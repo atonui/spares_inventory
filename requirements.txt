@@ -1,0 +1,72 @@
+# requirements.txt
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pyjwt==2.8.0
+python-multipart==0.0.6
+
+# setup_instructions.md
+
+## Quick Start Guide
+
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Run the Server
+```bash
+python main.py
+```
+
+### 3. Access Your App
+- **API Documentation**: http://localhost:8000/docs
+- **Frontend**: Put your HTML file in a `static/` folder and access via http://localhost:8000/static/index.html
+- **API Base**: http://localhost:8000/api/
+
+### 4. Test Login Credentials
+```
+Engineer: john@company.com / password123
+Admin: admin@company.com / admin123
+Manager: manager@company.com / manager123
+```
+
+## Project Structure
+```
+your_project/
+├── main.py              # FastAPI backend
+├── requirements.txt     # Python dependencies
+├── inventory.db        # SQLite database (auto-created)
+└── static/             # Frontend files
+    └── index.html      # Your HTML frontend
+```
+
+## Key API Endpoints
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `GET /api/me` - Get current user info
+
+### Data
+- `GET /api/inventory` - Get all inventory (engineers see everything)
+- `GET /api/stores` - Get all stores
+- `GET /api/parts` - Get all parts
+- `GET /api/stats` - Get dashboard statistics
+- `POST /api/inventory/add` - Add stock to inventory
+
+## Database Features
+- **Auto-initialization**: Database and sample data created on first run
+- **Sample data**: Ready-to-test with realistic inventory data
+- **Work order tracking**: Parts linked to work orders automatically
+- **Permission system**: Engineers see all, edit only assigned stores + central
+
+## Next Steps
+1. Put your HTML frontend in the `static/` folder
+2. Update the frontend to use real API calls instead of sample data
+3. Test with the sample users and data
+4. Add more features as needed
+
+## Production Deployment
+- Change SECRET_KEY in main.py
+- Switch to PostgreSQL for production
+- Add proper environment variables
+- Use a production WSGI server
