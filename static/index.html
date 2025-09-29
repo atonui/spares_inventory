@@ -371,8 +371,8 @@
                            placeholder="Search parts..." 
                            class="search-box"
                            x-model="searchTerm"
-                           @input="filterInventory()"
-                           @keyup="filterInventory()">
+                           @input="console.log('Search input:', searchTerm); filterInventory()"
+                           @keyup="console.log('Search keyup:', searchTerm); filterInventory()">
                     
                     <select x-model="storeFilter" @change="filterInventory()">
                         <option value="">All Stores</option>
@@ -806,7 +806,6 @@
                 async loadInventory() {
                     this.inventory = await this.apiCall('/inventory');
                     this.filteredInventory = this.inventory;
-                    this.filterInventory();
                 },
 
                 async loadUsers() {
@@ -815,13 +814,12 @@
                     }
                 },
 
-                // FIXED SEARCH FUNCTION
+                // FIXED SEARCH FUNCTION - Back to working version
                 filterInventory() {
-                    console.log('🔍 Filtering inventory...');
-                    let filtered = [...this.inventory];
+                    let filtered = this.inventory;
                     
-                    if (this.searchTerm && this.searchTerm.trim() !== '') {
-                        const term = this.searchTerm.toLowerCase().trim();
+                    if (this.searchTerm) {
+                        const term = this.searchTerm.toLowerCase();
                         filtered = filtered.filter(item => 
                             item.part_number.toLowerCase().includes(term) ||
                             item.description.toLowerCase().includes(term) ||
@@ -829,16 +827,13 @@
                         );
                     }
                     
-                    if (this.storeFilter && this.storeFilter !== '') {
+                    if (this.storeFilter) {
                         const storeId = parseInt(this.storeFilter);
                         const storeName = this.stores.find(s => s.id === storeId)?.name;
-                        if (storeName) {
-                            filtered = filtered.filter(item => item.store_name === storeName);
-                        }
+                        filtered = filtered.filter(item => item.store_name === storeName);
                     }
                     
                     this.filteredInventory = filtered;
-                    console.log(`📊 Showing ${filtered.length} of ${this.inventory.length} items`);
                 },
 
                 getStoreClass(storeType, storeOwner) {
