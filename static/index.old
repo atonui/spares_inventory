@@ -295,7 +295,7 @@
     </style>
 </head>
 <body>
-    <div x-data="inventoryApp()" x-init="checkAuth()">
+    <div x-data="inventoryApp()" x-init="init(); checkAuth()">
         <!-- Login Screen -->
         <div x-show="!isAuthenticated" class="login-container">
             <form @submit.prevent="login()" class="login-form">
@@ -370,11 +370,9 @@
                     <input type="text" 
                            placeholder="Search parts..." 
                            class="search-box"
-                           x-model="searchTerm"
-                           @input="filterInventory()"
-                           @keyup="filterInventory()">
+                           x-model="searchTerm">
                     
-                    <select x-model="storeFilter" @change="filterInventory()">
+                    <select x-model="storeFilter">
                         <option value="">All Stores</option>
                         <template x-for="store in stores" :key="store.id">
                             <option :value="store.id" x-text="store.name"></option>
@@ -490,6 +488,8 @@
                 </div>
             </div>
 
+            <!-- ALL MODALS INSIDE THE ALPINE SCOPE -->
+            
             <!-- Add Stock Modal -->
             <div x-show="showAddModal" class="modal" @click.outside="showAddModal = false">
                 <div class="modal-content">
@@ -622,19 +622,26 @@
             </div>
 
         </div>
+        <!-- End of Main App Container -->
+        
     </div>
+    <!-- End of Alpine.js Scope -->
 
     <script>
         function inventoryApp() {
             return {
+                // Authentication state
                 isAuthenticated: false,
                 currentUser: null,
                 token: null,
+                
+                // UI state
                 loading: false,
                 addingStock: false,
                 error: '',
                 successMessage: '',
                 
+                // Forms
                 loginForm: {
                     email: 'john@company.com',
                     password: 'password123'
@@ -666,6 +673,7 @@
                     territory: ''
                 },
                 
+                // Search and filters
                 searchTerm: '',
                 storeFilter: '',
                 showAddModal: false,
@@ -675,6 +683,7 @@
                 showUsersPanel: false,
                 editingUser: null,
                 
+                // Data
                 stats: {},
                 stores: [],
                 parts: [],
@@ -683,8 +692,10 @@
                 users: [],
                 filteredInventory: [],
 
+                // API Base URL
                 apiUrl: '/api',
 
+                // Initialize
                 async checkAuth() {
                     this.token = localStorage.getItem('token');
                     if (this.token) {
@@ -699,6 +710,14 @@
                     }
                 },
 
+                // Watch for search term changes
+                init() {
+                    // Set up reactive filtering
+                    this.$watch('searchTerm', () => this.filterInventory());
+                    this.$watch('storeFilter', () => this.filterInventory());
+                },
+
+                // Authentication
                 async login() {
                     this.loading = true;
                     this.error = '';
@@ -752,6 +771,7 @@
                     this.isAuthenticated = false;
                 },
 
+                // Data loading
                 async loadAllData() {
                     this.loading = true;
                     try {
@@ -762,6 +782,7 @@
                             this.loadInventory()
                         ];
                         
+                        // Load additional data for admins
                         if (this.currentUser?.role === 'admin') {
                             promises.push(this.loadUsers());
                         }
@@ -806,7 +827,14 @@
                 async loadInventory() {
                     this.inventory = await this.apiCall('/inventory');
                     this.filteredInventory = this.inventory;
-                    this.filterInventory();
+                    // Re-apply current filters after loading
+                    if (this.searchTerm || this.storeFilter) {
+                        this.filterInventory();
+                    }
+                },
+
+                async loadWorkOrders() {
+                    this.workOrders = await this.apiCall('/work-orders');
                 },
 
                 async loadUsers() {
@@ -815,13 +843,12 @@
                     }
                 },
 
-                // FIXED SEARCH FUNCTION
+                // Filtering
                 filterInventory() {
-                    console.log('🔍 Filtering inventory...');
-                    let filtered = [...this.inventory];
+                    let filtered = this.inventory;
                     
-                    if (this.searchTerm && this.searchTerm.trim() !== '') {
-                        const term = this.searchTerm.toLowerCase().trim();
+                    if (this.searchTerm) {
+                        const term = this.searchTerm.toLowerCase();
                         filtered = filtered.filter(item => 
                             item.part_number.toLowerCase().includes(term) ||
                             item.description.toLowerCase().includes(term) ||
@@ -829,18 +856,16 @@
                         );
                     }
                     
-                    if (this.storeFilter && this.storeFilter !== '') {
+                    if (this.storeFilter) {
                         const storeId = parseInt(this.storeFilter);
                         const storeName = this.stores.find(s => s.id === storeId)?.name;
-                        if (storeName) {
-                            filtered = filtered.filter(item => item.store_name === storeName);
-                        }
+                        filtered = filtered.filter(item => item.store_name === storeName);
                     }
                     
                     this.filteredInventory = filtered;
-                    console.log(`📊 Showing ${filtered.length} of ${this.inventory.length} items`);
                 },
 
+                // UI helpers
                 getStoreClass(storeType, storeOwner) {
                     if (storeOwner === this.currentUser.id) return 'store-mine';
                     return 'store-' + storeType;
@@ -859,6 +884,7 @@
                     );
                 },
 
+                // Actions
                 async addStock() {
                     this.addingStock = true;
                     this.error = '';
@@ -879,7 +905,10 @@
                         this.showAddModal = false;
                         this.addForm = { part_id: '', store_id: '', quantity: '', work_order_number: '' };
                         
+                        // Reload data
                         await this.loadAllData();
+                        
+                        // Clear success message after 3 seconds
                         setTimeout(() => this.successMessage = '', 3000);
                         
                     } catch (error) {
@@ -959,6 +988,7 @@
                     }
                 },
 
+                // User management
                 async createUser() {
                     this.loading = true;
                     this.error = '';
@@ -1080,3 +1110,4 @@
     </script>
 </body>
 </html>
+                
