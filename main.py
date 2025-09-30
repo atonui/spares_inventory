@@ -283,6 +283,41 @@ class AddStockRequest(BaseModel):
     quantity: int
     work_order_number: Optional[str] = None
 
+class CreateStoreRequest(BaseModel):
+    name: str
+    type: str
+    location: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+
+class UpdateStoreRequest(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    location: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+
+class CreatePartRequest(BaseModel):
+    part_number: str
+    description: str
+    category: str
+    unit_cost: float
+
+class UpdatePartRequest(BaseModel):
+    part_number: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    unit_cost: Optional[float] = None
+
+class MovementResponse(BaseModel):
+    id: int
+    from_store_name: Optional[str]
+    to_store_name: Optional[str]
+    part_number: str
+    quantity: int
+    movement_type: str
+    work_order: Optional[str]
+    created_by_name: str
+    created_at: str
+
 class UpdateStockRequest(BaseModel):
     inventory_id: int
     new_quantity: int
