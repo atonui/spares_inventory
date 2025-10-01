@@ -4,295 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
+    <link rel="stylesheet" href="mystyle.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f8f9fa;
-            color: #333;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 1rem;
-        }
-        
-        .login-container {
-            max-width: 400px;
-            margin: 5rem auto;
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        
-        .login-form h2 {
-            margin-bottom: 1.5rem;
-            text-align: center;
-        }
-        
-        .header {
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-        }
-        
-        .user-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        
-        .stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #007bff;
-        }
-        
-        .controls {
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-        }
-        
-        .control-row {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-        
-        input[type="text"], input[type="email"], input[type="password"], input[type="number"], select {
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 1rem;
-        }
-        
-        .search-box {
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        .btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        
-        .btn:hover {
-            background: #0056b3;
-        }
-        
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.8rem;
-        }
-        
-        .btn-success {
-            background: #28a745;
-        }
-        
-        .btn-success:hover {
-            background: #1e7e34;
-        }
-        
-        .btn-warning {
-            background: #ffc107;
-            color: #000;
-        }
-        
-        .inventory-table {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th, td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-        }
-        
-        tbody tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .store-tag {
-            padding: 0.2rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        
-        .store-central {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        
-        .store-customer_site {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-        
-        .store-engineer {
-            background: #e8f5e8;
-            color: #388e3c;
-        }
-        
-        .store-mine {
-            background: #fff3e0;
-            color: #f57c00;
-            border: 2px solid #ff9800;
-        }
-        
-        .wo-tag {
-            background: #f0f0f0;
-            padding: 0.1rem 0.3rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-        }
-        
-        .low-stock {
-            background: #ffebee;
-            color: #c62828;
-            font-weight: bold;
-        }
-        
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-        }
-        
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #666;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-        
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-        
-        .demo-credentials {
-            background: #e7f3ff;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: 0.5rem;
-            }
-            
-            table {
-                font-size: 0.9rem;
-            }
-            
-            th, td {
-                padding: 0.5rem;
-            }
-            
-            .control-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .search-box {
-                min-width: auto;
-            }
-        }
-    </style>
+    <script src="script.js"></script>
 </head>
 <body>
     <div x-data="inventoryApp()" x-init="checkAuth()">
@@ -333,7 +47,7 @@
                 <div class="user-info">
                     <div>
                         <h1>Inventory Management</h1>
-                        <p>Welcome back, <strong x-text="currentUser.name"></strong> (<span x-text="currentUser.role"></span>)</p>
+                        <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
                     <button class="btn" @click="logout()">Logout</button>
                 </div>
@@ -347,19 +61,19 @@
             <!-- Quick Stats -->
             <div x-show="!loading" class="stats">
                 <div class="stat-card">
-                    <div class="stat-number" x-text="stats.total_parts"></div>
+                    <div class="stat-number" x-text="stats.total_parts || 0"></div>
                     <div>Total Parts</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number" x-text="stats.total_stores"></div>
+                    <div class="stat-number" x-text="stats.total_stores || 0"></div>
                     <div>Active Stores</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number" x-text="stats.low_stock"></div>
+                    <div class="stat-number" x-text="stats.low_stock || 0"></div>
                     <div>Low Stock Alerts</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number" x-text="stats.my_parts"></div>
+                    <div class="stat-number" x-text="stats.my_parts || 0"></div>
                     <div>My Parts</div>
                 </div>
             </div>
@@ -383,8 +97,17 @@
                     
                     <button class="btn btn-success" @click="showAddModal = true">Add Stock</button>
                     <button class="btn" @click="exportCSV()">Export CSV</button>
-                    <button x-show="currentUser.role === 'admin'" class="btn" @click="showUsersPanel = !showUsersPanel">
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showUsersPanel = !showUsersPanel">
                         <span x-text="showUsersPanel ? 'Hide Users' : 'Manage Users'"></span>
+                    </button>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showStoresPanel = !showStoresPanel; if(showStoresPanel && users.length === 0) loadUsers()">
+                        <span x-text="showStoresPanel ? 'Hide Stores' : 'Manage Stores'"></span>
+                    </button>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showPartsPanel = !showPartsPanel">
+                        <span x-text="showPartsPanel ? 'Hide Parts' : 'Manage Parts'"></span>
+                    </button>
+                    <button class="btn" @click="toggleMovements()">
+                        <span x-text="showMovementsPanel ? 'Hide History' : 'Movement History'"></span>
                     </button>
                 </div>
                 
@@ -393,7 +116,7 @@
             </div>
 
             <!-- User Management Panel (Admin Only) -->
-            <div x-show="!loading && showUsersPanel && currentUser.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <div x-show="!loading && showUsersPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">User Management</h3>
                     <button class="btn btn-success" 
@@ -431,6 +154,126 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Store Management Panel (Admin Only) -->
+            <div x-show="!loading && showStoresPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Store Management</h3>
+                    <button class="btn btn-success" 
+                            @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true">
+                        Add Store
+                    </button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Assigned To</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="store in stores" :key="store.id">
+                            <tr>
+                                <td x-text="store.name"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="store.type"></span>
+                                </td>
+                                <td x-text="store.location || 'N/A'"></td>
+                                <td x-text="getUserName(store.assigned_user_id)"></td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editStore(store)">Edit</button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #dc3545; color: white;"
+                                            @click="deleteStore(store.id, store.name)">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Parts Management Panel (Admin Only) -->
+            <div x-show="!loading && showPartsPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Parts Management</h3>
+                    <button class="btn btn-success" 
+                            @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
+                        Add Part
+                    </button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Unit Cost</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="part in parts" :key="part.id">
+                            <tr>
+                                <td><strong x-text="part.part_number"></strong></td>
+                                <td x-text="part.description"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="part.category"></span>
+                                </td>
+                                <td x-text="' + part.unit_cost.toFixed(2)"></td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editPart(part)">Edit</button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #dc3545; color: white;"
+                                            @click="deletePart(part.id, part.part_number)">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Movement History Panel -->
+            <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                    <h3 style="margin: 0;">Movement History (Last 100)</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date/Time</th>
+                            <th>Type</th>
+                            <th>Part</th>
+                            <th>Qty</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>WO#</th>
+                            <th>By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="movement in movements" :key="movement.id">
+                            <tr>
+                                <td x-text="new Date(movement.created_at).toLocaleString()"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="movement.movement_type"></span>
+                                </td>
+                                <td x-text="movement.part_number"></td>
+                                <td><strong x-text="movement.quantity"></strong></td>
+                                <td x-text="movement.from_store_name || '-'"></td>
+                                <td x-text="movement.to_store_name || '-'"></td>
+                                <td x-text="movement.work_order || '-'"></td>
+                                <td x-text="movement.created_by_name"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="movements.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No movement history found.
+                </div>
             </div>
 
             <!-- Inventory Table -->
@@ -490,6 +333,8 @@
                 </div>
             </div>
 
+            <!-- ALL MODALS -->
+            
             <!-- Add Stock Modal -->
             <div x-show="showAddModal" class="modal" @click.outside="showAddModal = false">
                 <div class="modal-content">
@@ -621,457 +466,81 @@
                 </div>
             </div>
 
+            <!-- Store Management Modal -->
+            <div x-show="showStoreModal" class="modal" @click.outside="showStoreModal = false">
+                <div class="modal-content">
+                    <h3 x-text="editingStore ? 'Edit Store' : 'Create New Store'"></h3>
+                    <form @submit.prevent="editingStore ? updateStore() : createStore()">
+                        <div class="form-group">
+                            <label>Store Name</label>
+                            <input type="text" x-model="storeForm.name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select x-model="storeForm.type" required>
+                                <option value="central">Central Warehouse</option>
+                                <option value="customer_site">Customer Site</option>
+                                <option value="engineer">Engineer Personal</option>
+                                <option value="fe_consignment">FE Consignment</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" x-model="storeForm.location" placeholder="Optional">
+                        </div>
+                        <div class="form-group">
+                            <label>Assigned To</label>
+                            <select x-model="storeForm.assigned_user_id">
+                                <option value="">None</option>
+                                <template x-for="user in users" :key="user.id">
+                                    <option :value="user.id" x-text="user.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showStoreModal = false; editingStore = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading">
+                                <span x-show="!loading" x-text="editingStore ? 'Update Store' : 'Create Store'"></span>
+                                <span x-show="loading" x-text="editingStore ? 'Updating...' : 'Creating...'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Part Management Modal -->
+            <div x-show="showPartModal" class="modal" @click.outside="showPartModal = false">
+                <div class="modal-content">
+                    <h3 x-text="editingPart ? 'Edit Part' : 'Create New Part'"></h3>
+                    <form @submit.prevent="editingPart ? updatePart() : createPart()">
+                        <div class="form-group">
+                            <label>Part Number</label>
+                            <input type="text" x-model="partForm.part_number" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" x-model="partForm.description" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" x-model="partForm.category" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Unit Cost ($)</label>
+                            <input type="number" step="0.01" x-model="partForm.unit_cost" required>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showPartModal = false; editingPart = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading">
+                                <span x-show="!loading" x-text="editingPart ? 'Update Part' : 'Create Part'"></span>
+                                <span x-show="loading" x-text="editingPart ? 'Updating...' : 'Creating...'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
         </div>
     </div>
-
-    <script>
-        function inventoryApp() {
-            return {
-                isAuthenticated: false,
-                currentUser: null,
-                token: null,
-                loading: false,
-                addingStock: false,
-                error: '',
-                successMessage: '',
-                
-                loginForm: {
-                    email: 'john@company.com',
-                    password: 'password123'
-                },
-                
-                addForm: {
-                    part_id: '',
-                    store_id: '',
-                    quantity: '',
-                    work_order_number: ''
-                },
-                
-                editForm: {
-                    inventory_id: '',
-                    new_quantity: ''
-                },
-                
-                transferForm: {
-                    inventory_id: '',
-                    to_store_id: '',
-                    quantity: ''
-                },
-                
-                userForm: {
-                    email: '',
-                    name: '',
-                    password: '',
-                    role: 'engineer',
-                    territory: ''
-                },
-                
-                searchTerm: '',
-                storeFilter: '',
-                showAddModal: false,
-                showEditModal: false,
-                showTransferModal: false,
-                showUserModal: false,
-                showUsersPanel: false,
-                editingUser: null,
-                
-                stats: {},
-                stores: [],
-                parts: [],
-                inventory: [],
-                workOrders: [],
-                users: [],
-                filteredInventory: [],
-
-                apiUrl: '/api',
-
-                async checkAuth() {
-                    this.token = localStorage.getItem('token');
-                    if (this.token) {
-                        try {
-                            await this.getCurrentUser();
-                            this.isAuthenticated = true;
-                            await this.loadAllData();
-                        } catch (error) {
-                            localStorage.removeItem('token');
-                            this.token = null;
-                        }
-                    }
-                },
-
-                async login() {
-                    this.loading = true;
-                    this.error = '';
-                    
-                    try {
-                        const response = await fetch(`${this.apiUrl}/auth/login`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify(this.loginForm)
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error('Invalid credentials');
-                        }
-                        
-                        const data = await response.json();
-                        this.token = data.access_token;
-                        this.currentUser = data.user;
-                        localStorage.setItem('token', this.token);
-                        this.isAuthenticated = true;
-                        
-                        await this.loadAllData();
-                        
-                    } catch (error) {
-                        this.error = error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async getCurrentUser() {
-                    const response = await fetch(`${this.apiUrl}/me`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.token}`
-                        }
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Authentication failed');
-                    }
-                    
-                    this.currentUser = await response.json();
-                },
-
-                logout() {
-                    localStorage.removeItem('token');
-                    this.token = null;
-                    this.currentUser = null;
-                    this.isAuthenticated = false;
-                },
-
-                async loadAllData() {
-                    this.loading = true;
-                    try {
-                        const promises = [
-                            this.loadStats(),
-                            this.loadStores(),
-                            this.loadParts(),
-                            this.loadInventory()
-                        ];
-                        
-                        if (this.currentUser?.role === 'admin') {
-                            promises.push(this.loadUsers());
-                        }
-                        
-                        await Promise.all(promises);
-                    } catch (error) {
-                        this.error = 'Failed to load data: ' + error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async apiCall(endpoint, options = {}) {
-                    const response = await fetch(`${this.apiUrl}${endpoint}`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.token}`,
-                            'Content-Type': 'application/json',
-                            ...options.headers
-                        },
-                        ...options
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`API error: ${response.status}`);
-                    }
-                    
-                    return response.json();
-                },
-
-                async loadStats() {
-                    this.stats = await this.apiCall('/stats');
-                },
-
-                async loadStores() {
-                    this.stores = await this.apiCall('/stores');
-                },
-
-                async loadParts() {
-                    this.parts = await this.apiCall('/parts');
-                },
-
-                async loadInventory() {
-                    this.inventory = await this.apiCall('/inventory');
-                    this.filteredInventory = this.inventory;
-                },
-
-                async loadUsers() {
-                    if (this.currentUser?.role === 'admin') {
-                        this.users = await this.apiCall('/users');
-                    }
-                },
-
-                // FIXED SEARCH FUNCTION - Back to working version
-                filterInventory() {
-                    let filtered = this.inventory;
-                    
-                    if (this.searchTerm) {
-                        const term = this.searchTerm.toLowerCase();
-                        filtered = filtered.filter(item => 
-                            item.part_number.toLowerCase().includes(term) ||
-                            item.description.toLowerCase().includes(term) ||
-                            item.store_name.toLowerCase().includes(term)
-                        );
-                    }
-                    
-                    if (this.storeFilter) {
-                        const storeId = parseInt(this.storeFilter);
-                        const storeName = this.stores.find(s => s.id === storeId)?.name;
-                        filtered = filtered.filter(item => item.store_name === storeName);
-                    }
-                    
-                    this.filteredInventory = filtered;
-                },
-
-                getStoreClass(storeType, storeOwner) {
-                    if (storeOwner === this.currentUser.id) return 'store-mine';
-                    return 'store-' + storeType;
-                },
-
-                canEdit(storeOwner, storeType) {
-                    if (this.currentUser.role === 'admin') return true;
-                    return storeOwner === this.currentUser.id || storeType === 'central';
-                },
-
-                get editableStores() {
-                    if (this.currentUser?.role === 'admin') return this.stores;
-                    return this.stores.filter(store => 
-                        store.assigned_user_id === this.currentUser.id || 
-                        store.type === 'central'
-                    );
-                },
-
-                async addStock() {
-                    this.addingStock = true;
-                    this.error = '';
-                    this.successMessage = '';
-                    
-                    try {
-                        await this.apiCall('/inventory/add', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                part_id: parseInt(this.addForm.part_id),
-                                store_id: parseInt(this.addForm.store_id),
-                                quantity: parseInt(this.addForm.quantity),
-                                work_order_number: this.addForm.work_order_number || null
-                            })
-                        });
-                        
-                        this.successMessage = 'Stock added successfully!';
-                        this.showAddModal = false;
-                        this.addForm = { part_id: '', store_id: '', quantity: '', work_order_number: '' };
-                        
-                        await this.loadAllData();
-                        setTimeout(() => this.successMessage = '', 3000);
-                        
-                    } catch (error) {
-                        this.error = 'Failed to add stock: ' + error.message;
-                    } finally {
-                        this.addingStock = false;
-                    }
-                },
-
-                async editItem(item) {
-                    this.editForm.inventory_id = item.id;
-                    this.editForm.new_quantity = item.quantity;
-                    this.showEditModal = true;
-                },
-
-                async updateStock() {
-                    this.loading = true;
-                    this.error = '';
-                    this.successMessage = '';
-                    
-                    try {
-                        await this.apiCall('/inventory/update', {
-                            method: 'PUT',
-                            body: JSON.stringify({
-                                inventory_id: parseInt(this.editForm.inventory_id),
-                                new_quantity: parseInt(this.editForm.new_quantity)
-                            })
-                        });
-                        
-                        this.successMessage = 'Stock updated successfully!';
-                        this.showEditModal = false;
-                        this.editForm = { inventory_id: '', new_quantity: '' };
-                        
-                        await this.loadAllData();
-                        setTimeout(() => this.successMessage = '', 3000);
-                        
-                    } catch (error) {
-                        this.error = 'Failed to update stock: ' + error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async transferItem(item) {
-                    this.transferForm.inventory_id = item.id;
-                    this.transferForm.quantity = 1;
-                    this.transferForm.to_store_id = '';
-                    this.showTransferModal = true;
-                },
-
-                async transferStock() {
-                    this.loading = true;
-                    this.error = '';
-                    this.successMessage = '';
-                    
-                    try {
-                        await this.apiCall('/inventory/transfer', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                inventory_id: parseInt(this.transferForm.inventory_id),
-                                to_store_id: parseInt(this.transferForm.to_store_id),
-                                quantity: parseInt(this.transferForm.quantity)
-                            })
-                        });
-                        
-                        this.successMessage = 'Stock transferred successfully!';
-                        this.showTransferModal = false;
-                        this.transferForm = { inventory_id: '', to_store_id: '', quantity: '' };
-                        
-                        await this.loadAllData();
-                        setTimeout(() => this.successMessage = '', 3000);
-                        
-                    } catch (error) {
-                        this.error = 'Failed to transfer stock: ' + error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async createUser() {
-                    this.loading = true;
-                    this.error = '';
-                    this.successMessage = '';
-                    
-                    try {
-                        await this.apiCall('/users', {
-                            method: 'POST',
-                            body: JSON.stringify(this.userForm)
-                        });
-                        
-                        this.successMessage = 'User created successfully!';
-                        this.showUserModal = false;
-                        this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
-                        
-                        await this.loadUsers();
-                        setTimeout(() => this.successMessage = '', 3000);
-                        
-                    } catch (error) {
-                        this.error = 'Failed to create user: ' + error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                editUser(user) {
-                    this.editingUser = user.id;
-                    this.userForm = {
-                        email: user.email,
-                        name: user.name,
-                        password: '',
-                        role: user.role,
-                        territory: user.territory || ''
-                    };
-                    this.showUserModal = true;
-                },
-
-                async updateUser() {
-                    this.loading = true;
-                    this.error = '';
-                    this.successMessage = '';
-                    
-                    try {
-                        const updateData = {
-                            name: this.userForm.name,
-                            role: this.userForm.role,
-                            territory: this.userForm.territory || null
-                        };
-                        
-                        if (this.userForm.password) {
-                            updateData.password = this.userForm.password;
-                        }
-                        
-                        await this.apiCall(`/users/${this.editingUser}`, {
-                            method: 'PUT',
-                            body: JSON.stringify(updateData)
-                        });
-                        
-                        this.successMessage = 'User updated successfully!';
-                        this.showUserModal = false;
-                        this.editingUser = null;
-                        this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
-                        
-                        await this.loadUsers();
-                        setTimeout(() => this.successMessage = '', 3000);
-                        
-                    } catch (error) {
-                        this.error = 'Failed to update user: ' + error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async deleteUser(userId, userName) {
-                    if (!confirm(`Are you sure you want to delete user ${userName}?`)) {
-                        return;
-                    }
-                    
-                    this.loading = true;
-                    this.error = '';
-                    this.successMessage = '';
-                    
-                    try {
-                        await this.apiCall(`/users/${userId}`, {
-                            method: 'DELETE'
-                        });
-                        
-                        this.successMessage = 'User deleted successfully!';
-                        await this.loadUsers();
-                        setTimeout(() => this.successMessage = '', 3000);
-                        
-                    } catch (error) {
-                        this.error = 'Failed to delete user: ' + error.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                exportCSV() {
-                    const headers = ['Part Number', 'Description', 'Store', 'Quantity', 'Work Order'];
-                    const rows = this.filteredInventory.map(item => [
-                        item.part_number,
-                        item.description,
-                        item.store_name,
-                        item.quantity,
-                        item.work_order || 'Original'
-                    ]);
-                    
-                    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
-                    const blob = new Blob([csvContent], { type: 'text/csv' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'inventory_export.csv';
-                    a.click();
-                }
-            }
-        }
-    </script>
 </body>
 </html>
