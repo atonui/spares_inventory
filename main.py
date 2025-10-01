@@ -355,6 +355,41 @@ class StatsResponse(BaseModel):
     low_stock: int
     my_parts: int
 
+class CreateStoreRequest(BaseModel):
+    name: str
+    type: str
+    location: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+
+class UpdateStoreRequest(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    location: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+
+class CreatePartRequest(BaseModel):
+    part_number: str
+    description: str
+    category: str
+    unit_cost: float
+
+class UpdatePartRequest(BaseModel):
+    part_number: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    unit_cost: Optional[float] = None
+
+class MovementResponse(BaseModel):
+    id: int
+    from_store_name: Optional[str]
+    to_store_name: Optional[str]
+    part_number: str
+    quantity: int
+    movement_type: str
+    work_order: Optional[str]
+    created_by_name: str
+    created_at: str
+
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -873,6 +908,287 @@ async def delete_user(target_user_id: int, user_id: int = Depends(get_current_us
     conn.close()
     
     return {"success": True, "message": f"User {target_user['name']} deleted successfully"}
+
+# Store Management
+@app.post("/api/stores")
+async def create_store(request: CreateStoreRequest, user_id: int = Depends(get_current_user)):
+    """Create new store (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if current user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Validate store type
+    valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+    if request.type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
+    
+    # Create store
+    cursor.execute("""
+        INSERT INTO stores (name, type, location, assigned_user_id)
+        VALUES (?, ?, ?, ?)
+    """, (request.name, request.type, request.location, request.assigned_user_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": f"Store {request.name} created successfully"}
+
+@app.put("/api/stores/{store_id}")
+async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int = Depends(get_current_user)):
+    """Update store (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if current user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if store exists
+    cursor.execute("SELECT id FROM stores WHERE id = ?", (store_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Store not found")
+    
+    # Build update query dynamically
+    updates = []
+    values = []
+    
+    if request.name is not None:
+        updates.append("name = ?")
+        values.append(request.name)
+    
+    if request.type is not None:
+        valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+        if request.type not in valid_types:
+            raise HTTPException(status_code=400, detail=f"Invalid store type")
+        updates.append("type = ?")
+        values.append(request.type)
+    
+    if request.location is not None:
+        updates.append("location = ?")
+        values.append(request.location)
+    
+    if request.assigned_user_id is not None:
+        updates.append("assigned_user_id = ?")
+        values.append(request.assigned_user_id)
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    
+    values.append(store_id)
+    
+    cursor.execute(f"UPDATE stores SET {', '.join(updates)} WHERE id = ?", values)
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": "Store updated successfully"}
+
+@app.delete("/api/stores/{store_id}")
+async def delete_store(store_id: int, user_id: int = Depends(get_current_user)):
+    """Delete store (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if current user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if store exists
+    cursor.execute("SELECT name FROM stores WHERE id = ?", (store_id,))
+    store = cursor.fetchone()
+    
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    
+    # Check if store has inventory
+    cursor.execute("SELECT COUNT(*) as count FROM inventory WHERE store_id = ?", (store_id,))
+    inventory_count = cursor.fetchone()['count']
+    
+    if inventory_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete store with {inventory_count} inventory items")
+    
+    # Delete store
+    cursor.execute("DELETE FROM stores WHERE id = ?", (store_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": f"Store {store['name']} deleted successfully"}
+
+# Parts Management
+@app.post("/api/parts")
+async def create_part(request: CreatePartRequest, user_id: int = Depends(get_current_user)):
+    """Create new part (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if current user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if part number already exists
+    cursor.execute("SELECT id FROM parts WHERE part_number = ?", (request.part_number,))
+    if cursor.fetchone():
+        raise HTTPException(status_code=400, detail="Part number already exists")
+    
+    # Create part
+    cursor.execute("""
+        INSERT INTO parts (part_number, description, category, unit_cost)
+        VALUES (?, ?, ?, ?)
+    """, (request.part_number, request.description, request.category, request.unit_cost))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": f"Part {request.part_number} created successfully"}
+
+@app.put("/api/parts/{part_id}")
+async def update_part(part_id: int, request: UpdatePartRequest, user_id: int = Depends(get_current_user)):
+    """Update part (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if current user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if part exists
+    cursor.execute("SELECT id FROM parts WHERE id = ?", (part_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Part not found")
+    
+    # Build update query dynamically
+    updates = []
+    values = []
+    
+    if request.part_number is not None:
+        cursor.execute("SELECT id FROM parts WHERE part_number = ? AND id != ?", (request.part_number, part_id))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Part number already exists")
+        updates.append("part_number = ?")
+        values.append(request.part_number)
+    
+    if request.description is not None:
+        updates.append("description = ?")
+        values.append(request.description)
+    
+    if request.category is not None:
+        updates.append("category = ?")
+        values.append(request.category)
+    
+    if request.unit_cost is not None:
+        updates.append("unit_cost = ?")
+        values.append(request.unit_cost)
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    
+    values.append(part_id)
+    
+    cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE id = ?", values)
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": "Part updated successfully"}
+
+@app.delete("/api/parts/{part_id}")
+async def delete_part(part_id: int, user_id: int = Depends(get_current_user)):
+    """Delete part (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if current user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if part exists
+    cursor.execute("SELECT part_number FROM parts WHERE id = ?", (part_id,))
+    part = cursor.fetchone()
+    
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found")
+    
+    # Check if part has inventory
+    cursor.execute("SELECT COUNT(*) as count FROM inventory WHERE part_id = ?", (part_id,))
+    inventory_count = cursor.fetchone()['count']
+    
+    if inventory_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete part with {inventory_count} inventory records")
+    
+    # Delete part
+    cursor.execute("DELETE FROM parts WHERE id = ?", (part_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"success": True, "message": f"Part {part['part_number']} deleted successfully"}
+
+# Movement History
+@app.get("/api/movements", response_model=List[MovementResponse])
+async def get_movements(user_id: int = Depends(get_current_user), limit: int = 100):
+    """Get movement history"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get user role
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    query = """
+        SELECT 
+            m.id,
+            s1.name as from_store_name,
+            s2.name as to_store_name,
+            p.part_number,
+            m.quantity,
+            m.movement_type,
+            wo.work_order_number as work_order,
+            u.name as created_by_name,
+            m.created_at
+        FROM movements m
+        LEFT JOIN stores s1 ON m.from_store_id = s1.id
+        LEFT JOIN stores s2 ON m.to_store_id = s2.id
+        JOIN parts p ON m.part_id = p.id
+        LEFT JOIN work_orders wo ON m.work_order_id = wo.id
+        JOIN users u ON m.created_by = u.id
+    """
+    
+    if user['role'] != 'admin':
+        query += """
+            WHERE m.created_by = ? 
+               OR s1.assigned_user_id = ?
+               OR s2.assigned_user_id = ?
+        """
+        cursor.execute(f"{query} ORDER BY m.created_at DESC LIMIT ?", (user_id, user_id, user_id, limit))
+    else:
+        cursor.execute(f"{query} ORDER BY m.created_at DESC LIMIT ?", (limit,))
+    
+    movements = cursor.fetchall()
+    conn.close()
+    
+    return [dict(movement) for movement in movements]
 
 if __name__ == "__main__":
     import uvicorn
