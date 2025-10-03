@@ -128,7 +128,7 @@
                             <th>Description</th>
                             <th>Category</th>
                             <th>Unit Cost</th>
-                            <th>In Stock</th>
+                            <th>Quantity</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -138,7 +138,7 @@
                                 <td x-text="part.description"></td>
                                 <td><span class="wo-tag" x-text="part.category"></span></td>
                                 <td x-text="part.unit_cost"></td>
-                                <td x-text="part.quantity"></td>
+                                <td x-text="inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)"></td>
             <div x-show="!loading && showUsersPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">User Management</h3>
