@@ -60,19 +60,19 @@
 
             <!-- Quick Stats -->
             <div x-show="!loading" class="stats">
-                <div class="stat-card">
+                <div class="stat-card" @click="openPanel('showAllPartsPanel')" style="cursor: pointer;">
                     <div class="stat-number" x-text="stats.total_parts || 0"></div>
                     <div>Total Parts</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" @click="openPanel('showAllStoresPanel')" style="cursor: pointer;">
                     <div class="stat-number" x-text="stats.total_stores || 0"></div>
                     <div>Active Stores</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" @click="openPanel('showLowStockPanel')" style="cursor: pointer;">
                     <div class="stat-number" x-text="stats.low_stock || 0"></div>
                     <div>Low Stock Alerts</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" @click="openPanel('showMyPartsPanel')" style="cursor: pointer;">
                     <div class="stat-number" x-text="stats.my_parts || 0"></div>
                     <div>My Parts</div>
                 </div>
@@ -97,22 +97,758 @@
                     
                     <button class="btn btn-success" @click="showAddModal = true">Add Stock</button>
                     <button class="btn" @click="exportCSV()">Export CSV</button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showUsersPanel = !showUsersPanel">
-                        <span x-text="showUsersPanel ? 'Hide Users' : 'Manage Users'"></span>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showUsersPanel')">
+                        <span>Manage Users</span>
                     </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showStoresPanel = !showStoresPanel; if(showStoresPanel && users.length === 0) loadUsers()">
-                        <span x-text="showStoresPanel ? 'Hide Stores' : 'Manage Stores'"></span>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()">
+                        <span>Manage Stores</span>
                     </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showPartsPanel = !showPartsPanel">
-                        <span x-text="showPartsPanel ? 'Hide Parts' : 'Manage Parts'"></span>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showPartsPanel')">
+                        <span>Manage Parts</span>
                     </button>
-                    <button class="btn" @click="toggleMovements()">
-                        <span x-text="showMovementsPanel ? 'Hide History' : 'Movement History'"></span>
+                    <button class="btn" @click="openPanel('showMovementsPanel'); loadMovements()">
+                        <span>Movement History</span>
                     </button>
                 </div>
                 
                 <div x-show="error" class="error" x-text="error"></div>
                 <div x-show="successMessage" class="success" x-text="successMessage"></div>
+            </div>
+
+            <!-- All Parts Panel -->
+            <div x-show="showAllPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">All Parts Catalog</h3>
+                    <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Unit Cost</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="part in allPartsView" :key="part.id">
+                            <tr>
+                                <td><strong x-text="part.part_number"></strong></td>
+                                <td x-text="part.description"></td>
+                                <td><span class="wo-tag" x-text="part.category"></span></td>
+                                <td x-text="part.unit_cost"></td>
+                                <td x-text="inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)"></td>
+            <div x-show="!loading && showUsersPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">User Management</h3>
+                    <button class="btn btn-success" 
+                            @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true">
+                        Add User
+                    </button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Territory</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="user in users" :key="user.id">
+                            <tr>
+                                <td x-text="user.name"></td>
+                                <td x-text="user.email"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="user.role"></span>
+                                </td>
+                                <td x-text="user.territory || 'N/A'"></td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editUser(user)">Edit</button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #dc3545; color: white;"
+                                            x-show="user.id !== currentUser.id"
+                                            @click="deleteUser(user.id, user.name)">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Store Management Panel (Admin Only) -->
+            <div x-show="!loading && showStoresPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <h3 style="margin: 0;">Store Management</h3>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-sm" @click="downloadStoreTemplate()">Download Template</button>
+                        <label class="btn btn-sm" style="cursor: pointer;">
+                            Import CSV
+                            <input type="file" accept=".csv" @change="importStores($event)" style="display: none;">
+                        </label>
+                        <button class="btn btn-success" 
+                                @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true">
+                            Add Store
+                        </button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Assigned To</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="store in stores" :key="store.id">
+                            <tr>
+                                <td x-text="store.name"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="store.type"></span>
+                                </td>
+                                <td x-text="store.location || 'N/A'"></td>
+                                <td x-text="getUserName(store.assigned_user_id)"></td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editStore(store)">Edit</button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #dc3545; color: white;"
+                                            @click="deleteStore(store.id, store.name)">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Parts Management Panel (Admin Only) -->
+            <div x-show="!loading && showPartsPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <h3 style="margin: 0;">Parts Management</h3>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-sm" @click="downloadPartTemplate()">Download Template</button>
+                        <label class="btn btn-sm" style="cursor: pointer;">
+                            Import CSV
+                            <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
+                        </label>
+                        <button class="btn btn-success" 
+                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
+                            Add Part
+                        </button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Unit Cost</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="part in parts" :key="part.id">
+                            <tr>
+                                <td><strong x-text="part.part_number"></strong></td>
+                                <td x-text="part.description"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="part.category"></span>
+                                </td>
+                                <td x-text="' + part.unit_cost.toFixed(2)"></td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editPart(part)">Edit</button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #dc3545; color: white;"
+                                            @click="deletePart(part.id, part.part_number)">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Movement History Panel -->
+            <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin: 0;">Movement History</h3>
+                        <button class="btn btn-sm btn-success" @click="exportMovementsCSV()">Export to CSV</button>
+                    </div>
+                    
+                    <!-- Filters -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Start Date</label>
+                            <input type="date" x-model="movementFilters.startDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">End Date</label>
+                            <input type="date" x-model="movementFilters.endDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Movement Type</label>
+                            <select x-model="movementFilters.movementType" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                                <option value="">All Types</option>
+                                <option value="add">Add</option>
+                                <option value="remove">Remove</option>
+                                <option value="transfer">Transfer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Part</label>
+                            <select x-model="movementFilters.partId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                                <option value="">All Parts</option>
+                                <template x-for="part in parts" :key="part.id">
+                                    <option :value="part.id" x-text="part.part_number"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Store</label>
+                            <select x-model="movementFilters.storeId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                                <option value="">All Stores</option>
+                                <template x-for="store in stores" :key="store.id">
+                                    <option :value="store.id" x-text="store.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-sm btn-success" @click="loadMovements()">Apply Filters</button>
+                        <button class="btn btn-sm" @click="clearMovementFilters()">Clear Filters</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date/Time</th>
+                            <th>Type</th>
+                            <th>Part</th>
+                            <th>Qty</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>WO#</th>
+                            <th>By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="movement in movements" :key="movement.id">
+                            <tr>
+                                <td x-text="new Date(movement.created_at).toLocaleString()"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="movement.movement_type"></span>
+                                </td>
+                                <td x-text="movement.part_number"></td>
+                                <td><strong x-text="movement.quantity"></strong></td>
+                                <td x-text="movement.from_store_name || '-'"></td>
+                                <td x-text="movement.to_store_name || '-'"></td>
+                                <td x-text="movement.work_order || '-'"></td>
+                                <td x-text="movement.created_by_name"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="movements.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No movement history found.
+                </div>
+            </div>
+
+            <!-- Recent Activity Feed (Home View) -->
+            <div x-show="!loading && !showUsersPanel && !showStoresPanel && !showPartsPanel && !showMovementsPanel && !showAllPartsPanel && !showAllStoresPanel && !showLowStockPanel && !showMyPartsPanel && !showStoreInventoryPanel" class="inventory-table">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                    <h3 style="margin: 0;">Recent Activity</h3>
+                    <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;">
+                        <span x-show="currentUser?.role === 'admin'">Showing all recent inventory movements</span>
+                        <span x-show="currentUser?.role !== 'admin'">Showing your recent activity</span>
+                    </p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Action</th>
+                            <th>Part</th>
+                            <th>Qty</th>
+                            <th>From/To</th>
+                            <th>By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="activity in recentActivity" :key="activity.id">
+                            <tr>
+                                <td x-text="new Date(activity.created_at).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})"></td>
+                                <td>
+                                    <span class="wo-tag" x-text="activity.movement_type"></span>
+                                </td>
+                                <td><strong x-text="activity.part_number"></strong></td>
+                                <td x-text="activity.quantity"></td>
+                                <td>
+                                    <span x-show="activity.from_store_name" x-text="activity.from_store_name"></span>
+                                    <span x-show="activity.from_store_name && activity.to_store_name"> → </span>
+                                    <span x-show="activity.to_store_name" x-text="activity.to_store_name"></span>
+                                    <span x-show="!activity.from_store_name && !activity.to_store_name">-</span>
+                                </td>
+                                <td x-text="activity.created_by_name"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="recentActivity.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No recent activity. Start by adding or transferring inventory!
+                </div>
+            </div>
+            <div x-show="!loading" class="inventory-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Store</th>
+                            <th>Quantity</th>
+                            <th>Work Order</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in filteredInventory" :key="item.id">
+                            <tr :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                                <td x-text="item.part_number"></td>
+                                <td x-text="item.description"></td>
+                                <td>
+                                    <span class="store-tag" 
+                                          :class="getStoreClass(item.store_type, item.store_owner)"
+                                          x-text="item.store_name">
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong x-text="item.quantity"></strong>
+                                    <span x-show="item.quantity <= item.min_threshold">⚠️</span>
+                                </td>
+                                <td>
+                                    <span x-show="item.work_order" 
+                                          class="wo-tag" 
+                                          x-text="item.work_order">
+                                    </span>
+                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="editItem(item)">
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-warning" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="transferItem(item)">
+                                        Transfer
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                
+                <div x-show="filteredInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No inventory found matching your search criteria.
+                </div>
+            </div>
+
+            <!-- ALL MODALS -->
+            
+            <!-- Add Stock Modal -->
+            <div x-show="showAddModal" class="modal" @click.outside="showAddModal = false">
+                <div class="modal-content">
+                    <h3>Add Stock</h3>
+                    <form @submit.prevent="addStock()">
+                        <div class="form-group">
+                            <label>Part</label>
+                            <select x-model="addForm.part_id" required>
+                                <option value="">Select Part</option>
+                                <template x-for="part in parts" :key="part.id">
+                                    <option :value="part.id" x-text="part.part_number + ' - ' + part.description"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Store</label>
+                            <select x-model="addForm.store_id" required>
+                                <option value="">Select Store</option>
+                                <template x-for="store in editableStores" :key="store.id">
+                                    <option :value="store.id" x-text="store.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" x-model="addForm.quantity" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Work Order (leave blank for original stock)</label>
+                            <input type="text" x-model="addForm.work_order_number" placeholder="WO-2024-001">
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showAddModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="addingStock">
+                                <span x-show="!addingStock">Add Stock</span>
+                                <span x-show="addingStock">Adding...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Edit Stock Modal -->
+            <div x-show="showEditModal" class="modal" @click.outside="showEditModal = false">
+                <div class="modal-content">
+                    <h3>Edit Stock Quantity</h3>
+                    <form @submit.prevent="updateStock()">
+                        <div class="form-group">
+                            <label>New Quantity</label>
+                            <input type="number" x-model="editForm.new_quantity" min="0" required>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showEditModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading">
+                                <span x-show="!loading">Update</span>
+                                <span x-show="loading">Updating...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Transfer Stock Modal -->
+            <div x-show="showTransferModal" class="modal" @click.outside="showTransferModal = false">
+                <div class="modal-content">
+                    <h3>Transfer Stock</h3>
+                    <form @submit.prevent="transferStock()">
+                        <div class="form-group">
+                            <label>Destination Store</label>
+                            <select x-model="transferForm.to_store_id" required>
+                                <option value="">Select Store</option>
+                                <template x-for="store in editableStores" :key="store.id">
+                                    <option :value="store.id" x-text="store.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity to Transfer</label>
+                            <input type="number" x-model="transferForm.quantity" min="1" required>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showTransferModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-warning" :disabled="loading">
+                                <span x-show="!loading">Transfer</span>
+                                <span x-show="loading">Transferring...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- User Management Modal -->
+            <div x-show="showUserModal" class="modal" @click.outside="showUserModal = false">
+                <div class="modal-content">
+                    <h3 x-text="editingUser ? 'Edit User' : 'Create New User'"></h3>
+                    <form @submit.prevent="editingUser ? updateUser() : createUser()">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" x-model="userForm.email" required :disabled="!!editingUser">
+                        </div>
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" x-model="userForm.name" required>
+                        </div>
+                        <div class="form-group">
+                            <label x-text="editingUser ? 'New Password (leave blank to keep current)' : 'Password'"></label>
+                            <input type="password" x-model="userForm.password" :required="!editingUser">
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <select x-model="userForm.role" required>
+                                <option value="engineer">Engineer</option>
+                                <option value="admin">Admin</option>
+                                <option value="manager">Manager</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Territory</label>
+                            <input type="text" x-model="userForm.territory" placeholder="Optional">
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showUserModal = false; editingUser = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading">
+                                <span x-show="!loading" x-text="editingUser ? 'Update User' : 'Create User'"></span>
+                                <span x-show="loading" x-text="editingUser ? 'Updating...' : 'Creating...'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Store Management Modal -->
+            <div x-show="showStoreModal" class="modal" @click.outside="showStoreModal = false">
+                <div class="modal-content">
+                    <h3 x-text="editingStore ? 'Edit Store' : 'Create New Store'"></h3>
+                    <form @submit.prevent="editingStore ? updateStore() : createStore()">
+                        <div class="form-group">
+                            <label>Store Name</label>
+                            <input type="text" x-model="storeForm.name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select x-model="storeForm.type" required>
+                                <option value="central">Central Warehouse</option>
+                                <option value="customer_site">Customer Site</option>
+                                <option value="engineer">Engineer Personal</option>
+                                <option value="fe_consignment">FE Consignment</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" x-model="storeForm.location" placeholder="Optional">
+                        </div>
+                        <div class="form-group">
+                            <label>Assigned To</label>
+                            <select x-model="storeForm.assigned_user_id">
+                                <option value="">None</option>
+                                <template x-for="user in users" :key="user.id">
+                                    <option :value="user.id" x-text="user.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showStoreModal = false; editingStore = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading">
+                                <span x-show="!loading" x-text="editingStore ? 'Update Store' : 'Create Store'"></span>
+                                <span x-show="loading" x-text="editingStore ? 'Updating...' : 'Creating...'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Part Management Modal -->
+            <div x-show="showPartModal" class="modal" @click.outside="showPartModal = false">
+                <div class="modal-content">
+                    <h3 x-text="editingPart ? 'Edit Part' : 'Create New Part'"></h3>
+                    <form @submit.prevent="editingPart ? updatePart() : createPart()">
+                        <div class="form-group">
+                            <label>Part Number</label>
+                            <input type="text" x-model="partForm.part_number" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" x-model="partForm.description" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" x-model="partForm.category" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Unit Cost ($)</label>
+                            <input type="number" step="0.01" x-model="partForm.unit_cost" required>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showPartModal = false; editingPart = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading">
+                                <span x-show="!loading" x-text="editingPart ? 'Update Part' : 'Create Part'"></span>
+                                <span x-show="loading" x-text="editingPart ? 'Updating...' : 'Creating...'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html></td>
+                                <td x-text="inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- All Stores Panel -->
+            <div x-show="showAllStoresPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">All Stores</h3>
+                    <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Store Name</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Assigned To</th>
+                            <th>Total Items</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="store in allStoresView" :key="store.id">
+                            <tr>
+                                <td><strong x-text="store.name"></strong></td>
+                                <td><span class="wo-tag" x-text="store.type"></span></td>
+                                <td x-text="store.location || 'N/A'"></td>
+                                <td x-text="getUserName(store.assigned_user_id)"></td>
+                                <td x-text="inventory.filter(i => i.store_name === store.name).length"></td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" 
+                                            x-show="currentUser?.role === 'admin' || store.assigned_user_id === currentUser?.id || store.type === 'central'"
+                                            @click="viewStoreInventory(store)">
+                                        View Inventory
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Store Inventory Management Panel -->
+            <div x-show="showStoreInventoryPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3 style="margin: 0;" x-text="selectedStore?.name + ' Inventory'"></h3>
+                        <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;" x-text="storeInventory.length + ' items in stock'"></p>
+                    </div>
+                    <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Quantity</th>
+                            <th>Work Order</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in storeInventory" :key="item.id">
+                            <tr :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                                <td><strong x-text="item.part_number"></strong></td>
+                                <td x-text="item.description"></td>
+                                <td>
+                                    <strong x-text="item.quantity"></strong>
+                                    <span x-show="item.quantity <= item.min_threshold">⚠️</span>
+                                </td>
+                                <td>
+                                    <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
+                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="editItem(item)">
+                                        Adjust
+                                    </button>
+                                    <button class="btn btn-sm btn-warning" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="transferItem(item)">
+                                        Transfer
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    This store has no inventory yet.
+                </div>
+            </div>
+
+            <!-- Low Stock Alerts Panel -->
+            <div x-show="showLowStockPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Low Stock Alerts</h3>
+                    <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Store</th>
+                            <th>Current</th>
+                            <th>Minimum</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in lowStockItems" :key="item.id">
+                            <tr class="low-stock">
+                                <td><strong x-text="item.part_number"></strong></td>
+                                <td x-text="item.description"></td>
+                                <td><span class="store-tag" :class="getStoreClass(item.store_type, item.store_owner)" x-text="item.store_name"></span></td>
+                                <td><strong x-text="item.quantity"></strong> ⚠️</td>
+                                <td x-text="item.min_threshold"></td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="editItem(item)">
+                                        Restock
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="lowStockItems.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No low stock alerts. All inventory levels are good! ✅
+                </div>
+            </div>
+
+            <!-- My Parts Panel -->
+            <div x-show="showMyPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">My Parts Inventory</h3>
+                    <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Store</th>
+                            <th>Quantity</th>
+                            <th>Work Order</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in myPartsView" :key="item.id">
+                            <tr>
+                                <td><strong x-text="item.part_number"></strong></td>
+                                <td x-text="item.description"></td>
+                                <td><span class="store-tag store-mine" x-text="item.store_name"></span></td>
+                                <td><strong x-text="item.quantity"></strong></td>
+                                <td>
+                                    <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
+                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editItem(item)">Edit</button>
+                                    <button class="btn btn-sm btn-warning" @click="transferItem(item)">Transfer</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="myPartsView.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    You don't have any parts in your assigned stores yet.
+                </div>
             </div>
 
             <!-- User Management Panel (Admin Only) -->
@@ -158,12 +894,19 @@
 
             <!-- Store Management Panel (Admin Only) -->
             <div x-show="!loading && showStoresPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Store Management</h3>
-                    <button class="btn btn-success" 
-                            @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true">
-                        Add Store
-                    </button>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-sm" @click="downloadStoreTemplate()">Download Template</button>
+                        <label class="btn btn-sm" style="cursor: pointer;">
+                            Import CSV
+                            <input type="file" accept=".csv" @change="importStores($event)" style="display: none;">
+                        </label>
+                        <button class="btn btn-success" 
+                                @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true">
+                            Add Store
+                        </button>
+                    </div>
                 </div>
                 <table>
                     <thead>
@@ -198,12 +941,19 @@
 
             <!-- Parts Management Panel (Admin Only) -->
             <div x-show="!loading && showPartsPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Parts Management</h3>
-                    <button class="btn btn-success" 
-                            @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
-                        Add Part
-                    </button>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-sm" @click="downloadPartTemplate()">Download Template</button>
+                        <label class="btn btn-sm" style="cursor: pointer;">
+                            Import CSV
+                            <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
+                        </label>
+                        <button class="btn btn-success" 
+                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
+                            Add Part
+                        </button>
+                    </div>
                 </div>
                 <table>
                     <thead>
@@ -239,7 +989,51 @@
             <!-- Movement History Panel -->
             <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
-                    <h3 style="margin: 0;">Movement History (Last 100)</h3>
+                    <h3 style="margin: 0 0 1rem 0;">Movement History</h3>
+                    
+                    <!-- Filters -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Start Date</label>
+                            <input type="date" x-model="movementFilters.startDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">End Date</label>
+                            <input type="date" x-model="movementFilters.endDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Movement Type</label>
+                            <select x-model="movementFilters.movementType" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                                <option value="">All Types</option>
+                                <option value="add">Add</option>
+                                <option value="remove">Remove</option>
+                                <option value="transfer">Transfer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Part</label>
+                            <select x-model="movementFilters.partId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                                <option value="">All Parts</option>
+                                <template x-for="part in parts" :key="part.id">
+                                    <option :value="part.id" x-text="part.part_number"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Store</label>
+                            <select x-model="movementFilters.storeId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
+                                <option value="">All Stores</option>
+                                <template x-for="store in stores" :key="store.id">
+                                    <option :value="store.id" x-text="store.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-sm btn-success" @click="loadMovements()">Apply Filters</button>
+                        <button class="btn btn-sm" @click="clearMovementFilters()">Clear Filters</button>
+                    </div>
                 </div>
                 <table>
                     <thead>

@@ -71,9 +71,25 @@ function inventoryApp() {
         showStoresPanel: false,
         showPartsPanel: false,
         showMovementsPanel: false,
+        showAllPartsPanel: false,
+        showAllStoresPanel: false,
+        showLowStockPanel: false,
+        showMyPartsPanel: false,
+        showStoreInventoryPanel: false,
+        selectedStore: null,
+        storeInventory: [],
         editingUser: null,
         editingStore: null,
         editingPart: null,
+        
+        // Movement filters
+        movementFilters: {
+            startDate: '',
+            endDate: '',
+            movementType: '',
+            partId: '',
+            storeId: ''
+        },
         
         // Data
         stats: {},
@@ -222,7 +238,38 @@ function inventoryApp() {
         },
 
         async loadMovements() {
-            this.movements = await this.apiCall('/movements');
+            const params = new URLSearchParams();
+            
+            if (this.movementFilters.startDate) {
+                params.append('start_date', this.movementFilters.startDate);
+            }
+            if (this.movementFilters.endDate) {
+                params.append('end_date', this.movementFilters.endDate);
+            }
+            if (this.movementFilters.movementType) {
+                params.append('movement_type', this.movementFilters.movementType);
+            }
+            if (this.movementFilters.partId) {
+                params.append('part_id', this.movementFilters.partId);
+            }
+            if (this.movementFilters.storeId) {
+                params.append('store_id', this.movementFilters.storeId);
+            }
+            
+            const queryString = params.toString();
+            const endpoint = queryString ? `/movements?${queryString}` : '/movements';
+            this.movements = await this.apiCall(endpoint);
+        },
+
+        clearMovementFilters() {
+            this.movementFilters = {
+                startDate: '',
+                endDate: '',
+                movementType: '',
+                partId: '',
+                storeId: ''
+            };
+            this.loadMovements();
         },
 
         // Filtering - FIXED SEARCH FUNCTION
@@ -264,6 +311,58 @@ function inventoryApp() {
                 store.assigned_user_id === this.currentUser.id || 
                 store.type === 'central'
             );
+        },
+
+        get allPartsView() {
+            return this.parts;
+        },
+
+        get allStoresView() {
+            return this.stores;
+        },
+
+        get lowStockItems() {
+            return this.inventory.filter(item => item.quantity <= item.min_threshold);
+        },
+
+        get myPartsView() {
+            return this.inventory.filter(item => item.store_owner === this.currentUser?.id);
+        },
+
+        get recentActivity() {
+            // Get last 20 movements
+            return this.movements.slice(0, 20);
+        },
+
+        async viewStoreInventory(store) {
+            this.selectedStore = store;
+            this.storeInventory = this.inventory.filter(item => item.store_name === store.name);
+            this.openPanel('showStoreInventoryPanel');
+        },
+
+        exportMovementsCSV() {
+            const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By'];
+            const rows = this.movements.map(m => [
+                new Date(m.created_at).toLocaleString(),
+                m.movement_type,
+                m.part_number,
+                m.quantity,
+                m.from_store_name || '-',
+                m.to_store_name || '-',
+                m.work_order || '-',
+                m.created_by_name
+            ]);
+            
+            const csvContent = [headers, ...rows].map(row => 
+                row.map(cell => `"${cell}"`).join(',')
+            ).join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `movement_history_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
         },
 
         // Actions
@@ -676,6 +775,143 @@ function inventoryApp() {
             if (this.showMovementsPanel) {
                 await this.loadMovements();
             }
+        },
+
+        closeAllPanels() {
+            this.showUsersPanel = false;
+            this.showStoresPanel = false;
+            this.showPartsPanel = false;
+            this.showMovementsPanel = false;
+            this.showAllPartsPanel = false;
+            this.showAllStoresPanel = false;
+            this.showLowStockPanel = false;
+            this.showMyPartsPanel = false;
+            this.showStoreInventoryPanel = false;
+        },
+
+        openPanel(panelName) {
+            this.closeAllPanels();
+            // Also close all modals
+            this.showAddModal = false;
+            this.showEditModal = false;
+            this.showTransferModal = false;
+            this.showUserModal = false;
+            this.showStoreModal = false;
+            this.showPartModal = false;
+            // open the requested panel
+            this[panelName] = true;
+
+        },
+
+        // Bulk import functions
+        async importParts(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(`${this.apiUrl}/parts/bulk-import`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Import failed');
+                }
+                
+                const result = await response.json();
+                this.successMessage = result.message;
+                if (result.errors && result.errors.length > 0) {
+                    this.error = 'Some errors occurred:\n' + result.errors.join('\n');
+                }
+                
+                await this.loadParts();
+                event.target.value = ''; // Reset file input
+                setTimeout(() => {
+                    this.successMessage = '';
+                    this.error = '';
+                }, 5000);
+                
+            } catch (error) {
+                this.error = 'Failed to import parts: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async importStores(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(`${this.apiUrl}/stores/bulk-import`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Import failed');
+                }
+                
+                const result = await response.json();
+                this.successMessage = result.message;
+                if (result.errors && result.errors.length > 0) {
+                    this.error = 'Some errors occurred:\n' + result.errors.join('\n');
+                }
+                
+                await this.loadStores();
+                event.target.value = ''; // Reset file input
+                setTimeout(() => {
+                    this.successMessage = '';
+                    this.error = '';
+                }, 5000);
+                
+            } catch (error) {
+                this.error = 'Failed to import stores: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        downloadPartTemplate() {
+            const csv = 'part_number,description,category,unit_cost\nSAMPLE-001,Sample Part Description,Sample Category,99.99';
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'parts_import_template.csv';
+            a.click();
+        },
+
+        downloadStoreTemplate() {
+            const csv = 'name,type,location,assigned_user_email\nSample Store,customer_site,Sample Location,user@example.com';
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'stores_import_template.csv';
+            a.click();
         },
 
         exportCSV() {

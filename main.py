@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,8 @@ import hashlib
 import jwt
 from datetime import datetime, timedelta
 import os
+import csv
+import io
 
 # Database setup
 DATABASE = "inventory.db"
@@ -354,41 +356,6 @@ class StatsResponse(BaseModel):
     total_stores: int
     low_stock: int
     my_parts: int
-
-class CreateStoreRequest(BaseModel):
-    name: str
-    type: str
-    location: Optional[str] = None
-    assigned_user_id: Optional[int] = None
-
-class UpdateStoreRequest(BaseModel):
-    name: Optional[str] = None
-    type: Optional[str] = None
-    location: Optional[str] = None
-    assigned_user_id: Optional[int] = None
-
-class CreatePartRequest(BaseModel):
-    part_number: str
-    description: str
-    category: str
-    unit_cost: float
-
-class UpdatePartRequest(BaseModel):
-    part_number: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    unit_cost: Optional[float] = None
-
-class MovementResponse(BaseModel):
-    id: int
-    from_store_name: Optional[str]
-    to_store_name: Optional[str]
-    part_number: str
-    quantity: int
-    movement_type: str
-    work_order: Optional[str]
-    created_by_name: str
-    created_at: str
 
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -939,6 +906,43 @@ async def create_store(request: CreateStoreRequest, user_id: int = Depends(get_c
     
     return {"success": True, "message": f"Store {request.name} created successfully"}
 
+# Bulk import stores from CSV (admin only)
+@app.post("/api/stores/bulk-import")
+async def bulk_import_stores(
+    file: UploadFile = File(...),
+    user_id: int = Depends(get_current_user)
+):
+    """Bulk import stores from a CSV file (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    content = await file.read()
+    reader = csv.DictReader(io.StringIO(content.decode()))
+    added, skipped = 0, 0
+    valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+    for row in reader:
+        try:
+            # Validate type
+            if row['type'] not in valid_types:
+                skipped += 1
+                continue
+            # assigned_user_id can be empty
+            assigned_user_id = int(row['assigned_user_id']) if row.get('assigned_user_id') else None
+            cursor.execute(
+                "INSERT INTO stores (name, type, location, assigned_user_id) VALUES (?, ?, ?, ?)",
+                (row['name'], row['type'], row.get('location'), assigned_user_id)
+            )
+            added += 1
+        except Exception as e:
+            skipped += 1
+            continue
+    conn.commit()
+    conn.close()
+    return {"success": True, "added": added, "skipped": skipped}
+
 @app.put("/api/stores/{store_id}")
 async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int = Depends(get_current_user)):
     """Update store (admin only)"""
@@ -968,7 +972,7 @@ async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int 
     if request.type is not None:
         valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
         if request.type not in valid_types:
-            raise HTTPException(status_code=400, detail=f"Invalid store type")
+            raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
         updates.append("type = ?")
         values.append(request.type)
     
@@ -1005,7 +1009,7 @@ async def delete_store(store_id: int, user_id: int = Depends(get_current_user)):
     if user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Check if store exists
+    # Check if store exists and get name
     cursor.execute("SELECT name FROM stores WHERE id = ?", (store_id,))
     store = cursor.fetchone()
     
@@ -1017,7 +1021,7 @@ async def delete_store(store_id: int, user_id: int = Depends(get_current_user)):
     inventory_count = cursor.fetchone()['count']
     
     if inventory_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete store with {inventory_count} inventory items")
+        raise HTTPException(status_code=400, detail=f"Cannot delete store with {inventory_count} inventory items. Please transfer or remove inventory first.")
     
     # Delete store
     cursor.execute("DELETE FROM stores WHERE id = ?", (store_id,))
@@ -1057,6 +1061,37 @@ async def create_part(request: CreatePartRequest, user_id: int = Depends(get_cur
     
     return {"success": True, "message": f"Part {request.part_number} created successfully"}
 
+# ...existing code...
+
+@app.post("/api/parts/bulk-import")
+async def bulk_import_parts(
+    file: UploadFile = File(...),
+    user_id: int = Depends(get_current_user)
+):
+    """Bulk import parts from a CSV file (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    content = await file.read()
+    reader = csv.DictReader(io.StringIO(content.decode()))
+    added, skipped = 0, 0
+    for row in reader:
+        try:
+            cursor.execute(
+                "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
+                (row['part_number'], row['description'], row['category'], float(row['unit_cost']))
+            )
+            added += 1
+        except Exception:
+            skipped += 1
+            continue
+    conn.commit()
+    conn.close()
+    return {"success": True, "added": added, "skipped": skipped}
+
 @app.put("/api/parts/{part_id}")
 async def update_part(part_id: int, request: UpdatePartRequest, user_id: int = Depends(get_current_user)):
     """Update part (admin only)"""
@@ -1080,6 +1115,7 @@ async def update_part(part_id: int, request: UpdatePartRequest, user_id: int = D
     values = []
     
     if request.part_number is not None:
+        # Check if new part number already exists
         cursor.execute("SELECT id FROM parts WHERE part_number = ? AND id != ?", (request.part_number, part_id))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Part number already exists")
@@ -1123,7 +1159,7 @@ async def delete_part(part_id: int, user_id: int = Depends(get_current_user)):
     if user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Check if part exists
+    # Check if part exists and get details
     cursor.execute("SELECT part_number FROM parts WHERE id = ?", (part_id,))
     part = cursor.fetchone()
     
@@ -1135,7 +1171,7 @@ async def delete_part(part_id: int, user_id: int = Depends(get_current_user)):
     inventory_count = cursor.fetchone()['count']
     
     if inventory_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete part with {inventory_count} inventory records")
+        raise HTTPException(status_code=400, detail=f"Cannot delete part with {inventory_count} inventory records. Please remove inventory first.")
     
     # Delete part
     cursor.execute("DELETE FROM parts WHERE id = ?", (part_id,))
@@ -1147,8 +1183,16 @@ async def delete_part(part_id: int, user_id: int = Depends(get_current_user)):
 
 # Movement History
 @app.get("/api/movements", response_model=List[MovementResponse])
-async def get_movements(user_id: int = Depends(get_current_user), limit: int = 100):
-    """Get movement history"""
+async def get_movements(
+    user_id: int = Depends(get_current_user), 
+    limit: int = 100,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    part_id: Optional[int] = None,
+    store_id: Optional[int] = None
+):
+    """Get movement history with advanced filtering"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -1173,18 +1217,48 @@ async def get_movements(user_id: int = Depends(get_current_user), limit: int = 1
         JOIN parts p ON m.part_id = p.id
         LEFT JOIN work_orders wo ON m.work_order_id = wo.id
         JOIN users u ON m.created_by = u.id
+        WHERE 1=1
     """
     
+    params = []
+    
+    # Role-based filtering
     if user['role'] != 'admin':
         query += """
-            WHERE m.created_by = ? 
+            AND (m.created_by = ? 
                OR s1.assigned_user_id = ?
-               OR s2.assigned_user_id = ?
+               OR s2.assigned_user_id = ?)
         """
-        cursor.execute(f"{query} ORDER BY m.created_at DESC LIMIT ?", (user_id, user_id, user_id, limit))
-    else:
-        cursor.execute(f"{query} ORDER BY m.created_at DESC LIMIT ?", (limit,))
+        params.extend([user_id, user_id, user_id])
     
+    # Date range filtering
+    if start_date:
+        query += " AND m.created_at >= ?"
+        params.append(start_date)
+    
+    if end_date:
+        query += " AND m.created_at <= ?"
+        params.append(end_date + " 23:59:59")
+    
+    # Movement type filtering
+    if movement_type:
+        query += " AND m.movement_type = ?"
+        params.append(movement_type)
+    
+    # Part filtering
+    if part_id:
+        query += " AND m.part_id = ?"
+        params.append(part_id)
+    
+    # Store filtering (from or to)
+    if store_id:
+        query += " AND (m.from_store_id = ? OR m.to_store_id = ?)"
+        params.extend([store_id, store_id])
+    
+    query += " ORDER BY m.created_at DESC LIMIT ?"
+    params.append(limit)
+    
+    cursor.execute(query, params)
     movements = cursor.fetchall()
     conn.close()
     
