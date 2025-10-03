@@ -139,14 +139,16 @@
                                 <td><span class="wo-tag" x-text="part.category"></span></td>
                                 <td x-text="part.unit_cost"></td>
                                 <td x-text="inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)"></td>
+                            </tr>
             <div x-show="!loading && showUsersPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">User Management</h3>
-                    <button class="btn btn-success" 
-                            @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true">
-                        Add User
-                    </button>
-                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-success" @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true">
+            Add User
+        </button>
+    </div>
+</div>
                 <table>
                     <thead>
                         <tr>
@@ -855,10 +857,13 @@
             <div x-show="!loading && showUsersPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">User Management</h3>
-                    <button class="btn btn-success" 
-                            @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true">
-                        Add User
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-success" 
+                                @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true">
+                            Add User
+                        </button>
+                        <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                    </div>
                 </div>
                 <table>
                     <thead>
@@ -906,6 +911,7 @@
                                 @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true">
                             Add Store
                         </button>
+                        <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
                     </div>
                 </div>
                 <table>
@@ -953,6 +959,7 @@
                                 @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
                             Add Part
                         </button>
+                        <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
                     </div>
                 </div>
                 <table>
@@ -990,7 +997,6 @@
             <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <h3 style="margin: 0 0 1rem 0;">Movement History</h3>
-                    
                     <!-- Filters -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
                         <div>
@@ -1033,7 +1039,10 @@
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-sm btn-success" @click="loadMovements()">Apply Filters</button>
                         <button class="btn btn-sm" @click="clearMovementFilters()">Clear Filters</button>
+                        <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+
                     </div>
+
                 </div>
                 <table>
                     <thead>
