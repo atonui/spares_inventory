@@ -262,7 +262,7 @@
                                 <td>
                                     <span class="wo-tag" x-text="part.category"></span>
                                 </td>
-                                <td x-text="' + part.unit_cost.toFixed(2)"></td>
+                                <td x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
                                 <td>
                                     <button class="btn btn-sm" @click="editPart(part)">Edit</button>
                                     <button class="btn btn-sm" 
@@ -406,7 +406,7 @@
                     No recent activity. Start by adding or transferring inventory!
                 </div>
             </div>
-            <div x-show="!loading" class="inventory-table">
+            <div x-show="showInventoryPanel" class="inventory-table">
                 <table>
                     <thead>
                         <tr>
@@ -997,6 +997,7 @@
             <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <h3 style="margin: 0 0 1rem 0;">Movement History</h3>
+                    
                     <!-- Filters -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
                         <div>
@@ -1040,9 +1041,7 @@
                         <button class="btn btn-sm btn-success" @click="loadMovements()">Apply Filters</button>
                         <button class="btn btn-sm" @click="clearMovementFilters()">Clear Filters</button>
                         <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
-
                     </div>
-
                 </div>
                 <table>
                     <thead>

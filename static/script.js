@@ -76,6 +76,7 @@ function inventoryApp() {
         showLowStockPanel: false,
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
+        showInventoryPanel: false,
         selectedStore: null,
         storeInventory: [],
         editingUser: null,
@@ -181,7 +182,8 @@ function inventoryApp() {
                     this.loadStats(),
                     this.loadStores(),
                     this.loadParts(),
-                    this.loadInventory()
+                    this.loadInventory(),
+                    this.loadMovements()
                 ];
                 
                 if (this.currentUser?.role === 'admin') {
@@ -227,9 +229,17 @@ function inventoryApp() {
         },
 
         async loadInventory() {
-            this.inventory = await this.apiCall('/inventory');
-            this.filteredInventory = this.inventory;
-        },
+    this.loading = true;
+    try {
+        const response = await this.apiCall('/inventory');
+        this.inventory = response;
+        this.filterInventory(); // <-- Make sure this is called!
+    } catch (error) {
+        this.error = 'Failed to load inventory: ' + error.message;
+    } finally {
+        this.loading = false;
+    }
+},
 
         async loadUsers() {
             if (this.currentUser?.role === 'admin') {
@@ -787,6 +797,7 @@ function inventoryApp() {
             this.showLowStockPanel = false;
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
+            this.showInventoryPanel = false;
         },
 
         openPanel(panelName) {
@@ -798,6 +809,12 @@ function inventoryApp() {
             this.showUserModal = false;
             this.showStoreModal = false;
             this.showPartModal = false;
+            // Reset filters for inventory panel
+            if (panelName === 'showInventoryPanel') {
+                this.searchTerm = '';
+                this.storeFilter = '';
+                this.filterInventory();
+            }
             // open the requested panel
             this[panelName] = true;
 
