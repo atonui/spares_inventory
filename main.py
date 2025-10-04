@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import os
 import csv
 import io
+import secrets
 
 # Database setup
 DATABASE = "inventory.db"
@@ -359,15 +360,15 @@ class StatsResponse(BaseModel):
 
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return user_id
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    token = credentials.credentials
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE session_token = ?", (token,))
+    user = cursor.fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+    return user['id']
 
 # Routes
 @app.get("/")
@@ -380,21 +381,21 @@ async def login(user_login: UserLogin):
     """User login"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute(
         "SELECT id, email, name, role, territory, password_hash FROM users WHERE email = ?",
         (user_login.email,)
     )
     user = cursor.fetchone()
-    conn.close()
-    
     if not user or user['password_hash'] != hash_password(user_login.password):
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    access_token = create_access_token({"user_id": user['id']})
-    
+    # Generate a new session token
+    session_token = secrets.token_urlsafe(32)
+    cursor.execute("UPDATE users SET session_token = ? WHERE id = ?", (session_token, user['id']))
+    conn.commit()
+    conn.close()
     return {
-        "access_token": access_token,
+        "access_token": session_token,
         "token_type": "bearer",
         "user": {
             "id": user['id'],
@@ -404,6 +405,15 @@ async def login(user_login: UserLogin):
             "territory": user['territory']
         }
     }
+
+@app.post("/api/auth/logout")
+async def logout(user_id: int = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 @app.get("/api/me", response_model=UserResponse)
 async def get_current_user_info(user_id: int = Depends(get_current_user)):

@@ -10,6 +10,14 @@
 </head>
 <body>
     <div x-data="inventoryApp()" x-init="checkAuth()">
+        <div 
+            x-show="error"
+            x-transition
+            x-text="error"
+            class="error"
+            x-init="$watch('error', val => { if(val) setTimeout(() => error = '', 5000) })"
+        ></div>
+    <div x-data="inventoryApp()" x-init="checkAuth()">
         <!-- Login Screen -->
         <div x-show="!isAuthenticated" class="login-container">
             <form @submit.prevent="login()" class="login-form">
@@ -980,7 +988,7 @@
                                 <td>
                                     <span class="wo-tag" x-text="part.category"></span>
                                 </td>
-                                <td x-text="' + part.unit_cost.toFixed(2)"></td>
+                                <td x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
                                 <td>
                                     <button class="btn btn-sm" @click="editPart(part)">Edit</button>
                                     <button class="btn btn-sm" 

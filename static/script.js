@@ -168,10 +168,35 @@ function inventoryApp() {
         },
 
         logout() {
-            localStorage.removeItem('token');
             this.token = null;
             this.currentUser = null;
             this.isAuthenticated = false;
+            localStorage.removeItem('token');
+            localStorage.removeItem('currentUser');
+            // Optionally, redirect to login or home
+        },
+
+        async apiCall(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            if (this.token) {
+                options.headers['Authorization'] = 'Bearer ' + this.token;
+            }
+            try {
+                const response = await fetch(this.apiUrl + url, options);
+                if (response.status === 401 || response.status === 403) {
+                    // Session invalid or expired
+                    this.logout();
+                    this.error = "You have been logged out because your account was accessed from another device or your session expired.";
+                    return null;
+                }
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                return await response.json();
+            } catch (err) {
+                this.error = err.message;
+                return null;
+            }
         },
 
         // Data loading
