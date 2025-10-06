@@ -32,6 +32,7 @@ def init_db():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'engineer',
             territory TEXT,
+            session_token TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -123,10 +124,7 @@ def insert_sample_data(cursor):
     
     # Sample users
     users_data = [
-        ('john@company.com', 'John Engineer', hash_password('password123'), 'engineer', 'North Region'),
-        ('admin@company.com', 'System Admin', hash_password('admin123'), 'admin', 'All Regions'),
-        ('mike@company.com', 'Mike Engineer', hash_password('password123'), 'engineer', 'South Region'),
-        ('manager@company.com', 'Regional Manager', hash_password('manager123'), 'manager', 'North Region')
+        ('valentine.opiyo@varian.com', 'Valentine Opiyo', hash_password('admin123'), 'admin', 'Kenya'),
     ]
     
     cursor.executemany('''
@@ -134,63 +132,7 @@ def insert_sample_data(cursor):
         VALUES (?, ?, ?, ?, ?)
     ''', users_data)
     
-    # Sample stores
-    stores_data = [
-        ('Central Warehouse', 'central', 'Main Office', None),
-        ('Site Alpha', 'customer_site', 'Customer Location A', 1),
-        ('Site Beta', 'customer_site', 'Customer Location B', 3),
-        ('John\'s Personal', 'engineer', 'John\'s Inventory', 1),
-        ('Mike\'s Personal', 'engineer', 'Mike\'s Inventory', 3),
-        ('FE Consignment', 'fe_consignment', 'Customer Owned Stock', None)
-    ]
     
-    cursor.executemany('''
-        INSERT OR IGNORE INTO stores (name, type, location, assigned_user_id)
-        VALUES (?, ?, ?, ?)
-    ''', stores_data)
-    
-    # Sample parts
-    parts_data = [
-        ('BRG-001', 'Main Bearing Assembly', 'Mechanical', 150.00),
-        ('SEAL-045', 'Oil Seal 45mm', 'Seals', 25.00),
-        ('MTR-500', 'Drive Motor 500W', 'Electrical', 450.00),
-        ('BELT-V100', 'V-Belt 100cm', 'Mechanical', 35.00),
-        ('FILT-AIR', 'Air Filter Element', 'Filters', 15.00)
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO parts (part_number, description, category, unit_cost)
-        VALUES (?, ?, ?, ?)
-    ''', parts_data)
-    
-    # Sample work orders
-    wo_data = [
-        ('WO-2024-001', 'Customer A', 'Bearing replacement', 'open', 1),
-        ('WO-2024-002', 'Customer B', 'Seal maintenance', 'open', 1),
-        ('WO-2024-003', 'Customer C', 'Motor repair', 'closed', 3)
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO work_orders (work_order_number, customer_name, description, status, assigned_engineer_id)
-        VALUES (?, ?, ?, ?, ?)
-    ''', wo_data)
-    
-    # Sample inventory
-    inventory_data = [
-        (1, 1, 15, 5, None),  # Central warehouse original stock
-        (1, 2, 25, 5, None),  # Central warehouse original stock
-        (1, 3, 8, 3, None),   # Central warehouse original stock
-        (2, 1, 2, 2, 1),      # Site Alpha - WO stock
-        (4, 2, 3, 1, 2),      # John's personal - WO stock
-        (5, 2, 1, 1, 3),      # Mike's personal - WO stock
-        (3, 2, 1, 2, None),   # Site Beta - original stock
-        (6, 1, 5, 2, 1)       # FE Consignment
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO inventory (store_id, part_id, quantity, min_threshold, work_order_id)
-        VALUES (?, ?, ?, ?, ?)
-    ''', inventory_data)
 
 def hash_password(password: str) -> str:
     """Hash password for storage"""
@@ -932,7 +874,7 @@ async def bulk_import_stores(
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode()))
     added, skipped = 0, 0
-    valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+    valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment', 'self', 'admin', 'manager', 'warehouse']
     for row in reader:
         try:
             # Validate type
