@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import os
 import csv
 import io
+import secrets
 
 # Database setup
 DATABASE = "inventory.db"
@@ -31,6 +32,7 @@ def init_db():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'engineer',
             territory TEXT,
+            session_token TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -82,7 +84,7 @@ def init_db():
             part_id INTEGER NOT NULL,
             quantity INTEGER NOT NULL DEFAULT 0,
             min_threshold INTEGER DEFAULT 0,
-            work_order_id INTEGER,
+            work_order_id TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (store_id) REFERENCES stores (id),
             FOREIGN KEY (part_id) REFERENCES parts (id),
@@ -122,10 +124,7 @@ def insert_sample_data(cursor):
     
     # Sample users
     users_data = [
-        ('john@company.com', 'John Engineer', hash_password('password123'), 'engineer', 'North Region'),
-        ('admin@company.com', 'System Admin', hash_password('admin123'), 'admin', 'All Regions'),
-        ('mike@company.com', 'Mike Engineer', hash_password('password123'), 'engineer', 'South Region'),
-        ('manager@company.com', 'Regional Manager', hash_password('manager123'), 'manager', 'North Region')
+        ('valentine.opiyo@varian.com', 'Valentine Opiyo', hash_password('admin123'), 'admin', 'Kenya'),
     ]
     
     cursor.executemany('''
@@ -133,63 +132,7 @@ def insert_sample_data(cursor):
         VALUES (?, ?, ?, ?, ?)
     ''', users_data)
     
-    # Sample stores
-    stores_data = [
-        ('Central Warehouse', 'central', 'Main Office', None),
-        ('Site Alpha', 'customer_site', 'Customer Location A', 1),
-        ('Site Beta', 'customer_site', 'Customer Location B', 3),
-        ('John\'s Personal', 'engineer', 'John\'s Inventory', 1),
-        ('Mike\'s Personal', 'engineer', 'Mike\'s Inventory', 3),
-        ('FE Consignment', 'fe_consignment', 'Customer Owned Stock', None)
-    ]
     
-    cursor.executemany('''
-        INSERT OR IGNORE INTO stores (name, type, location, assigned_user_id)
-        VALUES (?, ?, ?, ?)
-    ''', stores_data)
-    
-    # Sample parts
-    parts_data = [
-        ('BRG-001', 'Main Bearing Assembly', 'Mechanical', 150.00),
-        ('SEAL-045', 'Oil Seal 45mm', 'Seals', 25.00),
-        ('MTR-500', 'Drive Motor 500W', 'Electrical', 450.00),
-        ('BELT-V100', 'V-Belt 100cm', 'Mechanical', 35.00),
-        ('FILT-AIR', 'Air Filter Element', 'Filters', 15.00)
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO parts (part_number, description, category, unit_cost)
-        VALUES (?, ?, ?, ?)
-    ''', parts_data)
-    
-    # Sample work orders
-    wo_data = [
-        ('WO-2024-001', 'Customer A', 'Bearing replacement', 'open', 1),
-        ('WO-2024-002', 'Customer B', 'Seal maintenance', 'open', 1),
-        ('WO-2024-003', 'Customer C', 'Motor repair', 'closed', 3)
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO work_orders (work_order_number, customer_name, description, status, assigned_engineer_id)
-        VALUES (?, ?, ?, ?, ?)
-    ''', wo_data)
-    
-    # Sample inventory
-    inventory_data = [
-        (1, 1, 15, 5, None),  # Central warehouse original stock
-        (1, 2, 25, 5, None),  # Central warehouse original stock
-        (1, 3, 8, 3, None),   # Central warehouse original stock
-        (2, 1, 2, 2, 1),      # Site Alpha - WO stock
-        (4, 2, 3, 1, 2),      # John's personal - WO stock
-        (5, 2, 1, 1, 3),      # Mike's personal - WO stock
-        (3, 2, 1, 2, None),   # Site Beta - original stock
-        (6, 1, 5, 2, 1)       # FE Consignment
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO inventory (store_id, part_id, quantity, min_threshold, work_order_id)
-        VALUES (?, ?, ?, ?, ?)
-    ''', inventory_data)
 
 def hash_password(password: str) -> str:
     """Hash password for storage"""
@@ -359,15 +302,15 @@ class StatsResponse(BaseModel):
 
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return user_id
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    token = credentials.credentials
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE session_token = ?", (token,))
+    user = cursor.fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+    return user['id']
 
 # Routes
 @app.get("/")
@@ -380,21 +323,21 @@ async def login(user_login: UserLogin):
     """User login"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute(
         "SELECT id, email, name, role, territory, password_hash FROM users WHERE email = ?",
         (user_login.email,)
     )
     user = cursor.fetchone()
-    conn.close()
-    
     if not user or user['password_hash'] != hash_password(user_login.password):
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    access_token = create_access_token({"user_id": user['id']})
-    
+    # Generate a new session token
+    session_token = secrets.token_urlsafe(32)
+    cursor.execute("UPDATE users SET session_token = ? WHERE id = ?", (session_token, user['id']))
+    conn.commit()
+    conn.close()
     return {
-        "access_token": access_token,
+        "access_token": session_token,
         "token_type": "bearer",
         "user": {
             "id": user['id'],
@@ -404,6 +347,15 @@ async def login(user_login: UserLogin):
             "territory": user['territory']
         }
     }
+
+@app.post("/api/auth/logout")
+async def logout(user_id: int = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 @app.get("/api/me", response_model=UserResponse)
 async def get_current_user_info(user_id: int = Depends(get_current_user)):
@@ -493,7 +445,7 @@ async def get_stats(user_id: int = Depends(get_current_user)):
     cursor = conn.cursor()
     
     # Total unique parts
-    cursor.execute("SELECT COUNT(DISTINCT part_id) FROM inventory")
+    cursor.execute("SELECT COUNT(DISTINCT part_number) FROM parts")
     total_parts = cursor.fetchone()[0]
     
     # Total stores
@@ -922,7 +874,8 @@ async def bulk_import_stores(
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode()))
     added, skipped = 0, 0
-    valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+    # this should be moved from hardcoded to a db table in future
+    valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment', 'self', 'admin', 'manager', 'warehouse']
     for row in reader:
         try:
             # Validate type
@@ -970,7 +923,8 @@ async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int 
         values.append(request.name)
     
     if request.type is not None:
-        valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+        # a store can either be at the office, personal or customer_site
+        valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment']
         if request.type not in valid_types:
             raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
         updates.append("type = ?")
@@ -1196,9 +1150,6 @@ async def get_movements(
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Get user role
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
     
     query = """
         SELECT 
@@ -1222,14 +1173,12 @@ async def get_movements(
     
     params = []
     
-    # Role-based filtering
-    if user['role'] != 'admin':
-        query += """
-            AND (m.created_by = ? 
-               OR s1.assigned_user_id = ?
-               OR s2.assigned_user_id = ?)
-        """
-        params.extend([user_id, user_id, user_id])
+    # query += """
+    #     AND (m.created_by = ? 
+    #     OR s1.assigned_user_id = ?
+    #     OR s2.assigned_user_id = ?)
+    #     """
+    # params.extend([user_id, user_id, user_id])
     
     # Date range filtering
     if start_date:

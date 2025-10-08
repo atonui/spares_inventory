@@ -76,6 +76,7 @@ function inventoryApp() {
         showLowStockPanel: false,
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
+        showInventoryPanel: false,
         selectedStore: null,
         storeInventory: [],
         editingUser: null,
@@ -167,10 +168,35 @@ function inventoryApp() {
         },
 
         logout() {
-            localStorage.removeItem('token');
             this.token = null;
             this.currentUser = null;
             this.isAuthenticated = false;
+            localStorage.removeItem('token');
+            localStorage.removeItem('currentUser');
+            // Optionally, redirect to login or home
+        },
+
+        async apiCall(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            if (this.token) {
+                options.headers['Authorization'] = 'Bearer ' + this.token;
+            }
+            try {
+                const response = await fetch(this.apiUrl + url, options);
+                if (response.status === 401 || response.status === 403) {
+                    // Session invalid or expired
+                    this.logout();
+                    this.error = "You have been logged out because your account was accessed from another device or your session expired.";
+                    return null;
+                }
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                return await response.json();
+            } catch (err) {
+                this.error = err.message;
+                return null;
+            }
         },
 
         // Data loading
@@ -181,7 +207,8 @@ function inventoryApp() {
                     this.loadStats(),
                     this.loadStores(),
                     this.loadParts(),
-                    this.loadInventory()
+                    this.loadInventory(),
+                    this.loadMovements()
                 ];
                 
                 if (this.currentUser?.role === 'admin') {
@@ -227,9 +254,17 @@ function inventoryApp() {
         },
 
         async loadInventory() {
-            this.inventory = await this.apiCall('/inventory');
-            this.filteredInventory = this.inventory;
-        },
+    this.loading = true;
+    try {
+        const response = await this.apiCall('/inventory');
+        this.inventory = response;
+        this.filterInventory(); // <-- Make sure this is called!
+    } catch (error) {
+        this.error = 'Failed to load inventory: ' + error.message;
+    } finally {
+        this.loading = false;
+    }
+},
 
         async loadUsers() {
             if (this.currentUser?.role === 'admin') {
@@ -306,6 +341,7 @@ function inventoryApp() {
         },
 
         get editableStores() {
+            if (!this.currentUser) return [];
             if (this.currentUser?.role === 'admin') return this.stores;
             return this.stores.filter(store => 
                 store.assigned_user_id === this.currentUser.id || 
@@ -378,7 +414,7 @@ function inventoryApp() {
                         part_id: parseInt(this.addForm.part_id),
                         store_id: parseInt(this.addForm.store_id),
                         quantity: parseInt(this.addForm.quantity),
-                        work_order_number: this.addForm.work_order_number || null
+                        // work_order_number: this.addForm.work_order_number || null
                     })
                 });
                 
@@ -787,6 +823,7 @@ function inventoryApp() {
             this.showLowStockPanel = false;
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
+            this.showInventoryPanel = false;
         },
 
         openPanel(panelName) {
@@ -798,6 +835,14 @@ function inventoryApp() {
             this.showUserModal = false;
             this.showStoreModal = false;
             this.showPartModal = false;
+            this.showInventoryPanel = false;
+
+            // Reset filters for inventory panel
+            if (panelName === 'showInventoryPanel') {
+                this.searchTerm = '';
+                this.storeFilter = '';
+                this.filterInventory();
+            }
             // open the requested panel
             this[panelName] = true;
 
