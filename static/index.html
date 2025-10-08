@@ -23,11 +23,11 @@
             <form @submit.prevent="login()" class="login-form">
                 <h2>Inventory Management</h2>
                 
-                <div class="demo-credentials">
+                <!-- <div class="demo-credentials">
                     <strong>Demo Credentials:</strong><br>
                     Engineer: john@company.com / password123<br>
                     Admin: admin@company.com / admin123
-                </div>
+                </div> -->
                 
                 <div x-show="error" class="error" x-text="error"></div>
                 
@@ -1090,6 +1090,12 @@
 
             <!-- Inventory Table -->
             <div x-show="!loading" class="inventory-table">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                    <h3 style="margin: 0 0 1rem 0;">Total Inventory</h3>
+                    <!-- <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                    </div> -->
+                </div>
                 <table>
                     <thead>
                         <tr>

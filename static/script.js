@@ -835,6 +835,8 @@ function inventoryApp() {
             this.showUserModal = false;
             this.showStoreModal = false;
             this.showPartModal = false;
+            this.showInventoryPanel = false;
+
             // Reset filters for inventory panel
             if (panelName === 'showInventoryPanel') {
                 this.searchTerm = '';
