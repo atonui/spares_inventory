@@ -14,8 +14,8 @@ function inventoryApp() {
         
         // Forms
         loginForm: {
-            email: 'john@company.com',
-            password: 'password123'
+            email: '',
+            password: ''
         },
         
         addForm: {
