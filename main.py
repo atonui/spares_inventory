@@ -84,7 +84,7 @@ def init_db():
             part_id INTEGER NOT NULL,
             quantity INTEGER NOT NULL DEFAULT 0,
             min_threshold INTEGER DEFAULT 0,
-            work_order_id INTEGER,
+            work_order_id TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (store_id) REFERENCES stores (id),
             FOREIGN KEY (part_id) REFERENCES parts (id),
@@ -445,7 +445,7 @@ async def get_stats(user_id: int = Depends(get_current_user)):
     cursor = conn.cursor()
     
     # Total unique parts
-    cursor.execute("SELECT COUNT(DISTINCT part_id) FROM inventory")
+    cursor.execute("SELECT COUNT(DISTINCT part_number) FROM parts")
     total_parts = cursor.fetchone()[0]
     
     # Total stores
@@ -874,6 +874,7 @@ async def bulk_import_stores(
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode()))
     added, skipped = 0, 0
+    # this should be moved from hardcoded to a db table in future
     valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment', 'self', 'admin', 'manager', 'warehouse']
     for row in reader:
         try:
@@ -922,7 +923,8 @@ async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int 
         values.append(request.name)
     
     if request.type is not None:
-        valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
+        # a store can either be at the office, personal or customer_site
+        valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment']
         if request.type not in valid_types:
             raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
         updates.append("type = ?")
@@ -1148,9 +1150,6 @@ async def get_movements(
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Get user role
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
     
     query = """
         SELECT 
@@ -1174,14 +1173,12 @@ async def get_movements(
     
     params = []
     
-    # Role-based filtering
-    if user['role'] != 'admin':
-        query += """
-            AND (m.created_by = ? 
-               OR s1.assigned_user_id = ?
-               OR s2.assigned_user_id = ?)
-        """
-        params.extend([user_id, user_id, user_id])
+    # query += """
+    #     AND (m.created_by = ? 
+    #     OR s1.assigned_user_id = ?
+    #     OR s2.assigned_user_id = ?)
+    #     """
+    # params.extend([user_id, user_id, user_id])
     
     # Date range filtering
     if start_date:

@@ -247,7 +247,7 @@
                             <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
                         </label>
                         <button class="btn btn-success" 
-                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
+                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; 653 = true">
                             Add Part
                         </button>
                     </div>
@@ -614,11 +614,13 @@
                         </div>
                         <div class="form-group">
                             <label>Type</label>
+                            <!-- this should also be moved from hardcode to db -->
                             <select x-model="storeForm.type" required>
-                                <option value="central">Central Warehouse</option>
+                                <option value="office">Office</option>
                                 <option value="customer_site">Customer Site</option>
                                 <option value="engineer">Engineer Personal</option>
                                 <option value="fe_consignment">FE Consignment</option>
+                                <option value="admin">Admin</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -1172,10 +1174,10 @@
                             <label>Quantity</label>
                             <input type="number" x-model="addForm.quantity" min="1" required>
                         </div>
-                        <div class="form-group">
+                        <!-- <div class="form-group">
                             <label>Work Order (leave blank for original stock)</label>
                             <input type="text" x-model="addForm.work_order_number" placeholder="WO-2024-001">
-                        </div>
+                        </div> -->
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showAddModal = false">Cancel</button>
                             <button type="submit" class="btn btn-success" :disabled="addingStock">
@@ -1288,10 +1290,11 @@
                         <div class="form-group">
                             <label>Type</label>
                             <select x-model="storeForm.type" required>
-                                <option value="central">Central Warehouse</option>
+                                <option value="office">Office</option>
                                 <option value="customer_site">Customer Site</option>
                                 <option value="engineer">Engineer Personal</option>
                                 <option value="fe_consignment">FE Consignment</option>
+                                <option value="admin">Admin</option>
                             </select>
                         </div>
                         <div class="form-group">

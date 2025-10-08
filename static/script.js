@@ -341,6 +341,7 @@ function inventoryApp() {
         },
 
         get editableStores() {
+            if (!this.currentUser) return [];
             if (this.currentUser?.role === 'admin') return this.stores;
             return this.stores.filter(store => 
                 store.assigned_user_id === this.currentUser.id || 
@@ -413,7 +414,7 @@ function inventoryApp() {
                         part_id: parseInt(this.addForm.part_id),
                         store_id: parseInt(this.addForm.store_id),
                         quantity: parseInt(this.addForm.quantity),
-                        work_order_number: this.addForm.work_order_number || null
+                        // work_order_number: this.addForm.work_order_number || null
                     })
                 });
                 
