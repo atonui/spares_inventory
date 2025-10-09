@@ -4,7 +4,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from pydantic_settings import BaseSettings
+from passlib.context import CryptContext
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 import sqlite3
 import hashlib
@@ -14,9 +19,21 @@ import os
 import csv
 import io
 import secrets
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Database setup
-DATABASE = "inventory.db"
+# DATABASE = os.getenv("DATABASE_URL")
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    SECRET_KEY: str
+
+    class Config:
+        env_file = ".env"
+settings = Settings()
+DATABASE = settings.DATABASE_URL
+SECRET_KEY = settings.SECRET_KEY
 
 def init_db():
     """Initialize the database with tables"""
@@ -171,7 +188,7 @@ app = FastAPI(
 
 # Security
 security = HTTPBearer()
-SECRET_KEY = "your-secret-key-change-in-production"
+# SECRET_KEY = os.getenv("SECRET_KEY")
 
 # CORS middleware for frontend
 app.add_middleware(
@@ -186,6 +203,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Pydantic models
+
 class UserLogin(BaseModel):
     email: str
     password: str

@@ -57,7 +57,11 @@
                         <h1>Inventory Management</h1>
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
-                    <button class="btn" @click="logout()">Logout</button>
+                    <div class="controls" style="margin-bottom: 1.5rem;">
+                        <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                            <button class="btn btn-success" @click="profile()">Profile</button>
+                            <button class="btn" @click="logout()">Logout</button>
+                        </div>
                 </div>
             </div>
 
@@ -471,6 +475,48 @@
             </div>
 
             <!-- ALL MODALS -->
+
+             <!-- Profile Modal -->
+            <div x-show="showProfileModal" class="modal" @click.outside="showProfileModal = false">
+                <div class="modal-content">
+                    <h3>Add Stock</h3>
+                    <form @submit.prevent="addStock()">
+                        <div class="form-group">
+                            <label>Part</label>
+                            <select x-model="addForm.part_id" required>
+                                <option value="">Select Part</option>
+                                <template x-for="part in parts" :key="part.id">
+                                    <option :value="part.id" x-text="part.part_number + ' - ' + part.description"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Store</label>
+                            <select x-model="addForm.store_id" required>
+                                <option value="">Select Store</option>
+                                <template x-for="store in editableStores" :key="store.id">
+                                    <option :value="store.id" x-text="store.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" x-model="addForm.quantity" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Work Order (leave blank for original stock)</label>
+                            <input type="text" x-model="addForm.work_order_number" placeholder="WO-2024-001">
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showAddModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="addingStock">
+                                <span x-show="!addingStock">Add Stock</span>
+                                <span x-show="addingStock">Adding...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
             
             <!-- Add Stock Modal -->
             <div x-show="showAddModal" class="modal" @click.outside="showAddModal = false">
