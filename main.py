@@ -21,19 +21,31 @@ import io
 import secrets
 from dotenv import load_dotenv
 
-load_dotenv()
+# load_dotenv()
 
 # Database setup
 # DATABASE = os.getenv("DATABASE_URL")
 class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
+    SMTP_SERVER: str
+    SMTP_PORT: int
+    SMTP_USERNAME: str
+    SMTP_PASSWORD: str
+    FRONTEND_URL: str
 
     class Config:
         env_file = ".env"
+
 settings = Settings()
+
 DATABASE = settings.DATABASE_URL
 SECRET_KEY = settings.SECRET_KEY
+SMTP_SERVER = settings.SMTP_SERVER
+SMTP_PORT = settings.SMTP_PORT
+SMTP_USERNAME = settings.SMTP_USERNAME
+SMTP_PASSWORD = settings.SMTP_PASSWORD
+FRONTEND_URL = settings.FRONTEND_URL
 
 def init_db():
     """Initialize the database with tables"""
@@ -148,8 +160,6 @@ def insert_sample_data(cursor):
         INSERT OR IGNORE INTO users (email, name, password_hash, role, territory)
         VALUES (?, ?, ?, ?, ?)
     ''', users_data)
-    
-    
 
 def hash_password(password: str) -> str:
     """Hash password for storage"""
@@ -167,6 +177,55 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+def send_reset_email(email: str, token: str):
+    """Send password reset email"""
+    reset_link = f"{FRONTEND_URL}/static/reset-password.html?token={token}"
+    
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = "Password Reset Request - Inventory Management"
+    msg['From'] = SMTP_USERNAME
+    msg['To'] = email
+    
+    html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 30px; border-radius: 8px;">
+            <h2 style="color: #333;">Password Reset Request</h2>
+            <p>You requested to reset your password for the Inventory Management System.</p>
+            <p>Click the button below to reset your password:</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{reset_link}" 
+                   style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                          color: white; 
+                          padding: 12px 30px; 
+                          text-decoration: none; 
+                          border-radius: 8px;
+                          display: inline-block;">
+                    Reset Password
+                </a>
+            </div>
+            <p style="color: #666; font-size: 14px;">
+                This link will expire in 1 hour.<br>
+                If you didn't request this, please ignore this email.
+            </p>
+        </div>
+      </body>
+    </html>
+    """
+    
+    part = MIMEText(html, 'html')
+    msg.attach(part)
+    
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reset email")
+
 
 # Lifespan event handler (modern FastAPI way)
 @asynccontextmanager
@@ -203,6 +262,22 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Pydantic models
+
+#----User Mangaement Models----
+class UserProfileUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+#-------------------------------
 
 class UserLogin(BaseModel):
     email: str
@@ -331,6 +406,224 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return user['id']
 
 # Routes
+#-----------Profile Management Routes-----------
+@app.get("/api/profile")
+async def get_profile(user_id: int = Depends(get_current_user)):
+    """Get current user's profile"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT id, email, name, role, territory, created_at FROM users WHERE id = ?",
+        (user_id,)
+    )
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return dict(user)
+
+@app.put("/api/profile")
+async def update_profile(
+    profile_update: UserProfileUpdate,
+    user_id: int = Depends(get_current_user)
+):
+    """Update user profile (email)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if user exists
+    cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if profile_update.email:
+        # Check if email already exists
+        cursor.execute(
+            "SELECT id FROM users WHERE email = ? AND id != ?",
+            (profile_update.email, user_id)
+        )
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Email already in use")
+        
+        cursor.execute(
+            "UPDATE users SET email = ? WHERE id = ?",
+            (profile_update.email, user_id)
+        )
+    
+    conn.commit()
+    
+    # Get updated user info
+    cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    return {"message": "Profile updated successfully", "email": user['email']}
+
+@app.post("/api/profile/change-password")
+async def change_password(
+    password_data: PasswordChange,
+    user_id: int = Depends(get_current_user)
+):
+    """Change user password"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get current user
+    cursor.execute(
+        "SELECT password_hash FROM users WHERE id = ?",
+        (user_id,)
+    )
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if user['password_hash'] != hash_password(password_data.current_password):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    if len(password_data.new_password) < 8:
+        conn.close()
+        raise HTTPException(
+            status_code=400, 
+            detail="Password must be at least 8 characters long"
+        )
+    
+    # Update password and invalidate session token
+    cursor.execute(
+        "UPDATE users SET password_hash = ?, session_token = NULL WHERE id = ?",
+        (hash_password(password_data.new_password), user_id)
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Password changed successfully. Please login again."}
+
+@app.post("/api/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """Initiate password reset process"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Find user by email
+    cursor.execute(
+        "SELECT id FROM users WHERE email = ?",
+        (request.email,)
+    )
+    user = cursor.fetchone()
+    
+    # Always return success to prevent email enumeration
+    if not user:
+        conn.close()
+        return {"message": "If the email exists, a reset link has been sent"}
+    
+    user_id = user['id']
+    
+    # Generate reset token
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=1)
+    
+    # Store token in users table (we'll add a column for this)
+    cursor.execute(
+        """UPDATE users 
+           SET reset_token = ?, reset_token_expires = ? 
+           WHERE id = ?""",
+        (token, expires_at.isoformat(), user_id)
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    # Send email
+    try:
+        send_reset_email(request.email, token)
+    except:
+        pass  # Fail silently to prevent information disclosure
+    
+    return {"message": "If the email exists, a reset link has been sent"}
+
+@app.post("/api/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password using token"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Validate token
+    cursor.execute(
+        """SELECT id, reset_token_expires 
+           FROM users 
+           WHERE reset_token = ?""",
+        (request.token,)
+    )
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+    # Check if token expired
+    expires_at = datetime.fromisoformat(user['reset_token_expires'])
+    if datetime.utcnow() > expires_at:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Token has expired")
+    
+    # Validate new password
+    if len(request.new_password) < 8:
+        conn.close()
+        raise HTTPException(
+            status_code=400, 
+            detail="Password must be at least 8 characters long"
+        )
+    
+    # Update password and clear token
+    cursor.execute(
+        """UPDATE users 
+           SET password_hash = ?, 
+               reset_token = NULL, 
+               reset_token_expires = NULL,
+               session_token = NULL
+           WHERE id = ?""",
+        (hash_password(request.new_password), user['id'])
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Password reset successfully"}
+
+@app.get("/api/verify-reset-token/{token}")
+async def verify_reset_token(token: str):
+    """Verify if a reset token is valid"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """SELECT reset_token_expires 
+           FROM users 
+           WHERE reset_token = ?""",
+        (token,)
+    )
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token")
+    
+    expires_at = datetime.fromisoformat(user['reset_token_expires'])
+    if datetime.utcnow() > expires_at:
+        raise HTTPException(status_code=400, detail="Token has expired")
+    
+    return {"valid": True}
+#-----------------------------------------------
 @app.get("/")
 async def root():
     """Serve the main application"""
