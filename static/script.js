@@ -61,12 +61,15 @@ function inventoryApp() {
         // Search and filters
         searchTerm: '',
         storeFilter: '',
+        // modala
         showAddModal: false,
         showEditModal: false,
         showTransferModal: false,
         showUserModal: false,
         showStoreModal: false,
         showPartModal: false,
+        showProfileModal: false,
+        // panels
         showUsersPanel: false,
         showStoresPanel: false,
         showPartsPanel: false,
@@ -165,6 +168,11 @@ function inventoryApp() {
             }
             
             this.currentUser = await response.json();
+        },
+
+        profile() {
+            // alert(`User Profile:\n\nName: ${this.currentUser.name}\nEmail: ${this.currentUser.email}\nRole: ${this.currentUser.role}`);
+            this.showProfileModal = true;
         },
 
         logout() {
@@ -836,6 +844,7 @@ function inventoryApp() {
             this.showStoreModal = false;
             this.showPartModal = false;
             this.showInventoryPanel = false;
+            this.showProfileModal = false;
 
             // Reset filters for inventory panel
             if (panelName === 'showInventoryPanel') {
