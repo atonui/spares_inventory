@@ -110,7 +110,39 @@
                     </select>
                     
                     <button class="btn btn-success" @click="showAddModal = true">Add Stock</button>
-                    <button class="btn" @click="exportCSV()">Export CSV</button>
+
+                    <!-- UPDATED: Export dropdown button -->
+    <div style="position: relative;" x-data="{ showExportMenu: false }">
+        <button class="btn" @click="showExportMenu = !showExportMenu">
+            Export CSV ▼
+        </button>
+        <div x-show="showExportMenu" 
+             @click.outside="showExportMenu = false"
+             style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
+            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                    @click="exportInventoryCSV(); showExportMenu = false">
+                Current View
+            </button>
+            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                    @click="exportAllPartsCSV(); showExportMenu = false">
+                All Parts Catalog
+            </button>
+            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                    @click="exportStoresCSV(); showExportMenu = false">
+                All Stores
+            </button>
+            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                    @click="exportMovementsCSV(); showExportMenu = false">
+                Movement History
+            </button>
+            <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;" 
+                    @click="exportComprehensiveReport(); showExportMenu = false">
+                📊 Comprehensive Report
+            </button>
+        </div>
+    </div>
+
+                    <!-- <button class="btn" @click="exportCSV()">Export Inventory</button> -->
                     <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showUsersPanel')">
                         <span>Manage Users</span>
                     </button>
@@ -290,15 +322,15 @@
             </div>
 
             <!-- Movement History Panel -->
-            <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <!--<div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 style="margin: 0;">Movement History</h3>
                         <button class="btn btn-sm btn-success" @click="exportMovementsCSV()">Export to CSV</button>
-                    </div>
+                    </div> -->
                     
                     <!-- Filters -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+                    <!-- <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
                         <div>
                             <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Start Date</label>
                             <input type="date" x-model="movementFilters.startDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
@@ -374,7 +406,7 @@
                 <div x-show="movements.length === 0" style="padding: 2rem; text-align: center; color: #666;">
                     No movement history found.
                 </div>
-            </div>
+            </div> -->
 
             <!-- Recent Activity Feed (Home View) -->
             <div x-show="!loading && !showUsersPanel && !showStoresPanel && !showPartsPanel && !showMovementsPanel && !showAllPartsPanel && !showAllStoresPanel && !showLowStockPanel && !showMyPartsPanel && !showStoreInventoryPanel" class="inventory-table">
@@ -1101,8 +1133,10 @@
                     
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-sm btn-success" @click="loadMovements()">Apply Filters</button>
-                        <button class="btn btn-sm" @click="clearMovementFilters()">Clear Filters</button>
+                        <button class="btn btn-sm btn-success" @click="clearMovementFilters()">Clear Filters</button>
+                        <button class="btn btn-sm btn-success" @click="exportMovementsCSV()">Export to CSV</button>
                         <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+
                     </div>
                 </div>
                 <table>

@@ -21,7 +21,7 @@
                     
                 </div>
                 <div class="back-link">
-                        <a href="=/static/index.html">← Back to Dashboard</a>
+                        <a href="/static/index.html">← Back to Dashboard</a>
                     </div>
             </div>
 
@@ -33,24 +33,33 @@
             <div x-show="successMessage" class="success" x-text="successMessage"></div>
 
             <!-- Profile Card -->
-            <div x-show="!loading" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <!-- <div x-show="!loading" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid #e5e7eb;">
                         <button 
                             @click="activeTab = 'profile'" 
                             :style="activeTab === 'profile' ? 'border-bottom: 2px solid #007bff; margin-bottom: -2px;' : ''"
-                            style="padding: 0.5rem 1rem; background: none; border: none; cursor: pointer; font-weight: 500;">
+                            style="padding: 0.5rem 1rem; background: none; border: none; cursor: pointer; font-weight: 500;"
+                            class="btn">
                             Profile Info
                         </button>
                         <button 
                             @click="activeTab = 'password'" 
                             :style="activeTab === 'password' ? 'border-bottom: 2px solid #007bff; margin-bottom: -2px;' : ''"
-                            style="padding: 0.5rem 1rem; background: none; border: none; cursor: pointer; font-weight: 500;">
+                            style="padding: 0.5rem 1rem; background: none; border: none; cursor: pointer; font-weight: 500;"
+                            class="btn btn-warning">
                             Change Password
                         </button>
                     </div>
+                </div> -->
+
+                <!-- Tab links -->
+                <div class="tab">
+                <button class="tablinks" @click="activeTab = 'profile'">Profile</button>
+                <button class="tablinks" @click="activeTab = 'password'" :style="activeTab === 'password'">Change Password</button>
                 </div>
 
+                <!-- Tab content -->
                 <!-- Profile Info Tab -->
                 <div x-show="activeTab === 'profile'" style="padding: 2rem;">
                     <form @submit.prevent="updateProfile()">
@@ -129,7 +138,7 @@
                             >
                         </div>
 
-                        <button type="submit" class="btn btn-success" :disabled="saving">
+                        <button type="submit" class="btn btn-warning" :disabled="saving">
                             <span x-show="!saving">Change Password</span>
                             <span x-show="saving">Changing...</span>
                         </button>
