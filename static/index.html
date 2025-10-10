@@ -46,6 +46,9 @@
                     <span x-show="loading">Logging in...</span>
                 </button>
             </form>
+            <div class="back-link" style="margin-top: 1rem; text-align: center;">
+                <a href="/static/forgot_password.html">Forgot Password?</a>
+            </div>
         </div>
 
         <!-- Main App -->
@@ -58,10 +61,7 @@
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
                     <div class="controls" style="margin-bottom: 1.5rem;">
-                        <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
-                            <button class="btn btn-success" @click="profile()">Profile</button>
                             <button class="btn" @click="logout()">Logout</button>
-                        </div>
                 </div>
             </div>
 
@@ -473,6 +473,10 @@
                     No inventory found matching your search criteria.
                 </div>
             </div>
+
+            <!-- some profile thing -->
+             
+            <!-- --------------------------- -->
 
             <!-- ALL MODALS -->
 
