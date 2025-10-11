@@ -1100,6 +1100,12 @@ async def add_stock(request_data: AddStockRequest, user_id: int = Depends(get_cu
         ON CONFLICT(store_id, part_id, work_order_id) 
         DO UPDATE SET quantity = quantity + ?
     """, (request_data.store_id, request_data.part_id, request_data.quantity, work_order_id, request_data.quantity))
+
+    # get id of last inserted inventory item
+    cursor.execute("""
+        SELECT last_insert_rowid()
+    """)
+    inventory_id = cursor.fetchone()[0]
     
     # Log movement
     cursor.execute("""

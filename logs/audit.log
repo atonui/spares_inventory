@@ -1,0 +1,8 @@
+2025-10-11 05:33:25,443 - USER=valentine.opiyo@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-10-11 05:33:25,443 - USER=valentine.opiyo@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-10-11 05:33:31,342 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-10-11 05:33:31,342 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-10-11 05:38:04,021 - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/None STATUS=error
+2025-10-11 05:38:04,021 - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/None STATUS=error
+2025-10-11 05:45:37,176 - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/9 STATUS=success
+2025-10-11 05:45:37,176 - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/9 STATUS=success
