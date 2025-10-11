@@ -80,6 +80,21 @@ function inventoryApp() {
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
         showInventoryPanel: false,
+        // logging
+        showLogsPanel: false,
+        showStatsModal: false,
+        showLogDetailsModal: false,
+        activityLogs: [],
+        activityStats:{},
+        selectedLog: null,
+        logFilters: {
+            startDate: '',
+            endDate: '',
+            action: '',
+            targetUserId: '',
+            status: ''
+        },
+        // selected store for inventory view
         selectedStore: null,
         storeInventory: [],
         editingUser: null,
@@ -257,17 +272,17 @@ function inventoryApp() {
         },
 
         async loadInventory() {
-    this.loading = true;
-    try {
-        const response = await this.apiCall('/inventory');
-        this.inventory = response;
-        this.filterInventory(); // <-- Make sure this is called!
-    } catch (error) {
-        this.error = 'Failed to load inventory: ' + error.message;
-    } finally {
-        this.loading = false;
-    }
-},
+            this.loading = true;
+            try {
+                const response = await this.apiCall('/inventory');
+                this.inventory = response;
+                this.filterInventory(); // <-- Make sure this is called!
+            } catch (error) {
+                this.error = 'Failed to load inventory: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
 
         async loadUsers() {
             if (this.currentUser?.role === 'admin') {
@@ -379,30 +394,390 @@ function inventoryApp() {
             this.openPanel('showStoreInventoryPanel');
         },
 
-        exportMovementsCSV() {
-            const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By'];
-            const rows = this.movements.map(m => [
-                new Date(m.created_at).toLocaleString(),
-                m.movement_type,
-                m.part_number,
-                m.quantity,
-                m.from_store_name || '-',
-                m.to_store_name || '-',
-                m.work_order || '-',
-                m.created_by_name
+        // logging functions
+        async loadActivityLogs() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams();
+                
+                if (this.logFilters.startDate) {
+                    params.append('start_date', this.logFilters.startDate);
+                }
+                if (this.logFilters.endDate) {
+                    params.append('end_date', this.logFilters.endDate);
+                }
+                if (this.logFilters.action) {
+                    params.append('action', this.logFilters.action);
+                }
+                if (this.logFilters.targetUserId) {
+                    params.append('target_user_id', this.logFilters.targetUserId);
+                }
+                if (this.logFilters.status) {
+                    params.append('status', this.logFilters.status);
+                }
+                
+                params.append('limit', '200'); // Get last 200 logs
+                
+                const queryString = params.toString();
+                const endpoint = queryString ? `/logs/activity?${queryString}` : '/logs/activity';
+                
+                this.activityLogs = await this.apiCall(endpoint);
+                    } catch (error) {
+                        this.error = 'Failed to load activity logs: ' + error.message;
+                    } finally {
+                        this.loading = false;
+                    }
+        },
+
+        async loadActivityStats() {
+            try {
+                const params = new URLSearchParams();
+                
+                if (this.logFilters.startDate) {
+                    params.append('start_date', this.logFilters.startDate);
+                }
+                if (this.logFilters.endDate) {
+                    params.append('end_date', this.logFilters.endDate);
+                }
+                
+                const queryString = params.toString();
+                const endpoint = queryString ? `/logs/activity/stats?${queryString}` : '/logs/activity/stats';
+                
+                this.activityStats = await this.apiCall(endpoint);
+                this.showStatsModal = true;
+            } catch (error) {
+                this.error = 'Failed to load activity stats: ' + error.message;
+            }
+        },
+
+        clearLogFilters() {
+            this.logFilters = {
+                startDate: '',
+                endDate: '',
+                action: '',
+                targetUserId: '',
+                status: ''
+            };
+            this.loadActivityLogs();
+        },
+
+        showLogDetails(log) {
+            this.selectedLog = log;
+            this.showLogDetailsModal = true;
+        },
+
+        async cleanupOldLogs() {
+            const days = prompt('Delete logs older than how many days?', '90');
+            if (!days) return;
+            
+            if (!confirm(`Are you sure you want to delete logs older than ${days} days? This cannot be undone.`)) {
+                return;
+            }
+            
+            this.loading = true;
+            try {
+                const response = await this.apiCall(`/logs/activity/cleanup?days=${days}`, {
+                    method: 'DELETE'
+                });
+                
+                this.successMessage = `Deleted ${response.deleted_count} old log entries`;
+                await this.loadActivityLogs();
+                setTimeout(() => this.successMessage = '', 5000);
+            } catch (error) {
+                this.error = 'Failed to cleanup logs: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        exportActivityLogsCSV() {
+            const headers = [
+                'Date/Time', 
+                'User', 
+                'Action', 
+                'Resource Type',
+                'Resource ID',
+                'Status', 
+                'IP Address',
+                'Error Message',
+                'Details'
+            ];
+            
+            const rows = this.activityLogs.map(log => [
+                new Date(log.created_at).toLocaleString(),
+                log.username,
+                log.action,
+                log.resource_type || '-',
+                log.resource_id || '-',
+                log.status,
+                log.ip_address || '-',
+                log.error_message || '-',
+                log.details ? JSON.stringify(JSON.parse(log.details)) : '-'
             ]);
             
-            const csvContent = [headers, ...rows].map(row => 
-                row.map(cell => `"${cell}"`).join(',')
-            ).join('\n');
-            
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `movement_history_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
+            this.downloadCSV(
+                headers, 
+                rows, 
+                `activity_logs_${new Date().toISOString().split('T')[0]}.csv`
+            );
         },
+
+        //---------------------End of logging functions------------------------------------
+// export functions
+        // exportMovementsCSV() {
+        //     const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By'];
+        //     const rows = this.movements.map(m => [
+        //         new Date(m.created_at).toLocaleString(),
+        //         m.movement_type,
+        //         m.part_number,
+        //         m.quantity,
+        //         m.from_store_name || '-',
+        //         m.to_store_name || '-',
+        //         m.work_order || '-',
+        //         m.created_by_name
+        //     ]);
+            
+        //     const csvContent = [headers, ...rows].map(row => 
+        //         row.map(cell => `"${cell}"`).join(',')
+        //     ).join('\n');
+            
+        //     const blob = new Blob([csvContent], { type: 'text/csv' });
+        //     const url = URL.createObjectURL(blob);
+        //     const a = document.createElement('a');
+        //     a.href = url;
+        //     a.download = `movement_history_${new Date().toISOString().split('T')[0]}.csv`;
+        //     a.click();
+        // },
+
+        // Add these functions to your script.js inventoryApp() return object
+
+// CSV Export Functions
+
+exportInventoryCSV() {
+    const headers = ['Part Number', 'Description', 'Store', 'Store Type', 'Quantity', 'Min Threshold', 'Work Order', 'Status'];
+    const rows = this.filteredInventory.map(item => [
+        item.part_number,
+        item.description,
+        item.store_name,
+        item.store_type,
+        item.quantity,
+        item.min_threshold,
+        item.work_order || 'Original',
+        item.quantity <= item.min_threshold ? 'Low Stock' : 'OK'
+    ]);
+    
+    this.downloadCSV(headers, rows, `inventory_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportAllPartsCSV() {
+    const headers = ['Part Number', 'Description', 'Category', 'Unit Cost', 'Total Quantity in System'];
+    const rows = this.parts.map(part => [
+        part.part_number,
+        part.description,
+        part.category,
+        part.unit_cost.toFixed(2),
+        this.inventory
+            .filter(i => i.part_number === part.part_number)
+            .reduce((sum, i) => sum + i.quantity, 0)
+    ]);
+    
+    this.downloadCSV(headers, rows, `parts_catalog_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportStoresCSV() {
+    const headers = ['Store Name', 'Type', 'Location', 'Assigned To', 'Total Items', 'Total Quantity'];
+    const rows = this.stores.map(store => {
+        const storeItems = this.inventory.filter(i => i.store_name === store.name);
+        return [
+            store.name,
+            store.type,
+            store.location || 'N/A',
+            this.getUserName(store.assigned_user_id),
+            storeItems.length,
+            storeItems.reduce((sum, i) => sum + i.quantity, 0)
+        ];
+    });
+    
+    this.downloadCSV(headers, rows, `stores_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportMovementsCSV() {
+    const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By'];
+    const rows = this.movements.map(m => [
+        new Date(m.created_at).toLocaleString(),
+        m.movement_type,
+        m.part_number,
+        m.quantity,
+        m.from_store_name || '-',
+        m.to_store_name || '-',
+        m.work_order || '-',
+        m.created_by_name
+    ]);
+    
+    this.downloadCSV(headers, rows, `movement_history_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportUsersCSV() {
+    const headers = ['Name', 'Email', 'Role', 'Territory', 'Created At'];
+    const rows = this.users.map(user => [
+        user.name,
+        user.email,
+        user.role,
+        user.territory || 'N/A',
+        'N/A' // Created date if you add it to the API
+    ]);
+    
+    this.downloadCSV(headers, rows, `users_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportLowStockCSV() {
+    const headers = ['Part Number', 'Description', 'Store', 'Current Quantity', 'Min Threshold', 'Shortage'];
+    const rows = this.lowStockItems.map(item => [
+        item.part_number,
+        item.description,
+        item.store_name,
+        item.quantity,
+        item.min_threshold,
+        item.min_threshold - item.quantity
+    ]);
+    
+    this.downloadCSV(headers, rows, `low_stock_alert_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportMyPartsCSV() {
+    const headers = ['Part Number', 'Description', 'Store', 'Quantity', 'Work Order'];
+    const rows = this.myPartsView.map(item => [
+        item.part_number,
+        item.description,
+        item.store_name,
+        item.quantity,
+        item.work_order || 'Original'
+    ]);
+    
+    this.downloadCSV(headers, rows, `my_parts_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+exportStoreInventoryCSV(storeName) {
+    const headers = ['Part Number', 'Description', 'Quantity', 'Min Threshold', 'Work Order', 'Status'];
+    const rows = this.storeInventory.map(item => [
+        item.part_number,
+        item.description,
+        item.quantity,
+        item.min_threshold,
+        item.work_order || 'Original',
+        item.quantity <= item.min_threshold ? 'Low Stock' : 'OK'
+    ]);
+    
+    const safeStoreName = storeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    this.downloadCSV(headers, rows, `${safeStoreName}_inventory_${new Date().toISOString().split('T')[0]}.csv`);
+},
+
+// Helper function to download CSV
+downloadCSV(headers, rows, filename) {
+    // Escape function for CSV fields
+    const escapeCSV = (field) => {
+        if (field === null || field === undefined) return '';
+        const str = String(field);
+        // If field contains comma, quote, or newline, wrap in quotes and escape quotes
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    };
+
+    // Build CSV content
+    const csvContent = [
+        headers.map(escapeCSV).join(','),
+        ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+},
+
+// Bonus: Export all data as a single comprehensive report
+exportComprehensiveReport() {
+    const timestamp = new Date().toLocaleString();
+    const date = new Date().toISOString().split('T')[0];
+    
+    let report = `Inventory Management System - Comprehensive Report\n`;
+    report += `Generated: ${timestamp}\n`;
+    report += `Generated By: ${this.currentUser.name} (${this.currentUser.email})\n\n`;
+    
+    // Summary Statistics
+    report += `SUMMARY STATISTICS\n`;
+    report += `Total Parts: ${this.stats.total_parts}\n`;
+    report += `Total Stores: ${this.stats.total_stores}\n`;
+    report += `Low Stock Alerts: ${this.stats.low_stock}\n`;
+    report += `Total Inventory Items: ${this.inventory.length}\n`;
+    report += `Total Parts Quantity: ${this.inventory.reduce((sum, i) => sum + i.quantity, 0)}\n\n`;
+    
+    // Parts Catalog
+    report += `\nPARTS CATALOG\n`;
+    report += `Part Number,Description,Category,Unit Cost,Total Qty\n`;
+    this.parts.forEach(part => {
+        const totalQty = this.inventory
+            .filter(i => i.part_number === part.part_number)
+            .reduce((sum, i) => sum + i.quantity, 0);
+        report += `${part.part_number},"${part.description}",${part.category},${part.unit_cost.toFixed(2)},${totalQty}\n`;
+    });
+    
+    // Stores
+    report += `\n\nSTORES\n`;
+    report += `Store Name,Type,Location,Assigned To,Items,Total Qty\n`;
+    this.stores.forEach(store => {
+        const storeItems = this.inventory.filter(i => i.store_name === store.name);
+        const totalQty = storeItems.reduce((sum, i) => sum + i.quantity, 0);
+        report += `"${store.name}",${store.type},"${store.location || 'N/A'}","${this.getUserName(store.assigned_user_id)}",${storeItems.length},${totalQty}\n`;
+    });
+    
+    // Current Inventory
+    report += `\n\nCURRENT INVENTORY\n`;
+    report += `Part Number,Description,Store,Quantity,Min Threshold,Status,Work Order\n`;
+    this.inventory.forEach(item => {
+        const status = item.quantity <= item.min_threshold ? 'LOW STOCK' : 'OK';
+        report += `${item.part_number},"${item.description}","${item.store_name}",${item.quantity},${item.min_threshold},${status},"${item.work_order || 'Original'}"\n`;
+    });
+    
+    // Low Stock Alerts
+    if (this.lowStockItems.length > 0) {
+        report += `\n\nLOW STOCK ALERTS\n`;
+        report += `Part Number,Description,Store,Current,Minimum,Shortage\n`;
+        this.lowStockItems.forEach(item => {
+            const shortage = item.min_threshold - item.quantity;
+            report += `${item.part_number},"${item.description}","${item.store_name}",${item.quantity},${item.min_threshold},${shortage}\n`;
+        });
+    }
+    
+    // Recent Movements
+    report += `\n\nRECENT MOVEMENTS (Last 50)\n`;
+    report += `Date/Time,Type,Part,Qty,From,To,Work Order,By\n`;
+    this.movements.slice(0, 50).forEach(m => {
+        report += `"${new Date(m.created_at).toLocaleString()}",${m.movement_type},${m.part_number},${m.quantity},"${m.from_store_name || '-'}","${m.to_store_name || '-'}","${m.work_order || '-'}","${m.created_by_name}"\n`;
+    });
+    
+    // Download the report
+    const blob = new Blob([report], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `comprehensive_report_${date}.csv`;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+},
+        
 
         // Actions
         async addStock() {
@@ -827,6 +1202,7 @@ function inventoryApp() {
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
             this.showInventoryPanel = false;
+            this.showLogsPanel = false;
         },
 
         openPanel(panelName) {

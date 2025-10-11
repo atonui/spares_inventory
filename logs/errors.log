@@ -1,0 +1,18 @@
+2025-10-11 05:38:04,010 - ERROR - Exception in add_stock: name 'inventory_id' is not defined
+Traceback (most recent call last):
+  File "c:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 402, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 1113, in add_stock
+    return {"success": True, "id": inventory_id, "part_id": request_data.part_id, "quantity": request_data.quantity}
+                                   ^^^^^^^^^^^^
+NameError: name 'inventory_id' is not defined
+2025-10-11 05:38:04,010 - ERROR - Exception in add_stock: name 'inventory_id' is not defined
+Traceback (most recent call last):
+  File "c:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 402, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 1113, in add_stock
+    return {"success": True, "id": inventory_id, "part_id": request_data.part_id, "quantity": request_data.quantity}
+                                   ^^^^^^^^^^^^
+NameError: name 'inventory_id' is not defined
