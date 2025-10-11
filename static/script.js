@@ -80,6 +80,21 @@ function inventoryApp() {
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
         showInventoryPanel: false,
+        // logging
+        showLogsPanel: false,
+        showStatsModal: false,
+        showLogDetailsModal: false,
+        activityLogs: [],
+        activityStats:{},
+        selectedLog: null,
+        logFilters: {
+            startDate: '',
+            endDate: '',
+            action: '',
+            targetUserId: '',
+            status: ''
+        },
+        // selected store for inventory view
         selectedStore: null,
         storeInventory: [],
         editingUser: null,
@@ -257,17 +272,17 @@ function inventoryApp() {
         },
 
         async loadInventory() {
-    this.loading = true;
-    try {
-        const response = await this.apiCall('/inventory');
-        this.inventory = response;
-        this.filterInventory(); // <-- Make sure this is called!
-    } catch (error) {
-        this.error = 'Failed to load inventory: ' + error.message;
-    } finally {
-        this.loading = false;
-    }
-},
+            this.loading = true;
+            try {
+                const response = await this.apiCall('/inventory');
+                this.inventory = response;
+                this.filterInventory(); // <-- Make sure this is called!
+            } catch (error) {
+                this.error = 'Failed to load inventory: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
 
         async loadUsers() {
             if (this.currentUser?.role === 'admin') {
@@ -378,6 +393,136 @@ function inventoryApp() {
             this.storeInventory = this.inventory.filter(item => item.store_name === store.name);
             this.openPanel('showStoreInventoryPanel');
         },
+
+        // logging functions
+        async loadActivityLogs() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams();
+                
+                if (this.logFilters.startDate) {
+                    params.append('start_date', this.logFilters.startDate);
+                }
+                if (this.logFilters.endDate) {
+                    params.append('end_date', this.logFilters.endDate);
+                }
+                if (this.logFilters.action) {
+                    params.append('action', this.logFilters.action);
+                }
+                if (this.logFilters.targetUserId) {
+                    params.append('target_user_id', this.logFilters.targetUserId);
+                }
+                if (this.logFilters.status) {
+                    params.append('status', this.logFilters.status);
+                }
+                
+                params.append('limit', '200'); // Get last 200 logs
+                
+                const queryString = params.toString();
+                const endpoint = queryString ? `/logs/activity?${queryString}` : '/logs/activity';
+                
+                this.activityLogs = await this.apiCall(endpoint);
+                    } catch (error) {
+                        this.error = 'Failed to load activity logs: ' + error.message;
+                    } finally {
+                        this.loading = false;
+                    }
+        },
+
+        async loadActivityStats() {
+            try {
+                const params = new URLSearchParams();
+                
+                if (this.logFilters.startDate) {
+                    params.append('start_date', this.logFilters.startDate);
+                }
+                if (this.logFilters.endDate) {
+                    params.append('end_date', this.logFilters.endDate);
+                }
+                
+                const queryString = params.toString();
+                const endpoint = queryString ? `/logs/activity/stats?${queryString}` : '/logs/activity/stats';
+                
+                this.activityStats = await this.apiCall(endpoint);
+                this.showStatsModal = true;
+            } catch (error) {
+                this.error = 'Failed to load activity stats: ' + error.message;
+            }
+        },
+
+        clearLogFilters() {
+            this.logFilters = {
+                startDate: '',
+                endDate: '',
+                action: '',
+                targetUserId: '',
+                status: ''
+            };
+            this.loadActivityLogs();
+        },
+
+        showLogDetails(log) {
+            this.selectedLog = log;
+            this.showLogDetailsModal = true;
+        },
+
+        async cleanupOldLogs() {
+            const days = prompt('Delete logs older than how many days?', '90');
+            if (!days) return;
+            
+            if (!confirm(`Are you sure you want to delete logs older than ${days} days? This cannot be undone.`)) {
+                return;
+            }
+            
+            this.loading = true;
+            try {
+                const response = await this.apiCall(`/logs/activity/cleanup?days=${days}`, {
+                    method: 'DELETE'
+                });
+                
+                this.successMessage = `Deleted ${response.deleted_count} old log entries`;
+                await this.loadActivityLogs();
+                setTimeout(() => this.successMessage = '', 5000);
+            } catch (error) {
+                this.error = 'Failed to cleanup logs: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        exportActivityLogsCSV() {
+            const headers = [
+                'Date/Time', 
+                'User', 
+                'Action', 
+                'Resource Type',
+                'Resource ID',
+                'Status', 
+                'IP Address',
+                'Error Message',
+                'Details'
+            ];
+            
+            const rows = this.activityLogs.map(log => [
+                new Date(log.created_at).toLocaleString(),
+                log.username,
+                log.action,
+                log.resource_type || '-',
+                log.resource_id || '-',
+                log.status,
+                log.ip_address || '-',
+                log.error_message || '-',
+                log.details ? JSON.stringify(JSON.parse(log.details)) : '-'
+            ]);
+            
+            this.downloadCSV(
+                headers, 
+                rows, 
+                `activity_logs_${new Date().toISOString().split('T')[0]}.csv`
+            );
+        },
+
+        //---------------------End of logging functions------------------------------------
 // export functions
         // exportMovementsCSV() {
         //     const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By'];
@@ -1057,6 +1202,7 @@ exportComprehensiveReport() {
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
             this.showInventoryPanel = false;
+            this.showLogsPanel = false;
         },
 
         openPanel(panelName) {

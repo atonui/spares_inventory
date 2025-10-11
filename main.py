@@ -1,8 +1,8 @@
-# main.py
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi import Request
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
@@ -19,12 +19,47 @@ import os
 import csv
 import io
 import secrets
-from dotenv import load_dotenv
+# logging imports
+import logging
+from logging.handlers import RotatingFileHandler
+import json
+from functools import wraps
 
-# load_dotenv()
+#setup logging files
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+# Configure main application logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        RotatingFileHandler(
+            'logs/app.log',
+            maxBytes=10485760,  # 10MB
+            backupCount=10
+        ),
+        logging.StreamHandler()  # Also log to console
+    ]
+)
+
+logger = logging.getLogger('inventory_app')
+
+# Create separate loggers for different purposes
+audit_logger = logging.getLogger('audit')
+audit_handler = RotatingFileHandler('logs/audit.log', maxBytes=10485760, backupCount=10)
+audit_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+audit_logger.addHandler(audit_handler)
+audit_logger.setLevel(logging.INFO)
+
+error_logger = logging.getLogger('errors')
+error_handler = RotatingFileHandler('logs/errors.log', maxBytes=10485760, backupCount=10)
+error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+error_logger.addHandler(error_handler)
+error_logger.setLevel(logging.ERROR)
 
 # Database setup
-# DATABASE = os.getenv("DATABASE_URL")
+
 class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
@@ -141,6 +176,53 @@ def init_db():
             FOREIGN KEY (created_by) REFERENCES users (id)
         )
     ''')
+
+    # Activity Logs table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS activity_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            action TEXT NOT NULL,
+            resource_type TEXT,
+            resource_id INTEGER,
+            details TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            status TEXT DEFAULT 'success',
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Create indexes for better query performance
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_activity_user 
+        ON activity_logs(user_id)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_activity_action 
+        ON activity_logs(action)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_activity_created 
+        ON activity_logs(created_at)
+    ''')
+    
+    # System Logs table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,
+            component TEXT,
+            message TEXT NOT NULL,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     
     # Insert sample data
     insert_sample_data(cursor)
@@ -226,17 +308,160 @@ def send_reset_email(email: str, token: str):
         print(f"Error sending email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send reset email")
 
+# ============ LOGGING UTILITIES ============
 
-# Lifespan event handler (modern FastAPI way)
+def log_activity(user_id: int, username: str, action: str, resource_type: str = None, 
+                 resource_id: int = None, details: dict = None, status: str = 'success',
+                 error_message: str = None, ip_address: str = None, user_agent: str = None):
+    """Log user activity to database and audit log file"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        details_json = json.dumps(details) if details else None
+        
+        cursor.execute("""
+            INSERT INTO activity_logs 
+            (user_id, username, action, resource_type, resource_id, details, 
+             ip_address, user_agent, status, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, username, action, resource_type, resource_id, details_json,
+              ip_address, user_agent, status, error_message))
+        
+        conn.commit()
+        conn.close()
+        
+        # Also log to audit file
+        audit_logger.info(
+            f"USER={username}({user_id}) ACTION={action} "
+            f"RESOURCE={resource_type}/{resource_id} STATUS={status}"
+        )
+        
+    except Exception as e:
+        error_logger.error(f"Failed to log activity: {str(e)}")
+
+def log_system_event(level: str, component: str, message: str, details: dict = None):
+    """Log system events to database"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        details_json = json.dumps(details) if details else None
+        
+        cursor.execute("""
+            INSERT INTO system_logs (level, component, message, details)
+            VALUES (?, ?, ?, ?)
+        """, (level, component, message, details_json))
+        
+        conn.commit()
+        conn.close()
+        
+        # Also log to application log
+        log_func = getattr(logger, level.lower(), logger.info)
+        log_func(f"[{component}] {message}")
+        
+    except Exception as e:
+        error_logger.error(f"Failed to log system event: {str(e)}")
+
+# ============ LOGGING DECORATOR ============
+
+def log_endpoint(action: str, resource_type: str = None):
+    """Decorator to automatically log API endpoint calls"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Extract user_id from kwargs
+            user_id = kwargs.get('user_id')
+            request = kwargs.get('request')
+            
+            # Get IP and user agent if request is available
+            ip_address = None
+            user_agent = None
+            if request:
+                ip_address = request.client.host if hasattr(request, 'client') else None
+                user_agent = request.headers.get('user-agent', '')[:200]  # Truncate long user agents
+            
+            username = "Unknown"
+            resource_id = None
+            details = {}
+            status = 'success'
+            error_message = None
+            
+            try:
+                # Get username if user_id is available
+                if user_id:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT name FROM users WHERE id = ?", (user_id,))
+                    user = cursor.fetchone()
+                    conn.close()
+                    if user:
+                        username = user['name']
+                
+                # Execute the endpoint function
+                result = await func(*args, **kwargs)
+                
+                # Extract resource_id from result if it's a dict
+                if isinstance(result, dict):
+                    resource_id = result.get('id')
+                    details = {k: v for k, v in result.items() if k != 'password_hash'}
+                
+                return result
+                
+            except HTTPException as e:
+                status = 'error'
+                error_message = e.detail
+                error_logger.error(
+                    f"HTTPException in {func.__name__}: {e.detail}",
+                    extra={'user_id': user_id, 'status_code': e.status_code}
+                )
+                raise
+                
+            except Exception as e:
+                status = 'error'
+                error_message = str(e)
+                error_logger.exception(
+                    f"Exception in {func.__name__}: {str(e)}",
+                    extra={'user_id': user_id}
+                )
+                raise
+                
+            finally:
+                # Log the activity
+                if user_id:
+                    log_activity(
+                        user_id=user_id,
+                        username=username,
+                        action=action,
+                        resource_type=resource_type,
+                        resource_id=resource_id,
+                        details=details,
+                        status=status,
+                        error_message=error_message,
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
+        
+        return wrapper
+    return decorator
+
+# Lifespan event handler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting up...")
+    logger.info("Application starting up")
+    log_system_event('INFO', 'startup', 'Application initialized')
+
     init_db()
     print("✅ Database initialized")
+    logger.info("Database initialized successfully")
     yield
+
     # Shutdown (if needed)
     print("⏹️ Shutting down...")
+    logger.info("Application shutting down")
+    log_system_event('INFO', 'shutdown', 'Application shut down gracefully')
 
 # Initialize FastAPI app with lifespan
 app = FastAPI(
@@ -247,7 +472,6 @@ app = FastAPI(
 
 # Security
 security = HTTPBearer()
-# SECRET_KEY = os.getenv("SECRET_KEY")
 
 # CORS middleware for frontend
 app.add_middleware(
@@ -392,6 +616,19 @@ class StatsResponse(BaseModel):
     total_stores: int
     low_stock: int
     my_parts: int
+
+class ActivityLogResponse(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    action: str
+    resource_type: Optional[str]
+    resource_id: Optional[int]
+    details: Optional[str]
+    ip_address: Optional[str]
+    status: str
+    error_message: Optional[str]
+    created_at: str
 
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -630,8 +867,11 @@ async def root():
     return {"message": "Inventory Management API", "docs": "/docs", "frontend": "/static/index.html"}
 
 @app.post("/api/auth/login")
-async def login(user_login: UserLogin):
+async def login(user_login: UserLogin, request: Request):
     """User login"""
+    ip_address = request.client.host if hasattr(request, 'client') else None
+    user_agent = request.headers.get('user-agent', '')[:200]  # Truncate long user agents
+
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -639,14 +879,39 @@ async def login(user_login: UserLogin):
         (user_login.email,)
     )
     user = cursor.fetchone()
+
     if not user or user['password_hash'] != hash_password(user_login.password):
+        # Log failed login attempt
+        log_activity(
+            user_id=0,
+            username=user_login.email,
+            action='login_failed',
+            status='error',
+            error_message='Invalid credentials',
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         conn.close()
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
     # Generate a new session token
     session_token = secrets.token_urlsafe(32)
     cursor.execute("UPDATE users SET session_token = ? WHERE id = ?", (session_token, user['id']))
     conn.commit()
     conn.close()
+
+    # Log successful login
+    log_activity(
+        user_id=user['id'],
+        username=user['name'],
+        action='login',
+        details={'role': user['role'], 'territory': user['territory']},
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    
+    logger.info(f"User {user['name']} ({user['id']}) logged in from {ip_address}")
+
     return {
         "access_token": session_token,
         "token_type": "bearer",
@@ -660,7 +925,8 @@ async def login(user_login: UserLogin):
     }
 
 @app.post("/api/auth/logout")
-async def logout(user_id: int = Depends(get_current_user)):
+@log_endpoint(action='logout')
+async def logout(user_id: int = Depends(get_current_user), request: Request = None):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
@@ -786,7 +1052,8 @@ async def get_stats(user_id: int = Depends(get_current_user)):
     }
 
 @app.post("/api/inventory/add")
-async def add_stock(request: AddStockRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='add_stock', resource_type='inventory')
+async def add_stock(request_data: AddStockRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Add stock to inventory"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -794,7 +1061,7 @@ async def add_stock(request: AddStockRequest, user_id: int = Depends(get_current
     # Check if user can edit this store
     cursor.execute("""
         SELECT type, assigned_user_id FROM stores WHERE id = ?
-    """, (request.store_id,))
+    """, (request_data.store_id,))
     store = cursor.fetchone()
     
     if not store:
@@ -810,10 +1077,10 @@ async def add_stock(request: AddStockRequest, user_id: int = Depends(get_current
     
     # Get work order ID if provided
     work_order_id = None
-    if request.work_order_number:
+    if request_data.work_order_number:
         cursor.execute(
             "SELECT id FROM work_orders WHERE work_order_number = ?",
-            (request.work_order_number,)
+            (request_data.work_order_number,)
         )
         wo = cursor.fetchone()
         if wo:
@@ -823,7 +1090,7 @@ async def add_stock(request: AddStockRequest, user_id: int = Depends(get_current
             cursor.execute("""
                 INSERT INTO work_orders (work_order_number, assigned_engineer_id)
                 VALUES (?, ?)
-            """, (request.work_order_number, user_id))
+            """, (request_data.work_order_number, user_id))
             work_order_id = cursor.lastrowid
     
     # Add or update inventory
@@ -832,16 +1099,18 @@ async def add_stock(request: AddStockRequest, user_id: int = Depends(get_current
         VALUES (?, ?, ?, ?)
         ON CONFLICT(store_id, part_id, work_order_id) 
         DO UPDATE SET quantity = quantity + ?
-    """, (request.store_id, request.part_id, request.quantity, work_order_id, request.quantity))
+    """, (request_data.store_id, request_data.part_id, request_data.quantity, work_order_id, request_data.quantity))
     
     # Log movement
     cursor.execute("""
         INSERT INTO movements (to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
         VALUES (?, ?, ?, 'add', ?, ?)
-    """, (request.store_id, request.part_id, request.quantity, work_order_id, user_id))
+    """, (request_data.store_id, request_data.part_id, request_data.quantity, work_order_id, user_id))
     
     conn.commit()
     conn.close()
+    # The decorator will automatically log this action
+    return {"success": True, "id": inventory_id, "part_id": request_data.part_id, "quantity": request_data.quantity}
     
 @app.put("/api/inventory/update")
 async def update_stock(request: UpdateStockRequest, user_id: int = Depends(get_current_user)):
@@ -1523,6 +1792,184 @@ async def get_movements(
     conn.close()
     
     return [dict(movement) for movement in movements]
+
+# ============ LOGGING ENDPOINTS ============
+
+@app.get("/api/logs/activity", response_model=List[ActivityLogResponse])
+async def get_activity_logs(
+    user_id: int = Depends(get_current_user),
+    limit: int = 100,
+    action: Optional[str] = None,
+    target_user_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """Get activity logs (admin only for all logs, users can see their own)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    query = "SELECT * FROM activity_logs WHERE 1=1"
+    params = []
+    
+    # Non-admins can only see their own logs
+    if user['role'] != 'admin':
+        query += " AND user_id = ?"
+        params.append(user_id)
+    else:
+        # Admins can filter by specific user
+        if target_user_id:
+            query += " AND user_id = ?"
+            params.append(target_user_id)
+    
+    # Apply filters
+    if action:
+        query += " AND action = ?"
+        params.append(action)
+    
+    if start_date:
+        query += " AND created_at >= ?"
+        params.append(start_date)
+    
+    if end_date:
+        query += " AND created_at <= ?"
+        params.append(end_date + " 23:59:59")
+    
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    
+    cursor.execute(query, params)
+    logs = cursor.fetchall()
+    conn.close()
+    
+    return [dict(log) for log in logs]
+
+@app.get("/api/logs/activity/stats")
+async def get_activity_stats(
+    user_id: int = Depends(get_current_user),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get activity statistics (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Date filter
+    date_filter = ""
+    params = []
+    if start_date:
+        date_filter += " AND created_at >= ?"
+        params.append(start_date)
+    if end_date:
+        date_filter += " AND created_at <= ?"
+        params.append(end_date + " 23:59:59")
+    
+    # Total activities
+    cursor.execute(f"SELECT COUNT(*) as total FROM activity_logs WHERE 1=1 {date_filter}", params)
+    total_activities = cursor.fetchone()['total']
+    
+    # Activities by action
+    cursor.execute(f"""
+        SELECT action, COUNT(*) as count 
+        FROM activity_logs 
+        WHERE 1=1 {date_filter}
+        GROUP BY action 
+        ORDER BY count DESC 
+        LIMIT 10
+    """, params)
+    by_action = [dict(row) for row in cursor.fetchall()]
+    
+    # Activities by user (top 10)
+    cursor.execute(f"""
+        SELECT username, COUNT(*) as count 
+        FROM activity_logs 
+        WHERE 1=1 {date_filter}
+        GROUP BY username 
+        ORDER BY count DESC 
+        LIMIT 10
+    """, params)
+    by_user = [dict(row) for row in cursor.fetchall()]
+    
+    # Error rate
+    cursor.execute(f"""
+        SELECT 
+            COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
+            COUNT(CASE WHEN status = 'success' THEN 1 END) as successes
+        FROM activity_logs
+        WHERE 1=1 {date_filter}
+    """, params)
+    error_stats = dict(cursor.fetchone())
+    
+    # Recent logins
+    cursor.execute(f"""
+        SELECT username, created_at, ip_address
+        FROM activity_logs
+        WHERE action = 'login' {date_filter}
+        ORDER BY created_at DESC
+        LIMIT 10
+    """, params)
+    recent_logins = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    
+    return {
+        "total_activities": total_activities,
+        "by_action": by_action,
+        "by_user": by_user,
+        "error_rate": error_stats,
+        "recent_logins": recent_logins
+    }
+
+@app.delete("/api/logs/activity/cleanup")
+async def cleanup_old_logs(
+    days: int = 90,
+    user_id: int = Depends(get_current_user)
+):
+    """Delete activity logs older than specified days (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if user is admin
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Delete old logs
+    cursor.execute("""
+        DELETE FROM activity_logs 
+        WHERE created_at < datetime('now', '-' || ? || ' days')
+    """, (days,))
+    
+    deleted_count = cursor.rowcount
+    
+    conn.commit()
+    conn.close()
+    
+    log_activity(
+        user_id=user_id,
+        username=user['name'],
+        action='cleanup_logs',
+        details={'days': days, 'deleted_count': deleted_count}
+    )
+    
+    return {"success": True, "deleted_count": deleted_count, "days": days}
 
 if __name__ == "__main__":
     import uvicorn
