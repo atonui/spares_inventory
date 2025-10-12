@@ -74,3 +74,9 @@
 2025-10-12 08:07:03,108 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
 2025-10-12 08:07:03,387 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-10-12 08:07:03,387 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:17:31,203 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-10-12 08:17:31,203 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-10-12 08:17:31,229 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:17:31,229 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:17:31,259 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:17:31,259 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
