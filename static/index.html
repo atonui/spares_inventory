@@ -155,9 +155,9 @@
                     <button class="btn" @click="openPanel('showMovementsPanel'); loadMovements()">
                         <span>Movement History</span>
                     </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()">
+                    <!-- <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()">
                         <span>Activity Logs</span>
-                    </button>
+                    </button> -->
                 </div>
                 
                 <div x-show="error" class="error" x-text="error"></div>
@@ -325,7 +325,7 @@
             </div>
 
         <!-- Activity Logs Panel (Admin only) -->
-            <div x-show="!loading && showLogsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <!-- <div x-show="!loading && showLogsPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                         <h3 style="margin: 0;">Activity Logs</h3>
@@ -334,10 +334,10 @@
                             <button class="btn btn-sm" @click="loadActivityStats()" x-show="currentUser?.role === 'admin'">View Stats</button>
                             <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
                         </div>
-                    </div>
+                    </div> -->
                     
                     <!-- Filters -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+                    <!-- <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
                         <div>
                             <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Start Date</label>
                             <input type="date" x-model="logFilters.startDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
@@ -438,7 +438,7 @@
                 <div x-show="activityLogs.length === 0" style="padding: 2rem; text-align: center; color: #666;">
                     No activity logs found.
                 </div>
-            </div>
+            </div> -->
 
             <!-- Movement History Panel -->
             <!--<div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">

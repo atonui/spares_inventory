@@ -24,6 +24,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import json
 from functools import wraps
+from typing import Optional
 
 #setup logging files
 if not os.path.exists('logs'):
@@ -260,6 +261,17 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def check_admin(user_id: int) -> bool:
+    """Check if the user is an admin"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    if user['role'] == 'admin':
+        return True
+    return False
+
 def send_reset_email(email: str, token: str):
     """Send password reset email"""
     reset_link = f"{FRONTEND_URL}/static/reset-password.html?token={token}"
@@ -370,16 +382,22 @@ def log_endpoint(action: str, resource_type: str = None):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Extract user_id from kwargs
+            # Extract parameters
             user_id = kwargs.get('user_id')
-            request = kwargs.get('request')
+            request = None
+            
+            # Find Request object in kwargs or args
+            for key, value in kwargs.items():
+                if isinstance(value, Request):
+                    request = value
+                    break
             
             # Get IP and user agent if request is available
             ip_address = None
             user_agent = None
             if request:
                 ip_address = request.client.host if hasattr(request, 'client') else None
-                user_agent = request.headers.get('user-agent', '')[:200]  # Truncate long user agents
+                user_agent = request.headers.get('user-agent', '')[:200]
             
             username = "Unknown"
             resource_id = None
@@ -390,13 +408,16 @@ def log_endpoint(action: str, resource_type: str = None):
             try:
                 # Get username if user_id is available
                 if user_id:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT name FROM users WHERE id = ?", (user_id,))
-                    user = cursor.fetchone()
-                    conn.close()
-                    if user:
-                        username = user['name']
+                    try:
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM users WHERE id = ?", (user_id,))
+                        user = cursor.fetchone()
+                        conn.close()
+                        if user:
+                            username = user['name']
+                    except Exception as e:
+                        logger.error(f"Failed to get username: {e}")
                 
                 # Execute the endpoint function
                 result = await func(*args, **kwargs)
@@ -404,7 +425,9 @@ def log_endpoint(action: str, resource_type: str = None):
                 # Extract resource_id from result if it's a dict
                 if isinstance(result, dict):
                     resource_id = result.get('id')
-                    details = {k: v for k, v in result.items() if k != 'password_hash'}
+                    # Create a safe copy of details without sensitive data
+                    details = {k: v for k, v in result.items() 
+                              if k not in ['password_hash', 'session_token', 'reset_token']}
                 
                 return result
                 
@@ -429,18 +452,22 @@ def log_endpoint(action: str, resource_type: str = None):
             finally:
                 # Log the activity
                 if user_id:
-                    log_activity(
-                        user_id=user_id,
-                        username=username,
-                        action=action,
-                        resource_type=resource_type,
-                        resource_id=resource_id,
-                        details=details,
-                        status=status,
-                        error_message=error_message,
-                        ip_address=ip_address,
-                        user_agent=user_agent
-                    )
+                    try:
+                        log_activity(
+                            user_id=user_id,
+                            username=username,
+                            action=action,
+                            resource_type=resource_type,
+                            resource_id=resource_id,
+                            details=details,
+                            status=status,
+                            error_message=error_message,
+                            ip_address=ip_address,
+                            user_agent=user_agent
+                        )
+                    except Exception as log_error:
+                        # Don't fail the request if logging fails
+                        error_logger.error(f"Failed to log activity: {log_error}")
         
         return wrapper
     return decorator
@@ -645,7 +672,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 # Routes
 #-----------Profile Management Routes-----------
 @app.get("/api/profile")
-async def get_profile(user_id: int = Depends(get_current_user)):
+async def get_profile(user_id: int = Depends(get_current_user), request: Request = None):
     """Get current user's profile"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -665,7 +692,8 @@ async def get_profile(user_id: int = Depends(get_current_user)):
 @app.put("/api/profile")
 async def update_profile(
     profile_update: UserProfileUpdate,
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(get_current_user),
+    request: Request = None
 ):
     """Update user profile (email)"""
     conn = get_db_connection()
@@ -704,7 +732,8 @@ async def update_profile(
 @app.post("/api/profile/change-password")
 async def change_password(
     password_data: PasswordChange,
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(get_current_user),
+    request: Request = None
 ):
     """Change user password"""
     conn = get_db_connection()
@@ -746,7 +775,7 @@ async def change_password(
     return {"message": "Password changed successfully. Please login again."}
 
 @app.post("/api/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest):
+async def forgot_password(request_data: ForgotPasswordRequest, request: Request = None):
     """Initiate password reset process"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -754,7 +783,7 @@ async def forgot_password(request: ForgotPasswordRequest):
     # Find user by email
     cursor.execute(
         "SELECT id FROM users WHERE email = ?",
-        (request.email,)
+        (request_data.email,)
     )
     user = cursor.fetchone()
     
@@ -782,14 +811,14 @@ async def forgot_password(request: ForgotPasswordRequest):
     
     # Send email
     try:
-        send_reset_email(request.email, token)
+        send_reset_email(request_data.email, token)
     except:
         pass  # Fail silently to prevent information disclosure
     
     return {"message": "If the email exists, a reset link has been sent"}
 
 @app.post("/api/reset-password")
-async def reset_password(request: ResetPasswordRequest):
+async def reset_password(request_data: ResetPasswordRequest, request: Request = None):
     """Reset password using token"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -799,7 +828,7 @@ async def reset_password(request: ResetPasswordRequest):
         """SELECT id, reset_token_expires 
            FROM users 
            WHERE reset_token = ?""",
-        (request.token,)
+        (request_data.token,)
     )
     user = cursor.fetchone()
     
@@ -814,7 +843,7 @@ async def reset_password(request: ResetPasswordRequest):
         raise HTTPException(status_code=400, detail="Token has expired")
     
     # Validate new password
-    if len(request.new_password) < 8:
+    if len(request_data.new_password) < 8:
         conn.close()
         raise HTTPException(
             status_code=400, 
@@ -829,7 +858,7 @@ async def reset_password(request: ResetPasswordRequest):
                reset_token_expires = NULL,
                session_token = NULL
            WHERE id = ?""",
-        (hash_password(request.new_password), user['id'])
+        (hash_password(request_data.new_password), user['id'])
     )
     
     conn.commit()
@@ -838,7 +867,7 @@ async def reset_password(request: ResetPasswordRequest):
     return {"message": "Password reset successfully"}
 
 @app.get("/api/verify-reset-token/{token}")
-async def verify_reset_token(token: str):
+async def verify_reset_token(token: str, request: Request = None):
     """Verify if a reset token is valid"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -861,10 +890,6 @@ async def verify_reset_token(token: str):
     
     return {"valid": True}
 #-----------------------------------------------
-@app.get("/")
-async def root():
-    """Serve the main application"""
-    return {"message": "Inventory Management API", "docs": "/docs", "frontend": "/static/index.html"}
 
 @app.post("/api/auth/login")
 async def login(user_login: UserLogin, request: Request):
@@ -935,7 +960,7 @@ async def logout(user_id: int = Depends(get_current_user), request: Request = No
     return {"success": True}
 
 @app.get("/api/me", response_model=UserResponse)
-async def get_current_user_info(user_id: int = Depends(get_current_user)):
+async def get_current_user_info(user_id: int = Depends(get_current_user), request: Request = None):
     """Get current user information"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -953,7 +978,7 @@ async def get_current_user_info(user_id: int = Depends(get_current_user)):
     return dict(user)
 
 @app.get("/api/stores", response_model=List[StoreResponse])
-async def get_stores(user_id: int = Depends(get_current_user)):
+async def get_stores(user_id: int = Depends(get_current_user), request: Request = None):
     """Get all stores (engineers see all, others see assigned)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -974,7 +999,8 @@ async def get_stores(user_id: int = Depends(get_current_user)):
     return [dict(store) for store in stores]
 
 @app.get("/api/parts", response_model=List[PartResponse])
-async def get_parts(user_id: int = Depends(get_current_user)):
+@log_endpoint(action='view_parts', resource_type='parts')
+async def get_parts(user_id: int = Depends(get_current_user), request: Request = None):
     """Get all parts"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -986,7 +1012,7 @@ async def get_parts(user_id: int = Depends(get_current_user)):
     return [dict(part) for part in parts]
 
 @app.get("/api/inventory", response_model=List[InventoryResponse])
-async def get_inventory(user_id: int = Depends(get_current_user)):
+async def get_inventory(user_id: int = Depends(get_current_user), request: Request = None):
     """Get inventory with full visibility for engineers"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1016,7 +1042,7 @@ async def get_inventory(user_id: int = Depends(get_current_user)):
     return [dict(item) for item in inventory]
 
 @app.get("/api/stats", response_model=StatsResponse)
-async def get_stats(user_id: int = Depends(get_current_user)):
+async def get_stats(user_id: int = Depends(get_current_user), request: Request = None):
     """Get dashboard statistics"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1119,7 +1145,8 @@ async def add_stock(request_data: AddStockRequest, user_id: int = Depends(get_cu
     return {"success": True, "id": inventory_id, "part_id": request_data.part_id, "quantity": request_data.quantity}
     
 @app.put("/api/inventory/update")
-async def update_stock(request: UpdateStockRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='update_stock', resource_type='inventory')
+async def update_stock(request_data: UpdateStockRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Update inventory quantity"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1131,7 +1158,7 @@ async def update_stock(request: UpdateStockRequest, user_id: int = Depends(get_c
         JOIN stores s ON i.store_id = s.id
         JOIN parts p ON i.part_id = p.id
         WHERE i.id = ?
-    """, (request.inventory_id,))
+    """, (request_data.inventory_id,))
     item = cursor.fetchone()
     
     if not item:
@@ -1147,14 +1174,14 @@ async def update_stock(request: UpdateStockRequest, user_id: int = Depends(get_c
         raise HTTPException(status_code=403, detail="Permission denied")
     
     old_quantity = item['quantity']
-    quantity_change = request.new_quantity - old_quantity
+    quantity_change = request_data.new_quantity - old_quantity
     
     # Update inventory
     cursor.execute("""
         UPDATE inventory 
         SET quantity = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (request.new_quantity, request.inventory_id))
+    """, (request_data.new_quantity, request_data.inventory_id))
     
     # Log movement
     movement_type = 'add' if quantity_change > 0 else 'remove'
@@ -1166,10 +1193,11 @@ async def update_stock(request: UpdateStockRequest, user_id: int = Depends(get_c
     conn.commit()
     conn.close()
     
-    return {"success": True, "message": f"Updated {item['part_number']} quantity from {old_quantity} to {request.new_quantity}"}
+    return {"success": True, "message": f"Updated {item['part_number']} quantity from {old_quantity} to {request_data.new_quantity}"}
 
 @app.post("/api/inventory/transfer")
-async def transfer_stock(request: TransferStockRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='transfer_stock', resource_type='inventory')
+async def transfer_stock(request_data: TransferStockRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Transfer stock between stores"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1181,17 +1209,17 @@ async def transfer_stock(request: TransferStockRequest, user_id: int = Depends(g
         JOIN stores s ON i.store_id = s.id
         JOIN parts p ON i.part_id = p.id
         WHERE i.id = ?
-    """, (request.inventory_id,))
+    """, (request_data.inventory_id,))
     source_item = cursor.fetchone()
     
     if not source_item:
         raise HTTPException(status_code=404, detail="Source inventory item not found")
     
-    if source_item['quantity'] < request.quantity:
+    if source_item['quantity'] < request_data.quantity:
         raise HTTPException(status_code=400, detail="Insufficient quantity in source store")
     
     # Get destination store
-    cursor.execute("SELECT type, assigned_user_id FROM stores WHERE id = ?", (request.to_store_id,))
+    cursor.execute("SELECT type, assigned_user_id FROM stores WHERE id = ?", (request_data.to_store_id,))
     dest_store = cursor.fetchone()
     
     if not dest_store:
@@ -1215,16 +1243,16 @@ async def transfer_stock(request: TransferStockRequest, user_id: int = Depends(g
         raise HTTPException(status_code=403, detail="Permission denied for transfer")
     
     # Update source inventory
-    new_source_quantity = source_item['quantity'] - request.quantity
+    new_source_quantity = source_item['quantity'] - request_data.quantity
     if new_source_quantity == 0:
         # Remove the inventory record if quantity becomes 0
-        cursor.execute("DELETE FROM inventory WHERE id = ?", (request.inventory_id,))
+        cursor.execute("DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,))
     else:
         cursor.execute("""
             UPDATE inventory 
             SET quantity = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (new_source_quantity, request.inventory_id))
+        """, (new_source_quantity, request_data.inventory_id))
     
     # Add or update destination inventory
     cursor.execute("""
@@ -1232,23 +1260,23 @@ async def transfer_stock(request: TransferStockRequest, user_id: int = Depends(g
         VALUES (?, ?, ?, ?)
         ON CONFLICT(store_id, part_id, work_order_id) 
         DO UPDATE SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
-    """, (request.to_store_id, source_item['part_id'], request.quantity, 
-          source_item['work_order_id'], request.quantity))
+    """, (request_data.to_store_id, source_item['part_id'], request_data.quantity, 
+          source_item['work_order_id'], request_data.quantity))
     
     # Log movement
     cursor.execute("""
         INSERT INTO movements (from_store_id, to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
         VALUES (?, ?, ?, ?, 'transfer', ?, ?)
-    """, (source_item['store_id'], request.to_store_id, source_item['part_id'], 
-          request.quantity, source_item['work_order_id'], user_id))
+    """, (source_item['store_id'], request_data.to_store_id, source_item['part_id'], 
+          request_data.quantity, source_item['work_order_id'], user_id))
     
     conn.commit()
     conn.close()
     
-    return {"success": True, "message": f"Transferred {request.quantity} {source_item['part_number']} successfully"}
+    return {"success": True, "message": f"Transferred {request_data.quantity} {source_item['part_number']} successfully"}
 
 @app.get("/api/work-orders", response_model=List[WorkOrderResponse])
-async def get_work_orders(user_id: int = Depends(get_current_user)):
+async def get_work_orders(user_id: int = Depends(get_current_user), request: Request = None):
     """Get work orders"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1284,7 +1312,8 @@ async def get_work_orders(user_id: int = Depends(get_current_user)):
 
 # User Management (Admin only)
 @app.get("/api/users", response_model=List[UserResponse])
-async def get_users(user_id: int = Depends(get_current_user)):
+@log_endpoint(action='view_users', resource_type='user')
+async def get_users(user_id: int = Depends(get_current_user), request: Request = None):
     """Get all users (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1302,8 +1331,51 @@ async def get_users(user_id: int = Depends(get_current_user)):
     
     return [dict(user) for user in users]
 
+#-------------Logging Test Endpoint-------------
+@app.get("/api/logs/test")
+async def test_logging(user_id: int = Depends(get_current_user), request: Request = None):
+    """Test endpoint to verify logging is working"""
+    try:
+        # Test database connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if table exists
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='activity_logs'
+        """)
+        table_exists = cursor.fetchone() is not None
+        
+        # Get count of logs
+        if table_exists:
+            cursor.execute("SELECT COUNT(*) as count FROM activity_logs")
+            log_count = cursor.fetchone()['count']
+        else:
+            log_count = 0
+        
+        # Get user info
+        cursor.execute("SELECT name, role FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        conn.close()
+        
+        return {
+            "status": "ok",
+            "table_exists": table_exists,
+            "log_count": log_count,
+            "current_user": dict(user) if user else None,
+            "can_view_logs": user['role'] == 'admin' if user else False
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 @app.post("/api/users")
-async def create_user(request: CreateUserRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='create_user', resource_type='user')
+async def create_user(request_data: CreateUserRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Create new user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1316,7 +1388,7 @@ async def create_user(request: CreateUserRequest, user_id: int = Depends(get_cur
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if email already exists
-    cursor.execute("SELECT id FROM users WHERE email = ?", (request.email,))
+    cursor.execute("SELECT id FROM users WHERE email = ?", (request_data.email,))
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Email already exists")
     
@@ -1324,16 +1396,17 @@ async def create_user(request: CreateUserRequest, user_id: int = Depends(get_cur
     cursor.execute("""
         INSERT INTO users (email, name, password_hash, role, territory)
         VALUES (?, ?, ?, ?, ?)
-    """, (request.email, request.name, hash_password(request.password), 
-          request.role, request.territory))
+    """, (request_data.email, request_data.name, hash_password(request_data.password), 
+          request_data.role, request_data.territory))
     
     conn.commit()
     conn.close()
     
-    return {"success": True, "message": f"User {request.name} created successfully"}
+    return {"success": True, "message": f"User {request_data.name} created successfully"}
 
 @app.put("/api/users/{target_user_id}")
-async def update_user(target_user_id: int, request: UpdateUserRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='update_user', resource_type='user')
+async def update_user(target_user_id: int, request_data: UpdateUserRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Update user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1354,21 +1427,21 @@ async def update_user(target_user_id: int, request: UpdateUserRequest, user_id: 
     updates = []
     values = []
     
-    if request.name is not None:
+    if request_data.name is not None:
         updates.append("name = ?")
-        values.append(request.name)
+        values.append(request_data.name)
     
-    if request.role is not None:
+    if request_data.role is not None:
         updates.append("role = ?")
-        values.append(request.role)
+        values.append(request_data.role)
     
-    if request.territory is not None:
+    if request_data.territory is not None:
         updates.append("territory = ?")
-        values.append(request.territory)
+        values.append(request_data.territory)
     
-    if request.password is not None:
+    if request_data.password is not None:
         updates.append("password_hash = ?")
-        values.append(hash_password(request.password))
+        values.append(hash_password(request_data.password))
     
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
@@ -1383,7 +1456,8 @@ async def update_user(target_user_id: int, request: UpdateUserRequest, user_id: 
     return {"success": True, "message": "User updated successfully"}
 
 @app.delete("/api/users/{target_user_id}")
-async def delete_user(target_user_id: int, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='delete_user', resource_type='user')
+async def delete_user(target_user_id: int, user_id: int = Depends(get_current_user), request: Request = None):
     """Delete user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1416,7 +1490,8 @@ async def delete_user(target_user_id: int, user_id: int = Depends(get_current_us
 
 # Store Management
 @app.post("/api/stores")
-async def create_store(request: CreateStoreRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='create_store', resource_type='store')
+async def create_store(request_data: CreateStoreRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Create new store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1430,25 +1505,27 @@ async def create_store(request: CreateStoreRequest, user_id: int = Depends(get_c
     
     # Validate store type
     valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
-    if request.type not in valid_types:
+    if request_data.type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
     
     # Create store
     cursor.execute("""
         INSERT INTO stores (name, type, location, assigned_user_id)
         VALUES (?, ?, ?, ?)
-    """, (request.name, request.type, request.location, request.assigned_user_id))
+    """, (request_data.name, request_data.type, request_data.location, request_data.assigned_user_id))
     
     conn.commit()
     conn.close()
     
-    return {"success": True, "message": f"Store {request.name} created successfully"}
+    return {"success": True, "message": f"Store {request_data.name} created successfully"}
 
 # Bulk import stores from CSV (admin only)
 @app.post("/api/stores/bulk-import")
+@log_endpoint(action='bulk_import_stores', resource_type='store')
 async def bulk_import_stores(
     file: UploadFile = File(...),
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(get_current_user),
+    request: Request = None
 ):
     """Bulk import stores from a CSV file (admin only)"""
     conn = get_db_connection()
@@ -1483,7 +1560,8 @@ async def bulk_import_stores(
     return {"success": True, "added": added, "skipped": skipped}
 
 @app.put("/api/stores/{store_id}")
-async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='update_store', resource_type='store')
+async def update_store(store_id: int, request_data: UpdateStoreRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Update store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1504,25 +1582,25 @@ async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int 
     updates = []
     values = []
     
-    if request.name is not None:
+    if request_data.name is not None:
         updates.append("name = ?")
-        values.append(request.name)
+        values.append(request_data.name)
     
-    if request.type is not None:
+    if request_data.type is not None:
         # a store can either be at the office, personal or customer_site
         valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment']
-        if request.type not in valid_types:
+        if request_data.type not in valid_types:
             raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
         updates.append("type = ?")
-        values.append(request.type)
+        values.append(request_data.type)
     
-    if request.location is not None:
+    if request_data.location is not None:
         updates.append("location = ?")
-        values.append(request.location)
+        values.append(request_data.location)
     
-    if request.assigned_user_id is not None:
+    if request_data.assigned_user_id is not None:
         updates.append("assigned_user_id = ?")
-        values.append(request.assigned_user_id)
+        values.append(request_data.assigned_user_id)
     
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
@@ -1537,7 +1615,8 @@ async def update_store(store_id: int, request: UpdateStoreRequest, user_id: int 
     return {"success": True, "message": "Store updated successfully"}
 
 @app.delete("/api/stores/{store_id}")
-async def delete_store(store_id: int, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='delete_store', resource_type='store')
+async def delete_store(store_id: int, user_id: int = Depends(get_current_user), request: Request = None):
     """Delete store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1573,7 +1652,8 @@ async def delete_store(store_id: int, user_id: int = Depends(get_current_user)):
 
 # Parts Management
 @app.post("/api/parts")
-async def create_part(request: CreatePartRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='create_store', resource_type='store')
+async def create_part(request_data: CreatePartRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Create new part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1586,7 +1666,7 @@ async def create_part(request: CreatePartRequest, user_id: int = Depends(get_cur
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if part number already exists
-    cursor.execute("SELECT id FROM parts WHERE part_number = ?", (request.part_number,))
+    cursor.execute("SELECT id FROM parts WHERE part_number = ?", (request_data.part_number,))
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Part number already exists")
     
@@ -1594,19 +1674,21 @@ async def create_part(request: CreatePartRequest, user_id: int = Depends(get_cur
     cursor.execute("""
         INSERT INTO parts (part_number, description, category, unit_cost)
         VALUES (?, ?, ?, ?)
-    """, (request.part_number, request.description, request.category, request.unit_cost))
+    """, (request_data.part_number, request_data.description, request_data.category, request_data.unit_cost))
     
     conn.commit()
     conn.close()
     
-    return {"success": True, "message": f"Part {request.part_number} created successfully"}
+    return {"success": True, "message": f"Part {request_data.part_number} created successfully"}
 
 # ...existing code...
 
 @app.post("/api/parts/bulk-import")
+@log_endpoint(action='bulk_import_stores', resource_type='store')
 async def bulk_import_parts(
     file: UploadFile = File(...),
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(get_current_user),
+    request: Request = None
 ):
     """Bulk import parts from a CSV file (admin only)"""
     conn = get_db_connection()
@@ -1633,7 +1715,8 @@ async def bulk_import_parts(
     return {"success": True, "added": added, "skipped": skipped}
 
 @app.put("/api/parts/{part_id}")
-async def update_part(part_id: int, request: UpdatePartRequest, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='update_part', resource_type='part')
+async def update_part(part_id: int, request_data: UpdatePartRequest, user_id: int = Depends(get_current_user), request: Request = None):
     """Update part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1654,25 +1737,25 @@ async def update_part(part_id: int, request: UpdatePartRequest, user_id: int = D
     updates = []
     values = []
     
-    if request.part_number is not None:
+    if request_data.part_number is not None:
         # Check if new part number already exists
-        cursor.execute("SELECT id FROM parts WHERE part_number = ? AND id != ?", (request.part_number, part_id))
+        cursor.execute("SELECT id FROM parts WHERE part_number = ? AND id != ?", (request_data.part_number, part_id))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Part number already exists")
         updates.append("part_number = ?")
-        values.append(request.part_number)
+        values.append(request_data.part_number)
     
-    if request.description is not None:
+    if request_data.description is not None:
         updates.append("description = ?")
-        values.append(request.description)
+        values.append(request_data.description)
     
-    if request.category is not None:
+    if request_data.category is not None:
         updates.append("category = ?")
-        values.append(request.category)
+        values.append(request_data.category)
     
-    if request.unit_cost is not None:
+    if request_data.unit_cost is not None:
         updates.append("unit_cost = ?")
-        values.append(request.unit_cost)
+        values.append(request_data.unit_cost)
     
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
@@ -1687,7 +1770,8 @@ async def update_part(part_id: int, request: UpdatePartRequest, user_id: int = D
     return {"success": True, "message": "Part updated successfully"}
 
 @app.delete("/api/parts/{part_id}")
-async def delete_part(part_id: int, user_id: int = Depends(get_current_user)):
+@log_endpoint(action='delete_part', resource_type='part')
+async def delete_part(part_id: int, user_id: int = Depends(get_current_user), request: Request = None):
     """Delete part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1730,7 +1814,8 @@ async def get_movements(
     end_date: Optional[str] = None,
     movement_type: Optional[str] = None,
     part_id: Optional[int] = None,
-    store_id: Optional[int] = None
+    store_id: Optional[int] = None,
+    request: Request = None
 ):
     """Get movement history with advanced filtering"""
     conn = get_db_connection()
@@ -1809,21 +1894,18 @@ async def get_activity_logs(
     target_user_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    request: Request = None
 ):
     """Get activity logs (admin only for all logs, users can see their own)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Check if user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
     query = "SELECT * FROM activity_logs WHERE 1=1"
     params = []
     
     # Non-admins can only see their own logs
-    if user['role'] != 'admin':
+    if check_admin(user_id):
         query += " AND user_id = ?"
         params.append(user_id)
     else:
@@ -1854,15 +1936,36 @@ async def get_activity_logs(
     
     cursor.execute(query, params)
     logs = cursor.fetchall()
-    conn.close()
+    # conn.close()
     
-    return [dict(log) for log in logs]
+    try:
+        cursor.execute(query, params)
+        logs = cursor.fetchall()
+        conn.close()
+        
+        # Convert to list of dicts and ensure all fields are present
+        result = []
+        for log in logs:
+            log_dict = dict(log)
+            # Ensure all expected fields exist with defaults
+            log_dict.setdefault('details', None)
+            log_dict.setdefault('ip_address', None)
+            log_dict.setdefault('user_agent', None)
+            log_dict.setdefault('error_message', None)
+            result.append(log_dict)
+        
+        return result
+    except Exception as e:
+        error_logger.error(f"Failed to get activity logs: {e}")
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve logs: {str(e)}")
 
 @app.get("/api/logs/activity/stats")
 async def get_activity_stats(
     user_id: int = Depends(get_current_user),
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    request: Request = None
 ):
     """Get activity statistics (admin only)"""
     conn = get_db_connection()
@@ -1944,7 +2047,8 @@ async def get_activity_stats(
 @app.delete("/api/logs/activity/cleanup")
 async def cleanup_old_logs(
     days: int = 90,
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(get_current_user),
+    request: Request = None
 ):
     """Delete activity logs older than specified days (admin only)"""
     conn = get_db_connection()
@@ -1976,6 +2080,11 @@ async def cleanup_old_logs(
     )
     
     return {"success": True, "deleted_count": deleted_count, "days": days}
+
+@app.get("/")
+async def root():
+    """Serve the main application"""
+    return {"message": "Inventory Management API", "docs": "/docs", "frontend": "/static/index.html"}
 
 if __name__ == "__main__":
     import uvicorn

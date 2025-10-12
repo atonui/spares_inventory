@@ -397,6 +397,8 @@ function inventoryApp() {
         // logging functions
         async loadActivityLogs() {
             this.loading = true;
+            this.error = '';
+
             try {
                 const params = new URLSearchParams();
                 
@@ -421,13 +423,53 @@ function inventoryApp() {
                 const queryString = params.toString();
                 const endpoint = queryString ? `/logs/activity?${queryString}` : '/logs/activity';
                 
-                this.activityLogs = await this.apiCall(endpoint);
-                    } catch (error) {
-                        this.error = 'Failed to load activity logs: ' + error.message;
-                    } finally {
-                        this.loading = false;
+                const response = await fetch(`${this.apiUrl}${endpoint}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`,
+                        'Content-Type': 'application/json'
                     }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `Failed to load logs: ${response.status}`);
+                }
+                
+                this.activityLogs = await response.json();
+                
+            } catch (error) {
+                console.error('Error loading activity logs:', error);
+                this.error = 'Failed to load activity logs: ' + error.message;
+                this.activityLogs = [];
+            } finally {
+                this.loading = false;
+            }
         },
+
+        //-------------Logging testing function------------------------------
+        async testLogging() {
+            try {
+                const response = await fetch(`${this.apiUrl}/logs/test`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Logging test result:', data);
+                
+                if (data.status === 'ok') {
+                    alert(`✅ Logging system OK!\n\nTable exists: ${data.table_exists}\nLog count: ${data.log_count}\nYou are: ${data.current_user?.name}\nCan view logs: ${data.can_view_logs}`);
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Test failed:', error);
+                alert('Test failed: ' + error.message);
+            }
+        },
+//---------------------End of logging testing function--------------------------
 
         async loadActivityStats() {
             try {

@@ -238,3 +238,462 @@ NameError: name 'inventory_id' is not defined
 2025-10-11 05:45:25,095 - inventory_app - INFO - [startup] Application initialized
 2025-10-11 05:45:25,113 - inventory_app - INFO - Database initialized successfully
 2025-10-11 05:45:37,176 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/9 STATUS=success
+2025-10-11 05:57:02,828 - inventory_app - INFO - Application shutting down
+2025-10-11 05:57:02,850 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 05:57:03,774 - inventory_app - INFO - Application starting up
+2025-10-11 05:57:03,788 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 05:57:03,798 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:18:08,663 - inventory_app - INFO - Application shutting down
+2025-10-11 07:18:08,672 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:18:15,179 - inventory_app - INFO - Application starting up
+2025-10-11 07:18:15,203 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:18:15,212 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:18:24,240 - inventory_app - INFO - Application shutting down
+2025-10-11 07:18:24,249 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:18:54,351 - inventory_app - INFO - Application starting up
+2025-10-11 07:18:54,374 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:18:54,385 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:19:01,853 - inventory_app - INFO - Application shutting down
+2025-10-11 07:19:01,861 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:19:03,541 - inventory_app - INFO - Application starting up
+2025-10-11 07:19:03,576 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:19:03,596 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:19:06,372 - inventory_app - INFO - Application shutting down
+2025-10-11 07:19:06,386 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:19:08,251 - inventory_app - INFO - Application starting up
+2025-10-11 07:19:08,271 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:19:08,292 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:19:08,780 - inventory_app - INFO - Application shutting down
+2025-10-11 07:19:08,810 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:19:12,241 - inventory_app - INFO - Application starting up
+2025-10-11 07:19:12,255 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:19:12,269 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:19:17,073 - inventory_app - INFO - Application shutting down
+2025-10-11 07:19:17,082 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:19:18,304 - inventory_app - INFO - Application starting up
+2025-10-11 07:19:18,335 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:19:18,349 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:19:30,246 - inventory_app - INFO - Application shutting down
+2025-10-11 07:19:30,268 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:19:31,493 - inventory_app - INFO - Application starting up
+2025-10-11 07:19:31,510 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:19:31,526 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:19:33,953 - inventory_app - INFO - Application starting up
+2025-10-11 07:19:33,984 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:19:34,001 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:20:26,157 - inventory_app - INFO - Application shutting down
+2025-10-11 07:20:26,164 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:20:29,538 - inventory_app - INFO - Application starting up
+2025-10-11 07:20:29,561 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:20:29,571 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:20:37,299 - inventory_app - INFO - Application shutting down
+2025-10-11 07:20:37,322 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:20:40,267 - inventory_app - INFO - Application starting up
+2025-10-11 07:20:40,280 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:20:40,297 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:20:43,396 - inventory_app - INFO - Application shutting down
+2025-10-11 07:20:43,408 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:20:45,157 - inventory_app - INFO - Application starting up
+2025-10-11 07:20:45,185 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:20:45,199 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:20:55,128 - inventory_app - INFO - Application shutting down
+2025-10-11 07:20:55,153 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:29:17,493 - inventory_app - INFO - Application starting up
+2025-10-11 07:29:17,499 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:29:17,510 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:29:52,522 - inventory_app - INFO - Application shutting down
+2025-10-11 07:29:52,529 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:29:53,676 - inventory_app - INFO - Application starting up
+2025-10-11 07:29:53,704 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:29:53,715 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:29:55,523 - inventory_app - INFO - Application shutting down
+2025-10-11 07:29:55,537 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:29:57,883 - inventory_app - INFO - Application starting up
+2025-10-11 07:29:57,915 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:29:57,941 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:30:01,148 - inventory_app - INFO - Application shutting down
+2025-10-11 07:30:01,161 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:30:03,605 - inventory_app - INFO - Application starting up
+2025-10-11 07:30:03,643 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:30:03,664 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:30:05,924 - inventory_app - INFO - Application starting up
+2025-10-11 07:30:05,941 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:30:05,954 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:30:08,335 - inventory_app - INFO - Application starting up
+2025-10-11 07:30:08,355 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:30:08,370 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:31:28,419 - audit - INFO - USER=wfv@edfv.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-10-11 07:31:45,302 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-10-11 07:31:45,303 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-10-11 07:31:55,644 - errors - ERROR - Failed to get activity logs: Cannot operate on a closed database.
+2025-10-11 07:49:36,764 - inventory_app - INFO - Application shutting down
+2025-10-11 07:49:36,786 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:49:40,703 - inventory_app - INFO - Application starting up
+2025-10-11 07:49:40,710 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:49:40,719 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:49:50,204 - inventory_app - INFO - Application shutting down
+2025-10-11 07:49:50,211 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:50:03,495 - inventory_app - INFO - Application starting up
+2025-10-11 07:50:03,512 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:50:03,523 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:50:14,640 - inventory_app - INFO - Application shutting down
+2025-10-11 07:50:14,666 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:50:21,349 - inventory_app - INFO - Application starting up
+2025-10-11 07:50:21,375 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:50:21,386 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:50:30,005 - inventory_app - INFO - Application shutting down
+2025-10-11 07:50:30,029 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:50:31,554 - inventory_app - INFO - Application starting up
+2025-10-11 07:50:31,584 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:50:31,599 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:50:32,485 - inventory_app - INFO - Application shutting down
+2025-10-11 07:50:32,513 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:50:35,490 - inventory_app - INFO - Application starting up
+2025-10-11 07:50:35,507 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:50:35,520 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:50:36,431 - inventory_app - INFO - Application shutting down
+2025-10-11 07:50:36,457 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:50:38,218 - inventory_app - INFO - Application starting up
+2025-10-11 07:50:38,249 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:50:38,263 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:50:53,775 - inventory_app - INFO - Application shutting down
+2025-10-11 07:50:53,782 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:50:59,610 - inventory_app - INFO - Application starting up
+2025-10-11 07:50:59,638 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:50:59,645 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:05,316 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:05,324 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:07,102 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:07,137 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:07,154 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:09,630 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:09,660 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:11,585 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:11,598 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:11,612 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:20,030 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:20,054 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:21,281 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:21,304 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:21,319 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:26,789 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:26,800 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:29,920 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:29,950 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:29,964 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:32,390 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:32,415 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:34,270 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:34,304 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:34,319 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:37,599 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:37,629 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:39,395 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:39,426 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:39,439 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:41,509 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:41,522 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:43,303 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:43,335 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:43,351 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:51:57,064 - inventory_app - INFO - Application shutting down
+2025-10-11 07:51:57,073 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:51:58,755 - inventory_app - INFO - Application starting up
+2025-10-11 07:51:58,787 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:51:58,802 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:52:15,787 - inventory_app - INFO - Application shutting down
+2025-10-11 07:52:15,810 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:52:16,751 - inventory_app - INFO - Application starting up
+2025-10-11 07:52:16,777 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:52:16,785 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:52:17,643 - inventory_app - INFO - Application shutting down
+2025-10-11 07:52:17,673 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:52:20,004 - inventory_app - INFO - Application starting up
+2025-10-11 07:52:20,040 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:52:20,062 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:52:28,623 - inventory_app - INFO - Application shutting down
+2025-10-11 07:52:28,650 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:52:30,087 - inventory_app - INFO - Application starting up
+2025-10-11 07:52:30,120 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:52:30,172 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:53:26,133 - inventory_app - INFO - Application shutting down
+2025-10-11 07:53:26,143 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:53:27,058 - inventory_app - INFO - Application starting up
+2025-10-11 07:53:27,068 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:53:27,079 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:53:36,271 - inventory_app - INFO - Application shutting down
+2025-10-11 07:53:36,279 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:53:39,955 - inventory_app - INFO - Application starting up
+2025-10-11 07:53:39,983 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:53:39,993 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:53:49,049 - inventory_app - INFO - Application shutting down
+2025-10-11 07:53:49,057 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:53:53,519 - inventory_app - INFO - Application starting up
+2025-10-11 07:53:53,532 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:53:53,545 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:53:54,554 - inventory_app - INFO - Application shutting down
+2025-10-11 07:53:54,567 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:53:56,539 - inventory_app - INFO - Application starting up
+2025-10-11 07:53:56,553 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:53:56,565 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:54:02,473 - inventory_app - INFO - Application shutting down
+2025-10-11 07:54:02,504 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:54:07,194 - inventory_app - INFO - Application starting up
+2025-10-11 07:54:07,220 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:54:07,229 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:54:13,438 - inventory_app - INFO - Application shutting down
+2025-10-11 07:54:13,445 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:54:15,086 - inventory_app - INFO - Application starting up
+2025-10-11 07:54:15,118 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:54:15,133 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:54:39,514 - inventory_app - INFO - Application shutting down
+2025-10-11 07:54:39,538 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:54:42,775 - inventory_app - INFO - Application starting up
+2025-10-11 07:54:42,792 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:54:42,808 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:54:48,417 - inventory_app - INFO - Application shutting down
+2025-10-11 07:54:48,443 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:54:50,158 - inventory_app - INFO - Application starting up
+2025-10-11 07:54:50,188 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:54:50,202 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:54:56,576 - inventory_app - INFO - Application shutting down
+2025-10-11 07:54:56,601 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:54:58,200 - inventory_app - INFO - Application starting up
+2025-10-11 07:54:58,233 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:54:58,250 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:10,632 - inventory_app - INFO - Application shutting down
+2025-10-11 07:55:10,644 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:55:12,818 - inventory_app - INFO - Application starting up
+2025-10-11 07:55:12,837 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:55:12,853 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:15,516 - inventory_app - INFO - Application shutting down
+2025-10-11 07:55:15,530 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:55:19,069 - inventory_app - INFO - Application starting up
+2025-10-11 07:55:19,083 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:55:19,096 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:28,932 - inventory_app - INFO - Application shutting down
+2025-10-11 07:55:28,940 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:55:31,358 - inventory_app - INFO - Application starting up
+2025-10-11 07:55:31,395 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:55:31,413 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:31,819 - inventory_app - INFO - Application shutting down
+2025-10-11 07:55:31,833 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:55:38,768 - inventory_app - INFO - Application starting up
+2025-10-11 07:55:38,779 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:55:38,789 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:41,148 - inventory_app - INFO - Application starting up
+2025-10-11 07:55:41,182 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:55:41,195 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:42,678 - inventory_app - INFO - Application shutting down
+2025-10-11 07:55:42,710 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:55:44,527 - inventory_app - INFO - Application starting up
+2025-10-11 07:55:44,559 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:55:44,575 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:55:51,676 - inventory_app - INFO - Application shutting down
+2025-10-11 07:55:51,700 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:56:09,388 - inventory_app - INFO - Application starting up
+2025-10-11 07:56:09,412 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:56:09,419 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:56:17,273 - inventory_app - INFO - Application shutting down
+2025-10-11 07:56:17,281 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:56:19,632 - inventory_app - INFO - Application starting up
+2025-10-11 07:56:19,654 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:56:19,677 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:56:27,063 - inventory_app - INFO - Application starting up
+2025-10-11 07:56:27,095 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:56:27,111 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:56:27,592 - inventory_app - INFO - Application shutting down
+2025-10-11 07:56:27,605 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 07:56:32,253 - inventory_app - INFO - Application starting up
+2025-10-11 07:56:32,284 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:56:32,296 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:56:34,179 - inventory_app - INFO - Application starting up
+2025-10-11 07:56:34,196 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 07:56:34,208 - inventory_app - INFO - Database initialized successfully
+2025-10-11 07:59:57,449 - inventory_app - INFO - Application shutting down
+2025-10-11 07:59:57,472 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:00:01,463 - inventory_app - INFO - Application starting up
+2025-10-11 08:00:01,488 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:00:01,504 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:00:05,123 - inventory_app - INFO - Application shutting down
+2025-10-11 08:00:05,153 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:02:35,517 - inventory_app - INFO - Application starting up
+2025-10-11 08:02:35,542 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:02:35,556 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:02:52,760 - inventory_app - INFO - Application shutting down
+2025-10-11 08:02:52,779 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:02:53,637 - inventory_app - INFO - Application starting up
+2025-10-11 08:02:53,649 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:02:53,658 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:03:27,994 - inventory_app - INFO - Application shutting down
+2025-10-11 08:03:28,018 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:03:29,301 - inventory_app - INFO - Application starting up
+2025-10-11 08:03:29,338 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:03:29,357 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:03:36,267 - inventory_app - INFO - Application shutting down
+2025-10-11 08:03:36,293 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:03:37,996 - inventory_app - INFO - Application starting up
+2025-10-11 08:03:38,029 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:03:38,055 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:03:40,220 - inventory_app - INFO - Application shutting down
+2025-10-11 08:03:40,247 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:03:42,137 - inventory_app - INFO - Application starting up
+2025-10-11 08:03:42,170 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:03:42,183 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:03:49,274 - inventory_app - INFO - Application shutting down
+2025-10-11 08:03:49,296 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:03:51,306 - inventory_app - INFO - Application starting up
+2025-10-11 08:03:51,342 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:03:51,357 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:03:51,910 - inventory_app - INFO - Application shutting down
+2025-10-11 08:03:51,942 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:03:54,232 - inventory_app - INFO - Application starting up
+2025-10-11 08:03:54,267 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:03:54,284 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:03:55,348 - inventory_app - INFO - Application shutting down
+2025-10-11 08:03:55,365 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:03:58,123 - inventory_app - INFO - Application starting up
+2025-10-11 08:03:58,155 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:03:58,171 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:04:06,286 - inventory_app - INFO - Application starting up
+2025-10-11 08:04:06,315 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:04:06,326 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:04:07,208 - inventory_app - INFO - Application shutting down
+2025-10-11 08:04:07,221 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:04:08,885 - inventory_app - INFO - Application starting up
+2025-10-11 08:04:08,898 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:04:08,910 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:04:17,357 - inventory_app - INFO - Application shutting down
+2025-10-11 08:04:17,368 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:04:19,341 - inventory_app - INFO - Application starting up
+2025-10-11 08:04:19,358 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:04:19,373 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:04:28,452 - inventory_app - INFO - Application shutting down
+2025-10-11 08:04:28,465 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:04:31,500 - inventory_app - INFO - Application starting up
+2025-10-11 08:04:31,531 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:04:31,544 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:04:42,045 - inventory_app - INFO - Application shutting down
+2025-10-11 08:04:42,073 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:04:44,064 - inventory_app - INFO - Application starting up
+2025-10-11 08:04:44,083 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:04:44,102 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:04:55,286 - inventory_app - INFO - Application shutting down
+2025-10-11 08:04:55,310 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:04:59,487 - inventory_app - INFO - Application starting up
+2025-10-11 08:04:59,517 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:04:59,532 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:05:08,192 - inventory_app - INFO - Application shutting down
+2025-10-11 08:05:08,220 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:05:11,520 - inventory_app - INFO - Application starting up
+2025-10-11 08:05:11,539 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:05:11,556 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:07:44,646 - inventory_app - INFO - Application shutting down
+2025-10-11 08:07:44,652 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:07:47,633 - inventory_app - INFO - Application starting up
+2025-10-11 08:07:47,655 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:07:47,665 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:06,820 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:06,832 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:08,820 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:08,836 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:08,855 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:16,311 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:16,324 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:18,182 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:18,209 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:18,221 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:23,486 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:23,498 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:25,217 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:25,236 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:25,253 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:35,960 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:35,990 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:38,451 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:38,468 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:38,482 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:42,880 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:42,906 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:44,828 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:44,859 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:44,875 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:48,626 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:48,639 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:50,637 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:50,652 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:50,666 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:08:56,118 - inventory_app - INFO - Application shutting down
+2025-10-11 08:08:56,131 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:08:57,986 - inventory_app - INFO - Application starting up
+2025-10-11 08:08:58,002 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:08:58,015 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:09:12,980 - inventory_app - INFO - Application shutting down
+2025-10-11 08:09:13,004 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:09:15,027 - inventory_app - INFO - Application starting up
+2025-10-11 08:09:15,044 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:09:15,057 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:09:18,391 - inventory_app - INFO - Application shutting down
+2025-10-11 08:09:18,420 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:09:20,385 - inventory_app - INFO - Application starting up
+2025-10-11 08:09:20,403 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:09:20,452 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:09:24,432 - inventory_app - INFO - Application shutting down
+2025-10-11 08:09:24,440 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:09:26,381 - inventory_app - INFO - Application starting up
+2025-10-11 08:09:26,398 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:09:26,413 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:09:30,592 - inventory_app - INFO - Application shutting down
+2025-10-11 08:09:30,620 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:09:33,067 - inventory_app - INFO - Application starting up
+2025-10-11 08:09:33,085 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:09:33,105 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:09:35,990 - inventory_app - INFO - Application shutting down
+2025-10-11 08:09:36,021 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 08:09:39,723 - inventory_app - INFO - Application starting up
+2025-10-11 08:09:39,737 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 08:09:39,750 - inventory_app - INFO - Database initialized successfully
+2025-10-11 08:10:17,133 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 08:10:17,435 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 08:10:17,751 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 08:10:18,022 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 08:10:20,745 - errors - ERROR - Failed to get activity logs: Cannot operate on a closed database.
+2025-10-11 09:48:37,446 - inventory_app - INFO - Application shutting down
+2025-10-11 09:48:37,468 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 10:12:20,193 - inventory_app - INFO - Application starting up
+2025-10-11 10:12:20,215 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 10:12:20,222 - inventory_app - INFO - Database initialized successfully
+2025-10-11 10:13:21,826 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 10:13:22,127 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 10:13:22,424 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 10:13:22,711 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 10:13:24,755 - errors - ERROR - Failed to get activity logs: Cannot operate on a closed database.
+2025-10-11 10:28:57,233 - inventory_app - INFO - Application shutting down
+2025-10-11 10:28:57,240 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-10-11 10:28:58,073 - inventory_app - INFO - Application starting up
+2025-10-11 10:28:58,081 - inventory_app - INFO - [startup] Application initialized
+2025-10-11 10:28:58,088 - inventory_app - INFO - Database initialized successfully
+2025-10-11 10:29:09,073 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 10:29:09,383 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 10:29:09,684 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 10:29:09,990 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 13:22:17,186 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 13:22:17,502 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 13:22:17,818 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 13:22:18,103 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 13:30:53,644 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 13:30:53,939 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-11 13:30:54,264 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-11 13:30:54,553 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:02:12,804 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:02:13,110 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:02:15,460 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:02:15,480 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:06:33,990 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:06:34,297 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:06:34,611 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:06:34,891 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:07:02,505 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:07:02,804 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-10-12 08:07:03,108 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-10-12 08:07:03,387 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
