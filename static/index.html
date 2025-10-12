@@ -15,14 +15,15 @@
             x-transition
             x-text="error"
             class="error"
-            x-init="$watch('error', val => { if(val) setTimeout(() => error = '', 5000) })"
-        ></div>
+            x-init="$watch('error', val => { if(val) setTimeout(() => error = '', 5000) })">
+        </div>
     <div x-data="inventoryApp()" x-init="checkAuth()">
         <!-- Login Screen -->
-        <div x-show="!isAuthenticated" class="login-container">
+        <div x-show="!isAuthenticated" class="card">
             <form @submit.prevent="login()" class="login-form">
+                <div class="card-header">
                 <h2>Inventory Management</h2>
-                
+                </div>
                 <!-- <div class="demo-credentials">
                     <strong>Demo Credentials:</strong><br>
                     Engineer: john@company.com / password123<br>
@@ -30,7 +31,7 @@
                 </div> -->
                 
                 <div x-show="error" class="error" x-text="error"></div>
-                
+                <div class="card-body">
                 <div class="form-group">
                     <label>Email</label>
                     <input type="email" x-model="loginForm.email" required>
@@ -48,6 +49,7 @@
             </form>
             <div class="back-link" style="margin-top: 1rem; text-align: center;">
                 <a href="/static/forgot_password.html">Forgot Password?</a>
+            </div>
             </div>
         </div>
 
