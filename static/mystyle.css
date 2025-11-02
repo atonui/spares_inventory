@@ -660,10 +660,6 @@ label.btn {
     }
 }
 
-
-
-
-
 /* Style the tab */
 .tab {
   overflow: hidden;
@@ -698,4 +694,153 @@ label.btn {
   padding: 6px 12px;
   border: 1px solid #ccc;
   border-top: none;
+}
+
+/* Equipment Calibration Status Styles */
+.overdue-cal {
+    background: #fee2e2;
+    border-left: 4px solid #dc2626;
+}
+
+.urgent-cal {
+    background: #fed7aa;
+    border-left: 4px solid #ea580c;
+}
+
+.soon-cal {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+}
+
+.ok-cal {
+    background: #d1fae5;
+    border-left: 4px solid #10b981;
+}
+
+/* Equipment status badges */
+.equipment-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.equipment-status.active {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.equipment-status.inactive {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.equipment-status.maintenance {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Equipment history timeline */
+.equipment-history-item {
+    position: relative;
+    padding-left: 2rem;
+    padding-bottom: 1.5rem;
+    border-left: 2px solid #e5e7eb;
+}
+
+.equipment-history-item:last-child {
+    border-left-color: transparent;
+    padding-bottom: 0;
+}
+
+.equipment-history-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #667eea;
+    border: 2px solid white;
+}
+
+.equipment-history-item.calibrated::before {
+    background: #10b981;
+}
+
+.equipment-history-item.transferred::before {
+    background: #f59e0b;
+}
+
+.equipment-history-item.created::before {
+    background: #3b82f6;
+}
+
+.equipment-history-item.deleted::before {
+    background: #dc2626;
+}
+
+/* Calibration badge styles for table */
+.cal-badge {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.cal-badge.overdue {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.cal-badge.urgent {
+    background: #fed7aa;
+    color: #9a3412;
+}
+
+.cal-badge.soon {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.cal-badge.ok {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.cal-badge.none {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Equipment card hover effect */
+.equipment-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.equipment-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive adjustments for equipment table */
+@media (max-width: 768px) {
+    .equipment-table th:nth-child(4), 
+    .equipment-table td:nth-child(4) {
+        display: none; /* Hide assigned to column on mobile */
+    }
+    
+    .equipment-table th:nth-child(5), 
+    .equipment-table td:nth-child(5) {
+        display: none; /* Hide last calibration on mobile */
+    }
+}
+
+@media (max-width: 480px) {
+    .equipment-table th:nth-child(2), 
+    .equipment-table td:nth-child(2) {
+        display: none; /* Hide make/model on very small screens */
+    }
 }

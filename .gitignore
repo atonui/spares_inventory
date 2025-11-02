@@ -15,3 +15,5 @@ static/index.old6
 static/index.old8
 requirements.old
 requirements.old2
+db_migrate_equipment.py
+db_migrate.py

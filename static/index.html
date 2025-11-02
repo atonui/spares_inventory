@@ -54,7 +54,7 @@
         </div>
 
         <!-- Main App -->
-        <div x-show="isAuthenticated" class="container">
+        <div x-data="{}" x-show="isAuthenticated" class="container">
             <!-- Header -->
             <div class="header">
                 <div class="user-info">
@@ -84,9 +84,9 @@
                     <div class="stat-number" x-text="stats.total_stores || 0"></div>
                     <div>Active Stores</div>
                 </div>
-                <div class="stat-card" @click="openPanel('showLowStockPanel')" style="cursor: pointer;">
-                    <div class="stat-number" x-text="stats.low_stock || 0"></div>
-                    <div>Low Stock Alerts</div>
+                <div class="stat-card" @click="openPanel('showEquipmentPanel')" style="cursor: pointer;">
+                    <div class="stat-number" x-text="equipmentStats.my_equipment || 0"></div>
+                    <div>My Equipment</div>
                 </div>
                 <div class="stat-card" @click="openPanel('showMyPartsPanel')" style="cursor: pointer;">
                     <div class="stat-number" x-text="stats.my_parts || 0"></div>
@@ -141,6 +141,7 @@
                                     @click="exportComprehensiveReport(); showExportMenu = false">
                                 📊 Comprehensive Report
                             </button>
+                            
                         </div>
                     </div>
 
@@ -154,12 +155,17 @@
                     <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showPartsPanel')">
                         <span>Manage Parts</span>
                     </button>
+                    <button class="btn" @click="openPanel('showEquipmentPanel'); loadEquipment()">
+                        <span>Equipment</span>
+                    </button>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" 
+                            @click="showCalibrationSettingsModal = true; loadCalibrationSettings()">
+                        <span>Calibration Settings</span>
+                    </button>
                     <button class="btn" @click="openPanel('showMovementsPanel'); loadMovements()">
                         <span>Movement History</span>
                     </button>
-                    <!-- <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()">
-                        <span>Activity Logs</span>
-                    </button> -->
+          
                 </div>
                 
                 <div x-show="error" class="error" x-text="error"></div>
@@ -326,208 +332,92 @@
                 </table>
             </div>
 
-        <!-- Activity Logs Panel (Admin only) -->
-            <!-- <div x-show="!loading && showLogsPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0;">Activity Logs</h3>
-                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <button class="btn btn-sm btn-success" @click="exportActivityLogsCSV()">Export CSV</button>
-                            <button class="btn btn-sm" @click="loadActivityStats()" x-show="currentUser?.role === 'admin'">View Stats</button>
-                            <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
-                        </div>
-                    </div> -->
-                    
-                    <!-- Filters -->
-                    <!-- <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Start Date</label>
-                            <input type="date" x-model="logFilters.startDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">End Date</label>
-                            <input type="date" x-model="logFilters.endDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Action</label>
-                            <select x-model="logFilters.action" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                                <option value="">All Actions</option>
-                                <option value="login">Login</option>
-                                <option value="logout">Logout</option>
-                                <option value="add_stock">Add Stock</option>
-                                <option value="update_stock">Update Stock</option>
-                                <option value="transfer_stock">Transfer Stock</option>
-                                <option value="create_user">Create User</option>
-                                <option value="update_user">Update User</option>
-                                <option value="delete_user">Delete User</option>
-                                <option value="create_store">Create Store</option>
-                                <option value="update_store">Update Store</option>
-                                <option value="delete_store">Delete Store</option>
-                                <option value="create_part">Create Part</option>
-                                <option value="update_part">Update Part</option>
-                                <option value="delete_part">Delete Part</option>
-                            </select>
-                        </div>
-                        <div x-show="currentUser?.role === 'admin'">
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">User</label>
-                            <select x-model="logFilters.targetUserId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                                <option value="">All Users</option>
-                                <template x-for="user in users" :key="user.id">
-                                    <option :value="user.id" x-text="user.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Status</label>
-                            <select x-model="logFilters.status" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                                <option value="">All</option>
-                                <option value="success">Success</option>
-                                <option value="error">Error</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-sm btn-success" @click="loadActivityLogs()">Apply Filters</button>
-                        <button class="btn btn-sm" @click="clearLogFilters()">Clear Filters</button>
-                        <button class="btn btn-sm" style="background: #dc3545; color: white;" 
-                                x-show="currentUser?.role === 'admin'"
-                                @click="cleanupOldLogs()">
-                            Cleanup Old Logs
+        <!-- Equipment Management Panel -->
+<div x-show="!loading && showEquipmentPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+    <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+            <h3 style="margin: 0;">Equipment Management</h3>
+            <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                <span>Total: <strong x-text="equipmentStats.total_equipment || 0"></strong></span>
+                <span>Mine: <strong x-text="equipmentStats.my_equipment || 0"></strong></span>
+                <span style="color: #f59e0b;">Due Soon: <strong x-text="equipmentStats.due_soon || 0"></strong></span>
+                <span style="color: #dc2626;">Overdue: <strong x-text="equipmentStats.overdue || 0"></strong></span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-sm" @click="downloadEquipmentTemplate()">Download Template</button>
+            <button class="btn btn-sm btn-success" @click="exportEquipmentCSV()">Export CSV</button>
+            <button x-show="currentUser?.role === 'admin'" class="btn btn-success" 
+                    @click="editingEquipment = null; equipmentForm = { equipment_name: '', make: '', model: '', serial_number: '', assigned_user_id: '', calibration_cert_number: '', calibration_authority: '', calibration_date: '', next_calibration_date: '', notes: '' }; showEquipmentModal = true">
+                Add Equipment
+            </button>
+            <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+        </div>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Equipment Name</th>
+                <th>Make/Model</th>
+                <th>Serial #</th>
+                <th>Assigned To</th>
+                <th>Last Calibration</th>
+                <th>Next Calibration</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <template x-for="eq in equipment" :key="eq.id">
+                <tr :class="getCalibrationStatus(eq).class">
+                    <td><strong x-text="eq.equipment_name"></strong></td>
+                    <td x-text="`${eq.make} ${eq.model}`"></td>
+                    <td x-text="eq.serial_number" style="font-family: monospace; font-size: 0.9em;"></td>
+                    <td>
+                        <span class="wo-tag" x-text="eq.assigned_user_name || 'Unassigned'"></span>
+                    </td>
+                    <td x-text="eq.calibration_date ? new Date(eq.calibration_date).toLocaleDateString() : '-'"></td>
+                    <td x-text="eq.next_calibration_date ? new Date(eq.next_calibration_date).toLocaleDateString() : '-'"></td>
+                    <td>
+                        <span class="wo-tag" 
+                              :style="`background: ${getCalibrationStatus(eq).status === 'overdue' ? '#fee2e2' : getCalibrationStatus(eq).status === 'urgent' ? '#fed7aa' : getCalibrationStatus(eq).status === 'soon' ? '#fef3c7' : '#d1fae5'}; color: ${getCalibrationStatus(eq).status === 'overdue' ? '#991b1b' : getCalibrationStatus(eq).status === 'urgent' ? '#9a3412' : getCalibrationStatus(eq).status === 'soon' ? '#92400e' : '#065f46'};`"
+                              x-text="getCalibrationStatus(eq).text">
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm" 
+                                @click="openCalibrationModal(eq)"
+                                x-show="currentUser?.role === 'admin' || eq.assigned_user_id === currentUser?.id">
+                            Calibrate
                         </button>
-                    </div>
-                </div>
-                
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date/Time</th>
-                            <th>User</th>
-                            <th>Action</th>
-                            <th>Resource</th>
-                            <th>Status</th>
-                            <th>IP Address</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="log in activityLogs" :key="log.id">
-                            <tr :class="log.status === 'error' ? 'low-stock' : ''">
-                                <td x-text="new Date(log.created_at).toLocaleString()" style="white-space: nowrap;"></td>
-                                <td x-text="log.username"></td>
-                                <td>
-                                    <span class="wo-tag" x-text="log.action.replace('_', ' ')"></span>
-                                </td>
-                                <td x-text="log.resource_type ? `${log.resource_type}/${log.resource_id}` : '-'"></td>
-                                <td>
-                                    <span :class="log.status === 'success' ? 'wo-tag' : 'wo-tag'" 
-                                        :style="log.status === 'error' ? 'background: #fee2e2; color: #991b1b;' : ''"
-                                        x-text="log.status"></span>
-                                </td>
-                                <td x-text="log.ip_address || '-'" style="font-size: 0.85rem;"></td>
-                                <td>
-                                    <button class="btn btn-sm" 
-                                            x-show="log.details || log.error_message"
-                                            @click="showLogDetails(log)">
-                                        View
-                                    </button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                
-                <div x-show="activityLogs.length === 0" style="padding: 2rem; text-align: center; color: #666;">
-                    No activity logs found.
-                </div>
-            </div> -->
-
-            <!-- Movement History Panel -->
-            <!--<div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 style="margin: 0;">Movement History</h3>
-                        <button class="btn btn-sm btn-success" @click="exportMovementsCSV()">Export to CSV</button>
-                    </div> -->
-                    
-                    <!-- Filters -->
-                    <!-- <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Start Date</label>
-                            <input type="date" x-model="movementFilters.startDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">End Date</label>
-                            <input type="date" x-model="movementFilters.endDate" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Movement Type</label>
-                            <select x-model="movementFilters.movementType" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                                <option value="">All Types</option>
-                                <option value="add">Add</option>
-                                <option value="remove">Remove</option>
-                                <option value="transfer">Transfer</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Part</label>
-                            <select x-model="movementFilters.partId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                                <option value="">All Parts</option>
-                                <template x-for="part in parts" :key="part.id">
-                                    <option :value="part.id" x-text="part.part_number"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Store</label>
-                            <select x-model="movementFilters.storeId" style="width: 100%; padding: 0.4rem; font-size: 0.9rem;">
-                                <option value="">All Stores</option>
-                                <template x-for="store in stores" :key="store.id">
-                                    <option :value="store.id" x-text="store.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-sm btn-success" @click="loadMovements()">Apply Filters</button>
-                        <button class="btn btn-sm" @click="clearMovementFilters()">Clear Filters</button>
-                    </div>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date/Time</th>
-                            <th>Type</th>
-                            <th>Part</th>
-                            <th>Qty</th>
-                            <th>From</th>
-                            <th>To</th>
-                            <th>WO#</th>
-                            <th>By</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="movement in movements" :key="movement.id">
-                            <tr>
-                                <td x-text="new Date(movement.created_at).toLocaleString()"></td>
-                                <td>
-                                    <span class="wo-tag" x-text="movement.movement_type"></span>
-                                </td>
-                                <td x-text="movement.part_number"></td>
-                                <td><strong x-text="movement.quantity"></strong></td>
-                                <td x-text="movement.from_store_name || '-'"></td>
-                                <td x-text="movement.to_store_name || '-'"></td>
-                                <td x-text="movement.work_order || '-'"></td>
-                                <td x-text="movement.created_by_name"></td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                <div x-show="movements.length === 0" style="padding: 2rem; text-align: center; color: #666;">
-                    No movement history found.
-                </div>
-            </div> -->
+                        <button class="btn btn-sm" 
+                                @click="openTransferEquipmentModal(eq)"
+                                x-show="currentUser?.role === 'admin' || eq.assigned_user_id === currentUser?.id">
+                            Transfer
+                        </button>
+                        <button class="btn btn-sm" @click="viewEquipmentHistory(eq)">History</button>
+                        <button class="btn btn-sm" 
+                                x-show="currentUser?.role === 'admin'"
+                                @click="editEquipment(eq)">
+                            Edit
+                        </button>
+                        <button class="btn btn-sm" 
+                                style="background: #dc3545; color: white;"
+                                x-show="currentUser?.role === 'admin'"
+                                @click="deleteEquipment(eq.id, eq.equipment_name)">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+    </table>
+    
+    <div x-show="equipment.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+        No equipment found.
+    </div>
+</div>
 
             <!-- Recent Activity Feed (Home View) -->
             <div x-show="!loading && !showUsersPanel && !showStoresPanel && !showPartsPanel && !showMovementsPanel && !showAllPartsPanel && !showAllStoresPanel && !showLowStockPanel && !showMyPartsPanel && !showStoreInventoryPanel" class="inventory-table">
@@ -723,52 +613,237 @@
     </div>
 </div>
 
-<!-- Log Details Modal -->
-<div x-show="showLogDetailsModal" class="modal" @click.outside="showLogDetailsModal = false">
+<!-- Equipment Modal -->
+<div x-show="showEquipmentModal" class="modal" @click.outside="showEquipmentModal = false">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3 x-text="editingEquipment ? 'Edit Equipment' : 'Add New Equipment'"></h3>
+        <form @submit.prevent="editingEquipment ? updateEquipment() : createEquipment()">
+            <div class="form-group">
+                <label>Equipment Name *</label>
+                <input type="text" x-model="equipmentForm.equipment_name" required>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Make *</label>
+                    <input type="text" x-model="equipmentForm.make" required>
+                </div>
+                <div class="form-group">
+                    <label>Model *</label>
+                    <input type="text" x-model="equipmentForm.model" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Serial Number *</label>
+                <input type="text" x-model="equipmentForm.serial_number" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Assigned To</label>
+                <select x-model="equipmentForm.assigned_user_id">
+                    <option value="">Unassigned</option>
+                    <template x-for="user in users" :key="user.id">
+                        <option :value="user.id" x-text="user.name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
+            <h4 style="margin-bottom: 1rem; color: #667eea;">Calibration Information</h4>
+            
+            <div class="form-group">
+                <label>Calibration Certificate Number</label>
+                <input type="text" x-model="equipmentForm.calibration_cert_number">
+            </div>
+            
+            <div class="form-group">
+                <label>Calibration Authority</label>
+                <input type="text" x-model="equipmentForm.calibration_authority">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Calibration Date</label>
+                    <input type="date" x-model="equipmentForm.calibration_date">
+                </div>
+                <div class="form-group">
+                    <label>Next Calibration Date</label>
+                    <input type="date" x-model="equipmentForm.next_calibration_date">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea x-model="equipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn" @click="showEquipmentModal = false; editingEquipment = null;">Cancel</button>
+                <button type="submit" class="btn btn-success" :disabled="loading">
+                    <span x-show="!loading" x-text="editingEquipment ? 'Update Equipment' : 'Create Equipment'"></span>
+                    <span x-show="loading">Saving...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Calibration Update Modal -->
+<div x-show="showCalibrationModal" class="modal" @click.outside="showCalibrationModal = false">
     <div class="modal-content">
-        <h3>Log Details</h3>
-        
-        <div style="margin: 1.5rem 0;">
-            <div style="margin-bottom: 1rem;">
-                <strong>User:</strong> <span x-text="selectedLog?.username"></span>
+        <h3>Update Calibration</h3>
+        <p style="margin-bottom: 1rem; color: #666;">
+            <strong x-text="selectedEquipment?.equipment_name"></strong> 
+            (<span x-text="selectedEquipment?.serial_number"></span>)
+        </p>
+        <form @submit.prevent="updateCalibration()">
+            <div class="form-group">
+                <label>Calibration Certificate Number *</label>
+                <input type="text" x-model="calibrationForm.calibration_cert_number" required>
             </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>Action:</strong> <span x-text="selectedLog?.action"></span>
+            
+            <div class="form-group">
+                <label>Calibration Authority *</label>
+                <input type="text" x-model="calibrationForm.calibration_authority" required>
             </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>Time:</strong> <span x-text="selectedLog ? new Date(selectedLog.created_at).toLocaleString() : ''"></span>
-            </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>IP Address:</strong> <span x-text="selectedLog?.ip_address || '-'"></span>
-            </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>Status:</strong> 
-                <span :class="selectedLog?.status === 'success' ? 'wo-tag' : 'wo-tag'" 
-                      :style="selectedLog?.status === 'error' ? 'background: #fee2e2; color: #991b1b;' : ''"
-                      x-text="selectedLog?.status"></span>
-            </div>
-            <div style="margin-bottom: 1rem;" x-show="selectedLog?.error_message">
-                <strong>Error:</strong> 
-                <div style="background: #fee2e2; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem;">
-                    <span x-text="selectedLog?.error_message"></span>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Calibration Date *</label>
+                    <input type="date" x-model="calibrationForm.calibration_date" required>
+                </div>
+                <div class="form-group">
+                    <label>Next Calibration Date *</label>
+                    <input type="date" x-model="calibrationForm.next_calibration_date" required>
                 </div>
             </div>
-            <div x-show="selectedLog?.details">
-                <strong>Details:</strong>
-                <pre style="background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem; max-height: 300px; overflow-y: auto;"
-                     x-text="selectedLog?.details ? JSON.stringify(JSON.parse(selectedLog.details), null, 2) : ''"></pre>
+            
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea x-model="calibrationForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
             </div>
-            <div x-show="selectedLog?.user_agent">
-                <strong>User Agent:</strong>
-                <div style="background: #f8f9fa; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; font-size: 0.85rem; word-break: break-all;">
-                    <span x-text="selectedLog?.user_agent"></span>
-                </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn" @click="showCalibrationModal = false; selectedEquipment = null;">Cancel</button>
+                <button type="submit" class="btn btn-success" :disabled="loading">
+                    <span x-show="!loading">Update Calibration</span>
+                    <span x-show="loading">Updating...</span>
+                </button>
             </div>
+        </form>
+    </div>
+</div>
+
+<!-- Transfer Equipment Modal -->
+<div x-show="showTransferEquipmentModal" class="modal" @click.outside="showTransferEquipmentModal = false">
+    <div class="modal-content">
+        <h3>Transfer Equipment</h3>
+        <p style="margin-bottom: 1rem; color: #666;">
+            <strong x-text="selectedEquipment?.equipment_name"></strong> 
+            (<span x-text="selectedEquipment?.serial_number"></span>)
+        </p>
+        <form @submit.prevent="transferEquipmentToUser()">
+            <div class="form-group">
+                <label>Transfer To</label>
+                <select x-model="transferEquipmentForm.to_user_id" required>
+                    <option value="">Select User</option>
+                    <template x-for="user in users" :key="user.id">
+                        <option :value="user.id" x-text="user.name"></option>
+                    </template>
+                    <option value="">Unassign (Return to Admin)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea x-model="transferEquipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="Reason for transfer..."></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn" @click="showTransferEquipmentModal = false; selectedEquipment = null;">Cancel</button>
+                <button type="submit" class="btn btn-warning" :disabled="loading">
+                    <span x-show="!loading">Transfer Equipment</span>
+                    <span x-show="loading">Transferring...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Equipment History Modal -->
+<div x-show="showEquipmentHistoryModal" class="modal" @click.outside="showEquipmentHistoryModal = false">
+    <div class="modal-content" style="max-width: 700px;">
+        <h3>Equipment History</h3>
+        <p style="margin-bottom: 1rem; color: #666;">
+            <strong x-text="selectedEquipment?.equipment_name"></strong> 
+            (<span x-text="selectedEquipment?.serial_number"></span>)
+        </p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>By</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="history in equipmentHistory" :key="history.id">
+                    <tr>
+                        <td x-text="new Date(history.created_at).toLocaleString()" style="white-space: nowrap;"></td>
+                        <td>
+                            <span class="wo-tag" x-text="history.action"></span>
+                        </td>
+                        <td>
+                            <span x-show="history.action === 'transferred'">
+                                From: <span x-text="history.from_user_name || 'Unassigned'"></span> → 
+                                To: <span x-text="history.to_user_name || 'Unassigned'"></span>
+                            </span>
+                            <span x-show="history.action === 'calibrated'" x-text="history.calibration_date"></span>
+                            <div x-show="history.notes" style="font-size: 0.85em; color: #666; margin-top: 0.25rem;" x-text="history.notes"></div>
+                        </td>
+                        <td x-text="history.created_by_name"></td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        
+        <div x-show="equipmentHistory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+            No history available.
         </div>
         
-        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-            <button type="button" class="btn" @click="showLogDetailsModal = false">Close</button>
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+            <button type="button" class="btn" @click="showEquipmentHistoryModal = false; selectedEquipment = null;">Close</button>
         </div>
+    </div>
+</div>
+
+<!-- Calibration Settings Modal -->
+<div x-show="showCalibrationSettingsModal" class="modal" @click.outside="showCalibrationSettingsModal = false">
+    <div class="modal-content">
+        <h3>Calibration Reminder Settings</h3>
+        <p style="margin-bottom: 1rem; color: #666;">
+            Configure when to send calibration due reminders
+        </p>
+        <form @submit.prevent="updateCalibrationReminderDays()">
+            <div class="form-group">
+                <label>Send reminder (days before due date)</label>
+                <input type="number" x-model="calibrationReminderDays" min="1" max="365" required>
+                <small style="color: #666; display: block; margin-top: 0.5rem;">
+                    Equipment due within this many days will trigger email reminders
+                </small>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn" @click="showCalibrationSettingsModal = false">Cancel</button>
+                <button type="submit" class="btn btn-success" :disabled="loading">
+                    <span x-show="!loading">Save Settings</span>
+                    <span x-show="loading">Saving...</span>
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
