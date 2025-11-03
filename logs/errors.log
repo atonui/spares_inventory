@@ -22,3 +22,9 @@ NameError: name 'inventory_id' is not defined
 2025-10-11 08:10:20,745 - ERROR - Failed to get activity logs: Cannot operate on a closed database.
 2025-10-11 10:13:24,755 - ERROR - Failed to get activity logs: Cannot operate on a closed database.
 2025-10-11 10:13:24,755 - ERROR - Failed to get activity logs: Cannot operate on a closed database.
+2025-11-02 06:26:30,854 - ERROR - Failed to log activity: database is locked
+2025-11-02 06:26:36,370 - ERROR - Failed to log activity: database is locked
+2025-11-02 06:26:41,923 - ERROR - Failed to log activity: database is locked
+2025-11-02 06:26:47,486 - ERROR - Failed to log activity: database is locked
+2025-11-02 06:26:53,079 - ERROR - Failed to log activity: database is locked
+2025-11-03 09:28:44,172 - ERROR - HTTPException in delete_part: Cannot delete part with 1 inventory records. Please remove inventory first.

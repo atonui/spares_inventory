@@ -17,3 +17,4 @@ requirements.old
 requirements.old2
 db_migrate_equipment.py
 db_migrate.py
+static/diagnostic_equipment.py

@@ -2140,7 +2140,7 @@ async def cleanup_old_logs(
     return {"success": True, "deleted_count": deleted_count, "days": days}
 
 # equipment management routes
-@app.get("/api/equipment/stats", response_model=EquipmentStatsResponse)
+@app.get("/api/equipment/statistics", response_model=EquipmentStatsResponse)
 async def get_equipment_stats(user_id: int = Depends(get_current_user), request: Request = None):
     """Get equipment statistics"""
     conn = get_db_connection()

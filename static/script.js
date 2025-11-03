@@ -80,7 +80,7 @@ function inventoryApp() {
         showLowStockPanel: false,
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
-        showInventoryPanel: false,
+        showInventoryPanel: true,
         
         // logging
         showLogsPanel: false,
@@ -381,6 +381,11 @@ function inventoryApp() {
                     item.description.toLowerCase().includes(term) ||
                     item.store_name.toLowerCase().includes(term)
                 );
+                // When searching, close other panels and show inventory
+                    if (term.length > 0) {
+                        this.closeAllOtherPanels();
+                        this.showInventoryPanel = true;
+                    }
             }
             
             if (this.storeFilter) {
@@ -1050,7 +1055,7 @@ exportComprehensiveReport() {
 
         async loadEquipmentStats() {
             try {
-                this.equipmentStats = await this.apiCall('/equipment/stats');
+                this.equipmentStats = await this.apiCall('/equipment/statistics');
             } catch (error) {
                 this.error = 'Failed to load equipment stats: ' + error.message;
             }
@@ -1603,6 +1608,21 @@ exportComprehensiveReport() {
             }
         },
 
+        closeAllOtherPanels() {
+            this.showUsersPanel = false;
+            this.showStoresPanel = false;
+            this.showPartsPanel = false;
+            this.showMovementsPanel = false;
+            this.showAllPartsPanel = false;
+            this.showAllStoresPanel = false;
+            this.showLowStockPanel = false;
+            this.showMyPartsPanel = false;
+            this.showStoreInventoryPanel = false;
+            this.showLogsPanel = false;
+            this.showEquipmentPanel = false;
+            // Don't close inventory panel
+        },
+
         closeAllPanels() {
             this.showUsersPanel = false;
             this.showStoresPanel = false;
@@ -1613,7 +1633,7 @@ exportComprehensiveReport() {
             this.showLowStockPanel = false;
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
-            this.showInventoryPanel = false;
+            this.showInventoryPanel = true;
             this.showLogsPanel = false;
             this.showEquipmentPanel = false;
         },
@@ -1629,6 +1649,11 @@ exportComprehensiveReport() {
             this.showPartModal = false;
             this.showInventoryPanel = false;
             this.showProfileModal = false;
+            this.showEquipmentModal = false;
+            this.showCalibrationModal = false;
+            this.showTransferEquipmentModal = false;
+            this.showEquipmentHistoryModal = false;
+            this.showCalibrationSettingsModal = false;
 
             // Reset filters for inventory panel
             if (panelName === 'showInventoryPanel') {
