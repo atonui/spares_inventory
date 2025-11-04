@@ -1541,3 +1541,23 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-04 07:14:54,198 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
 2025-11-04 09:10:45,476 - inventory_app - INFO - Application shutting down
 2025-11-04 09:10:45,503 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-04 16:36:12,042 - inventory_app - INFO - Application starting up
+2025-11-04 16:36:12,050 - inventory_app - INFO - [startup] Application initialized
+2025-11-04 16:36:12,057 - inventory_app - INFO - Database initialized successfully
+2025-11-04 16:58:49,387 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-04 16:58:49,388 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-04 16:58:49,422 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 16:58:49,449 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 16:58:49,464 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 16:58:49,482 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 16:58:49,503 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-04 17:04:03,301 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 17:04:03,333 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 17:04:03,360 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 17:04:03,376 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 17:04:03,392 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-04 17:06:32,576 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 17:06:32,600 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 17:06:32,621 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 17:06:32,634 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 17:06:32,645 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
