@@ -12,4 +12,5 @@ static/diagnostic_equipment.py
 .env.production
 db_add_reset_token.py
 test_email.py
-logs
+logs/
+calibration_check.py
