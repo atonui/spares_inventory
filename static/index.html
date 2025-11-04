@@ -212,7 +212,7 @@
                             <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
                         </label>
                         <button class="btn btn-success" 
-                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; 653 = true">
+                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true">
                             Add Part
                         </button>
                         <button class="btn btn-sm" @click="closeAllPanels()">Close</button>

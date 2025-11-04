@@ -1538,3 +1538,6 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-04 07:14:26,034 - inventory_app - INFO - Application starting up
 2025-11-04 07:14:26,054 - inventory_app - INFO - [startup] Application initialized
 2025-11-04 07:14:26,064 - inventory_app - INFO - Database initialized successfully
+2025-11-04 07:14:54,198 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 09:10:45,476 - inventory_app - INFO - Application shutting down
+2025-11-04 09:10:45,503 - inventory_app - INFO - [shutdown] Application shut down gracefully
