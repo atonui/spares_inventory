@@ -475,6 +475,103 @@ function inventoryApp() {
             this.storeInventory = this.inventory.filter(item => item.store_name === store.name);
             this.openPanel('showStoreInventoryPanel');
         },
+        async addStockToStore(store) {
+            // Pre-fill the add form with the store
+            this.addForm.store_id = store.id;
+            this.addForm.part_id = '';
+            this.addForm.quantity = '';
+            this.addForm.work_order_number = '';
+            this.showAddModal = true;
+        },
+
+        async importPartsToStore(event, storeId) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                // Read CSV file
+                const text = await file.text();
+                const lines = text.split('\n').filter(line => line.trim());
+                
+                // Skip header line
+                const dataLines = lines.slice(1);
+                
+                let addedCount = 0;
+                let skippedCount = 0;
+                let errors = [];
+                
+                for (const line of dataLines) {
+                    const [partNumber, quantity] = line.split(',').map(s => s.trim());
+                    
+                    if (!partNumber || !quantity) {
+                        skippedCount++;
+                        continue;
+                    }
+                    
+                    // Find part by part number
+                    const part = this.parts.find(p => p.part_number === partNumber);
+                    if (!part) {
+                        errors.push(`Part ${partNumber} not found`);
+                        skippedCount++;
+                        continue;
+                    }
+                    
+                    try {
+                        await this.apiCall('/inventory/add', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                part_id: part.id,
+                                store_id: storeId,
+                                quantity: parseInt(quantity)
+                            })
+                        });
+                        addedCount++;
+                    } catch (error) {
+                        errors.push(`Failed to add ${partNumber}: ${error.message}`);
+                        skippedCount++;
+                    }
+                }
+                
+                this.successMessage = `Import complete! Added: ${addedCount}, Skipped: ${skippedCount}`;
+                
+                if (errors.length > 0) {
+                    console.error('Import errors:', errors);
+                    this.error = `Some errors occurred. Check console for details.`;
+                }
+                
+                await this.loadInventory();
+                if (this.selectedStore) {
+                    this.storeInventory = this.inventory.filter(item => item.store_name === this.selectedStore.name);
+                }
+                
+                event.target.value = ''; // Reset file input
+                
+                setTimeout(() => {
+                    this.successMessage = '';
+                    this.error = '';
+                }, 5000);
+                
+            } catch (error) {
+                this.error = 'Failed to import: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        downloadStoreImportTemplate() {
+            const csv = 'part_number,quantity\nPART-001,10\nPART-002,5';
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'store_parts_import_template.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        },
 
         // logging functions
         async loadActivityLogs() {

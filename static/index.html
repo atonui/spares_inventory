@@ -336,57 +336,80 @@
                 </table>
             </div>
 
-            <!-- Store Inventory Management Panel -->
+           <!-- Store Inventory Management Panel -->
             <div x-show="showStoreInventoryPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h3 style="margin: 0;" x-text="selectedStore?.name + ' Inventory'"></h3>
-                        <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;" x-text="storeInventory.length + ' items in stock'"></p>
-                    </div>
+            <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                    <h3 style="margin: 0;" x-text="selectedStore?.name + ' Inventory'"></h3>
+                    <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;" x-text="storeInventory.length + ' items in stock'"></p>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-sm" 
+                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)"
+                            @click="downloadStoreImportTemplate()">
+                        Download Template
+                    </button>
+                    <label class="btn btn-sm" 
+                        style="cursor: pointer;"
+                        x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)">
+                        Import CSV
+                        <input type="file" 
+                            accept=".csv" 
+                            @change="importPartsToStore($event, selectedStore?.id)" 
+                            style="display: none;">
+                    </label>
+                    <button class="btn btn-success" 
+                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)"
+                            @click="addStockToStore(selectedStore)">
+                        Add Single Part
+                    </button>
+                    <button class="btn btn-sm" @click="exportStoreInventoryCSV(selectedStore?.name)">
+                        Export CSV
+                    </button>
                     <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Part Number</th>
-                            <th>Description</th>
-                            <th>Quantity</th>
-                            <th>Work Order</th>
-                            <th>Actions</th>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Part Number</th>
+                        <th>Description</th>
+                        <th>Quantity</th>
+                        <th>Work Order</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="item in storeInventory" :key="item.id">
+                        <tr :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                            <td><strong x-text="item.part_number"></strong></td>
+                            <td x-text="item.description"></td>
+                            <td>
+                                <strong x-text="item.quantity"></strong>
+                                <span x-show="item.quantity <= item.min_threshold">⚠️</span>
+                            </td>
+                            <td>
+                                <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
+                                <span x-show="!item.work_order" class="wo-tag">Original</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm" 
+                                        x-show="canEdit(item.store_owner, item.store_type)"
+                                        @click="editItem(item)">
+                                    Adjust
+                                </button>
+                                <button class="btn btn-sm btn-warning" 
+                                        x-show="canEdit(item.store_owner, item.store_type)"
+                                        @click="transferItem(item)">
+                                    Transfer
+                                </button>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="item in storeInventory" :key="item.id">
-                            <tr :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
-                                <td><strong x-text="item.part_number"></strong></td>
-                                <td x-text="item.description"></td>
-                                <td>
-                                    <strong x-text="item.quantity"></strong>
-                                    <span x-show="item.quantity <= item.min_threshold">⚠️</span>
-                                </td>
-                                <td>
-                                    <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
-                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm" 
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="editItem(item)">
-                                        Adjust
-                                    </button>
-                                    <button class="btn btn-sm btn-warning" 
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="transferItem(item)">
-                                        Transfer
-                                    </button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                <div x-show="storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
-                    This store has no inventory yet.
-                </div>
+                    </template>
+                </tbody>
+            </table>
+            <div x-show="storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                This store has no inventory yet. Click "Add Single Part" or "Import CSV" to add parts.
             </div>
 
             <!-- Movement History Panel -->
@@ -1326,7 +1349,7 @@
                 </div>
             </div>
 
-        </div>
+            </div>
     
                                 <td x-text="inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)"></td>
                             </tr>
