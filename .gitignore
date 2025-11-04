@@ -19,3 +19,6 @@ db_migrate_equipment.py
 db_migrate.py
 static/diagnostic_equipment.py
 .env
+db_add_reset_token.py
+test_email.py
+logs

@@ -236,28 +236,60 @@ function inventoryApp() {
             // Optionally, redirect to login or home
         },
 
-        async apiCall(url, options = {}) {
-            if (!options.headers) options.headers = {};
-            if (this.token) {
-                options.headers['Authorization'] = 'Bearer ' + this.token;
-            }
-            try {
-                const response = await fetch(this.apiUrl + url, options);
-                if (response.status === 401 || response.status === 403) {
-                    // Session invalid or expired
-                    this.logout();
-                    this.error = "You have been logged out because your account was accessed from another device or your session expired.";
-                    return null;
-                }
-                if (!response.ok) {
-                    throw new Error(await response.text());
-                }
-                return await response.json();
-            } catch (err) {
-                this.error = err.message;
-                return null;
-            }
-        },
+        async apiCall(endpoint, options = {}) {
+    const defaultHeaders = {
+        'Content-Type': 'application/json'
+    };
+    
+    if (this.token) {
+        defaultHeaders['Authorization'] = `Bearer ${this.token}`;
+    }
+    
+    const config = {
+        ...options,
+        headers: {
+            ...defaultHeaders,
+            ...options.headers
+        }
+    };
+    
+    try {
+        const response = await fetch(`${this.apiUrl}${endpoint}`, config);
+        
+        // Handle 401/403 - session expired or unauthorized
+        if (response.status === 401 || response.status === 403) {
+            this.logout();
+            this.error = "Session expired or unauthorized. Please login again.";
+            return null;
+        }
+        
+        // Handle 422 - Validation error
+        if (response.status === 422) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Validation error:', errorData);
+            throw new Error(errorData.detail || 'Validation error');
+        }
+        
+        // Handle other errors
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `API error: ${response.status}`);
+        }
+        
+        // Handle 204 No Content
+        if (response.status === 204) {
+            return null;
+        }
+        
+        // Parse and return JSON response
+        return await response.json();
+        
+    } catch (error) {
+        console.error('API call error:', error);
+        this.error = error.message;
+        throw error;
+    }
+},
 
         // Data loading
         async loadAllData() {

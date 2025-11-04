@@ -1452,3 +1452,86 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-03 16:42:11,993 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
 2025-11-03 16:43:13,941 - inventory_app - INFO - Application shutting down
 2025-11-03 16:43:13,948 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-03 19:43:26,941 - inventory_app - INFO - Application starting up
+2025-11-03 19:43:26,947 - inventory_app - INFO - [startup] Application initialized
+2025-11-03 19:43:26,954 - inventory_app - INFO - Database initialized successfully
+2025-11-03 19:45:02,947 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-03 19:45:02,971 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-03 19:45:27,725 - inventory_app - INFO - Attempting to send password reset email to allan.kibetkoech@varian.com
+2025-11-03 19:45:31,681 - inventory_app - INFO - Password reset email sent successfully to allan.kibetkoech@varian.com
+2025-11-03 19:47:25,283 - audit - INFO - USER=Allan Koech(11) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-03 19:47:25,284 - inventory_app - INFO - User Allan Koech (11) logged in from 127.0.0.1
+2025-11-03 19:47:25,310 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-03 19:47:25,335 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-03 19:47:37,840 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-03 19:48:00,968 - inventory_app - INFO - Attempting to send password reset email to allan.kibetkoech@varian.com
+2025-11-03 19:48:04,834 - inventory_app - INFO - Password reset email sent successfully to allan.kibetkoech@varian.com
+2025-11-03 19:50:55,986 - inventory_app - INFO - Application shutting down
+2025-11-03 19:50:55,992 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-03 19:50:58,695 - inventory_app - INFO - Application starting up
+2025-11-03 19:50:58,707 - inventory_app - INFO - [startup] Application initialized
+2025-11-03 19:50:58,720 - inventory_app - INFO - Database initialized successfully
+2025-11-03 19:51:12,633 - inventory_app - INFO - Attempting to send password reset email to allan.kibetkoech@varian.com
+2025-11-03 19:51:15,244 - inventory_app - INFO - Password reset email sent successfully to allan.kibetkoech@varian.com
+2025-11-03 19:54:09,552 - inventory_app - INFO - Application shutting down
+2025-11-03 19:54:09,557 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-03 19:54:11,710 - inventory_app - INFO - Application starting up
+2025-11-03 19:54:11,717 - inventory_app - INFO - [startup] Application initialized
+2025-11-03 19:54:11,724 - inventory_app - INFO - Database initialized successfully
+2025-11-03 19:54:22,012 - inventory_app - INFO - Attempting to send password reset email to allan.kibetkoech@varian.com
+2025-11-03 19:54:24,650 - inventory_app - INFO - Password reset email sent successfully to allan.kibetkoech@varian.com
+2025-11-03 19:59:17,989 - inventory_app - INFO - Application shutting down
+2025-11-03 19:59:17,999 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-03 19:59:21,105 - inventory_app - INFO - Application starting up
+2025-11-03 19:59:21,112 - inventory_app - INFO - [startup] Application initialized
+2025-11-03 19:59:21,119 - inventory_app - INFO - Database initialized successfully
+2025-11-03 19:59:34,007 - inventory_app - INFO - Attempting to send password reset email to allan.kibetkoech@varian.com
+2025-11-03 19:59:37,019 - inventory_app - INFO - Password reset email sent successfully to allan.kibetkoech@varian.com
+2025-11-03 20:00:56,845 - audit - INFO - USER=Allan Koech(11) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-03 20:00:56,846 - inventory_app - INFO - User Allan Koech (11) logged in from 127.0.0.1
+2025-11-03 20:00:56,877 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-03 20:00:56,903 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:48:01,266 - inventory_app - INFO - Application shutting down
+2025-11-04 05:48:01,280 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-04 05:48:04,344 - inventory_app - INFO - Application starting up
+2025-11-04 05:48:04,356 - inventory_app - INFO - [startup] Application initialized
+2025-11-04 05:48:04,361 - inventory_app - INFO - Database initialized successfully
+2025-11-04 05:48:31,229 - audit - INFO - USER=Allan Koech(11) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-04 05:48:31,230 - inventory_app - INFO - User Allan Koech (11) logged in from 127.0.0.1
+2025-11-04 05:48:31,264 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 05:48:31,279 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:48:31,298 - audit - INFO - USER=Allan Koech(11) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 05:48:31,312 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 05:48:38,378 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:49:13,683 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:49:13,703 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 05:52:10,494 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 05:52:10,520 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:52:10,535 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 05:52:10,548 - audit - INFO - USER=Allan Koech(11) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 05:52:14,444 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:52:47,369 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 05:52:47,391 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 06:07:51,891 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 06:07:51,932 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 06:07:51,949 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 06:07:51,964 - audit - INFO - USER=Allan Koech(11) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 07:08:16,196 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 07:08:16,242 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 07:08:16,263 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 07:08:16,292 - audit - INFO - USER=Allan Koech(11) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 07:10:04,019 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 07:10:04,072 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:04,091 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:04,107 - audit - INFO - USER=Allan Koech(11) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 07:10:09,238 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:26,582 - audit - INFO - USER=Allan Koech(11) ACTION=calibrate_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:26,623 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:26,726 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:46,980 - audit - INFO - USER=Allan Koech(11) ACTION=update_stock RESOURCE=inventory/None STATUS=success
+2025-11-04 07:10:47,027 - audit - INFO - USER=Allan Koech(11) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-04 07:10:47,071 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:47,106 - audit - INFO - USER=Allan Koech(11) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-04 07:10:47,126 - audit - INFO - USER=Allan Koech(11) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-04 07:13:14,644 - inventory_app - INFO - Application shutting down
+2025-11-04 07:13:14,666 - inventory_app - INFO - [shutdown] Application shut down gracefully

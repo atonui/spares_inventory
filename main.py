@@ -273,10 +273,10 @@ def check_admin(user_id: int) -> bool:
 
 def send_reset_email(email: str, token: str):
     """Send password reset email"""
-    reset_link = f"{FRONTEND_URL}/static/reset-password.html?token={token}"
+    reset_link = f"{FRONTEND_URL}/reset_password.html?token={token}"
     
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = "Password Reset Request"
+    msg['Subject'] = "Password Reset Request - Inventory System"
     msg['From'] = SMTP_USERNAME
     msg['To'] = email
     
@@ -299,6 +299,10 @@ def send_reset_email(email: str, token: str):
                 </a>
             </div>
             <p style="color: #666; font-size: 14px;">
+                Or copy and paste this link into your browser:<br>
+                <a href="{reset_link}">{reset_link}</a>
+            </p>
+            <p style="color: #666; font-size: 14px;">
                 This link will expire in 1 hour.<br>
                 If you didn't request this, please ignore this email.
             </p>
@@ -311,12 +315,20 @@ def send_reset_email(email: str, token: str):
     msg.attach(part)
     
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        logger.info(f"Attempting to send password reset email to {email}")
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
             server.starttls()
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.send_message(msg)
+        logger.info(f"Password reset email sent successfully to {email}")
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error(f"SMTP Authentication failed: {e}")
+        raise HTTPException(status_code=500, detail="Email configuration error. Please contact administrator.")
+    except smtplib.SMTPException as e:
+        logger.error(f"SMTP error sending email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reset email")
     except Exception as e:
-        print(f"Error sending email: {e}")
+        logger.error(f"Unexpected error sending email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send reset email")
 
 # ============ LOGGING UTILITIES ============
@@ -835,15 +847,36 @@ async def change_password(
 @app.post("/api/forgot-password")
 async def forgot_password(request_data: ForgotPasswordRequest, request: Request = None):
     """Initiate password reset process"""
+    ip_address = request.client.host if hasattr(request, 'client') else None
+    user_agent = request.headers.get('user-agent', '')[:200]
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
     # Find user by email
     cursor.execute(
-        "SELECT id FROM users WHERE email = ?",
+        "SELECT id, name FROM users WHERE email = ?",
         (request_data.email,)
     )
     user = cursor.fetchone()
+    
+    # Log the attempt (even if email doesn't exist, for security monitoring)
+    if user:
+        user_id = user['id']
+        user_name = user['name']
+    else:
+        user_id = 0
+        user_name = request_data.email
+    
+    log_activity(
+        user_id=user_id,
+        username=user_name,
+        action='password_reset_request',
+        details={'email': request_data.email},
+        status='success',
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
     
     # Always return success to prevent email enumeration
     if not user:
@@ -856,7 +889,7 @@ async def forgot_password(request_data: ForgotPasswordRequest, request: Request 
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(hours=1)
     
-    # Store token in users table (we'll add a column for this)
+    # Store token in users table
     cursor.execute(
         """UPDATE users 
            SET reset_token = ?, reset_token_expires = ? 
@@ -870,20 +903,25 @@ async def forgot_password(request_data: ForgotPasswordRequest, request: Request 
     # Send email
     try:
         send_reset_email(request_data.email, token)
-    except:
-        pass  # Fail silently to prevent information disclosure
+        logger.info(f"Password reset email sent to {request_data.email}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {e}")
+        # Don't reveal email send failure to prevent information disclosure
     
     return {"message": "If the email exists, a reset link has been sent"}
 
 @app.post("/api/reset-password")
 async def reset_password(request_data: ResetPasswordRequest, request: Request = None):
     """Reset password using token"""
+    ip_address = request.client.host if hasattr(request, 'client') else None
+    user_agent = request.headers.get('user-agent', '')[:200]
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
     # Validate token
     cursor.execute(
-        """SELECT id, reset_token_expires 
+        """SELECT id, name, email, reset_token_expires 
            FROM users 
            WHERE reset_token = ?""",
         (request_data.token,)
@@ -891,17 +929,48 @@ async def reset_password(request_data: ResetPasswordRequest, request: Request = 
     user = cursor.fetchone()
     
     if not user:
+        # Log failed attempt
+        log_activity(
+            user_id=0,
+            username='unknown',
+            action='password_reset_failed',
+            details={'reason': 'invalid_token'},
+            status='error',
+            error_message='Invalid or expired token',
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     
     # Check if token expired
     expires_at = datetime.fromisoformat(user['reset_token_expires'])
     if datetime.utcnow() > expires_at:
+        log_activity(
+            user_id=user['id'],
+            username=user['name'],
+            action='password_reset_failed',
+            details={'reason': 'token_expired', 'email': user['email']},
+            status='error',
+            error_message='Token has expired',
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         conn.close()
         raise HTTPException(status_code=400, detail="Token has expired")
     
     # Validate new password
     if len(request_data.new_password) < 8:
+        log_activity(
+            user_id=user['id'],
+            username=user['name'],
+            action='password_reset_failed',
+            details={'reason': 'weak_password', 'email': user['email']},
+            status='error',
+            error_message='Password too short',
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         conn.close()
         raise HTTPException(
             status_code=400, 
@@ -922,16 +991,31 @@ async def reset_password(request_data: ResetPasswordRequest, request: Request = 
     conn.commit()
     conn.close()
     
+    # Log successful password reset
+    log_activity(
+        user_id=user['id'],
+        username=user['name'],
+        action='password_reset_success',
+        details={'email': user['email']},
+        status='success',
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    
+    logger.info(f"Password successfully reset for user {user['name']} ({user['email']})")
+    
     return {"message": "Password reset successfully"}
 
 @app.get("/api/verify-reset-token/{token}")
 async def verify_reset_token(token: str, request: Request = None):
     """Verify if a reset token is valid"""
+    ip_address = request.client.host if hasattr(request, 'client') else None
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute(
-        """SELECT reset_token_expires 
+        """SELECT id, name, reset_token_expires 
            FROM users 
            WHERE reset_token = ?""",
         (token,)
@@ -940,10 +1024,26 @@ async def verify_reset_token(token: str, request: Request = None):
     conn.close()
     
     if not user:
+        log_activity(
+            user_id=0,
+            username='unknown',
+            action='verify_reset_token_failed',
+            details={'reason': 'invalid_token'},
+            status='error',
+            ip_address=ip_address
+        )
         raise HTTPException(status_code=400, detail="Invalid token")
     
     expires_at = datetime.fromisoformat(user['reset_token_expires'])
     if datetime.utcnow() > expires_at:
+        log_activity(
+            user_id=user['id'],
+            username=user['name'],
+            action='verify_reset_token_failed',
+            details={'reason': 'token_expired'},
+            status='error',
+            ip_address=ip_address
+        )
         raise HTTPException(status_code=400, detail="Token has expired")
     
     return {"valid": True}
@@ -2141,6 +2241,7 @@ async def cleanup_old_logs(
 
 # equipment management routes
 @app.get("/api/equipment/statistics", response_model=EquipmentStatsResponse)
+@log_endpoint(action='view_equipment_stats', resource_type='equipment')
 async def get_equipment_stats(user_id: int = Depends(get_current_user), request: Request = None):
     """Get equipment statistics"""
     conn = get_db_connection()
@@ -2487,6 +2588,7 @@ async def delete_equipment(
     return {"success": True, "message": f"Equipment {equipment['equipment_name']} deleted successfully"}
 
 @app.get("/api/equipment/{equipment_id}/history")
+@log_endpoint(action='view_equipment_history', resource_type='equipment')
 async def get_equipment_history(
     equipment_id: int,
     user_id: int = Depends(get_current_user),
@@ -2517,6 +2619,7 @@ async def get_equipment_history(
 
 # System Settings endpoint
 @app.get("/api/settings/calibration-reminder-days")
+@log_endpoint(action='view_calibration_settings', resource_type='settings')
 async def get_calibration_reminder_days(
     user_id: int = Depends(get_current_user),
     request: Request = None
@@ -2535,6 +2638,7 @@ async def get_calibration_reminder_days(
     return {"days": int(result['setting_value']) if result else 30}
 
 @app.put("/api/settings/calibration-reminder-days")
+@log_endpoint(action='update_calibration_settings', resource_type='settings')
 async def update_calibration_reminder_days(
     days: int,
     user_id: int = Depends(get_current_user),
