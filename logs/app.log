@@ -1563,3 +1563,6 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-04 17:06:32,645 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-04 19:38:33,946 - inventory_app - INFO - Application shutting down
 2025-11-04 19:38:33,954 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-05 19:27:49,067 - inventory_app - INFO - Application starting up
+2025-11-05 19:27:49,073 - inventory_app - INFO - [startup] Application initialized
+2025-11-05 19:27:49,082 - inventory_app - INFO - Database initialized successfully
