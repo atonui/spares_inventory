@@ -13,4 +13,4 @@ static/diagnostic_equipment.py
 db_add_reset_token.py
 test_email.py
 logs/
-calibration_check.py
+calibration_checker.py
