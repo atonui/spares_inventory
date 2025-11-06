@@ -111,6 +111,17 @@ function inventoryApp() {
             partId: '',
             storeId: ''
         },
+
+        // advanced search
+        advancedSearch: {
+            partNumber: '',
+            description: '',
+            category: '',
+            storeType: '',
+            minQuantity: '',
+            maxQuantity: '',
+            lowStockOnly: false
+        },
         
         // Data
         stats: {},
@@ -424,6 +435,37 @@ function inventoryApp() {
                 const storeId = parseInt(this.storeFilter);
                 const storeName = this.stores.find(s => s.id === storeId)?.name;
                 filtered = filtered.filter(item => item.store_name === storeName);
+            }
+            
+            this.filteredInventory = filtered;
+        },
+
+        // advanced search filter
+        filterInventoryAdvanced() {
+            let filtered = this.inventory;
+            
+            if (this.advancedSearch.partNumber) {
+                filtered = filtered.filter(item => 
+                    item.part_number.toLowerCase().includes(this.advancedSearch.partNumber.toLowerCase())
+                );
+            }
+            
+            if (this.advancedSearch.category) {
+                const parts = this.parts.filter(p => p.category === this.advancedSearch.category);
+                const partNumbers = parts.map(p => p.part_number);
+                filtered = filtered.filter(item => partNumbers.includes(item.part_number));
+            }
+            
+            if (this.advancedSearch.lowStockOnly) {
+                filtered = filtered.filter(item => item.quantity <= item.min_threshold);
+            }
+            
+            if (this.advancedSearch.minQuantity) {
+                filtered = filtered.filter(item => item.quantity >= parseInt(this.advancedSearch.minQuantity));
+            }
+            
+            if (this.advancedSearch.maxQuantity) {
+                filtered = filtered.filter(item => item.quantity <= parseInt(this.advancedSearch.maxQuantity));
             }
             
             this.filteredInventory = filtered;

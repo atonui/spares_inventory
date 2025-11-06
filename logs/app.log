@@ -1614,3 +1614,18 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-06 05:40:56,894 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-06 05:41:56,700 - inventory_app - INFO - Application shutting down
 2025-11-06 05:41:56,715 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-06 05:49:00,489 - inventory_app - INFO - Application starting up
+2025-11-06 05:49:00,509 - inventory_app - INFO - [startup] Application initialized
+2025-11-06 05:49:00,521 - inventory_app - INFO - Database initialized successfully
+2025-11-06 05:49:10,447 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 05:49:10,486 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 05:49:10,505 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 05:49:10,528 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 05:49:10,551 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 06:02:47,778 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 06:02:47,805 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 06:02:47,825 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 06:02:47,845 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 06:02:47,865 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 06:50:22,346 - inventory_app - INFO - Application shutting down
+2025-11-06 06:50:22,362 - inventory_app - INFO - [shutdown] Application shut down gracefully
