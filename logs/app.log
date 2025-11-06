@@ -1566,3 +1566,10 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-05 19:27:49,067 - inventory_app - INFO - Application starting up
 2025-11-05 19:27:49,073 - inventory_app - INFO - [startup] Application initialized
 2025-11-05 19:27:49,082 - inventory_app - INFO - Database initialized successfully
+2025-11-05 19:27:53,583 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-05 19:27:53,622 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-05 19:27:53,647 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-05 19:27:53,672 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-05 19:27:53,695 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-05 19:27:55,830 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-05 19:27:56,393 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
