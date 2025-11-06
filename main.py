@@ -29,6 +29,11 @@ from typing import Optional
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 #setup logging files
 if not os.path.exists('logs'):
@@ -249,7 +254,11 @@ def insert_sample_data(cursor):
 
 def hash_password(password: str) -> str:
     """Hash password for storage"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password against bcrypt hash"""
+    return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict):
     """Create JWT token"""
@@ -512,19 +521,24 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Security
 security = HTTPBearer()
 
 # CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your domain
+    allow_origins=["*"],  # remember to specify the domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Serve static files (your HTML frontend)
+# Serve static files - frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Pydantic models
@@ -543,7 +557,6 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
-#-------------------------------
 
 class UserLogin(BaseModel):
     email: str
@@ -555,6 +568,8 @@ class UserResponse(BaseModel):
     name: str
     role: str
     territory: Optional[str]
+
+#-------------------------------
 
 class StoreResponse(BaseModel):
     id: int
@@ -849,6 +864,7 @@ async def change_password(
     return {"message": "Password changed successfully. Please login again."}
 
 @app.post("/api/forgot-password")
+@limiter.limit("3/hour")  # 3 password reset requests per hour
 async def forgot_password(request_data: ForgotPasswordRequest, request: Request = None):
     """Initiate password reset process"""
     ip_address = request.client.host if hasattr(request, 'client') else None
@@ -915,6 +931,7 @@ async def forgot_password(request_data: ForgotPasswordRequest, request: Request 
     return {"message": "If the email exists, a reset link has been sent"}
 
 @app.post("/api/reset-password")
+@limiter.limit("5/hour")  # 5 password reset attempts per hour
 async def reset_password(request_data: ResetPasswordRequest, request: Request = None):
     """Reset password using token"""
     ip_address = request.client.host if hasattr(request, 'client') else None
@@ -1053,11 +1070,6 @@ async def verify_reset_token(token: str, request: Request = None):
     return {"valid": True}
 #-----------------------------------------------
 
-# login rate limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")  # 5 attempts per minute
 async def login(user_login: UserLogin, request: Request):
@@ -1073,7 +1085,7 @@ async def login(user_login: UserLogin, request: Request):
     )
     user = cursor.fetchone()
 
-    if not user or user['password_hash'] != hash_password(user_login.password):
+    if not user or not verify_password(user_login.password, user['password_hash']):
         # Log failed login attempt
         log_activity(
             user_id=0,

@@ -28,3 +28,37 @@ NameError: name 'inventory_id' is not defined
 2025-11-02 06:26:47,486 - ERROR - Failed to log activity: database is locked
 2025-11-02 06:26:53,079 - ERROR - Failed to log activity: database is locked
 2025-11-03 09:28:44,172 - ERROR - HTTPException in delete_part: Cannot delete part with 1 inventory records. Please remove inventory first.
+2025-11-06 16:04:36,226 - ERROR - Failed to log system event: no such table: system_logs
+2025-11-06 16:04:52,148 - ERROR - Exception in get_equipment: no such table: equipment
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 438, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 2365, in get_equipment
+    cursor.execute(query + " ORDER BY e.next_calibration_date")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: equipment
+2025-11-06 16:04:52,421 - ERROR - Exception in get_equipment_stats: no such table: equipment
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 438, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 2266, in get_equipment_stats
+    cursor.execute("SELECT COUNT(*) as count FROM equipment WHERE status = 'active'")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: equipment
+2025-11-06 16:04:52,444 - ERROR - Exception in get_calibration_reminder_days: no such table: system_settings
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 438, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 2642, in get_calibration_reminder_days
+    cursor.execute("""
+    ~~~~~~~~~~~~~~^^^^
+        SELECT setting_value FROM system_settings
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE setting_key = 'calibration_reminder_days'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    """)
+    ^^^^
+sqlite3.OperationalError: no such table: system_settings

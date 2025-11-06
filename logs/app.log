@@ -1649,3 +1649,91 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-06 10:38:00,309 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-06 10:39:05,368 - inventory_app - INFO - Application shutting down
 2025-11-06 10:39:05,376 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-06 16:00:01,392 - inventory_app - INFO - Application starting up
+2025-11-06 16:00:01,401 - inventory_app - INFO - [startup] Application initialized
+2025-11-06 16:00:01,410 - inventory_app - INFO - Database initialized successfully
+2025-11-06 16:02:56,418 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_stock RESOURCE=inventory/None STATUS=success
+2025-11-06 16:02:56,450 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:02:56,483 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 16:02:56,517 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 16:02:56,544 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 16:02:56,561 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 16:03:04,803 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_stock RESOURCE=inventory/None STATUS=success
+2025-11-06 16:03:04,829 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:03:04,857 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 16:03:04,877 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 16:03:04,903 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 16:03:04,929 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 16:03:13,491 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:03:13,523 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 16:03:13,548 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 16:03:13,571 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 16:03:13,601 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 16:03:47,388 - inventory_app - INFO - Application shutting down
+2025-11-06 16:03:47,406 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-06 16:04:36,225 - inventory_app - INFO - Application starting up
+2025-11-06 16:04:36,226 - errors - ERROR - Failed to log system event: no such table: system_logs
+2025-11-06 16:04:36,353 - inventory_app - INFO - Database initialized successfully
+2025-11-06 16:04:52,103 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-06 16:04:52,103 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-06 16:04:52,132 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:04:52,148 - errors - ERROR - Exception in get_equipment: no such table: equipment
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 438, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 2365, in get_equipment
+    cursor.execute(query + " ORDER BY e.next_calibration_date")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: equipment
+2025-11-06 16:04:52,165 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=error
+2025-11-06 16:04:52,421 - errors - ERROR - Exception in get_equipment_stats: no such table: equipment
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 438, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 2266, in get_equipment_stats
+    cursor.execute("SELECT COUNT(*) as count FROM equipment WHERE status = 'active'")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: equipment
+2025-11-06 16:04:52,435 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=error
+2025-11-06 16:04:52,444 - errors - ERROR - Exception in get_calibration_reminder_days: no such table: system_settings
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 438, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 2642, in get_calibration_reminder_days
+    cursor.execute("""
+    ~~~~~~~~~~~~~~^^^^
+        SELECT setting_value FROM system_settings
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        WHERE setting_key = 'calibration_reminder_days'
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    """)
+    ^^^^
+sqlite3.OperationalError: no such table: system_settings
+2025-11-06 16:04:52,455 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=error
+2025-11-06 16:04:52,473 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 16:05:26,221 - inventory_app - INFO - Application shutting down
+2025-11-06 16:05:26,247 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-06 16:06:46,382 - inventory_app - INFO - Application starting up
+2025-11-06 16:06:46,391 - inventory_app - INFO - [startup] Application initialized
+2025-11-06 16:06:46,400 - inventory_app - INFO - Database initialized successfully
+2025-11-06 16:06:51,777 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:06:51,803 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 16:06:51,828 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 16:06:51,851 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 16:06:51,866 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 16:16:28,982 - audit - INFO - USER=Valentine Opiyo(1) ACTION=bulk_import_stores RESOURCE=store/None STATUS=success
+2025-11-06 16:16:28,998 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:22:38,660 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_part RESOURCE=part/None STATUS=success
+2025-11-06 16:22:38,675 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:42:48,322 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:42:48,353 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 16:42:48,370 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 16:42:48,384 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 16:42:48,397 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-06 16:48:53,278 - audit - INFO - USER=Valentine Opiyo(1) ACTION=bulk_import_stores RESOURCE=store/None STATUS=success
+2025-11-06 16:48:53,295 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 16:58:30,554 - inventory_app - INFO - Application shutting down
+2025-11-06 16:58:30,576 - inventory_app - INFO - [shutdown] Application shut down gracefully
