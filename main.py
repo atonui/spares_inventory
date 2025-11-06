@@ -326,10 +326,10 @@ def send_reset_email(email: str, token: str):
         raise HTTPException(status_code=500, detail="Email configuration error. Please contact administrator.")
     except smtplib.SMTPException as e:
         logger.error(f"SMTP error sending email: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send reset email")
+        raise HTTPException(status_code=500, detail="Failed to send reset email.")
     except Exception as e:
         logger.error(f"Unexpected error sending email: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send reset email")
+        raise HTTPException(status_code=500, detail="Failed to send reset email.")
 
 # ============ LOGGING UTILITIES ============
 

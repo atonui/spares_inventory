@@ -411,6 +411,7 @@
             <div x-show="storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
                 This store has no inventory yet. Click "Add Single Part" or "Import CSV" to add parts.
             </div>
+            </div>
 
             <!-- Movement History Panel -->
             <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
@@ -1347,8 +1348,6 @@
                         </div>
                     </form>
                 </div>
-            </div>
-
             </div>
     
                                 <td x-text="inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)"></td>

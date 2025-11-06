@@ -237,21 +237,21 @@ function inventoryApp() {
         },
 
         async apiCall(endpoint, options = {}) {
-    const defaultHeaders = {
-        'Content-Type': 'application/json'
-    };
-    
-    if (this.token) {
-        defaultHeaders['Authorization'] = `Bearer ${this.token}`;
-    }
-    
-    const config = {
-        ...options,
-        headers: {
-            ...defaultHeaders,
-            ...options.headers
-        }
-    };
+            const defaultHeaders = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (this.token) {
+                defaultHeaders['Authorization'] = `Bearer ${this.token}`;
+            }
+            
+            const config = {
+                ...options,
+                headers: {
+                    ...defaultHeaders,
+                    ...options.headers
+                }
+            };
     
     try {
         const response = await fetch(`${this.apiUrl}${endpoint}`, config);
