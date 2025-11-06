@@ -25,6 +25,10 @@ from logging.handlers import RotatingFileHandler
 import json
 from functools import wraps
 from typing import Optional
+# rate limiting imports
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 #setup logging files
 if not os.path.exists('logs'):
@@ -1049,7 +1053,13 @@ async def verify_reset_token(token: str, request: Request = None):
     return {"valid": True}
 #-----------------------------------------------
 
+# login rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 @app.post("/api/auth/login")
+@limiter.limit("5/minute")  # 5 attempts per minute
 async def login(user_login: UserLogin, request: Request):
     """User login"""
     ip_address = request.client.host if hasattr(request, 'client') else None
