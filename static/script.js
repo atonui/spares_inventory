@@ -178,15 +178,20 @@ function inventoryApp() {
 
         // Initialize
         async checkAuth() {
-            this.token = localStorage.getItem('token');
-            if (this.token) {
+            // Check if user info exists in localStorage
+            const userStr = localStorage.getItem('currentUser');
+            if (userStr) {
                 try {
+                    this.currentUser = JSON.parse(userStr);
+                    // Verify session is still valid by making a test call
                     await this.getCurrentUser();
                     this.isAuthenticated = true;
                     await this.loadAllData();
                 } catch (error) {
-                    localStorage.removeItem('token');
-                    this.token = null;
+                    // Session invalid, clear storage
+                    localStorage.removeItem('currentUser');
+                    this.currentUser = null;
+                    this.isAuthenticated = false;
                 }
             }
         },
@@ -202,6 +207,7 @@ function inventoryApp() {
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include', // IMPORTANT: Include cookies
                     body: JSON.stringify(this.loginForm)
                 });
                 
@@ -210,10 +216,13 @@ function inventoryApp() {
                 }
                 
                 const data = await response.json();
-                this.token = data.access_token;
+                
+                // No longer store token in localStorage
                 this.currentUser = data.user;
-                localStorage.setItem('token', this.token);
                 this.isAuthenticated = true;
+                
+                // Store user info (but not token)
+                localStorage.setItem('currentUser', JSON.stringify(data.user));
                 
                 await this.loadAllData();
                 
@@ -238,13 +247,20 @@ function inventoryApp() {
             this.currentUser = await response.json();
         },
 
-        logout() {
-            this.token = null;
+        async logout() {
+            try {
+                await this.apiCall('/auth/logout', { method: 'POST' });
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
+            // Clear local state
             this.currentUser = null;
             this.isAuthenticated = false;
-            localStorage.removeItem('token');
             localStorage.removeItem('currentUser');
-            // Optionally, redirect to login or home
+            
+            // Redirect to login
+            window.location.href = '/static/index.html';
         },
 
         async apiCall(endpoint, options = {}) {
@@ -252,55 +268,57 @@ function inventoryApp() {
                 'Content-Type': 'application/json'
             };
             
-            if (this.token) {
-                defaultHeaders['Authorization'] = `Bearer ${this.token}`;
-            }
-            
             const config = {
                 ...options,
+                credentials: 'include', // IMPORTANT: Include cookies in all requests
                 headers: {
                     ...defaultHeaders,
                     ...options.headers
                 }
             };
-    
-    try {
-        const response = await fetch(`${this.apiUrl}${endpoint}`, config);
-        
-        // Handle 401/403 - session expired or unauthorized
-        if (response.status === 401 || response.status === 403) {
-            this.logout();
-            this.error = "Session expired or unauthorized. Please login again.";
-            return null;
-        }
-        
-        // Handle 422 - Validation error
-        if (response.status === 422) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('Validation error:', errorData);
-            throw new Error(errorData.detail || 'Validation error');
-        }
-        
-        // Handle other errors
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `API error: ${response.status}`);
-        }
-        
-        // Handle 204 No Content
-        if (response.status === 204) {
-            return null;
-        }
-        
-        // Parse and return JSON response
-        return await response.json();
-        
-    } catch (error) {
-        console.error('API call error:', error);
-        this.error = error.message;
-        throw error;
-    }
-},
+            
+            try {
+                const response = await fetch(`${this.apiUrl}${endpoint}`, config);
+                
+                // Handle 401/403 - session expired or unauthorized
+                if (response.status === 401 || response.status === 403) {
+                    this.logout();
+                    this.error = "Session expired. Please login again.";
+                    return null;
+                }
+                
+                // Handle 422 - Validation error
+                if (response.status === 422) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Validation error:', errorData);
+                    throw new Error(errorData.detail || 'Validation error');
+                }
+                
+                // Handle 429 - Rate limit exceeded
+                if (response.status === 429) {
+                    throw new Error('Too many requests. Please try again later.');
+                }
+                
+                // Handle other errors
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `API error: ${response.status}`);
+                }
+                
+                // Handle 204 No Content
+                if (response.status === 204) {
+                    return null;
+                }
+                
+                // Parse and return JSON response
+                return await response.json();
+                
+            } catch (error) {
+                console.error('API call error:', error);
+                this.error = error.message;
+                throw error;
+            }
+        },
 
         // Data loading
         async loadAllData() {

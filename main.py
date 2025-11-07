@@ -3,6 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi import Cookie
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
@@ -731,15 +733,20 @@ class EquipmentStatsResponse(BaseModel):
     overdue: int
 
 # Authentication dependency
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
+async def get_current_user(session_token: str = Cookie(None)):
+    """Get current user from HTTPOnly cookie"""
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE session_token = ?", (token,))
+    cursor.execute("SELECT id FROM users WHERE session_token = ?", (session_token,))
     user = cursor.fetchone()
     conn.close()
+    
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    
     return user['id']
 
 # Routes
@@ -1101,9 +1108,9 @@ async def login(user_login: UserLogin, request: Request):
     
     logger.info(f"User {user['name']} ({user['id']}) logged in from {ip_address}")
 
-    return {
-        "access_token": session_token,
-        "token_type": "bearer",
+    # Create response with HTTPOnly cookie
+    response_data = {
+        "success": True,
         "user": {
             "id": user['id'],
             "email": user['email'],
@@ -1112,16 +1119,36 @@ async def login(user_login: UserLogin, request: Request):
             "territory": user['territory']
         }
     }
+    
+    response = JSONResponse(content=response_data)
+    
+    # Set HTTPOnly cookie (secure in production with HTTPS)
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,  # Prevents JavaScript access (XSS protection)
+        secure=False,    # Set to True in production with HTTPS
+        samesite="lax",  # CSRF protection
+        max_age=86400    # 24 hours
+    )
+    
+    return response
 
 @app.post("/api/auth/logout")
 @log_endpoint(action='logout')
 async def logout(user_id: int = Depends(get_current_user), request: Request = None):
+    """Logout and clear session cookie"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
-    return {"success": True}
+    
+    response = JSONResponse(content={"success": True})
+    # Clear the cookie
+    response.delete_cookie(key="session_token")
+    
+    return response
 
 @app.get("/api/me", response_model=UserResponse)
 async def get_current_user_info(user_id: int = Depends(get_current_user), request: Request = None):

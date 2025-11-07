@@ -900,3 +900,9 @@
 2025-11-06 16:42:48,397 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-06 16:48:53,278 - USER=Valentine Opiyo(1) ACTION=bulk_import_stores RESOURCE=store/None STATUS=success
 2025-11-06 16:48:53,295 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 20:07:39,065 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-06 20:07:39,091 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 20:07:39,114 - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 20:07:39,129 - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 20:07:39,144 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 20:07:39,160 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success

@@ -1737,3 +1737,22 @@ sqlite3.OperationalError: no such table: system_settings
 2025-11-06 16:48:53,295 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
 2025-11-06 16:58:30,554 - inventory_app - INFO - Application shutting down
 2025-11-06 16:58:30,576 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-06 20:07:22,491 - inventory_app - INFO - Application starting up
+2025-11-06 20:07:22,502 - inventory_app - INFO - [startup] Application initialized
+2025-11-06 20:07:22,506 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\grc2639\AppData\Local\Programs\Python\Python313\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-11-06 20:07:22,710 - inventory_app - INFO - Database initialized successfully
+2025-11-06 20:07:39,065 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-06 20:07:39,065 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-06 20:07:39,091 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-06 20:07:39,114 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-06 20:07:39,129 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-06 20:07:39,144 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-06 20:07:39,160 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-07 19:52:05,471 - inventory_app - INFO - Application starting up
+2025-11-07 19:52:05,490 - inventory_app - INFO - [startup] Application initialized
+2025-11-07 19:52:05,496 - inventory_app - INFO - Database initialized successfully
