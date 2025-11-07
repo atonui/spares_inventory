@@ -233,25 +233,9 @@ def init_db():
         )
     ''')
     
-    # Insert sample data
-    insert_sample_data(cursor)
-    
     conn.commit()
     conn.close()
-
-def insert_sample_data(cursor):
-    """Insert sample data for testing"""
-    
-    # Sample users
-    users_data = [
-        ('valentine.opiyo@varian.com', 'Valentine Opiyo', hash_password('admin123'), 'admin', 'Kenya'),
-    ]
-    
-    cursor.executemany('''
-        INSERT OR IGNORE INTO users (email, name, password_hash, role, territory)
-        VALUES (?, ?, ?, ?, ?)
-    ''', users_data)
-
+# ============ AUTHENTICATION UTILITIES ============
 def hash_password(password: str) -> str:
     """Hash password for storage"""
     return pwd_context.hash(password)
