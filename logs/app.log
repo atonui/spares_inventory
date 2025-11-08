@@ -1756,3 +1756,179 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-11-07 19:52:05,471 - inventory_app - INFO - Application starting up
 2025-11-07 19:52:05,490 - inventory_app - INFO - [startup] Application initialized
 2025-11-07 19:52:05,496 - inventory_app - INFO - Database initialized successfully
+2025-11-07 19:53:05,097 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-07 19:53:05,127 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-07 19:53:05,150 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-07 19:53:05,167 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-07 19:53:05,185 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-07 19:53:51,680 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-07 19:53:51,696 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-07 19:53:51,706 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-07 19:53:51,716 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-07 19:53:51,730 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-07 20:10:47,560 - errors - ERROR - HTTPException in create_store: Invalid store type. Must be one of: central, customer_site, engineer, fe_consignment
+2025-11-07 20:10:47,587 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_store RESOURCE=store/None STATUS=error
+2025-11-07 20:11:50,313 - errors - ERROR - HTTPException in create_store: Invalid store type. Must be one of: central, customer_site, engineer, fe_consignment
+2025-11-07 20:11:50,324 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_store RESOURCE=store/None STATUS=error
+2025-11-07 20:11:57,436 - errors - ERROR - HTTPException in create_store: Invalid store type. Must be one of: central, customer_site, engineer, fe_consignment
+2025-11-07 20:11:57,445 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_store RESOURCE=store/None STATUS=error
+2025-11-08 05:58:26,550 - inventory_app - INFO - Application shutting down
+2025-11-08 05:58:26,569 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-08 08:58:56,419 - inventory_app - INFO - Application starting up
+2025-11-08 08:58:56,428 - inventory_app - INFO - [startup] Application initialized
+2025-11-08 08:58:56,431 - inventory_app - INFO - Database initialized successfully
+2025-11-08 09:00:11,839 - audit - INFO - USER=allan.kibetkoech@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:00:25,728 - audit - INFO - USER=allan.kibetkoech@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:00:33,888 - audit - INFO - USER=allan.kibetkoech@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:00:44,674 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\grc2639\AppData\Local\Programs\Python\Python313\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-11-08 09:00:44,929 - audit - INFO - USER=valentine.opiyo@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:00:53,472 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 09:00:53,472 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 09:00:54,158 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 09:00:54,190 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 09:00:54,427 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 09:00:54,444 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 09:00:54,742 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 09:03:18,396 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 09:03:36,025 - audit - INFO - USER=tonuiallan@gmail.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:03:53,452 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 09:03:53,453 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 09:03:53,483 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 09:03:53,500 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 09:03:53,535 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 09:03:53,557 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 09:03:53,576 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 09:04:45,672 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 09:09:59,326 - inventory_app - INFO - Application shutting down
+2025-11-08 09:09:59,353 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-08 09:13:29,517 - inventory_app - INFO - Application starting up
+2025-11-08 09:13:29,544 - inventory_app - INFO - [startup] Application initialized
+2025-11-08 09:13:29,548 - inventory_app - INFO - Database initialized successfully
+2025-11-08 09:13:32,878 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 09:13:32,879 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 09:13:33,586 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 09:13:33,610 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 09:13:33,872 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 09:13:33,888 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 09:13:34,172 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 09:13:59,658 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 09:14:00,796 - asyncio - ERROR - Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Users\grc2639\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+2025-11-08 09:14:15,487 - audit - INFO - USER=tonuiallan@gmail.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:14:25,655 - audit - INFO - USER=tonuiallan@gmail.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-11-08 09:16:57,913 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 09:16:57,913 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 09:16:58,621 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 09:16:58,653 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 09:16:58,891 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 09:16:58,913 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 09:16:59,208 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 09:26:56,065 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 09:26:57,193 - asyncio - ERROR - Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Users\grc2639\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+2025-11-08 09:27:16,367 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 09:27:16,367 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 09:27:17,069 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 09:27:17,097 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 09:27:17,346 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 09:27:17,364 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 09:27:17,648 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 09:28:38,390 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 09:28:38,706 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 09:28:38,973 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 09:28:38,990 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 09:28:39,004 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 14:17:13,237 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 14:17:13,263 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 14:17:13,278 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 14:17:13,293 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 14:17:13,307 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 14:46:17,452 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 14:46:17,480 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 14:46:17,495 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 14:46:17,511 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 14:46:17,526 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 14:46:50,560 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 14:47:31,212 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 14:47:31,212 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 14:47:31,235 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 14:47:31,252 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 14:47:31,277 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 14:47:31,295 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 14:47:31,308 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 15:26:40,422 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 15:31:06,015 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 15:31:06,015 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 15:31:08,160 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 15:31:08,187 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 15:31:09,871 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 15:31:09,904 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 15:31:10,240 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 15:32:06,699 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 15:35:50,067 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 15:35:50,067 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 15:35:52,239 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 15:35:52,253 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 15:35:53,952 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 15:35:53,982 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 15:35:54,318 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 16:01:19,637 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 16:01:44,315 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 16:01:44,316 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 16:01:46,509 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 16:01:46,523 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 16:01:48,224 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 16:01:48,241 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 16:01:48,574 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 16:02:06,033 - inventory_app - INFO - Application shutting down
+2025-11-08 16:02:06,042 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-08 16:02:26,835 - inventory_app - INFO - Application starting up
+2025-11-08 16:02:26,842 - inventory_app - INFO - [startup] Application initialized
+2025-11-08 16:02:26,845 - inventory_app - INFO - Database initialized successfully
+2025-11-08 16:02:56,446 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 16:02:56,446 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 16:02:58,615 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 16:02:58,630 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 16:03:00,346 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 16:03:00,370 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 16:03:00,666 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 16:03:23,455 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 16:03:45,522 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 16:03:45,522 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 16:03:47,401 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 16:03:47,720 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 16:03:49,411 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 16:03:49,443 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 16:03:49,738 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 16:04:05,352 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 16:26:45,537 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 16:26:45,538 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 16:26:47,703 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 16:26:47,719 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 16:26:49,435 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 16:26:49,451 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 16:26:49,768 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 16:27:16,451 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 16:29:18,658 - inventory_app - INFO - Application shutting down
+2025-11-08 16:29:18,665 - inventory_app - INFO - [shutdown] Application shut down gracefully

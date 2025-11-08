@@ -132,6 +132,7 @@ function inventoryApp() {
         users: [],
         movements: [],
         filteredInventory: [],
+        csrfToken: '',
 
         // Equipment-related state
         equipment: [],
@@ -183,17 +184,16 @@ function inventoryApp() {
             if (userStr) {
                 try {
                     this.currentUser = JSON.parse(userStr);
-                    // Verify session is still valid by making a test call
                     await this.getCurrentUser();
+                    await this.getCsrfToken(); // Get CSRF token
                     this.isAuthenticated = true;
                     await this.loadAllData();
                 } catch (error) {
-                    // Session invalid, clear storage
                     localStorage.removeItem('currentUser');
                     this.currentUser = null;
                     this.isAuthenticated = false;
                 }
-            }
+                    }
         },
 
         // Authentication
@@ -263,10 +263,32 @@ function inventoryApp() {
             window.location.href = '/static/index.html';
         },
 
+        // function to get CSRF token
+        async getCsrfToken() {
+            try {
+                const response = await fetch(`${this.apiUrl}/csrf-token`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                this.csrfToken = data.csrf_token;
+            } catch (error) {
+                console.error('Failed to get CSRF token:', error);
+            }
+        },
+
+        
+
         async apiCall(endpoint, options = {}) {
             const defaultHeaders = {
                 'Content-Type': 'application/json'
             };
+
+            // CSRF token for state-changing operations
+            if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method.toUpperCase())) {
+                if (this.csrfToken) {
+                    defaultHeaders['X-CSRF-Token'] = this.csrfToken;
+                }
+            }
             
             const config = {
                 ...options,
@@ -282,8 +304,13 @@ function inventoryApp() {
                 
                 // Handle 401/403 - session expired or unauthorized
                 if (response.status === 401 || response.status === 403) {
-                    this.logout();
-                    this.error = "Session expired. Please login again.";
+                    // If CSRF token expired, try to refresh it
+                    if (response.status === 403) {
+                        await this.getCsrfToken();
+                    } else {
+                        this.logout();
+                        this.error = "Session expired. Please login again.";
+                    }
                     return null;
                 }
                 
@@ -1147,7 +1174,7 @@ exportComprehensiveReport() {
                 
                 this.successMessage = 'User created successfully!';
                 this.showUserModal = false;
-                this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
+                this.userForm = { email: '', name: '', password: '', role: '', territory: '' };
                 
                 await this.loadUsers();
                 setTimeout(() => this.successMessage = '', 3000);
@@ -1195,7 +1222,7 @@ exportComprehensiveReport() {
                 this.successMessage = 'User updated successfully!';
                 this.showUserModal = false;
                 this.editingUser = null;
-                this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
+                this.userForm = { email: '', name: '', password: '', role: '', territory: '' };
                 
                 await this.loadUsers();
                 setTimeout(() => this.successMessage = '', 3000);

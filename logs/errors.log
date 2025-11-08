@@ -62,3 +62,6 @@ Traceback (most recent call last):
     """)
     ^^^^
 sqlite3.OperationalError: no such table: system_settings
+2025-11-07 20:10:47,560 - ERROR - HTTPException in create_store: Invalid store type. Must be one of: central, customer_site, engineer, fe_consignment
+2025-11-07 20:11:50,313 - ERROR - HTTPException in create_store: Invalid store type. Must be one of: central, customer_site, engineer, fe_consignment
+2025-11-07 20:11:57,436 - ERROR - HTTPException in create_store: Invalid store type. Must be one of: central, customer_site, engineer, fe_consignment

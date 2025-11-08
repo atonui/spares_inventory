@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi import Cookie
+from fastapi import Header
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
@@ -33,8 +34,9 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+from itsdangerous import URLSafeTimedSerializer
 
-
+# setup password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 #setup logging files
@@ -78,6 +80,7 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str
     SMTP_PASSWORD: str
     FRONTEND_URL: str
+    CSRF_SECRET: str
 
     class Config:
         env_file = ".env"
@@ -91,6 +94,11 @@ SMTP_PORT = settings.SMTP_PORT
 SMTP_USERNAME = settings.SMTP_USERNAME
 SMTP_PASSWORD = settings.SMTP_PASSWORD
 FRONTEND_URL = settings.FRONTEND_URL
+CSRF_SECRET = settings.CSRF_SECRET
+
+# csrf configuration
+# CSRF_SECRET = os.getenv("CSRF_SECRET", SECRET_KEY)
+csrf_serializer = URLSafeTimedSerializer(CSRF_SECRET)
 
 # Database setup
 def init_db():
@@ -237,6 +245,20 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+# ============ CSRF UTILITIES ============
+def generate_csrf_token() -> str:
+    """Generate CSRF token"""
+    return csrf_serializer.dumps(secrets.token_urlsafe(32))
+
+def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
+    """Verify CSRF token (valid for 1 hour by default)"""
+    try:
+        csrf_serializer.loads(token, max_age=max_age)
+        return True
+    except:
+        return False
+    
 # ============ AUTHENTICATION UTILITIES ============
 def hash_password(password: str) -> str:
     """Hash password for storage"""
@@ -749,7 +771,25 @@ async def get_current_user(session_token: str = Cookie(None)):
     
     return user['id']
 
+# csrf middleware
+async def verify_csrf(x_csrf_token: str = Header(None)):
+    """Verify CSRF token for state-changing operations"""
+    if not x_csrf_token:
+        raise HTTPException(status_code=403, detail="CSRF token missing")
+    
+    if not verify_csrf_token(x_csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    
+    return True
+
 # Routes
+#Csrf token endpoint route
+@app.get("/api/csrf-token")
+async def get_csrf_token():
+    """Get CSRF token for forms"""
+    token = generate_csrf_token()
+    return {"csrf_token": token}
+
 #-----------Profile Management Routes-----------
 @app.get("/api/profile")
 async def get_profile(user_id: int = Depends(get_current_user), request: Request = None):
@@ -773,6 +813,7 @@ async def get_profile(user_id: int = Depends(get_current_user), request: Request
 async def update_profile(
     profile_update: UserProfileUpdate,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Update user profile (email)"""
@@ -813,6 +854,7 @@ async def update_profile(
 async def change_password(
     password_data: PasswordChange,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Change user password"""
@@ -856,7 +898,7 @@ async def change_password(
 
 @app.post("/api/forgot-password")
 @limiter.limit("3/hour")  # 3 password reset requests per hour
-async def forgot_password(request_data: ForgotPasswordRequest, request: Request = None):
+async def forgot_password(request_data: ForgotPasswordRequest, csrf_valid: bool = Depends(verify_csrf), request: Request = None):
     """Initiate password reset process"""
     ip_address = request.client.host if hasattr(request, 'client') else None
     user_agent = request.headers.get('user-agent', '')[:200]
@@ -923,7 +965,7 @@ async def forgot_password(request_data: ForgotPasswordRequest, request: Request 
 
 @app.post("/api/reset-password")
 @limiter.limit("5/hour")  # 5 password reset attempts per hour
-async def reset_password(request_data: ResetPasswordRequest, request: Request = None):
+async def reset_password(request_data: ResetPasswordRequest, csrf_valid: bool = Depends(verify_csrf), request: Request = None):
     """Reset password using token"""
     ip_address = request.client.host if hasattr(request, 'client') else None
     user_agent = request.headers.get('user-agent', '')[:200]
@@ -1270,7 +1312,10 @@ async def get_stats(user_id: int = Depends(get_current_user), request: Request =
 
 @app.post("/api/inventory/add")
 @log_endpoint(action='add_stock', resource_type='inventory')
-async def add_stock(request_data: AddStockRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def add_stock(request_data: AddStockRequest,
+                    user_id: int = Depends(get_current_user),
+                    csrf_valid: bool = Depends(verify_csrf),
+                    request: Request = None):
     """Add stock to inventory"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1337,7 +1382,10 @@ async def add_stock(request_data: AddStockRequest, user_id: int = Depends(get_cu
     
 @app.put("/api/inventory/update")
 @log_endpoint(action='update_stock', resource_type='inventory')
-async def update_stock(request_data: UpdateStockRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def update_stock(request_data: UpdateStockRequest,
+                       user_id: int = Depends(get_current_user),
+                       csrf_valid: bool = Depends(verify_csrf),
+                       request: Request = None):
     """Update inventory quantity"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1388,7 +1436,10 @@ async def update_stock(request_data: UpdateStockRequest, user_id: int = Depends(
 
 @app.post("/api/inventory/transfer")
 @log_endpoint(action='transfer_stock', resource_type='inventory')
-async def transfer_stock(request_data: TransferStockRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def transfer_stock(request_data: TransferStockRequest,
+                         user_id: int = Depends(get_current_user),
+                         csrf_valid: bool = Depends(verify_csrf),
+                         request: Request = None):
     """Transfer stock between stores"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1566,16 +1617,16 @@ async def test_logging(user_id: int = Depends(get_current_user), request: Reques
 
 @app.post("/api/users")
 @log_endpoint(action='create_user', resource_type='user')
-async def create_user(request_data: CreateUserRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def create_user(request_data: CreateUserRequest,
+                      user_id: int = Depends(get_current_user),
+                      csrf_valid: bool = Depends(verify_csrf),
+                      request: Request = None):
     """Create new user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+    # Check if current user is admin    
+    if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if email already exists
@@ -1597,7 +1648,11 @@ async def create_user(request_data: CreateUserRequest, user_id: int = Depends(ge
 
 @app.put("/api/users/{target_user_id}")
 @log_endpoint(action='update_user', resource_type='user')
-async def update_user(target_user_id: int, request_data: UpdateUserRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def update_user(target_user_id: int,
+                      request_data: UpdateUserRequest,
+                      user_id: int = Depends(get_current_user),
+                      csrf_valid: bool = Depends(verify_csrf),
+                      request: Request = None):
     """Update user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1648,7 +1703,10 @@ async def update_user(target_user_id: int, request_data: UpdateUserRequest, user
 
 @app.delete("/api/users/{target_user_id}")
 @log_endpoint(action='delete_user', resource_type='user')
-async def delete_user(target_user_id: int, user_id: int = Depends(get_current_user), request: Request = None):
+async def delete_user(target_user_id: int,
+                      user_id: int = Depends(get_current_user),
+                      csrf_valid: bool = Depends(verify_csrf),
+                      request: Request = None):
     """Delete user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1682,7 +1740,10 @@ async def delete_user(target_user_id: int, user_id: int = Depends(get_current_us
 # Store Management
 @app.post("/api/stores")
 @log_endpoint(action='create_store', resource_type='store')
-async def create_store(request_data: CreateStoreRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def create_store(request_data: CreateStoreRequest,
+                       user_id: int = Depends(get_current_user),
+                       csrf_valid: bool = Depends(verify_csrf),
+                       request: Request = None):
     """Create new store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1716,6 +1777,7 @@ async def create_store(request_data: CreateStoreRequest, user_id: int = Depends(
 async def bulk_import_stores(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Bulk import stores from a CSV file (admin only)"""
@@ -1752,7 +1814,11 @@ async def bulk_import_stores(
 
 @app.put("/api/stores/{store_id}")
 @log_endpoint(action='update_store', resource_type='store')
-async def update_store(store_id: int, request_data: UpdateStoreRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def update_store(store_id: int,
+                       request_data: UpdateStoreRequest,
+                       user_id: int = Depends(get_current_user),
+                       csrf_valid: bool = Depends(verify_csrf),
+                       request: Request = None):
     """Update store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1807,7 +1873,10 @@ async def update_store(store_id: int, request_data: UpdateStoreRequest, user_id:
 
 @app.delete("/api/stores/{store_id}")
 @log_endpoint(action='delete_store', resource_type='store')
-async def delete_store(store_id: int, user_id: int = Depends(get_current_user), request: Request = None):
+async def delete_store(store_id: int,
+                       user_id: int = Depends(get_current_user),
+                       csrf_valid: bool = Depends(verify_csrf),
+                       request: Request = None):
     """Delete store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1844,7 +1913,10 @@ async def delete_store(store_id: int, user_id: int = Depends(get_current_user), 
 # Parts Management
 @app.post("/api/parts")
 @log_endpoint(action='create_store', resource_type='store')
-async def create_part(request_data: CreatePartRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def create_part(request_data: CreatePartRequest,
+                      user_id: int = Depends(get_current_user),
+                      csrf_valid: bool = Depends(verify_csrf),
+                      request: Request = None):
     """Create new part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1872,13 +1944,12 @@ async def create_part(request_data: CreatePartRequest, user_id: int = Depends(ge
     
     return {"success": True, "message": f"Part {request_data.part_number} created successfully"}
 
-# ...existing code...
-
 @app.post("/api/parts/bulk-import")
 @log_endpoint(action='bulk_import_stores', resource_type='store')
 async def bulk_import_parts(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Bulk import parts from a CSV file (admin only)"""
@@ -1907,7 +1978,11 @@ async def bulk_import_parts(
 
 @app.put("/api/parts/{part_id}")
 @log_endpoint(action='update_part', resource_type='part')
-async def update_part(part_id: int, request_data: UpdatePartRequest, user_id: int = Depends(get_current_user), request: Request = None):
+async def update_part(part_id: int,
+                      request_data: UpdatePartRequest,
+                      user_id: int = Depends(get_current_user),
+                      csrf_valid: bool = Depends(verify_csrf),
+                      request: Request = None):
     """Update part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1962,7 +2037,10 @@ async def update_part(part_id: int, request_data: UpdatePartRequest, user_id: in
 
 @app.delete("/api/parts/{part_id}")
 @log_endpoint(action='delete_part', resource_type='part')
-async def delete_part(part_id: int, user_id: int = Depends(get_current_user), request: Request = None):
+async def delete_part(part_id: int,
+                      user_id: int = Depends(get_current_user),
+                      csrf_valid: bool = Depends(verify_csrf),
+                      request: Request = None):
     """Delete part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2239,6 +2317,7 @@ async def get_activity_stats(
 async def cleanup_old_logs(
     days: int = 90,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Delete activity logs older than specified days (admin only)"""
@@ -2396,6 +2475,7 @@ async def get_equipment(
 async def create_equipment(
     request_data: CreateEquipmentRequest,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Create new equipment (admin only)"""
@@ -2444,6 +2524,7 @@ async def update_equipment(
     equipment_id: int,
     request_data: UpdateEquipmentRequest,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Update equipment (admin only)"""
@@ -2496,6 +2577,7 @@ async def transfer_equipment(
     equipment_id: int,
     request_data: TransferEquipmentRequest,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Transfer equipment to another user"""
@@ -2537,6 +2619,7 @@ async def update_calibration(
     equipment_id: int,
     request_data: UpdateCalibrationRequest,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Update equipment calibration"""
@@ -2587,6 +2670,7 @@ async def update_calibration(
 async def delete_equipment(
     equipment_id: int,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Delete/deactivate equipment (admin only)"""
@@ -2675,6 +2759,7 @@ async def get_calibration_reminder_days(
 async def update_calibration_reminder_days(
     days: int,
     user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
     request: Request = None
 ):
     """Update calibration reminder days setting (admin only)"""
