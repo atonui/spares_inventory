@@ -1024,3 +1024,10 @@
 2025-11-08 16:26:49,451 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
 2025-11-08 16:26:49,768 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-08 16:27:16,451 - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-11-08 19:07:09,438 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 19:07:11,597 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 19:07:11,612 - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 19:07:13,301 - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 19:07:13,332 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 19:07:13,681 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 19:07:41,483 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success

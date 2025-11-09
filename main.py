@@ -1626,7 +1626,7 @@ async def create_user(request_data: CreateUserRequest,
     cursor = conn.cursor()
     
     # Check if current user is admin    
-    if check_admin(user_id) is False:
+    if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if email already exists

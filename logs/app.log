@@ -1932,3 +1932,16 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-08 16:27:16,451 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
 2025-11-08 16:29:18,658 - inventory_app - INFO - Application shutting down
 2025-11-08 16:29:18,665 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-08 19:06:42,697 - inventory_app - INFO - Application starting up
+2025-11-08 19:06:42,705 - inventory_app - INFO - [startup] Application initialized
+2025-11-08 19:06:42,709 - inventory_app - INFO - Database initialized successfully
+2025-11-08 19:07:09,438 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-08 19:07:09,438 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-08 19:07:11,597 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-08 19:07:11,612 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-08 19:07:13,301 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-08 19:07:13,332 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-08 19:07:13,681 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 19:07:41,483 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-08 19:19:54,073 - inventory_app - INFO - Application shutting down
+2025-11-08 19:19:54,099 - inventory_app - INFO - [shutdown] Application shut down gracefully

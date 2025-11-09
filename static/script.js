@@ -275,9 +275,7 @@ function inventoryApp() {
                 console.error('Failed to get CSRF token:', error);
             }
         },
-
-        
-
+    
         async apiCall(endpoint, options = {}) {
             const defaultHeaders = {
                 'Content-Type': 'application/json'
