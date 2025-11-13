@@ -16,3 +16,4 @@ test_email.py
 logs
 /tests/
 /migration/
+/__pycache__/

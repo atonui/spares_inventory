@@ -80,7 +80,7 @@ function inventoryApp() {
         showLowStockPanel: false,
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
-        showStoreTypesPanlel: false,
+        showStoreTypesPanel: false,
         showInventoryPanel: true,
         
         // logging

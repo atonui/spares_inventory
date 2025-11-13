@@ -2177,3 +2177,24 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-11-13 08:25:15,620 - inventory_app - INFO - [startup] Application initialized
 2025-11-13 08:25:15,623 - inventory_app - INFO - Database initialized successfully
 2025-11-13 08:32:55,166 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_store RESOURCE=store/None STATUS=success
+2025-11-13 17:28:00,608 - inventory_app - INFO - Application starting up
+2025-11-13 17:28:00,614 - inventory_app - INFO - [startup] Application initialized
+2025-11-13 17:28:00,618 - inventory_app - INFO - Database initialized successfully
+2025-11-13 17:28:19,881 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-13 17:28:19,881 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-13 17:28:19,909 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-13 17:28:19,936 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-13 17:28:19,951 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-13 17:28:19,966 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-13 17:28:19,983 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-13 17:28:47,447 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-13 17:38:49,098 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-13 17:38:49,121 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-13 17:38:49,133 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-13 17:38:49,144 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-13 17:38:49,161 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-13 17:39:36,081 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-13 17:39:36,099 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-13 17:39:36,110 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-13 17:39:36,121 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-13 17:39:36,137 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
