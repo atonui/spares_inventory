@@ -1,4 +1,3 @@
-// script.js - Inventory Management Application
 function inventoryApp() {
     return {
         // Authentication state
@@ -277,20 +276,41 @@ function inventoryApp() {
         },
     
         async apiCall(endpoint, options = {}) {
-            const defaultHeaders = {
-                'Content-Type': 'application/json'
-            };
-
-            // CSRF token for state-changing operations
+            /**
+             * Universal API call handler for both JSON and file uploads
+             * Automatically handles:
+             * - CSRF tokens for state-changing operations
+             * - HTTPOnly cookies (credentials: include)
+             * - File uploads (FormData detection)
+             * - Error handling and token refresh
+             * - Rate limiting
+             */
+            
+            const isFileUpload = options.body instanceof FormData;
+            
+            const defaultHeaders = {};
+            
+            // Only set Content-Type for JSON requests (FormData sets its own)
+            if (!isFileUpload) {
+                defaultHeaders['Content-Type'] = 'application/json';
+            }
+            
+            // Add CSRF token for state-changing operations
             if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method.toUpperCase())) {
                 if (this.csrfToken) {
                     defaultHeaders['X-CSRF-Token'] = this.csrfToken;
+                } else {
+                    console.warn('CSRF token not available, fetching...');
+                    await this.getCsrfToken();
+                    if (this.csrfToken) {
+                        defaultHeaders['X-CSRF-Token'] = this.csrfToken;
+                    }
                 }
             }
             
             const config = {
                 ...options,
-                credentials: 'include', // IMPORTANT: Include cookies in all requests
+                credentials: 'include', // Always include cookies
                 headers: {
                     ...defaultHeaders,
                     ...options.headers
@@ -300,28 +320,73 @@ function inventoryApp() {
             try {
                 const response = await fetch(`${this.apiUrl}${endpoint}`, config);
                 
-                // Handle 401/403 - session expired or unauthorized
-                if (response.status === 401 || response.status === 403) {
-                    // If CSRF token expired, try to refresh it
-                    if (response.status === 403) {
-                        await this.getCsrfToken();
-                    } else {
-                        this.logout();
-                        this.error = "Session expired. Please login again.";
-                    }
+                // Handle 401 - Authentication failed
+                if (response.status === 401) {
+                    this.logout();
+                    this.error = "Session expired. Please login again.";
                     return null;
+                }
+                
+                // Handle 403 - CSRF token might be expired
+                if (response.status === 403) {
+                    const errorData = await response.json().catch(() => ({}));
+                    
+                    // If it's a CSRF error, try to refresh the token and retry ONCE
+                    if (errorData.detail && errorData.detail.toLowerCase().includes('csrf')) {
+                        console.log('CSRF token expired, refreshing and retrying...');
+                        await this.getCsrfToken();
+                        
+                        // Retry the request once with new token
+                        if (this.csrfToken) {
+                            config.headers = {
+                                ...defaultHeaders,
+                                'X-CSRF-Token': this.csrfToken,
+                                ...options.headers
+                            };
+                            
+                            const retryResponse = await fetch(`${this.apiUrl}${endpoint}`, config);
+                            
+                            if (retryResponse.status === 401) {
+                                this.logout();
+                                this.error = "Session expired. Please login again.";
+                                return null;
+                            }
+                            
+                            if (!retryResponse.ok) {
+                                const retryError = await retryResponse.json().catch(() => ({}));
+                                throw new Error(retryError.detail || `Request failed: ${retryResponse.status}`);
+                            }
+                            
+                            if (retryResponse.status === 204) return null;
+                            return await retryResponse.json();
+                        }
+                    }
+                    
+                    throw new Error(errorData.detail || 'Access forbidden');
                 }
                 
                 // Handle 422 - Validation error
                 if (response.status === 422) {
                     const errorData = await response.json().catch(() => ({}));
                     console.error('Validation error:', errorData);
-                    throw new Error(errorData.detail || 'Validation error');
+                    
+                    // Extract detailed error message if available
+                    if (errorData.detail) {
+                        if (Array.isArray(errorData.detail)) {
+                            const messages = errorData.detail.map(err => 
+                                `${err.loc?.join('.')}: ${err.msg}`
+                            ).join(', ');
+                            throw new Error(`Validation error: ${messages}`);
+                        }
+                        throw new Error(errorData.detail);
+                    }
+                    throw new Error('Validation error');
                 }
                 
                 // Handle 429 - Rate limit exceeded
                 if (response.status === 429) {
-                    throw new Error('Too many requests. Please try again later.');
+                    const retryAfter = response.headers.get('Retry-After') || '60';
+                    throw new Error(`Too many requests. Please try again in ${retryAfter} seconds.`);
                 }
                 
                 // Handle other errors
@@ -339,7 +404,10 @@ function inventoryApp() {
                 return await response.json();
                 
             } catch (error) {
-                console.error('API call error:', error);
+                // Don't log if it's a logout scenario
+                if (!error.message.includes('Session expired')) {
+                    console.error('API call error:', error);
+                }
                 this.error = error.message;
                 throw error;
             }
@@ -371,24 +439,6 @@ function inventoryApp() {
                 this.loading = false;
             }
         },
-
-        // async apiCall(endpoint, options = {}) {
-        //     const response = await fetch(`${this.apiUrl}${endpoint}`, {
-        //         headers: {
-        //             'Authorization': `Bearer ${this.token}`,
-        //             'Content-Type': 'application/json',
-        //             ...options.headers
-        //         },
-        //         ...options
-        //     });
-            
-        //     if (!response.ok) {
-        //         const errorData = await response.json().catch(() => ({}));
-        //         throw new Error(errorData.detail || `API error: ${response.status}`);
-        //     }
-            
-        //     return response.json();
-        // },
 
         async loadStats() {
             this.stats = await this.apiCall('/stats');
@@ -982,7 +1032,7 @@ downloadCSV(headers, rows, filename) {
     URL.revokeObjectURL(url);
 },
 
-// Bonus: Export all data as a single comprehensive report
+// export all data as a single comprehensive report
 exportComprehensiveReport() {
     const timestamp = new Date().toLocaleString();
     const date = new Date().toISOString().split('T')[0];
@@ -1893,31 +1943,18 @@ exportComprehensiveReport() {
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                const response = await fetch(`${this.apiUrl}/parts/bulk-import`, {
+                        // apiCall handles everything: CSRF, cookies, errors
+                const result = await this.apiCall('/parts/bulk-import', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`
-                    },
-                    body: formData
+                    body: formData  // apiCall detects FormData automatically
                 });
                 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Import failed');
-                }
-                
-                const result = await response.json();
-                this.successMessage = result.message;
-                if (result.errors && result.errors.length > 0) {
-                    this.error = 'Some errors occurred:\n' + result.errors.join('\n');
-                }
+                this.successMessage = `Import complete! Added: ${result.added}, Skipped: ${result.skipped}`;
                 
                 await this.loadParts();
-                event.target.value = ''; // Reset file input
-                setTimeout(() => {
-                    this.successMessage = '';
-                    this.error = '';
-                }, 5000);
+                event.target.value = '';
+                
+                setTimeout(() => this.successMessage = '', 5000);
                 
             } catch (error) {
                 this.error = 'Failed to import parts: ' + error.message;

@@ -1783,10 +1783,10 @@ async def bulk_import_stores(
     """Bulk import stores from a CSV file (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    if user['role'] != 'admin':
+    # Check if current user is admin    
+    if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
+    
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode()))
     added, skipped = 0, 0
@@ -1912,7 +1912,7 @@ async def delete_store(store_id: int,
 
 # Parts Management
 @app.post("/api/parts")
-@log_endpoint(action='create_store', resource_type='store')
+@log_endpoint(action='create_part', resource_type='part')
 async def create_part(request_data: CreatePartRequest,
                       user_id: int = Depends(get_current_user),
                       csrf_valid: bool = Depends(verify_csrf),
@@ -1921,11 +1921,8 @@ async def create_part(request_data: CreatePartRequest,
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+    # Check if current user is admin    
+    if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if part number already exists
@@ -1944,8 +1941,9 @@ async def create_part(request_data: CreatePartRequest,
     
     return {"success": True, "message": f"Part {request_data.part_number} created successfully"}
 
+#bulk part import from CSV (admin only)
 @app.post("/api/parts/bulk-import")
-@log_endpoint(action='bulk_import_stores', resource_type='store')
+@log_endpoint(action='bulk_import_parts', resource_type='part')
 async def bulk_import_parts(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
@@ -1955,15 +1953,24 @@ async def bulk_import_parts(
     """Bulk import parts from a CSV file (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    if user['role'] != 'admin':
+    # Check if current user is admin    
+    if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
+    
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode()))
     added, skipped = 0, 0
+    skipped_part_numbers = []  # keep track of skipped part numbers
     for row in reader:
         try:
+            # check if part_number already exists before attempting to enter the part
+            cursor.execute("SELECT id FROM parts WHERE part_number = ?", (row['part_number'],))
+            if cursor.fetchone():
+                skipped += 1
+                # FEAT: tell the user which part numbers were skipped
+                skipped_part_numbers.append(row['part_number'])
+                continue
+
             cursor.execute(
                 "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
                 (row['part_number'], row['description'], row['category'], float(row['unit_cost']))
