@@ -68,6 +68,7 @@ function inventoryApp() {
         showStoreModal: false,
         showPartModal: false,
         showProfileModal: false,
+        showStoreTypeModal: false,
         
         // panels
         showUsersPanel: false,
@@ -79,6 +80,7 @@ function inventoryApp() {
         showLowStockPanel: false,
         showMyPartsPanel: false,
         showStoreInventoryPanel: false,
+        showStoreTypesPanlel: false,
         showInventoryPanel: true,
         
         // logging
@@ -101,6 +103,7 @@ function inventoryApp() {
         editingUser: null,
         editingStore: null,
         editingPart: null,
+        editingStoreType: null,
         
         // Movement filters
         movementFilters: {
@@ -131,6 +134,7 @@ function inventoryApp() {
         users: [],
         movements: [],
         filteredInventory: [],
+        storeTypes: [],
         csrfToken: '',
 
         // Equipment-related state
@@ -148,6 +152,7 @@ function inventoryApp() {
             next_calibration_date: '',
             notes: ''
         },
+
         calibrationForm: {
             calibration_cert_number: '',
             calibration_authority: '',
@@ -155,10 +160,20 @@ function inventoryApp() {
             next_calibration_date: '',
             notes: ''
         },
+
         transferEquipmentForm: {
             to_user_id: '',
             notes: ''
         },
+
+        storeTypeForm: {
+            type_code: '',
+            type_name: '',
+            description: '',
+            display_order: 0,
+            is_active: true
+        },
+
         editingEquipment: null,
         selectedEquipment: null,
         equipmentHistory: [],
@@ -425,7 +440,8 @@ function inventoryApp() {
                     this.loadMovements(),
                     this.loadEquipment(),
                     this.loadEquipmentStats(),
-                    this.loadCalibrationSettings()
+                    this.loadCalibrationSettings(),
+                    this.loadStoreTypes()
                 ];
                 
                 if (this.currentUser?.role === 'admin') {
@@ -446,6 +462,16 @@ function inventoryApp() {
 
         async loadStores() {
             this.stores = await this.apiCall('/stores');
+        },
+
+        // function to load store types
+        async loadStoreTypes() {
+            try {
+                this.storeTypes = await this.apiCall('/store-types');
+            } catch (error) {
+                console.error('Failed to load store types:', error);
+                this.storeTypes = [];
+            }
         },
 
         async loadParts() {
@@ -706,6 +732,106 @@ function inventoryApp() {
             a.download = 'store_parts_import_template.csv';
             a.click();
             URL.revokeObjectURL(url);
+        },
+
+        // Store Type Management
+        async createStoreType() {
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                await this.apiCall('/store-types', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        type_code: this.storeTypeForm.type_code,
+                        type_name: this.storeTypeForm.type_name,
+                        description: this.storeTypeForm.description,
+                        display_order: parseInt(this.storeTypeForm.display_order) || 0
+                    })
+                });
+                
+                this.successMessage = 'Store type created successfully!';
+                this.showStoreTypeModal = false;
+                this.storeTypeForm = { type_code: '', type_name: '', description: '', display_order: 0 };
+                
+                await this.loadStoreTypes();
+                setTimeout(() => this.successMessage = '', 3000);
+                
+            } catch (error) {
+                this.error = 'Failed to create store type: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        editStoreType(storeType) {
+            this.editingStoreType = storeType.id;
+            this.storeTypeForm = {
+                type_code: storeType.type_code,
+                type_name: storeType.type_name,
+                description: storeType.description || '',
+                display_order: storeType.display_order,
+                is_active: storeType.is_active
+            };
+            this.showStoreTypeModal = true;
+        },
+
+        async updateStoreType() {
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                await this.apiCall(`/store-types/${this.editingStoreType}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        type_name: this.storeTypeForm.type_name,
+                        description: this.storeTypeForm.description,
+                        display_order: parseInt(this.storeTypeForm.display_order) || 0,
+                        is_active: this.storeTypeForm.is_active
+                    })
+                });
+                
+                this.successMessage = 'Store type updated successfully!';
+                this.showStoreTypeModal = false;
+                this.editingStoreType = null;
+                this.storeTypeForm = { type_code: '', type_name: '', description: '', display_order: 0 };
+                
+                await this.loadStoreTypes();
+                await this.loadStores(); // Refresh stores in case type changed
+                setTimeout(() => this.successMessage = '', 3000);
+                
+            } catch (error) {
+                this.error = 'Failed to update store type: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async deleteStoreType(typeId, typeName) {
+            if (!confirm(`Are you sure you want to delete/deactivate store type '${typeName}'?`)) {
+                return;
+            }
+            
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                const result = await this.apiCall(`/store-types/${typeId}`, {
+                    method: 'DELETE'
+                });
+                
+                this.successMessage = result.message;
+                await this.loadStoreTypes();
+                setTimeout(() => this.successMessage = '', 3000);
+                
+            } catch (error) {
+                this.error = 'Failed to delete store type: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
         },
 
         // logging functions
@@ -1660,6 +1786,31 @@ exportComprehensiveReport() {
             a.click();
         },
 
+        exportStoreTypesCSV() {
+            const headers = ['Type Code', 'Type Name', 'Description', 'Display Order', 'Status', 'Stores Using'];
+            const rows = this.storeTypes.map(type => [
+                type.type_code,
+                type.type_name,
+                type.description || '',
+                type.display_order,
+                type.is_active ? 'Active' : 'Inactive',
+                this.stores.filter(s => s.type === type.type_code).length
+            ]);
+            
+            this.downloadCSV(headers, rows, `store_types_${new Date().toISOString().split('T')[0]}.csv`);
+        },
+
+        downloadStoreTypeTemplate() {
+            const csv = 'type_code,type_name,description,display_order\nwarehouse,Warehouse,Main warehouse storage,1\nfield_office,Field Office,Regional field office,2';
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'store_types_template.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+
         // Store management
         async createStore() {
             this.loading = true;
@@ -1897,9 +2048,10 @@ exportComprehensiveReport() {
             this.showLowStockPanel = false;
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
-            this.showInventoryPanel = true;
             this.showLogsPanel = false;
             this.showEquipmentPanel = false;
+            this.showStoreTypesPanlel = false;
+            this.showInventoryPanel = true;
         },
 
         openPanel(panelName) {

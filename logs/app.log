@@ -2173,3 +2173,7 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-11-12 20:02:16,120 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-12 20:06:46,417 - inventory_app - INFO - Application shutting down
 2025-11-12 20:06:46,432 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-13 08:25:15,606 - inventory_app - INFO - Application starting up
+2025-11-13 08:25:15,620 - inventory_app - INFO - [startup] Application initialized
+2025-11-13 08:25:15,623 - inventory_app - INFO - Database initialized successfully
+2025-11-13 08:32:55,166 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_store RESOURCE=store/None STATUS=success

@@ -155,6 +155,9 @@
                     <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showPartsPanel')">
                         <span>Manage Parts</span>
                     </button>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()">
+                        <span>Store Types</span>
+                    </button>
                     <button class="btn" @click="openPanel('showEquipmentPanel'); loadEquipment()">
                         <span>Equipment</span>
                     </button>
@@ -282,7 +285,9 @@
                             <tr>
                                 <td x-text="store.name"></td>
                                 <td>
-                                    <span class="wo-tag" x-text="store.type"></span>
+                                    <span class="wo-tag" x-text="store.type" 
+                                        x-text="storeTypes.find(t => t.type_code === store.type)?.type_name || store.type">
+                                    </span>
                                 </td>
                                 <td x-text="store.location || 'N/A'"></td>
                                 <td x-text="getUserName(store.assigned_user_id)"></td>
@@ -319,7 +324,10 @@
                         <template x-for="store in allStoresView" :key="store.id">
                             <tr>
                                 <td><strong x-text="store.name"></strong></td>
-                                <td><span class="wo-tag" x-text="store.type"></span></td>
+                                <td>
+                                    <span class="wo-tag" x-text="store.type" x-text="storeTypes.find(t => t.type_code === store.type)?.type_name || store.type">
+                                    </span>
+                                </td>
                                 <td x-text="store.location || 'N/A'"></td>
                                 <td x-text="getUserName(store.assigned_user_id)"></td>
                                 <td x-text="inventory.filter(i => i.store_name === store.name).length"></td>
@@ -585,7 +593,7 @@
                 </table>
             </div>
 
-                    <!-- Equipment Management Panel -->
+            <!-- Equipment Management Panel -->
             <div x-show="!loading && showEquipmentPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <div>
@@ -716,6 +724,7 @@
                     No recent activity. Start by adding or transferring inventory!
                 </div>
             </div>
+
             <!-- Inventory Panel -->
             <div x-show="showInventoryPanel" class="inventory-table">
                 <table>
@@ -773,11 +782,64 @@
                 </div>
             </div>
 
-            <!-- some profile thing -->
-             
-            <!-- --------------------------- -->
+            <!-- Store Types Management Panel (Admin Only) -->
+            <div x-show="!loading && showStoreTypesPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Store Types Management</h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-sm" @click="downloadStoreTypeTemplate()">Download Template</button>
+                        <button class="btn btn-sm" @click="exportStoreTypesCSV()">Export CSV</button>
+                        <button class="btn btn-success" 
+                                @click="editingStoreType = null; storeTypeForm = { type_code: '', type_name: '', description: '', display_order: 0, is_active: true }; showStoreTypeModal = true">
+                            Add Store Type
+                        </button>
+                        <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Type Code</th>
+                            <th>Type Name</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>In Use</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="storeType in storeTypes" :key="storeType.id">
+                            <tr :style="!storeType.is_active ? 'opacity: 0.5;' : ''">
+                                <td x-text="storeType.display_order"></td>
+                                <td><code x-text="storeType.type_code" style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"></code></td>
+                                <td><strong x-text="storeType.type_name"></strong></td>
+                                <td x-text="storeType.description || '-'"></td>
+                                <td>
+                                    <span class="wo-tag" 
+                                        :style="storeType.is_active ? 'background: #d1fae5; color: #065f46;' : 'background: #fee2e2; color: #991b1b;'"
+                                        x-text="storeType.is_active ? 'Active' : 'Inactive'">
+                                    </span>
+                                </td>
+                                <td x-text="stores.filter(s => s.type === storeType.type_code).length + ' stores'"></td>
+                                <td>
+                                    <button class="btn btn-sm" @click="editStoreType(storeType)">Edit</button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #dc3545; color: white;"
+                                            @click="deleteStoreType(storeType.id, storeType.type_name)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="storeTypes.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No store types configured. Click "Add Store Type" to create one.
+                </div>
+            </div>
 
-            <!-- ALL MODALS -->
+            <!-- MODALS -->
 
             <!-- Activity Stats Modal -->
             <div x-show="showStatsModal" class="modal" @click.outside="showStatsModal = false">
@@ -1286,13 +1348,12 @@
                         </div>
                         <div class="form-group">
                             <label>Type</label>
-                            <!-- this should also be moved from hardcode to db -->
+                            <!-- UPDATED: Dynamic store types -->
                             <select x-model="storeForm.type" required>
-                                <option value="office">Office</option>
-                                <option value="customer_site">Customer Site</option>
-                                <option value="engineer">Engineer Personal</option>
-                                <option value="fe_consignment">FE Consignment</option>
-                                <option value="admin">Admin</option>
+                                <option value="">Select Type</option>
+                                <template x-for="storeType in storeTypes" :key="storeType.id">
+                                    <option :value="storeType.type_code" x-text="storeType.type_name"></option>
+                                </template>
                             </select>
                         </div>
                         <div class="form-group">
@@ -1317,6 +1378,71 @@
                         </div>
                     </form>
                 </div>
+            </div>
+
+            <!-- Store Type Management Modal -->
+            <div x-show="showStoreTypeModal" class="modal" @click.outside="showStoreTypeModal = false">
+                <div class="modal-content">
+                    <h3 x-text="editingStoreType ? 'Edit Store Type' : 'Create New Store Type'"></h3>
+                    <form @submit.prevent="editingStoreType ? updateStoreType() : createStoreType()">
+                        <div class="form-group">
+                            <label>Type Code *</label>
+                            <input type="text" 
+                                x-model="storeTypeForm.type_code" 
+                                :disabled="!!editingStoreType"
+                                pattern="[a-z_]+"
+                                placeholder="e.g., office, warehouse, customer_site"
+                                required>
+                            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                                Lowercase letters and underscores only. Cannot be changed after creation.
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Type Name *</label>
+                            <input type="text" 
+                                x-model="storeTypeForm.type_name" 
+                                placeholder="e.g., Office/Warehouse"
+                                required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea x-model="storeTypeForm.description" 
+                                    rows="2" 
+                                    placeholder="Optional description"
+                                    style="width: 100%;padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+            </div>
+            <div class="form-group">
+                        <label>Display Order</label>
+                        <input type="number" 
+                            x-model="storeTypeForm.display_order" 
+                            min="0"
+                            placeholder="0">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Lower numbers appear first in dropdowns
+                        </small>
+                    </div>
+                    
+                    <div class="form-group" x-show="editingStoreType">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" x-model="storeTypeForm.is_active">
+                            <span>Active</span>
+                        </label>
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Inactive types won't appear in dropdowns but existing stores keep their type
+                        </small>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                        <button type="button" class="btn" @click="showStoreTypeModal = false; editingStoreType = null;">Cancel</button>
+                        <button type="submit" class="btn btn-success" :disabled="loading">
+                            <span x-show="!loading" x-text="editingStoreType ? 'Update Store Type' : 'Create Store Type'"></span>
+                            <span x-show="loading" x-text="editingStoreType ? 'Updating...' : 'Creating...'"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
             </div>
 
             <!-- Part Management Modal -->

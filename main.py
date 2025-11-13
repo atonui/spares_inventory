@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi import Cookie
 from fastapi import Header
 from contextlib import asynccontextmanager
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, validator
 from pydantic_settings import BaseSettings
 from passlib.context import CryptContext
 import smtplib
@@ -242,6 +242,37 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Store Types table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS store_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type_code TEXT UNIQUE NOT NULL,
+            type_name TEXT NOT NULL,
+            description TEXT,
+            is_active INTEGER DEFAULT 1,
+            display_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Insert default store types if table is empty
+    cursor.execute("SELECT COUNT(*) FROM store_types")
+    if cursor.fetchone()[0] == 0:
+        default_types = [
+            ('office', 'Office/Warehouse', 'Main office or warehouse location', 1, 1),
+            ('customer_site', 'Customer Site', 'Equipment at customer location', 1, 2),
+            ('engineer', 'Engineer Personal', 'Parts assigned to field engineer', 1, 3),
+            ('fe_consignment', 'FE Consignment', 'Field engineer consignment stock', 1, 4),
+            ('admin', 'Administration', 'Administrative storage', 1, 5),
+            ('warehouse', 'Warehouse', 'General warehouse storage', 1, 6),
+        ]
+        
+        cursor.executemany('''
+            INSERT INTO store_types (type_code, type_name, description, is_active, display_order)
+            VALUES (?, ?, ?, ?, ?)
+        ''', default_types)
     
     conn.commit()
     conn.close()
@@ -585,6 +616,30 @@ class StoreResponse(BaseModel):
     type: str
     location: Optional[str]
     assigned_user_id: Optional[int]
+
+class StoreTypeResponse(BaseModel):
+    id: int
+    type_code: str
+    type_name: str
+    description: Optional[str]
+    is_active: bool
+    display_order: int
+
+class CreateStoreTypeRequest(BaseModel):
+    type_code: str = Field(..., min_length=1, max_length=50, pattern=r'^[a-z_]+$')
+    type_name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    display_order: int = Field(default=0, ge=0)
+    
+    @validator('type_code')
+    def type_code_lowercase(cls, v):
+        return v.lower().strip()
+
+class UpdateStoreTypeRequest(BaseModel):
+    type_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = Field(None, ge=0)
 
 class PartResponse(BaseModel):
     id: int
@@ -1712,10 +1767,7 @@ async def delete_user(target_user_id: int,
     cursor = conn.cursor()
     
     # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+    if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Don't allow deleting yourself
@@ -1749,16 +1801,24 @@ async def create_store(request_data: CreateStoreRequest,
     cursor = conn.cursor()
     
     # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+    if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Validate store type
-    valid_types = ['central', 'customer_site', 'engineer', 'fe_consignment']
-    if request_data.type not in valid_types:
-        raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
+    # Validate store type from database
+    cursor.execute(""" SELECT id, is_active FROM store_types WHERE type_code = ? """, (request_data.type,))
+    
+    store_type = cursor.fetchone()
+    if not store_type:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid store type '{request_data.type}'. Please select from available store types."
+        )
+    
+    if not store_type['is_active']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Store type '{request_data.type}' is inactive. Please select an active store type."
+        )
     
     # Create store
     cursor.execute("""
@@ -1766,10 +1826,16 @@ async def create_store(request_data: CreateStoreRequest,
         VALUES (?, ?, ?, ?)
     """, (request_data.name, request_data.type, request_data.location, request_data.assigned_user_id))
     
+    store_id = cursor.lastrowid
+    
     conn.commit()
     conn.close()
     
-    return {"success": True, "message": f"Store {request_data.name} created successfully"}
+    return {
+        "success": True,
+        "id": store_id,
+        "message": f"Store {request_data.name} created successfully"
+    }
 
 # Bulk import stores from CSV (admin only)
 @app.post("/api/stores/bulk-import")
@@ -1824,10 +1890,7 @@ async def update_store(store_id: int,
     cursor = conn.cursor()
     
     # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+    if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Check if store exists
@@ -1844,10 +1907,26 @@ async def update_store(store_id: int,
         values.append(request_data.name)
     
     if request_data.type is not None:
-        # a store can either be at the office, personal or customer_site
-        valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment']
-        if request_data.type not in valid_types:
-            raise HTTPException(status_code=400, detail=f"Invalid store type. Must be one of: {', '.join(valid_types)}")
+        # validate store type from the database
+        cursor.execute("""
+            SELECT id, is_active 
+            FROM store_types 
+            WHERE type_code = ?
+        """, (request_data.type,))
+        
+        store_type = cursor.fetchone()
+        if not store_type:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid store type '{request_data.type}'. Please select from available store types."
+            )
+        
+        if not store_type['is_active']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Store type '{request_data.type}' is inactive. Please select an active store type."
+            )
+        
         updates.append("type = ?")
         values.append(request_data.type)
     
@@ -1909,6 +1988,234 @@ async def delete_store(store_id: int,
     conn.close()
     
     return {"success": True, "message": f"Store {store['name']} deleted successfully"}
+
+# ============ STORE TYPE MANAGEMENT ============
+
+@app.get("/api/store-types", response_model=List[StoreTypeResponse])
+async def get_store_types(
+    include_inactive: bool = False,
+    user_id: int = Depends(get_current_user),
+    request: Request = None
+):
+    """Get all store types"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if include_inactive:
+        cursor.execute("""
+            SELECT id, type_code, type_name, description, is_active, display_order
+            FROM store_types
+            ORDER BY display_order, type_name
+        """)
+    else:
+        cursor.execute("""
+            SELECT id, type_code, type_name, description, is_active, display_order
+            FROM store_types
+            WHERE is_active = 1
+            ORDER BY display_order, type_name
+        """)
+    
+    types = cursor.fetchall()
+    conn.close()
+    
+    return [dict(t) for t in types]
+
+@app.post("/api/store-types")
+@log_endpoint(action='create_store_type', resource_type='store_type')
+async def create_store_type(
+    request_data: CreateStoreTypeRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None
+):
+    """Create new store type (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if user is admin
+    if not check_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if type_code already exists
+    cursor.execute("SELECT id FROM store_types WHERE type_code = ?", (request_data.type_code,))
+    if cursor.fetchone():
+        raise HTTPException(status_code=400, detail="Store type code already exists")
+    
+    try:
+        cursor.execute("""
+            INSERT INTO store_types (type_code, type_name, description, display_order)
+            VALUES (?, ?, ?, ?)
+        """, (
+            request_data.type_code,
+            request_data.type_name,
+            request_data.description,
+            request_data.display_order
+        ))
+        
+        store_type_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "id": store_type_id,
+            "message": f"Store type '{request_data.type_name}' created successfully",
+            "type_code": request_data.type_code,
+            "type_name": request_data.type_name
+        }
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/store-types/{type_id}")
+@log_endpoint(action='update_store_type', resource_type='store_type')
+async def update_store_type(
+    type_id: int,
+    request_data: UpdateStoreTypeRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None
+):
+    """Update store type (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if not check_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if store type exists
+    cursor.execute("SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,))
+    store_type = cursor.fetchone()
+    if not store_type:
+        raise HTTPException(status_code=404, detail="Store type not found")
+    
+    # Build update query
+    updates = []
+    values = []
+    
+    if request_data.type_name is not None:
+        updates.append("type_name = ?")
+        values.append(request_data.type_name)
+    
+    if request_data.description is not None:
+        updates.append("description = ?")
+        values.append(request_data.description)
+    
+    if request_data.is_active is not None:
+        updates.append("is_active = ?")
+        values.append(1 if request_data.is_active else 0)
+    
+    if request_data.display_order is not None:
+        updates.append("display_order = ?")
+        values.append(request_data.display_order)
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    
+    updates.append("updated_at = CURRENT_TIMESTAMP")
+    values.append(type_id)
+    
+    cursor.execute(
+        f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?",
+        values
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True,
+        "message": "Store type updated successfully",
+        "id": type_id,
+        "type_code": store_type['type_code']
+    }
+
+@app.delete("/api/store-types/{type_id}")
+@log_endpoint(action='delete_store_type', resource_type='store_type')
+async def delete_store_type(
+    type_id: int,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None
+):
+    """Delete/deactivate store type (admin only)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if not check_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if store type exists
+    cursor.execute("SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,))
+    store_type = cursor.fetchone()
+    if not store_type:
+        raise HTTPException(status_code=404, detail="Store type not found")
+    
+    # Check if any stores are using this type
+    cursor.execute("""
+        SELECT COUNT(*) as count 
+        FROM stores 
+        WHERE type = ?
+    """, (store_type['type_code'],))
+    store_count = cursor.fetchone()['count']
+    
+    if store_count > 0:
+        # Soft delete - just deactivate
+        cursor.execute("""
+            UPDATE store_types 
+            SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (type_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": f"Store type '{store_type['type_name']}' deactivated (in use by {store_count} stores)",
+            "deactivated": True,
+            "stores_affected": store_count
+        }
+    else:
+        # Hard delete - no stores using it
+        cursor.execute("DELETE FROM store_types WHERE id = ?", (type_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": f"Store type '{store_type['type_name']}' deleted successfully",
+            "deactivated": False
+        }
+
+@app.get("/api/store-types/validate/{type_code}")
+async def validate_store_type(
+    type_code: str,
+    user_id: int = Depends(get_current_user),
+    request: Request = None
+):
+    """Validate if a store type code exists and is active"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT id, type_name, is_active 
+        FROM store_types 
+        WHERE type_code = ?
+    """, (type_code,))
+    
+    store_type = cursor.fetchone()
+    conn.close()
+    
+    if not store_type:
+        raise HTTPException(status_code=404, detail="Store type not found")
+    
+    return {
+        "valid": True,
+        "is_active": bool(store_type['is_active']),
+        "type_name": store_type['type_name']
+    }
 
 # Parts Management
 @app.post("/api/parts")

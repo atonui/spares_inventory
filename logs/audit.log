@@ -1188,3 +1188,4 @@
 2025-11-12 20:02:16,095 - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
 2025-11-12 20:02:16,108 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
 2025-11-12 20:02:16,120 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-13 08:32:55,166 - USER=Valentine Opiyo(1) ACTION=update_store RESOURCE=store/None STATUS=success
