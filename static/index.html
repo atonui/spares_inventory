@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
     <link rel="stylesheet" href="mystyle.css">
+    <script src="script.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
-    <script src="script.js"></script>
 </head>
 <body>
     <!-- <div x-data="inventoryApp()" x-init="checkAuth()">
@@ -160,9 +160,6 @@
                     </button>
                     <button class="btn" @click="openPanel('showEquipmentPanel'); loadEquipment()">
                         <span>Equipment</span>
-                    </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="showCalibrationSettingsModal = true; loadCalibrationSettings()">
-                        <span>Calibration Settings</span>
                     </button>
                     <button class="btn" @click="openPanel('showMovementsPanel'); loadMovements()">
                         <span>Movement History</span>
@@ -611,6 +608,9 @@
                         <button x-show="currentUser?.role === 'admin'" class="btn btn-success" 
                                 @click="editingEquipment = null; equipmentForm = { equipment_name: '', make: '', model: '', serial_number: '', assigned_user_id: '', calibration_cert_number: '', calibration_authority: '', calibration_date: '', next_calibration_date: '', notes: '' }; showEquipmentModal = true">
                             Add Equipment
+                        </button>
+                        <button x-show="currentUser?.role === 'admin'" class="btn" @click="showCalibrationSettingsModal = true; loadCalibrationSettings()">
+                            <span>Calibration Settings</span>
                         </button>
                         <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
                     </div>

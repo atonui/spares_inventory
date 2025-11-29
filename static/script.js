@@ -591,15 +591,15 @@ function inventoryApp() {
         },
 
         // UI helpers
-        getStoreClass(storeType, storeOwner) {
-            if (storeOwner === this.currentUser.id) return 'store-mine';
-            return 'store-' + storeType;
-        },
+        // getStoreClass(storeType, storeOwner) {
+        //     if (storeOwner === this.currentUser.id) return 'store-mine';
+        //     return 'store-' + storeType;
+        // },
 
-        canEdit(storeOwner, storeType) {
-            if (this.currentUser.role === 'admin') return true;
-            return storeOwner === this.currentUser.id || storeType === 'central';
-        },
+        // canEdit(storeOwner, storeType) {
+        //     if (this.currentUser.role === 'admin') return true;
+        //     return storeOwner === this.currentUser.id || storeType === 'central';
+        // },
 
         get editableStores() {
             if (!this.currentUser) return [];
@@ -2035,6 +2035,7 @@ exportComprehensiveReport() {
             this.showStoreInventoryPanel = false;
             this.showLogsPanel = false;
             this.showEquipmentPanel = false;
+            this.showStoreTypesPanel = false;
             // Don't close inventory panel
         },
 
@@ -2050,7 +2051,7 @@ exportComprehensiveReport() {
             this.showStoreInventoryPanel = false;
             this.showLogsPanel = false;
             this.showEquipmentPanel = false;
-            this.showStoreTypesPanlel = false;
+            this.showStoreTypesPanel = false;
             this.showInventoryPanel = true;
         },
 
@@ -2070,6 +2071,7 @@ exportComprehensiveReport() {
             this.showTransferEquipmentModal = false;
             this.showEquipmentHistoryModal = false;
             this.showCalibrationSettingsModal = false;
+            this.showStoreTypeModal = false;
 
             // Reset filters for inventory panel
             if (panelName === 'showInventoryPanel') {
@@ -2092,16 +2094,28 @@ exportComprehensiveReport() {
             this.successMessage = '';
             
             try {
+                // ensure CSRF token is present
+                if (!this.csrfToken) {
+                    await this.getCsrfToken();
+                }
+
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                        // apiCall handles everything: CSRF, cookies, errors
+                // apiCall handles everything: CSRF, cookies, errors
                 const result = await this.apiCall('/parts/bulk-import', {
                     method: 'POST',
                     body: formData  // apiCall detects FormData automatically
                 });
                 
                 this.successMessage = `Import complete! Added: ${result.added}, Skipped: ${result.skipped}`;
+
+                // Show skip reasons if any
+                if (result.details && result.details.length > 0) {
+                    console.log('Skipped parts details:', result.details);
+                    this.error = 'Some parts were skipped. Check console for details.';
+                    setTimeout(() => this.error = '', 8000);
+                }
                 
                 await this.loadParts();
                 event.target.value = '';
@@ -2110,6 +2124,7 @@ exportComprehensiveReport() {
                 
             } catch (error) {
                 this.error = 'Failed to import parts: ' + error.message;
+                console.error('Import error: ',error);
             } finally {
                 this.loading = false;
             }

@@ -22,12 +22,14 @@ import os
 import csv
 import io
 import secrets
+
 # logging imports
 import logging
 from logging.handlers import RotatingFileHandler
 import json
 from functools import wraps
 from typing import Optional
+
 # rate limiting imports
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -39,38 +41,43 @@ from itsdangerous import URLSafeTimedSerializer
 # setup password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-#setup logging files
-if not os.path.exists('logs'):
-    os.makedirs('logs')
+# setup logging files
+if not os.path.exists("logs"):
+    os.makedirs("logs")
 
 # Configure main application logger
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         RotatingFileHandler(
-            'logs/app.log',
+            "logs/app.log",
             maxBytes=10485760,  # 10MB
-            backupCount=10
+            backupCount=10,
         ),
-        logging.StreamHandler()  # Also log to console
-    ]
+        logging.StreamHandler(),  # Also log to console
+    ],
 )
 
-logger = logging.getLogger('inventory_app')
+logger = logging.getLogger("inventory_app")
 
 # Create separate loggers for different purposes
-audit_logger = logging.getLogger('audit')
-audit_handler = RotatingFileHandler('logs/audit.log', maxBytes=10485760, backupCount=10)
-audit_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+audit_logger = logging.getLogger("audit")
+audit_handler = RotatingFileHandler("logs/audit.log", maxBytes=10485760, backupCount=10)
+audit_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
 audit_logger.addHandler(audit_handler)
 audit_logger.setLevel(logging.INFO)
 
-error_logger = logging.getLogger('errors')
-error_handler = RotatingFileHandler('logs/errors.log', maxBytes=10485760, backupCount=10)
-error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+error_logger = logging.getLogger("errors")
+error_handler = RotatingFileHandler(
+    "logs/errors.log", maxBytes=10485760, backupCount=10
+)
+error_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+)
 error_logger.addHandler(error_handler)
 error_logger.setLevel(logging.ERROR)
+
 
 class Settings(BaseSettings):
     DATABASE_URL: str
@@ -84,6 +91,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()
 
@@ -100,14 +108,15 @@ CSRF_SECRET = settings.CSRF_SECRET
 # CSRF_SECRET = os.getenv("CSRF_SECRET", SECRET_KEY)
 csrf_serializer = URLSafeTimedSerializer(CSRF_SECRET)
 
+
 # Database setup
 def init_db():
     """Initialize the database with tables"""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    
+
     # Users table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
@@ -118,10 +127,10 @@ def init_db():
             session_token TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-    
+    """)
+
     # Stores table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS stores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -131,10 +140,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (assigned_user_id) REFERENCES users (id)
         )
-    ''')
-    
+    """)
+
     # Work Orders table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS work_orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             work_order_number TEXT UNIQUE NOT NULL,
@@ -145,10 +154,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (assigned_engineer_id) REFERENCES users (id)
         )
-    ''')
-    
+    """)
+
     # Parts table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS parts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             part_number TEXT UNIQUE NOT NULL,
@@ -157,10 +166,10 @@ def init_db():
             unit_cost REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-    
+    """)
+
     # Inventory table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             store_id INTEGER NOT NULL,
@@ -174,10 +183,10 @@ def init_db():
             FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
             UNIQUE(store_id, part_id, work_order_id)
         )
-    ''')
-    
+    """)
+
     # Movements table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS movements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             from_store_id INTEGER,
@@ -194,10 +203,10 @@ def init_db():
             FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
             FOREIGN KEY (created_by) REFERENCES users (id)
         )
-    ''')
+    """)
 
     # Activity Logs table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS activity_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -213,26 +222,26 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
-    ''')
-    
+    """)
+
     # Create indexes for better query performance
-    cursor.execute('''
+    cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_activity_user 
         ON activity_logs(user_id)
-    ''')
-    
-    cursor.execute('''
+    """)
+
+    cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_activity_action 
         ON activity_logs(action)
-    ''')
-    
-    cursor.execute('''
+    """)
+
+    cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_activity_created 
         ON activity_logs(created_at)
-    ''')
-    
+    """)
+
     # System Logs table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS system_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             level TEXT NOT NULL,
@@ -241,10 +250,10 @@ def init_db():
             details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-    
+    """)
+
     # Store Types table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS store_types (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type_code TEXT UNIQUE NOT NULL,
@@ -255,32 +264,43 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-    
+    """)
+
     # Insert default store types if table is empty
     cursor.execute("SELECT COUNT(*) FROM store_types")
     if cursor.fetchone()[0] == 0:
         default_types = [
-            ('office', 'Office/Warehouse', 'Main office or warehouse location', 1, 1),
-            ('customer_site', 'Customer Site', 'Equipment at customer location', 1, 2),
-            ('engineer', 'Engineer Personal', 'Parts assigned to field engineer', 1, 3),
-            ('fe_consignment', 'FE Consignment', 'Field engineer consignment stock', 1, 4),
-            ('admin', 'Administration', 'Administrative storage', 1, 5),
-            ('warehouse', 'Warehouse', 'General warehouse storage', 1, 6),
+            ("office", "Office/Warehouse", "Main office or warehouse location", 1, 1),
+            ("customer_site", "Customer Site", "Equipment at customer location", 1, 2),
+            ("engineer", "Engineer Personal", "Parts assigned to field engineer", 1, 3),
+            (
+                "fe_consignment",
+                "FE Consignment",
+                "Field engineer consignment stock",
+                1,
+                4,
+            ),
+            ("admin", "Administration", "Administrative storage", 1, 5),
+            ("warehouse", "Warehouse", "General warehouse storage", 1, 6),
         ]
-        
-        cursor.executemany('''
+
+        cursor.executemany(
+            """
             INSERT INTO store_types (type_code, type_name, description, is_active, display_order)
             VALUES (?, ?, ?, ?, ?)
-        ''', default_types)
-    
+        """,
+            default_types,
+        )
+
     conn.commit()
     conn.close()
+
 
 # ============ CSRF UTILITIES ============
 def generate_csrf_token() -> str:
     """Generate CSRF token"""
     return csrf_serializer.dumps(secrets.token_urlsafe(32))
+
 
 def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
     """Verify CSRF token (valid for 1 hour by default)"""
@@ -289,15 +309,18 @@ def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
         return True
     except:
         return False
-    
+
+
 # ============ AUTHENTICATION UTILITIES ============
 def hash_password(password: str) -> str:
     """Hash password for storage"""
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against bcrypt hash"""
     return pwd_context.verify(plain_password, hashed_password)
+
 
 def create_access_token(data: dict):
     """Create JWT token"""
@@ -306,11 +329,13 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
 
+
 def get_db_connection():
     """Get database connection"""
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def check_admin(user_id: int) -> bool:
     """Check if the user is an admin"""
@@ -319,19 +344,20 @@ def check_admin(user_id: int) -> bool:
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     conn.close()
-    if user['role'] == 'admin':
+    if user["role"] == "admin":
         return True
     return False
+
 
 def send_reset_email(email: str, token: str):
     """Send password reset email"""
     reset_link = f"{FRONTEND_URL}/reset_password.html?token={token}"
-    
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = "Password Reset Request - Inventory System"
-    msg['From'] = SMTP_USERNAME
-    msg['To'] = email
-    
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Password Reset Request - Inventory System"
+    msg["From"] = SMTP_USERNAME
+    msg["To"] = email
+
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -362,10 +388,10 @@ def send_reset_email(email: str, token: str):
       </body>
     </html>
     """
-    
-    part = MIMEText(html, 'html')
+
+    part = MIMEText(html, "html")
     msg.attach(part)
-    
+
     try:
         logger.info(f"Attempting to send password reset email to {email}")
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
@@ -375,7 +401,10 @@ def send_reset_email(email: str, token: str):
         logger.info(f"Password reset email sent successfully to {email}")
     except smtplib.SMTPAuthenticationError as e:
         logger.error(f"SMTP Authentication failed: {e}")
-        raise HTTPException(status_code=500, detail="Email configuration error. Please contact administrator.")
+        raise HTTPException(
+            status_code=500,
+            detail="Email configuration error. Please contact administrator.",
+        )
     except smtplib.SMTPException as e:
         logger.error(f"SMTP error sending email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send reset email.")
@@ -383,135 +412,171 @@ def send_reset_email(email: str, token: str):
         logger.error(f"Unexpected error sending email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send reset email.")
 
+
 # ============ LOGGING UTILITIES ============
 
-def log_activity(user_id: int, username: str, action: str, resource_type: str = None, 
-                 resource_id: int = None, details: dict = None, status: str = 'success',
-                 error_message: str = None, ip_address: str = None, user_agent: str = None):
+
+def log_activity(
+    user_id: int,
+    username: str,
+    action: str,
+    resource_type: str = None,
+    resource_id: int = None,
+    details: dict = None,
+    status: str = "success",
+    error_message: str = None,
+    ip_address: str = None,
+    user_agent: str = None,
+):
     """Log user activity to database and audit log file"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         details_json = json.dumps(details) if details else None
-        
-        cursor.execute("""
+
+        cursor.execute(
+            """
             INSERT INTO activity_logs 
             (user_id, username, action, resource_type, resource_id, details, 
              ip_address, user_agent, status, error_message)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, username, action, resource_type, resource_id, details_json,
-              ip_address, user_agent, status, error_message))
-        
+        """,
+            (
+                user_id,
+                username,
+                action,
+                resource_type,
+                resource_id,
+                details_json,
+                ip_address,
+                user_agent,
+                status,
+                error_message,
+            ),
+        )
+
         conn.commit()
         conn.close()
-        
+
         # Also log to audit file
         audit_logger.info(
             f"USER={username}({user_id}) ACTION={action} "
             f"RESOURCE={resource_type}/{resource_id} STATUS={status}"
         )
-        
+
     except Exception as e:
         error_logger.error(f"Failed to log activity: {str(e)}")
+
 
 def log_system_event(level: str, component: str, message: str, details: dict = None):
     """Log system events to database"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         details_json = json.dumps(details) if details else None
-        
-        cursor.execute("""
+
+        cursor.execute(
+            """
             INSERT INTO system_logs (level, component, message, details)
             VALUES (?, ?, ?, ?)
-        """, (level, component, message, details_json))
-        
+        """,
+            (level, component, message, details_json),
+        )
+
         conn.commit()
         conn.close()
-        
+
         # Also log to application log
         log_func = getattr(logger, level.lower(), logger.info)
         log_func(f"[{component}] {message}")
-        
+
     except Exception as e:
         error_logger.error(f"Failed to log system event: {str(e)}")
 
+
 # ============ LOGGING DECORATOR ============
+
 
 def log_endpoint(action: str, resource_type: str = None):
     """Decorator to automatically log API endpoint calls"""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Extract parameters
-            user_id = kwargs.get('user_id')
+            user_id = kwargs.get("user_id")
             request = None
-            
+
             # Find Request object in kwargs or args
             for key, value in kwargs.items():
                 if isinstance(value, Request):
                     request = value
                     break
-            
+
             # Get IP and user agent if request is available
             ip_address = None
             user_agent = None
             if request:
-                ip_address = request.client.host if hasattr(request, 'client') else None
-                user_agent = request.headers.get('user-agent', '')[:200]
-            
+                ip_address = request.client.host if hasattr(request, "client") else None
+                user_agent = request.headers.get("user-agent", "")[:200]
+
             username = "Unknown"
             resource_id = None
             details = {}
-            status = 'success'
+            status = "success"
             error_message = None
-            
+
             try:
                 # Get username if user_id is available
                 if user_id:
                     try:
                         conn = get_db_connection()
                         cursor = conn.cursor()
-                        cursor.execute("SELECT name FROM users WHERE id = ?", (user_id,))
+                        cursor.execute(
+                            "SELECT name FROM users WHERE id = ?", (user_id,)
+                        )
                         user = cursor.fetchone()
                         conn.close()
                         if user:
-                            username = user['name']
+                            username = user["name"]
                     except Exception as e:
                         logger.error(f"Failed to get username: {e}")
-                
+
                 # Execute the endpoint function
                 result = await func(*args, **kwargs)
-                
+
                 # Extract resource_id from result if it's a dict
                 if isinstance(result, dict):
-                    resource_id = result.get('id')
+                    resource_id = result.get("id")
                     # Create a safe copy of details without sensitive data
-                    details = {k: v for k, v in result.items() 
-                              if k not in ['password_hash', 'session_token', 'reset_token']}
-                
+                    details = {
+                        k: v
+                        for k, v in result.items()
+                        if k not in ["password_hash", "session_token", "reset_token"]
+                    }
+
                 return result
-                
+
             except HTTPException as e:
-                status = 'error'
+                status = "error"
                 error_message = e.detail
                 error_logger.error(
                     f"HTTPException in {func.__name__}: {e.detail}",
-                    extra={'user_id': user_id, 'status_code': e.status_code}
+                    extra={"user_id": user_id, "status_code": e.status_code},
                 )
                 raise
-                
+
             except Exception as e:
-                status = 'error'
+                status = "error"
                 error_message = str(e)
                 error_logger.exception(
                     f"Exception in {func.__name__}: {str(e)}",
-                    extra={'user_id': user_id}
+                    extra={"user_id": user_id},
                 )
                 raise
-                
+
             finally:
                 # Log the activity
                 if user_id:
@@ -526,14 +591,16 @@ def log_endpoint(action: str, resource_type: str = None):
                             status=status,
                             error_message=error_message,
                             ip_address=ip_address,
-                            user_agent=user_agent
+                            user_agent=user_agent,
                         )
                     except Exception as log_error:
                         # Don't fail the request if logging fails
                         error_logger.error(f"Failed to log activity: {log_error}")
-        
+
         return wrapper
+
     return decorator
+
 
 # Lifespan event handler
 @asynccontextmanager
@@ -541,7 +608,7 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting up...")
     logger.info("Application starting up")
-    log_system_event('INFO', 'startup', 'Application initialized')
+    log_system_event("INFO", "startup", "Application initialized")
 
     init_db()
     print("✅ Database initialized")
@@ -551,14 +618,11 @@ async def lifespan(app: FastAPI):
     # Shutdown (if needed)
     print("⏹️ Shutting down...")
     logger.info("Application shutting down")
-    log_system_event('INFO', 'shutdown', 'Application shut down gracefully')
+    log_system_event("INFO", "shutdown", "Application shut down gracefully")
+
 
 # Initialize FastAPI app with lifespan
-app = FastAPI(
-    title="Inventory Management API", 
-    version="1.0.0",
-    lifespan=lifespan
-)
+app = FastAPI(title="Inventory Management API", version="1.0.0", lifespan=lifespan)
 
 # rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -582,24 +646,30 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Pydantic models
 
-#----User Mangaement Models----
+
+# ----User Mangaement Models----
 class UserProfileUpdate(BaseModel):
     email: Optional[EmailStr] = None
+
 
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
 
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+
 class UserLogin(BaseModel):
     email: str
     password: str
+
 
 class UserResponse(BaseModel):
     id: int
@@ -608,7 +678,9 @@ class UserResponse(BaseModel):
     role: str
     territory: Optional[str]
 
-#-------------------------------
+
+# -------------------------------
+
 
 class StoreResponse(BaseModel):
     id: int
@@ -616,6 +688,7 @@ class StoreResponse(BaseModel):
     type: str
     location: Optional[str]
     assigned_user_id: Optional[int]
+
 
 class StoreTypeResponse(BaseModel):
     id: int
@@ -625,15 +698,17 @@ class StoreTypeResponse(BaseModel):
     is_active: bool
     display_order: int
 
+
 class CreateStoreTypeRequest(BaseModel):
-    type_code: str = Field(..., min_length=1, max_length=50, pattern=r'^[a-z_]+$')
+    type_code: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z_]+$")
     type_name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     display_order: int = Field(default=0, ge=0)
-    
-    @validator('type_code')
+
+    @validator("type_code")
     def type_code_lowercase(cls, v):
         return v.lower().strip()
+
 
 class UpdateStoreTypeRequest(BaseModel):
     type_name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -641,12 +716,14 @@ class UpdateStoreTypeRequest(BaseModel):
     is_active: Optional[bool] = None
     display_order: Optional[int] = Field(None, ge=0)
 
+
 class PartResponse(BaseModel):
     id: int
     part_number: str
     description: str
     category: str
     unit_cost: float
+
 
 class InventoryResponse(BaseModel):
     id: int
@@ -659,11 +736,13 @@ class InventoryResponse(BaseModel):
     min_threshold: int
     work_order: Optional[str]
 
+
 class AddStockRequest(BaseModel):
     part_id: int
     store_id: int
     quantity: int
     work_order_number: Optional[str] = None
+
 
 class CreateStoreRequest(BaseModel):
     name: str
@@ -671,11 +750,13 @@ class CreateStoreRequest(BaseModel):
     location: Optional[str] = None
     assigned_user_id: Optional[int] = None
 
+
 class UpdateStoreRequest(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     location: Optional[str] = None
     assigned_user_id: Optional[int] = None
+
 
 class CreatePartRequest(BaseModel):
     part_number: str
@@ -683,11 +764,13 @@ class CreatePartRequest(BaseModel):
     category: str
     unit_cost: float
 
+
 class UpdatePartRequest(BaseModel):
     part_number: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
     unit_cost: Optional[float] = None
+
 
 class MovementResponse(BaseModel):
     id: int
@@ -700,14 +783,17 @@ class MovementResponse(BaseModel):
     created_by_name: str
     created_at: str
 
+
 class UpdateStockRequest(BaseModel):
     inventory_id: int
     new_quantity: int
+
 
 class TransferStockRequest(BaseModel):
     inventory_id: int
     to_store_id: int
     quantity: int
+
 
 class CreateUserRequest(BaseModel):
     email: str
@@ -716,11 +802,13 @@ class CreateUserRequest(BaseModel):
     role: str
     territory: Optional[str] = None
 
+
 class UpdateUserRequest(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     territory: Optional[str] = None
     password: Optional[str] = None
+
 
 class WorkOrderResponse(BaseModel):
     id: int
@@ -731,11 +819,13 @@ class WorkOrderResponse(BaseModel):
     assigned_engineer_id: Optional[int]
     engineer_name: Optional[str]
 
+
 class StatsResponse(BaseModel):
     total_parts: int
     total_stores: int
     low_stock: int
     my_parts: int
+
 
 class ActivityLogResponse(BaseModel):
     id: int
@@ -749,6 +839,7 @@ class ActivityLogResponse(BaseModel):
     status: str
     error_message: Optional[str]
     created_at: str
+
 
 # calibration models
 class EquipmentResponse(BaseModel):
@@ -767,6 +858,7 @@ class EquipmentResponse(BaseModel):
     notes: Optional[str]
     days_until_calibration: Optional[int]
 
+
 class CreateEquipmentRequest(BaseModel):
     equipment_name: str
     make: str
@@ -778,6 +870,7 @@ class CreateEquipmentRequest(BaseModel):
     calibration_date: Optional[str] = None
     next_calibration_date: Optional[str] = None
     notes: Optional[str] = None
+
 
 class UpdateEquipmentRequest(BaseModel):
     equipment_name: Optional[str] = None
@@ -792,9 +885,11 @@ class UpdateEquipmentRequest(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
 
+
 class TransferEquipmentRequest(BaseModel):
     to_user_id: Optional[int] = None
     notes: Optional[str] = None
+
 
 class UpdateCalibrationRequest(BaseModel):
     calibration_cert_number: str
@@ -803,211 +898,217 @@ class UpdateCalibrationRequest(BaseModel):
     next_calibration_date: str
     notes: Optional[str] = None
 
+
 class EquipmentStatsResponse(BaseModel):
     total_equipment: int
     my_equipment: int
     due_soon: int
     overdue: int
 
+
 # Authentication dependency
 async def get_current_user(session_token: str = Cookie(None)):
     """Get current user from HTTPOnly cookie"""
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM users WHERE session_token = ?", (session_token,))
     user = cursor.fetchone()
     conn.close()
-    
+
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    
-    return user['id']
+
+    return user["id"]
+
 
 # csrf middleware
 async def verify_csrf(x_csrf_token: str = Header(None)):
     """Verify CSRF token for state-changing operations"""
     if not x_csrf_token:
         raise HTTPException(status_code=403, detail="CSRF token missing")
-    
+
     if not verify_csrf_token(x_csrf_token):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
-    
+
     return True
 
+
 # Routes
-#Csrf token endpoint route
+# Csrf token endpoint route
 @app.get("/api/csrf-token")
 async def get_csrf_token():
     """Get CSRF token for forms"""
     token = generate_csrf_token()
     return {"csrf_token": token}
 
-#-----------Profile Management Routes-----------
+
+# -----------Profile Management Routes-----------
 @app.get("/api/profile")
-async def get_profile(user_id: int = Depends(get_current_user), request: Request = None):
+async def get_profile(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
     """Get current user's profile"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute(
         "SELECT id, email, name, role, territory, created_at FROM users WHERE id = ?",
-        (user_id,)
+        (user_id,),
     )
     user = cursor.fetchone()
     conn.close()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return dict(user)
+
 
 @app.put("/api/profile")
 async def update_profile(
     profile_update: UserProfileUpdate,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Update user profile (email)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user exists
     cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     if profile_update.email:
         # Check if email already exists
         cursor.execute(
             "SELECT id FROM users WHERE email = ? AND id != ?",
-            (profile_update.email, user_id)
+            (profile_update.email, user_id),
         )
         if cursor.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="Email already in use")
-        
+
         cursor.execute(
-            "UPDATE users SET email = ? WHERE id = ?",
-            (profile_update.email, user_id)
+            "UPDATE users SET email = ? WHERE id = ?", (profile_update.email, user_id)
         )
-    
+
     conn.commit()
-    
+
     # Get updated user info
     cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     conn.close()
-    
-    return {"message": "Profile updated successfully", "email": user['email']}
+
+    return {"message": "Profile updated successfully", "email": user["email"]}
+
 
 @app.post("/api/profile/change-password")
 async def change_password(
     password_data: PasswordChange,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Change user password"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get current user
-    cursor.execute(
-        "SELECT password_hash FROM users WHERE id = ?",
-        (user_id,)
-    )
+    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
+
     if not user:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Verify current password
-    if user['password_hash'] != hash_password(password_data.current_password):
+    if user["password_hash"] != hash_password(password_data.current_password):
         conn.close()
         raise HTTPException(status_code=400, detail="Current password is incorrect")
-    
+
     # Validate new password
     if len(password_data.new_password) < 8:
         conn.close()
         raise HTTPException(
-            status_code=400, 
-            detail="Password must be at least 8 characters long"
+            status_code=400, detail="Password must be at least 8 characters long"
         )
-    
+
     # Update password and invalidate session token
     cursor.execute(
         "UPDATE users SET password_hash = ?, session_token = NULL WHERE id = ?",
-        (hash_password(password_data.new_password), user_id)
+        (hash_password(password_data.new_password), user_id),
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"message": "Password changed successfully. Please login again."}
+
 
 @app.post("/api/forgot-password")
 @limiter.limit("3/hour")  # 3 password reset requests per hour
-async def forgot_password(request_data: ForgotPasswordRequest, csrf_valid: bool = Depends(verify_csrf), request: Request = None):
+async def forgot_password(
+    request_data: ForgotPasswordRequest,
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Initiate password reset process"""
-    ip_address = request.client.host if hasattr(request, 'client') else None
-    user_agent = request.headers.get('user-agent', '')[:200]
-    
+    ip_address = request.client.host if hasattr(request, "client") else None
+    user_agent = request.headers.get("user-agent", "")[:200]
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Find user by email
-    cursor.execute(
-        "SELECT id, name FROM users WHERE email = ?",
-        (request_data.email,)
-    )
+    cursor.execute("SELECT id, name FROM users WHERE email = ?", (request_data.email,))
     user = cursor.fetchone()
-    
+
     # Log the attempt (even if email doesn't exist, for security monitoring)
     if user:
-        user_id = user['id']
-        user_name = user['name']
+        user_id = user["id"]
+        user_name = user["name"]
     else:
         user_id = 0
         user_name = request_data.email
-    
+
     log_activity(
         user_id=user_id,
         username=user_name,
-        action='password_reset_request',
-        details={'email': request_data.email},
-        status='success',
+        action="password_reset_request",
+        details={"email": request_data.email},
+        status="success",
         ip_address=ip_address,
-        user_agent=user_agent
+        user_agent=user_agent,
     )
-    
+
     # Always return success to prevent email enumeration
     if not user:
         conn.close()
         return {"message": "If the email exists, a reset link has been sent"}
-    
-    user_id = user['id']
-    
+
+    user_id = user["id"]
+
     # Generate reset token
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(hours=1)
-    
+
     # Store token in users table
     cursor.execute(
         """UPDATE users 
            SET reset_token = ?, reset_token_expires = ? 
            WHERE id = ?""",
-        (token, expires_at.isoformat(), user_id)
+        (token, expires_at.isoformat(), user_id),
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     # Send email
     try:
         send_reset_email(request_data.email, token)
@@ -1015,77 +1116,81 @@ async def forgot_password(request_data: ForgotPasswordRequest, csrf_valid: bool 
     except Exception as e:
         logger.error(f"Failed to send password reset email: {e}")
         # Don't reveal email send failure to prevent information disclosure
-    
+
     return {"message": "If the email exists, a reset link has been sent"}
+
 
 @app.post("/api/reset-password")
 @limiter.limit("5/hour")  # 5 password reset attempts per hour
-async def reset_password(request_data: ResetPasswordRequest, csrf_valid: bool = Depends(verify_csrf), request: Request = None):
+async def reset_password(
+    request_data: ResetPasswordRequest,
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Reset password using token"""
-    ip_address = request.client.host if hasattr(request, 'client') else None
-    user_agent = request.headers.get('user-agent', '')[:200]
-    
+    ip_address = request.client.host if hasattr(request, "client") else None
+    user_agent = request.headers.get("user-agent", "")[:200]
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Validate token
     cursor.execute(
         """SELECT id, name, email, reset_token_expires 
            FROM users 
            WHERE reset_token = ?""",
-        (request_data.token,)
+        (request_data.token,),
     )
     user = cursor.fetchone()
-    
+
     if not user:
         # Log failed attempt
         log_activity(
             user_id=0,
-            username='unknown',
-            action='password_reset_failed',
-            details={'reason': 'invalid_token'},
-            status='error',
-            error_message='Invalid or expired token',
+            username="unknown",
+            action="password_reset_failed",
+            details={"reason": "invalid_token"},
+            status="error",
+            error_message="Invalid or expired token",
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    
+
     # Check if token expired
-    expires_at = datetime.fromisoformat(user['reset_token_expires'])
+    expires_at = datetime.fromisoformat(user["reset_token_expires"])
     if datetime.utcnow() > expires_at:
         log_activity(
-            user_id=user['id'],
-            username=user['name'],
-            action='password_reset_failed',
-            details={'reason': 'token_expired', 'email': user['email']},
-            status='error',
-            error_message='Token has expired',
+            user_id=user["id"],
+            username=user["name"],
+            action="password_reset_failed",
+            details={"reason": "token_expired", "email": user["email"]},
+            status="error",
+            error_message="Token has expired",
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
         conn.close()
         raise HTTPException(status_code=400, detail="Token has expired")
-    
+
     # Validate new password
     if len(request_data.new_password) < 8:
         log_activity(
-            user_id=user['id'],
-            username=user['name'],
-            action='password_reset_failed',
-            details={'reason': 'weak_password', 'email': user['email']},
-            status='error',
-            error_message='Password too short',
+            user_id=user["id"],
+            username=user["name"],
+            action="password_reset_failed",
+            details={"reason": "weak_password", "email": user["email"]},
+            status="error",
+            error_message="Password too short",
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
         conn.close()
         raise HTTPException(
-            status_code=400, 
-            detail="Password must be at least 8 characters long"
+            status_code=400, detail="Password must be at least 8 characters long"
         )
-    
+
     # Update password and clear token
     cursor.execute(
         """UPDATE users 
@@ -1094,145 +1199,156 @@ async def reset_password(request_data: ResetPasswordRequest, csrf_valid: bool = 
                reset_token_expires = NULL,
                session_token = NULL
            WHERE id = ?""",
-        (hash_password(request_data.new_password), user['id'])
+        (hash_password(request_data.new_password), user["id"]),
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     # Log successful password reset
     log_activity(
-        user_id=user['id'],
-        username=user['name'],
-        action='password_reset_success',
-        details={'email': user['email']},
-        status='success',
+        user_id=user["id"],
+        username=user["name"],
+        action="password_reset_success",
+        details={"email": user["email"]},
+        status="success",
         ip_address=ip_address,
-        user_agent=user_agent
+        user_agent=user_agent,
     )
-    
-    logger.info(f"Password successfully reset for user {user['name']} ({user['email']})")
-    
+
+    logger.info(
+        f"Password successfully reset for user {user['name']} ({user['email']})"
+    )
+
     return {"message": "Password reset successfully"}
+
 
 @app.get("/api/verify-reset-token/{token}")
 async def verify_reset_token(token: str, request: Request = None):
     """Verify if a reset token is valid"""
-    ip_address = request.client.host if hasattr(request, 'client') else None
-    
+    ip_address = request.client.host if hasattr(request, "client") else None
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute(
         """SELECT id, name, reset_token_expires 
            FROM users 
            WHERE reset_token = ?""",
-        (token,)
+        (token,),
     )
     user = cursor.fetchone()
     conn.close()
-    
+
     if not user:
         log_activity(
             user_id=0,
-            username='unknown',
-            action='verify_reset_token_failed',
-            details={'reason': 'invalid_token'},
-            status='error',
-            ip_address=ip_address
+            username="unknown",
+            action="verify_reset_token_failed",
+            details={"reason": "invalid_token"},
+            status="error",
+            ip_address=ip_address,
         )
         raise HTTPException(status_code=400, detail="Invalid token")
-    
-    expires_at = datetime.fromisoformat(user['reset_token_expires'])
+
+    expires_at = datetime.fromisoformat(user["reset_token_expires"])
     if datetime.utcnow() > expires_at:
         log_activity(
-            user_id=user['id'],
-            username=user['name'],
-            action='verify_reset_token_failed',
-            details={'reason': 'token_expired'},
-            status='error',
-            ip_address=ip_address
+            user_id=user["id"],
+            username=user["name"],
+            action="verify_reset_token_failed",
+            details={"reason": "token_expired"},
+            status="error",
+            ip_address=ip_address,
         )
         raise HTTPException(status_code=400, detail="Token has expired")
-    
+
     return {"valid": True}
-#-----------------------------------------------
+
+
+# -----------------------------------------------
+
 
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")  # 5 attempts per minute
 async def login(user_login: UserLogin, request: Request):
     """User login"""
-    ip_address = request.client.host if hasattr(request, 'client') else None
-    user_agent = request.headers.get('user-agent', '')[:200]  # Truncate long user agents
+    ip_address = request.client.host if hasattr(request, "client") else None
+    user_agent = request.headers.get("user-agent", "")[
+        :200
+    ]  # Truncate long user agents
 
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT id, email, name, role, territory, password_hash FROM users WHERE email = ?",
-        (user_login.email,)
+        (user_login.email,),
     )
     user = cursor.fetchone()
 
-    if not user or not verify_password(user_login.password, user['password_hash']):
+    if not user or not verify_password(user_login.password, user["password_hash"]):
         # Log failed login attempt
         log_activity(
             user_id=0,
             username=user_login.email,
-            action='login_failed',
-            status='error',
-            error_message='Invalid credentials',
+            action="login_failed",
+            status="error",
+            error_message="Invalid credentials",
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
         conn.close()
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     # Generate a new session token
     session_token = secrets.token_urlsafe(32)
-    cursor.execute("UPDATE users SET session_token = ? WHERE id = ?", (session_token, user['id']))
+    cursor.execute(
+        "UPDATE users SET session_token = ? WHERE id = ?", (session_token, user["id"])
+    )
     conn.commit()
     conn.close()
 
     # Log successful login
     log_activity(
-        user_id=user['id'],
-        username=user['name'],
-        action='login',
-        details={'role': user['role'], 'territory': user['territory']},
+        user_id=user["id"],
+        username=user["name"],
+        action="login",
+        details={"role": user["role"], "territory": user["territory"]},
         ip_address=ip_address,
-        user_agent=user_agent
+        user_agent=user_agent,
     )
-    
+
     logger.info(f"User {user['name']} ({user['id']}) logged in from {ip_address}")
 
     # Create response with HTTPOnly cookie
     response_data = {
         "success": True,
         "user": {
-            "id": user['id'],
-            "email": user['email'],
-            "name": user['name'],
-            "role": user['role'],
-            "territory": user['territory']
-        }
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "territory": user["territory"],
+        },
     }
-    
+
     response = JSONResponse(content=response_data)
-    
+
     # Set HTTPOnly cookie (secure in production with HTTPS)
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,  # Prevents JavaScript access (XSS protection)
-        secure=False,    # Set to True in production with HTTPS
+        secure=False,  # Set to True in production with HTTPS
         samesite="lax",  # CSRF protection
-        max_age=86400    # 24 hours
+        max_age=86400,  # 24 hours
     )
-    
+
     return response
 
+
 @app.post("/api/auth/logout")
-@log_endpoint(action='logout')
+@log_endpoint(action="logout")
 async def logout(user_id: int = Depends(get_current_user), request: Request = None):
     """Logout and clear session cookie"""
     conn = get_db_connection()
@@ -1240,72 +1356,81 @@ async def logout(user_id: int = Depends(get_current_user), request: Request = No
     cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
-    
+
     response = JSONResponse(content={"success": True})
     # Clear the cookie
     response.delete_cookie(key="session_token")
-    
+
     return response
 
+
 @app.get("/api/me", response_model=UserResponse)
-async def get_current_user_info(user_id: int = Depends(get_current_user), request: Request = None):
+async def get_current_user_info(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
     """Get current user information"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute(
-        "SELECT id, email, name, role, territory FROM users WHERE id = ?",
-        (user_id,)
+        "SELECT id, email, name, role, territory FROM users WHERE id = ?", (user_id,)
     )
     user = cursor.fetchone()
     conn.close()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return dict(user)
+
 
 @app.get("/api/stores", response_model=List[StoreResponse])
 async def get_stores(user_id: int = Depends(get_current_user), request: Request = None):
     """Get all stores (engineers see all, others see assigned)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get user role
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] in ['admin', 'manager']:
+
+    if user["role"] in ["admin", "manager"]:
         cursor.execute("SELECT id, name, type, location, assigned_user_id FROM stores")
     else:
         # Engineers see all stores for visibility
         cursor.execute("SELECT id, name, type, location, assigned_user_id FROM stores")
-    
+
     stores = cursor.fetchall()
     conn.close()
-    
+
     return [dict(store) for store in stores]
 
+
 @app.get("/api/parts", response_model=List[PartResponse])
-@log_endpoint(action='view_parts', resource_type='parts')
+@log_endpoint(action="view_parts", resource_type="parts")
 async def get_parts(user_id: int = Depends(get_current_user), request: Request = None):
     """Get all parts"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, part_number, description, category, unit_cost FROM parts")
+
+    cursor.execute(
+        "SELECT id, part_number, description, category, unit_cost FROM parts"
+    )
     parts = cursor.fetchall()
     conn.close()
-    
+
     return [dict(part) for part in parts]
 
+
 @app.get("/api/inventory", response_model=List[InventoryResponse])
-async def get_inventory(user_id: int = Depends(get_current_user), request: Request = None):
+async def get_inventory(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
     """Get inventory with full visibility for engineers"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    query = '''
+
+    query = """
         SELECT 
             i.id,
             p.part_number,
@@ -1321,268 +1446,371 @@ async def get_inventory(user_id: int = Depends(get_current_user), request: Reque
         JOIN stores s ON i.store_id = s.id
         LEFT JOIN work_orders wo ON i.work_order_id = wo.id
         ORDER BY p.part_number, s.name
-    '''
-    
+    """
+
     cursor.execute(query)
     inventory = cursor.fetchall()
     conn.close()
-    
+
     return [dict(item) for item in inventory]
+
 
 @app.get("/api/stats", response_model=StatsResponse)
 async def get_stats(user_id: int = Depends(get_current_user), request: Request = None):
     """Get dashboard statistics"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Total unique parts
     cursor.execute("SELECT COUNT(DISTINCT part_number) FROM parts")
     total_parts = cursor.fetchone()[0]
-    
+
     # Total stores
     cursor.execute("SELECT COUNT(*) FROM stores")
     total_stores = cursor.fetchone()[0]
-    
+
     # Low stock items
     cursor.execute("SELECT COUNT(*) FROM inventory WHERE quantity <= min_threshold")
     low_stock = cursor.fetchone()[0]
-    
+
     # User's parts (stores they own)
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(DISTINCT i.part_id) 
         FROM inventory i 
         JOIN stores s ON i.store_id = s.id 
         WHERE s.assigned_user_id = ?
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
     my_parts = cursor.fetchone()[0]
-    
+
     conn.close()
-    
+
     return {
         "total_parts": total_parts,
         "total_stores": total_stores,
         "low_stock": low_stock,
-        "my_parts": my_parts
+        "my_parts": my_parts,
     }
 
+
 @app.post("/api/inventory/add")
-@log_endpoint(action='add_stock', resource_type='inventory')
-async def add_stock(request_data: AddStockRequest,
-                    user_id: int = Depends(get_current_user),
-                    csrf_valid: bool = Depends(verify_csrf),
-                    request: Request = None):
+@log_endpoint(action="add_stock", resource_type="inventory")
+async def add_stock(
+    request_data: AddStockRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Add stock to inventory"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user can edit this store
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT type, assigned_user_id FROM stores WHERE id = ?
-    """, (request_data.store_id,))
+    """,
+        (request_data.store_id,),
+    )
     store = cursor.fetchone()
-    
+
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
-    
+
     # Check permissions
-    if store['type'] not in ['central'] and store['assigned_user_id'] != user_id:
+    if store["type"] not in ["central"] and store["assigned_user_id"] != user_id:
         # Get user role
         cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
-        if user['role'] != 'admin':
+        if user["role"] != "admin":
             raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     # Get work order ID if provided
     work_order_id = None
     if request_data.work_order_number:
         cursor.execute(
             "SELECT id FROM work_orders WHERE work_order_number = ?",
-            (request_data.work_order_number,)
+            (request_data.work_order_number,),
         )
         wo = cursor.fetchone()
         if wo:
-            work_order_id = wo['id']
+            work_order_id = wo["id"]
         else:
             # Create new work order
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO work_orders (work_order_number, assigned_engineer_id)
                 VALUES (?, ?)
-            """, (request_data.work_order_number, user_id))
+            """,
+                (request_data.work_order_number, user_id),
+            )
             work_order_id = cursor.lastrowid
-    
+
     # Add or update inventory
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO inventory (store_id, part_id, quantity, work_order_id)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(store_id, part_id, work_order_id) 
         DO UPDATE SET quantity = quantity + ?
-    """, (request_data.store_id, request_data.part_id, request_data.quantity, work_order_id, request_data.quantity))
+    """,
+        (
+            request_data.store_id,
+            request_data.part_id,
+            request_data.quantity,
+            work_order_id,
+            request_data.quantity,
+        ),
+    )
 
     # get id of last inserted inventory item
     cursor.execute("""
         SELECT last_insert_rowid()
     """)
     inventory_id = cursor.fetchone()[0]
-    
+
     # Log movement
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO movements (to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
         VALUES (?, ?, ?, 'add', ?, ?)
-    """, (request_data.store_id, request_data.part_id, request_data.quantity, work_order_id, user_id))
-    
+    """,
+        (
+            request_data.store_id,
+            request_data.part_id,
+            request_data.quantity,
+            work_order_id,
+            user_id,
+        ),
+    )
+
     conn.commit()
     conn.close()
     # The decorator will automatically log this action
-    return {"success": True, "id": inventory_id, "part_id": request_data.part_id, "quantity": request_data.quantity}
-    
+    return {
+        "success": True,
+        "id": inventory_id,
+        "part_id": request_data.part_id,
+        "quantity": request_data.quantity,
+    }
+
+
 @app.put("/api/inventory/update")
-@log_endpoint(action='update_stock', resource_type='inventory')
-async def update_stock(request_data: UpdateStockRequest,
-                       user_id: int = Depends(get_current_user),
-                       csrf_valid: bool = Depends(verify_csrf),
-                       request: Request = None):
+@log_endpoint(action="update_stock", resource_type="inventory")
+async def update_stock(
+    request_data: UpdateStockRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Update inventory quantity"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get inventory item and check permissions
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT i.*, s.type, s.assigned_user_id, p.part_number
         FROM inventory i
         JOIN stores s ON i.store_id = s.id
         JOIN parts p ON i.part_id = p.id
         WHERE i.id = ?
-    """, (request_data.inventory_id,))
+    """,
+        (request_data.inventory_id,),
+    )
     item = cursor.fetchone()
-    
+
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
-    
+
     # Check permissions
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if (item['type'] not in ['central'] and 
-        item['assigned_user_id'] != user_id and 
-        user['role'] != 'admin'):
+
+    if (
+        item["type"] not in ["central"]
+        and item["assigned_user_id"] != user_id
+        and user["role"] != "admin"
+    ):
         raise HTTPException(status_code=403, detail="Permission denied")
-    
-    old_quantity = item['quantity']
+
+    old_quantity = item["quantity"]
     quantity_change = request_data.new_quantity - old_quantity
-    
+
     # Update inventory
-    cursor.execute("""
+    cursor.execute(
+        """
         UPDATE inventory 
         SET quantity = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (request_data.new_quantity, request_data.inventory_id))
-    
+    """,
+        (request_data.new_quantity, request_data.inventory_id),
+    )
+
     # Log movement
-    movement_type = 'add' if quantity_change > 0 else 'remove'
-    cursor.execute("""
+    movement_type = "add" if quantity_change > 0 else "remove"
+    cursor.execute(
+        """
         INSERT INTO movements (to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (item['store_id'], item['part_id'], abs(quantity_change), movement_type, item['work_order_id'], user_id))
-    
+    """,
+        (
+            item["store_id"],
+            item["part_id"],
+            abs(quantity_change),
+            movement_type,
+            item["work_order_id"],
+            user_id,
+        ),
+    )
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"Updated {item['part_number']} quantity from {old_quantity} to {request_data.new_quantity}"}
+
+    return {
+        "success": True,
+        "message": f"Updated {item['part_number']} quantity from {old_quantity} to {request_data.new_quantity}",
+    }
+
 
 @app.post("/api/inventory/transfer")
-@log_endpoint(action='transfer_stock', resource_type='inventory')
-async def transfer_stock(request_data: TransferStockRequest,
-                         user_id: int = Depends(get_current_user),
-                         csrf_valid: bool = Depends(verify_csrf),
-                         request: Request = None):
+@log_endpoint(action="transfer_stock", resource_type="inventory")
+async def transfer_stock(
+    request_data: TransferStockRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Transfer stock between stores"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get source inventory item
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT i.*, s.type as from_store_type, s.assigned_user_id as from_store_owner, p.part_number
         FROM inventory i
         JOIN stores s ON i.store_id = s.id
         JOIN parts p ON i.part_id = p.id
         WHERE i.id = ?
-    """, (request_data.inventory_id,))
+    """,
+        (request_data.inventory_id,),
+    )
     source_item = cursor.fetchone()
-    
+
     if not source_item:
         raise HTTPException(status_code=404, detail="Source inventory item not found")
-    
-    if source_item['quantity'] < request_data.quantity:
-        raise HTTPException(status_code=400, detail="Insufficient quantity in source store")
-    
+
+    if source_item["quantity"] < request_data.quantity:
+        raise HTTPException(
+            status_code=400, detail="Insufficient quantity in source store"
+        )
+
     # Get destination store
-    cursor.execute("SELECT type, assigned_user_id FROM stores WHERE id = ?", (request_data.to_store_id,))
+    cursor.execute(
+        "SELECT type, assigned_user_id FROM stores WHERE id = ?",
+        (request_data.to_store_id,),
+    )
     dest_store = cursor.fetchone()
-    
+
     if not dest_store:
         raise HTTPException(status_code=404, detail="Destination store not found")
-    
+
     # Check permissions for both stores
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
+
     # Can transfer from stores you can edit
-    can_edit_from = (source_item['from_store_type'] == 'central' or 
-                     source_item['from_store_owner'] == user_id or 
-                     user['role'] == 'admin')
-    
+    can_edit_from = (
+        source_item["from_store_type"] == "central"
+        or source_item["from_store_owner"] == user_id
+        or user["role"] == "admin"
+    )
+
     # Can transfer to stores you can edit
-    can_edit_to = (dest_store['type'] == 'central' or 
-                   dest_store['assigned_user_id'] == user_id or 
-                   user['role'] == 'admin')
-    
+    can_edit_to = (
+        dest_store["type"] == "central"
+        or dest_store["assigned_user_id"] == user_id
+        or user["role"] == "admin"
+    )
+
     if not (can_edit_from and can_edit_to):
         raise HTTPException(status_code=403, detail="Permission denied for transfer")
-    
+
     # Update source inventory
-    new_source_quantity = source_item['quantity'] - request_data.quantity
+    new_source_quantity = source_item["quantity"] - request_data.quantity
     if new_source_quantity == 0:
         # Remove the inventory record if quantity becomes 0
-        cursor.execute("DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,))
+        cursor.execute(
+            "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
+        )
     else:
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE inventory 
             SET quantity = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (new_source_quantity, request_data.inventory_id))
-    
+        """,
+            (new_source_quantity, request_data.inventory_id),
+        )
+
     # Add or update destination inventory
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO inventory (store_id, part_id, quantity, work_order_id)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(store_id, part_id, work_order_id) 
         DO UPDATE SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
-    """, (request_data.to_store_id, source_item['part_id'], request_data.quantity, 
-          source_item['work_order_id'], request_data.quantity))
-    
+    """,
+        (
+            request_data.to_store_id,
+            source_item["part_id"],
+            request_data.quantity,
+            source_item["work_order_id"],
+            request_data.quantity,
+        ),
+    )
+
     # Log movement
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO movements (from_store_id, to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
         VALUES (?, ?, ?, ?, 'transfer', ?, ?)
-    """, (source_item['store_id'], request_data.to_store_id, source_item['part_id'], 
-          request_data.quantity, source_item['work_order_id'], user_id))
-    
+    """,
+        (
+            source_item["store_id"],
+            request_data.to_store_id,
+            source_item["part_id"],
+            request_data.quantity,
+            source_item["work_order_id"],
+            user_id,
+        ),
+    )
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"Transferred {request_data.quantity} {source_item['part_number']} successfully"}
+
+    return {
+        "success": True,
+        "message": f"Transferred {request_data.quantity} {source_item['part_number']} successfully",
+    }
+
 
 @app.get("/api/work-orders", response_model=List[WorkOrderResponse])
-async def get_work_orders(user_id: int = Depends(get_current_user), request: Request = None):
+async def get_work_orders(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
     """Get work orders"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get user role
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] == 'admin':
+
+    if user["role"] == "admin":
         # Admin sees all work orders
         query = """
             SELECT wo.*, u.name as engineer_name
@@ -1601,274 +1829,324 @@ async def get_work_orders(user_id: int = Depends(get_current_user), request: Req
             ORDER BY wo.created_at DESC
         """
         cursor.execute(query, (user_id,))
-    
+
     work_orders = cursor.fetchall()
     conn.close()
-    
+
     return [dict(wo) for wo in work_orders]
+
 
 # User Management (Admin only)
 @app.get("/api/users", response_model=List[UserResponse])
-@log_endpoint(action='view_users', resource_type='user')
+@log_endpoint(action="view_users", resource_type="user")
 async def get_users(user_id: int = Depends(get_current_user), request: Request = None):
     """Get all users (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     cursor.execute("SELECT id, email, name, role, territory FROM users ORDER BY name")
     users = cursor.fetchall()
     conn.close()
-    
+
     return [dict(user) for user in users]
 
-#-------------Logging Test Endpoint-------------
+
+# -------------Logging Test Endpoint-------------
 @app.get("/api/logs/test")
-async def test_logging(user_id: int = Depends(get_current_user), request: Request = None):
+async def test_logging(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
     """Test endpoint to verify logging is working"""
     try:
         # Test database connection
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Check if table exists
         cursor.execute("""
             SELECT name FROM sqlite_master 
             WHERE type='table' AND name='activity_logs'
         """)
         table_exists = cursor.fetchone() is not None
-        
+
         # Get count of logs
         if table_exists:
             cursor.execute("SELECT COUNT(*) as count FROM activity_logs")
-            log_count = cursor.fetchone()['count']
+            log_count = cursor.fetchone()["count"]
         else:
             log_count = 0
-        
+
         # Get user info
         cursor.execute("SELECT name, role FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
-        
+
         conn.close()
-        
+
         return {
             "status": "ok",
             "table_exists": table_exists,
             "log_count": log_count,
             "current_user": dict(user) if user else None,
-            "can_view_logs": user['role'] == 'admin' if user else False
+            "can_view_logs": user["role"] == "admin" if user else False,
         }
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+        return {"status": "error", "error": str(e)}
+
 
 @app.post("/api/users")
-@log_endpoint(action='create_user', resource_type='user')
-async def create_user(request_data: CreateUserRequest,
-                      user_id: int = Depends(get_current_user),
-                      csrf_valid: bool = Depends(verify_csrf),
-                      request: Request = None):
+@log_endpoint(action="create_user", resource_type="user")
+async def create_user(
+    request_data: CreateUserRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Create new user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Check if current user is admin    
+
+    # Check if current user is admin
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if email already exists
     cursor.execute("SELECT id FROM users WHERE email = ?", (request_data.email,))
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Email already exists")
-    
+
     # Create user
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO users (email, name, password_hash, role, territory)
         VALUES (?, ?, ?, ?, ?)
-    """, (request_data.email, request_data.name, hash_password(request_data.password), 
-          request_data.role, request_data.territory))
-    
+    """,
+        (
+            request_data.email,
+            request_data.name,
+            hash_password(request_data.password),
+            request_data.role,
+            request_data.territory,
+        ),
+    )
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"User {request_data.name} created successfully"}
+
+    return {
+        "success": True,
+        "message": f"User {request_data.name} created successfully",
+    }
+
 
 @app.put("/api/users/{target_user_id}")
-@log_endpoint(action='update_user', resource_type='user')
-async def update_user(target_user_id: int,
-                      request_data: UpdateUserRequest,
-                      user_id: int = Depends(get_current_user),
-                      csrf_valid: bool = Depends(verify_csrf),
-                      request: Request = None):
+@log_endpoint(action="update_user", resource_type="user")
+async def update_user(
+    target_user_id: int,
+    request_data: UpdateUserRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Update user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if target user exists
     cursor.execute("SELECT id FROM users WHERE id = ?", (target_user_id,))
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Build update query dynamically
     updates = []
     values = []
-    
+
     if request_data.name is not None:
         updates.append("name = ?")
         values.append(request_data.name)
-    
+
     if request_data.role is not None:
         updates.append("role = ?")
         values.append(request_data.role)
-    
+
     if request_data.territory is not None:
         updates.append("territory = ?")
         values.append(request_data.territory)
-    
+
     if request_data.password is not None:
         updates.append("password_hash = ?")
         values.append(hash_password(request_data.password))
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     values.append(target_user_id)
-    
+
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", values)
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": "User updated successfully"}
 
+
 @app.delete("/api/users/{target_user_id}")
-@log_endpoint(action='delete_user', resource_type='user')
-async def delete_user(target_user_id: int,
-                      user_id: int = Depends(get_current_user),
-                      csrf_valid: bool = Depends(verify_csrf),
-                      request: Request = None):
+@log_endpoint(action="delete_user", resource_type="user")
+async def delete_user(
+    target_user_id: int,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Delete user (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Don't allow deleting yourself
     if target_user_id == user_id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
-    
+
     # Check if user exists
     cursor.execute("SELECT name FROM users WHERE id = ?", (target_user_id,))
     target_user = cursor.fetchone()
-    
+
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Delete user (this will cascade and update related records)
     cursor.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
-    
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"User {target_user['name']} deleted successfully"}
+
+    return {
+        "success": True,
+        "message": f"User {target_user['name']} deleted successfully",
+    }
+
 
 # Store Management
 @app.post("/api/stores")
-@log_endpoint(action='create_store', resource_type='store')
-async def create_store(request_data: CreateStoreRequest,
-                       user_id: int = Depends(get_current_user),
-                       csrf_valid: bool = Depends(verify_csrf),
-                       request: Request = None):
+@log_endpoint(action="create_store", resource_type="store")
+async def create_store(
+    request_data: CreateStoreRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Create new store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Validate store type from database
-    cursor.execute(""" SELECT id, is_active FROM store_types WHERE type_code = ? """, (request_data.type,))
-    
+    cursor.execute(
+        """ SELECT id, is_active FROM store_types WHERE type_code = ? """,
+        (request_data.type,),
+    )
+
     store_type = cursor.fetchone()
     if not store_type:
         raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid store type '{request_data.type}'. Please select from available store types."
+            status_code=400,
+            detail=f"Invalid store type '{request_data.type}'. Please select from available store types.",
         )
-    
-    if not store_type['is_active']:
+
+    if not store_type["is_active"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Store type '{request_data.type}' is inactive. Please select an active store type."
+            detail=f"Store type '{request_data.type}' is inactive. Please select an active store type.",
         )
-    
+
     # Create store
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO stores (name, type, location, assigned_user_id)
         VALUES (?, ?, ?, ?)
-    """, (request_data.name, request_data.type, request_data.location, request_data.assigned_user_id))
-    
+    """,
+        (
+            request_data.name,
+            request_data.type,
+            request_data.location,
+            request_data.assigned_user_id,
+        ),
+    )
+
     store_id = cursor.lastrowid
-    
+
     conn.commit()
     conn.close()
-    
+
     return {
         "success": True,
         "id": store_id,
-        "message": f"Store {request_data.name} created successfully"
+        "message": f"Store {request_data.name} created successfully",
     }
+
 
 # Bulk import stores from CSV (admin only)
 @app.post("/api/stores/bulk-import")
-@log_endpoint(action='bulk_import_stores', resource_type='store')
+@log_endpoint(action="bulk_import_stores", resource_type="store")
 async def bulk_import_stores(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Bulk import stores from a CSV file (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Check if current user is admin    
+    # Check if current user is admin
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode()))
     added, skipped = 0, 0
     # this should be moved from hardcoded to a db table in future
-    valid_types = ['office', 'customer_site', 'engineer', 'fe_consignment', 'self', 'admin', 'manager', 'warehouse']
+    valid_types = [
+        "office",
+        "customer_site",
+        "engineer",
+        "fe_consignment",
+        "self",
+        "admin",
+        "manager",
+        "warehouse",
+    ]
     for row in reader:
         try:
             # Validate type
-            if row['type'] not in valid_types:
+            if row["type"] not in valid_types:
                 skipped += 1
                 continue
             # assigned_user_id can be empty
-            assigned_user_id = int(row['assigned_user_id']) if row.get('assigned_user_id') else None
+            assigned_user_id = (
+                int(row["assigned_user_id"]) if row.get("assigned_user_id") else None
+            )
             cursor.execute(
                 "INSERT INTO stores (name, type, location, assigned_user_id) VALUES (?, ?, ?, ?)",
-                (row['name'], row['type'], row.get('location'), assigned_user_id)
+                (row["name"], row["type"], row.get("location"), assigned_user_id),
             )
             added += 1
         except Exception as e:
@@ -1878,129 +2156,145 @@ async def bulk_import_stores(
     conn.close()
     return {"success": True, "added": added, "skipped": skipped}
 
+
 @app.put("/api/stores/{store_id}")
-@log_endpoint(action='update_store', resource_type='store')
-async def update_store(store_id: int,
-                       request_data: UpdateStoreRequest,
-                       user_id: int = Depends(get_current_user),
-                       csrf_valid: bool = Depends(verify_csrf),
-                       request: Request = None):
+@log_endpoint(action="update_store", resource_type="store")
+async def update_store(
+    store_id: int,
+    request_data: UpdateStoreRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Update store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     if check_admin(user_id) is False:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if store exists
     cursor.execute("SELECT id FROM stores WHERE id = ?", (store_id,))
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Store not found")
-    
+
     # Build update query dynamically
     updates = []
     values = []
-    
+
     if request_data.name is not None:
         updates.append("name = ?")
         values.append(request_data.name)
-    
+
     if request_data.type is not None:
         # validate store type from the database
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id, is_active 
             FROM store_types 
             WHERE type_code = ?
-        """, (request_data.type,))
-        
+        """,
+            (request_data.type,),
+        )
+
         store_type = cursor.fetchone()
         if not store_type:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid store type '{request_data.type}'. Please select from available store types."
+                detail=f"Invalid store type '{request_data.type}'. Please select from available store types.",
             )
-        
-        if not store_type['is_active']:
+
+        if not store_type["is_active"]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Store type '{request_data.type}' is inactive. Please select an active store type."
+                detail=f"Store type '{request_data.type}' is inactive. Please select an active store type.",
             )
-        
+
         updates.append("type = ?")
         values.append(request_data.type)
-    
+
     if request_data.location is not None:
         updates.append("location = ?")
         values.append(request_data.location)
-    
+
     if request_data.assigned_user_id is not None:
         updates.append("assigned_user_id = ?")
         values.append(request_data.assigned_user_id)
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     values.append(store_id)
-    
+
     cursor.execute(f"UPDATE stores SET {', '.join(updates)} WHERE id = ?", values)
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": "Store updated successfully"}
 
+
 @app.delete("/api/stores/{store_id}")
-@log_endpoint(action='delete_store', resource_type='store')
-async def delete_store(store_id: int,
-                       user_id: int = Depends(get_current_user),
-                       csrf_valid: bool = Depends(verify_csrf),
-                       request: Request = None):
+@log_endpoint(action="delete_store", resource_type="store")
+async def delete_store(
+    store_id: int,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Delete store (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if store exists and get name
     cursor.execute("SELECT name FROM stores WHERE id = ?", (store_id,))
     store = cursor.fetchone()
-    
+
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
-    
+
     # Check if store has inventory
-    cursor.execute("SELECT COUNT(*) as count FROM inventory WHERE store_id = ?", (store_id,))
-    inventory_count = cursor.fetchone()['count']
-    
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM inventory WHERE store_id = ?", (store_id,)
+    )
+    inventory_count = cursor.fetchone()["count"]
+
     if inventory_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete store with {inventory_count} inventory items. Please transfer or remove inventory first.")
-    
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete store with {inventory_count} inventory items. Please transfer or remove inventory first.",
+        )
+
     # Delete store
     cursor.execute("DELETE FROM stores WHERE id = ?", (store_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": f"Store {store['name']} deleted successfully"}
 
+
 # ============ STORE TYPE MANAGEMENT ============
+
 
 @app.get("/api/store-types", response_model=List[StoreTypeResponse])
 async def get_store_types(
     include_inactive: bool = False,
     user_id: int = Depends(get_current_user),
-    request: Request = None
+    request: Request = None,
 ):
     """Get all store types"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if include_inactive:
         cursor.execute("""
             SELECT id, type_code, type_name, description, is_active, display_order
@@ -2014,397 +2308,487 @@ async def get_store_types(
             WHERE is_active = 1
             ORDER BY display_order, type_name
         """)
-    
+
     types = cursor.fetchall()
     conn.close()
-    
+
     return [dict(t) for t in types]
 
+
 @app.post("/api/store-types")
-@log_endpoint(action='create_store_type', resource_type='store_type')
+@log_endpoint(action="create_store_type", resource_type="store_type")
 async def create_store_type(
     request_data: CreateStoreTypeRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Create new store type (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user is admin
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if type_code already exists
-    cursor.execute("SELECT id FROM store_types WHERE type_code = ?", (request_data.type_code,))
+    cursor.execute(
+        "SELECT id FROM store_types WHERE type_code = ?", (request_data.type_code,)
+    )
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Store type code already exists")
-    
+
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO store_types (type_code, type_name, description, display_order)
             VALUES (?, ?, ?, ?)
-        """, (
-            request_data.type_code,
-            request_data.type_name,
-            request_data.description,
-            request_data.display_order
-        ))
-        
+        """,
+            (
+                request_data.type_code,
+                request_data.type_name,
+                request_data.description,
+                request_data.display_order,
+            ),
+        )
+
         store_type_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "id": store_type_id,
             "message": f"Store type '{request_data.type_name}' created successfully",
             "type_code": request_data.type_code,
-            "type_name": request_data.type_name
+            "type_name": request_data.type_name,
         }
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.put("/api/store-types/{type_id}")
-@log_endpoint(action='update_store_type', resource_type='store_type')
+@log_endpoint(action="update_store_type", resource_type="store_type")
 async def update_store_type(
     type_id: int,
     request_data: UpdateStoreTypeRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Update store type (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if store type exists
-    cursor.execute("SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,))
+    cursor.execute(
+        "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
+    )
     store_type = cursor.fetchone()
     if not store_type:
         raise HTTPException(status_code=404, detail="Store type not found")
-    
+
     # Build update query
     updates = []
     values = []
-    
+
     if request_data.type_name is not None:
         updates.append("type_name = ?")
         values.append(request_data.type_name)
-    
+
     if request_data.description is not None:
         updates.append("description = ?")
         values.append(request_data.description)
-    
+
     if request_data.is_active is not None:
         updates.append("is_active = ?")
         values.append(1 if request_data.is_active else 0)
-    
+
     if request_data.display_order is not None:
         updates.append("display_order = ?")
         values.append(request_data.display_order)
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     updates.append("updated_at = CURRENT_TIMESTAMP")
     values.append(type_id)
-    
-    cursor.execute(
-        f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?",
-        values
-    )
-    
+
+    cursor.execute(f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?", values)
+
     conn.commit()
     conn.close()
-    
+
     return {
         "success": True,
         "message": "Store type updated successfully",
         "id": type_id,
-        "type_code": store_type['type_code']
+        "type_code": store_type["type_code"],
     }
 
+
 @app.delete("/api/store-types/{type_id}")
-@log_endpoint(action='delete_store_type', resource_type='store_type')
+@log_endpoint(action="delete_store_type", resource_type="store_type")
 async def delete_store_type(
     type_id: int,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Delete/deactivate store type (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if store type exists
-    cursor.execute("SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,))
+    cursor.execute(
+        "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
+    )
     store_type = cursor.fetchone()
     if not store_type:
         raise HTTPException(status_code=404, detail="Store type not found")
-    
+
     # Check if any stores are using this type
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) as count 
         FROM stores 
         WHERE type = ?
-    """, (store_type['type_code'],))
-    store_count = cursor.fetchone()['count']
-    
+    """,
+        (store_type["type_code"],),
+    )
+    store_count = cursor.fetchone()["count"]
+
     if store_count > 0:
         # Soft delete - just deactivate
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE store_types 
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (type_id,))
-        
+        """,
+            (type_id,),
+        )
+
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "message": f"Store type '{store_type['type_name']}' deactivated (in use by {store_count} stores)",
             "deactivated": True,
-            "stores_affected": store_count
+            "stores_affected": store_count,
         }
     else:
         # Hard delete - no stores using it
         cursor.execute("DELETE FROM store_types WHERE id = ?", (type_id,))
-        
+
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "message": f"Store type '{store_type['type_name']}' deleted successfully",
-            "deactivated": False
+            "deactivated": False,
         }
+
 
 @app.get("/api/store-types/validate/{type_code}")
 async def validate_store_type(
-    type_code: str,
-    user_id: int = Depends(get_current_user),
-    request: Request = None
+    type_code: str, user_id: int = Depends(get_current_user), request: Request = None
 ):
     """Validate if a store type code exists and is active"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("""
+
+    cursor.execute(
+        """
         SELECT id, type_name, is_active 
         FROM store_types 
         WHERE type_code = ?
-    """, (type_code,))
-    
+    """,
+        (type_code,),
+    )
+
     store_type = cursor.fetchone()
     conn.close()
-    
+
     if not store_type:
         raise HTTPException(status_code=404, detail="Store type not found")
-    
+
     return {
         "valid": True,
-        "is_active": bool(store_type['is_active']),
-        "type_name": store_type['type_name']
+        "is_active": bool(store_type["is_active"]),
+        "type_name": store_type["type_name"],
     }
+
 
 # Parts Management
 @app.post("/api/parts")
-@log_endpoint(action='create_part', resource_type='part')
-async def create_part(request_data: CreatePartRequest,
-                      user_id: int = Depends(get_current_user),
-                      csrf_valid: bool = Depends(verify_csrf),
-                      request: Request = None):
+@log_endpoint(action="create_part", resource_type="part")
+async def create_part(
+    request_data: CreatePartRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Create new part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Check if current user is admin    
+
+    # Check if current user is admin
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if part number already exists
-    cursor.execute("SELECT id FROM parts WHERE part_number = ?", (request_data.part_number,))
+    cursor.execute(
+        "SELECT id FROM parts WHERE part_number = ?", (request_data.part_number,)
+    )
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Part number already exists")
-    
+
     # Create part
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO parts (part_number, description, category, unit_cost)
         VALUES (?, ?, ?, ?)
-    """, (request_data.part_number, request_data.description, request_data.category, request_data.unit_cost))
-    
+    """,
+        (
+            request_data.part_number,
+            request_data.description,
+            request_data.category,
+            request_data.unit_cost,
+        ),
+    )
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"Part {request_data.part_number} created successfully"}
 
-#bulk part import from CSV (admin only)
+    return {
+        "success": True,
+        "message": f"Part {request_data.part_number} created successfully",
+    }
+
+
+# bulk part import from CSV (admin only)
 @app.post("/api/parts/bulk-import")
-@log_endpoint(action='bulk_import_parts', resource_type='part')
+@log_endpoint(action="bulk_import_parts", resource_type="part")
 async def bulk_import_parts(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Bulk import parts from a CSV file (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Check if current user is admin    
+
+    # Check if current user is admin
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     content = await file.read()
-    reader = csv.DictReader(io.StringIO(content.decode()))
+
+    # Try UTF-8 first, then fall back to other encodings
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            text = content.decode("utf-8-sig")  # UTF-8 with BOM
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("latin-1")  # Fallback
+            except UnicodeDecodeError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unable to decode CSV file. Please ensure it's UTF-8 encoded.",
+                )
+
+    reader = csv.DictReader(io.StringIO(text))
+
     added, skipped = 0, 0
-    skipped_part_numbers = []  # keep track of skipped part numbers
+    skipped_details = []  # keep track of skipped parts with reasons
+
     for row in reader:
         try:
-            # check if part_number already exists before attempting to enter the part
-            cursor.execute("SELECT id FROM parts WHERE part_number = ?", (row['part_number'],))
+            # Validate required fields
+            if not row.get("part_number") or not row.get("description"):
+                skipped += 1
+                skipped_details.append(f"Row missing required fields: {row}")
+                continue
+
+            # Check if part_number already exists
+            cursor.execute(
+                "SELECT id FROM parts WHERE part_number = ?", (row["part_number"],)
+            )
             if cursor.fetchone():
                 skipped += 1
-                # FEAT: tell the user which part numbers were skipped
-                skipped_part_numbers.append(row['part_number'])
+                skipped_details.append(f"Part {row['part_number']} already exists")
                 continue
 
             cursor.execute(
                 "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
-                (row['part_number'], row['description'], row['category'], float(row['unit_cost']))
+                (
+                    row["part_number"],
+                    row["description"],
+                    row.get("category", ""),
+                    float(row.get("unit_cost", 0)),
+                ),
             )
             added += 1
-        except Exception:
+        except Exception as e:
             skipped += 1
+            skipped_details.append(
+                f"Error with {row.get('part_number', 'unknown')}: {str(e)}"
+            )
             continue
     conn.commit()
     conn.close()
-    return {"success": True, "added": added, "skipped": skipped}
+    return {
+        "success": True,
+        "added": added,
+        "skipped": skipped,
+        "skipped_details": skipped_details,
+    }
+
 
 @app.put("/api/parts/{part_id}")
-@log_endpoint(action='update_part', resource_type='part')
-async def update_part(part_id: int,
-                      request_data: UpdatePartRequest,
-                      user_id: int = Depends(get_current_user),
-                      csrf_valid: bool = Depends(verify_csrf),
-                      request: Request = None):
+@log_endpoint(action="update_part", resource_type="part")
+async def update_part(
+    part_id: int,
+    request_data: UpdatePartRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Update part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if part exists
     cursor.execute("SELECT id FROM parts WHERE id = ?", (part_id,))
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Part not found")
-    
+
     # Build update query dynamically
     updates = []
     values = []
-    
+
     if request_data.part_number is not None:
         # Check if new part number already exists
-        cursor.execute("SELECT id FROM parts WHERE part_number = ? AND id != ?", (request_data.part_number, part_id))
+        cursor.execute(
+            "SELECT id FROM parts WHERE part_number = ? AND id != ?",
+            (request_data.part_number, part_id),
+        )
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Part number already exists")
         updates.append("part_number = ?")
         values.append(request_data.part_number)
-    
+
     if request_data.description is not None:
         updates.append("description = ?")
         values.append(request_data.description)
-    
+
     if request_data.category is not None:
         updates.append("category = ?")
         values.append(request_data.category)
-    
+
     if request_data.unit_cost is not None:
         updates.append("unit_cost = ?")
         values.append(request_data.unit_cost)
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     values.append(part_id)
-    
+
     cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE id = ?", values)
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": "Part updated successfully"}
 
+
 @app.delete("/api/parts/{part_id}")
-@log_endpoint(action='delete_part', resource_type='part')
-async def delete_part(part_id: int,
-                      user_id: int = Depends(get_current_user),
-                      csrf_valid: bool = Depends(verify_csrf),
-                      request: Request = None):
+@log_endpoint(action="delete_part", resource_type="part")
+async def delete_part(
+    part_id: int,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
     """Delete part (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if current user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if part exists and get details
     cursor.execute("SELECT part_number FROM parts WHERE id = ?", (part_id,))
     part = cursor.fetchone()
-    
+
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
-    
+
     # Check if part has inventory
-    cursor.execute("SELECT COUNT(*) as count FROM inventory WHERE part_id = ?", (part_id,))
-    inventory_count = cursor.fetchone()['count']
-    
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM inventory WHERE part_id = ?", (part_id,)
+    )
+    inventory_count = cursor.fetchone()["count"]
+
     if inventory_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete part with {inventory_count} inventory records. Please remove inventory first.")
-    
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete part with {inventory_count} inventory records. Please remove inventory first.",
+        )
+
     # Delete part
     cursor.execute("DELETE FROM parts WHERE id = ?", (part_id,))
-    
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"Part {part['part_number']} deleted successfully"}
+
+    return {
+        "success": True,
+        "message": f"Part {part['part_number']} deleted successfully",
+    }
+
 
 # Movement History
 @app.get("/api/movements", response_model=List[MovementResponse])
 async def get_movements(
-    user_id: int = Depends(get_current_user), 
+    user_id: int = Depends(get_current_user),
     limit: int = 100,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     movement_type: Optional[str] = None,
     part_id: Optional[int] = None,
     store_id: Optional[int] = None,
-    request: Request = None
+    request: Request = None,
 ):
     """Get movement history with advanced filtering"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    
+
     query = """
         SELECT 
             m.id,
@@ -2424,50 +2808,52 @@ async def get_movements(
         JOIN users u ON m.created_by = u.id
         WHERE 1=1
     """
-    
+
     params = []
-    
+
     # query += """
-    #     AND (m.created_by = ? 
+    #     AND (m.created_by = ?
     #     OR s1.assigned_user_id = ?
     #     OR s2.assigned_user_id = ?)
     #     """
     # params.extend([user_id, user_id, user_id])
-    
+
     # Date range filtering
     if start_date:
         query += " AND m.created_at >= ?"
         params.append(start_date)
-    
+
     if end_date:
         query += " AND m.created_at <= ?"
         params.append(end_date + " 23:59:59")
-    
+
     # Movement type filtering
     if movement_type:
         query += " AND m.movement_type = ?"
         params.append(movement_type)
-    
+
     # Part filtering
     if part_id:
         query += " AND m.part_id = ?"
         params.append(part_id)
-    
+
     # Store filtering (from or to)
     if store_id:
         query += " AND (m.from_store_id = ? OR m.to_store_id = ?)"
         params.extend([store_id, store_id])
-    
+
     query += " ORDER BY m.created_at DESC LIMIT ?"
     params.append(limit)
-    
+
     cursor.execute(query, params)
     movements = cursor.fetchall()
     conn.close()
-    
+
     return [dict(movement) for movement in movements]
 
+
 # ============ LOGGING ENDPOINTS ============
+
 
 @app.get("/api/logs/activity", response_model=List[ActivityLogResponse])
 async def get_activity_logs(
@@ -2478,15 +2864,15 @@ async def get_activity_logs(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     status: Optional[str] = None,
-    request: Request = None
+    request: Request = None,
 ):
     """Get activity logs (admin only for all logs, users can see their own)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     query = "SELECT * FROM activity_logs WHERE 1=1"
     params = []
-    
+
     # Non-admins can only see their own logs
     if check_admin(user_id):
         query += " AND user_id = ?"
@@ -2496,71 +2882,74 @@ async def get_activity_logs(
         if target_user_id:
             query += " AND user_id = ?"
             params.append(target_user_id)
-    
+
     # Apply filters
     if action:
         query += " AND action = ?"
         params.append(action)
-    
+
     if start_date:
         query += " AND created_at >= ?"
         params.append(start_date)
-    
+
     if end_date:
         query += " AND created_at <= ?"
         params.append(end_date + " 23:59:59")
-    
+
     if status:
         query += " AND status = ?"
         params.append(status)
-    
+
     query += " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
-    
+
     cursor.execute(query, params)
     logs = cursor.fetchall()
     # conn.close()
-    
+
     try:
         cursor.execute(query, params)
         logs = cursor.fetchall()
         conn.close()
-        
+
         # Convert to list of dicts and ensure all fields are present
         result = []
         for log in logs:
             log_dict = dict(log)
             # Ensure all expected fields exist with defaults
-            log_dict.setdefault('details', None)
-            log_dict.setdefault('ip_address', None)
-            log_dict.setdefault('user_agent', None)
-            log_dict.setdefault('error_message', None)
+            log_dict.setdefault("details", None)
+            log_dict.setdefault("ip_address", None)
+            log_dict.setdefault("user_agent", None)
+            log_dict.setdefault("error_message", None)
             result.append(log_dict)
-        
+
         return result
     except Exception as e:
         error_logger.error(f"Failed to get activity logs: {e}")
         conn.close()
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve logs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve logs: {str(e)}"
+        )
+
 
 @app.get("/api/logs/activity/stats")
 async def get_activity_stats(
     user_id: int = Depends(get_current_user),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    request: Request = None
+    request: Request = None,
 ):
     """Get activity statistics (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Date filter
     date_filter = ""
     params = []
@@ -2570,158 +2959,189 @@ async def get_activity_stats(
     if end_date:
         date_filter += " AND created_at <= ?"
         params.append(end_date + " 23:59:59")
-    
+
     # Total activities
-    cursor.execute(f"SELECT COUNT(*) as total FROM activity_logs WHERE 1=1 {date_filter}", params)
-    total_activities = cursor.fetchone()['total']
-    
+    cursor.execute(
+        f"SELECT COUNT(*) as total FROM activity_logs WHERE 1=1 {date_filter}", params
+    )
+    total_activities = cursor.fetchone()["total"]
+
     # Activities by action
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT action, COUNT(*) as count 
         FROM activity_logs 
         WHERE 1=1 {date_filter}
         GROUP BY action 
         ORDER BY count DESC 
         LIMIT 10
-    """, params)
+    """,
+        params,
+    )
     by_action = [dict(row) for row in cursor.fetchall()]
-    
+
     # Activities by user (top 10)
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT username, COUNT(*) as count 
         FROM activity_logs 
         WHERE 1=1 {date_filter}
         GROUP BY username 
         ORDER BY count DESC 
         LIMIT 10
-    """, params)
+    """,
+        params,
+    )
     by_user = [dict(row) for row in cursor.fetchall()]
-    
+
     # Error rate
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT 
             COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
             COUNT(CASE WHEN status = 'success' THEN 1 END) as successes
         FROM activity_logs
         WHERE 1=1 {date_filter}
-    """, params)
+    """,
+        params,
+    )
     error_stats = dict(cursor.fetchone())
-    
+
     # Recent logins
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT username, created_at, ip_address
         FROM activity_logs
         WHERE action = 'login' {date_filter}
         ORDER BY created_at DESC
         LIMIT 10
-    """, params)
+    """,
+        params,
+    )
     recent_logins = [dict(row) for row in cursor.fetchall()]
-    
+
     conn.close()
-    
+
     return {
         "total_activities": total_activities,
         "by_action": by_action,
         "by_user": by_user,
         "error_rate": error_stats,
-        "recent_logins": recent_logins
+        "recent_logins": recent_logins,
     }
+
 
 @app.delete("/api/logs/activity/cleanup")
 async def cleanup_old_logs(
     days: int = 90,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Delete activity logs older than specified days (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user is admin
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
-    if user['role'] != 'admin':
+
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Delete old logs
-    cursor.execute("""
+    cursor.execute(
+        """
         DELETE FROM activity_logs 
         WHERE created_at < datetime('now', '-' || ? || ' days')
-    """, (days,))
-    
+    """,
+        (days,),
+    )
+
     deleted_count = cursor.rowcount
-    
+
     conn.commit()
     conn.close()
-    
+
     log_activity(
         user_id=user_id,
-        username=user['name'],
-        action='cleanup_logs',
-        details={'days': days, 'deleted_count': deleted_count}
+        username=user["name"],
+        action="cleanup_logs",
+        details={"days": days, "deleted_count": deleted_count},
     )
-    
+
     return {"success": True, "deleted_count": deleted_count, "days": days}
+
 
 # equipment management routes
 @app.get("/api/equipment/statistics", response_model=EquipmentStatsResponse)
-@log_endpoint(action='view_equipment_stats', resource_type='equipment')
-async def get_equipment_stats(user_id: int = Depends(get_current_user), request: Request = None):
+@log_endpoint(action="view_equipment_stats", resource_type="equipment")
+async def get_equipment_stats(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
     """Get equipment statistics"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get user role
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
+
     # Total equipment
     cursor.execute("SELECT COUNT(*) as count FROM equipment WHERE status = 'active'")
-    total_equipment = cursor.fetchone()['count']
-    
+    total_equipment = cursor.fetchone()["count"]
+
     # My equipment
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) as count FROM equipment 
         WHERE status = 'active' AND assigned_user_id = ?
-    """, (user_id,))
-    my_equipment = cursor.fetchone()['count']
-    
+    """,
+        (user_id,),
+    )
+    my_equipment = cursor.fetchone()["count"]
+
     # Get calibration reminder days
     cursor.execute("""
         SELECT setting_value FROM system_settings 
         WHERE setting_key = 'calibration_reminder_days'
     """)
     reminder_setting = cursor.fetchone()
-    reminder_days = int(reminder_setting['setting_value']) if reminder_setting else 30
-    
+    reminder_days = int(reminder_setting["setting_value"]) if reminder_setting else 30
+
     # Equipment due soon
     from datetime import datetime, timedelta
-    check_date = (datetime.now() + timedelta(days=reminder_days)).strftime('%Y-%m-%d')
-    
-    if user['role'] == 'admin':
-        cursor.execute("""
+
+    check_date = (datetime.now() + timedelta(days=reminder_days)).strftime("%Y-%m-%d")
+
+    if user["role"] == "admin":
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM equipment 
             WHERE status = 'active'
             AND next_calibration_date IS NOT NULL
             AND next_calibration_date <= ?
             AND next_calibration_date >= date('now')
-        """, (check_date,))
+        """,
+            (check_date,),
+        )
     else:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM equipment 
             WHERE status = 'active'
             AND assigned_user_id = ?
             AND next_calibration_date IS NOT NULL
             AND next_calibration_date <= ?
             AND next_calibration_date >= date('now')
-        """, (user_id, check_date))
-    
-    due_soon = cursor.fetchone()['count']
-    
+        """,
+            (user_id, check_date),
+        )
+
+    due_soon = cursor.fetchone()["count"]
+
     # Overdue equipment
-    if user['role'] == 'admin':
+    if user["role"] == "admin":
         cursor.execute("""
             SELECT COUNT(*) as count FROM equipment 
             WHERE status = 'active'
@@ -2729,40 +3149,44 @@ async def get_equipment_stats(user_id: int = Depends(get_current_user), request:
             AND next_calibration_date < date('now')
         """)
     else:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM equipment 
             WHERE status = 'active'
             AND assigned_user_id = ?
             AND next_calibration_date IS NOT NULL
             AND next_calibration_date < date('now')
-        """, (user_id,))
-    
-    overdue = cursor.fetchone()['count']
-    
+        """,
+            (user_id,),
+        )
+
+    overdue = cursor.fetchone()["count"]
+
     conn.close()
-    
+
     return {
         "total_equipment": total_equipment,
         "my_equipment": my_equipment,
         "due_soon": due_soon,
-        "overdue": overdue
+        "overdue": overdue,
     }
 
+
 @app.get("/api/equipment", response_model=List[EquipmentResponse])
-@log_endpoint(action='view_equipment', resource_type='equipment')
+@log_endpoint(action="view_equipment", resource_type="equipment")
 async def get_equipment(
     user_id: int = Depends(get_current_user),
     show_all: bool = False,
-    request: Request = None
+    request: Request = None,
 ):
     """Get equipment list"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get user role
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
+
     query = """
         SELECT 
             e.*,
@@ -2772,186 +3196,228 @@ async def get_equipment(
         LEFT JOIN users u ON e.assigned_user_id = u.id
         WHERE e.status = 'active'
     """
-    
-    if not show_all and user['role'] != 'admin':
+
+    if not show_all and user["role"] != "admin":
         query += " AND e.assigned_user_id = ?"
         cursor.execute(query + " ORDER BY e.next_calibration_date", (user_id,))
     else:
         cursor.execute(query + " ORDER BY e.next_calibration_date")
-    
+
     equipment = cursor.fetchall()
     conn.close()
-    
+
     return [dict(eq) for eq in equipment]
 
+
 @app.post("/api/equipment")
-@log_endpoint(action='create_equipment', resource_type='equipment')
+@log_endpoint(action="create_equipment", resource_type="equipment")
 async def create_equipment(
     request_data: CreateEquipmentRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Create new equipment (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if user is admin
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if serial number already exists
-    cursor.execute("SELECT id FROM equipment WHERE serial_number = ?", (request_data.serial_number,))
+    cursor.execute(
+        "SELECT id FROM equipment WHERE serial_number = ?",
+        (request_data.serial_number,),
+    )
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Serial number already exists")
-    
-    cursor.execute("""
+
+    cursor.execute(
+        """
         INSERT INTO equipment (
             equipment_name, make, model, serial_number, assigned_user_id,
             calibration_cert_number, calibration_authority, calibration_date,
             next_calibration_date, notes
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        request_data.equipment_name, request_data.make, request_data.model,
-        request_data.serial_number, request_data.assigned_user_id,
-        request_data.calibration_cert_number, request_data.calibration_authority,
-        request_data.calibration_date, request_data.next_calibration_date,
-        request_data.notes
-    ))
-    
+    """,
+        (
+            request_data.equipment_name,
+            request_data.make,
+            request_data.model,
+            request_data.serial_number,
+            request_data.assigned_user_id,
+            request_data.calibration_cert_number,
+            request_data.calibration_authority,
+            request_data.calibration_date,
+            request_data.next_calibration_date,
+            request_data.notes,
+        ),
+    )
+
     equipment_id = cursor.lastrowid
-    
+
     # Log history
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO equipment_history (equipment_id, action, to_user_id, created_by)
         VALUES (?, 'created', ?, ?)
-    """, (equipment_id, request_data.assigned_user_id, user_id))
-    
+    """,
+        (equipment_id, request_data.assigned_user_id, user_id),
+    )
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "id": equipment_id, "message": "Equipment created successfully"}
+
+    return {
+        "success": True,
+        "id": equipment_id,
+        "message": "Equipment created successfully",
+    }
+
 
 @app.put("/api/equipment/{equipment_id}")
-@log_endpoint(action='update_equipment', resource_type='equipment')
+@log_endpoint(action="update_equipment", resource_type="equipment")
 async def update_equipment(
     equipment_id: int,
     request_data: UpdateEquipmentRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Update equipment (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if equipment exists
     cursor.execute("SELECT * FROM equipment WHERE id = ?", (equipment_id,))
     equipment = cursor.fetchone()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipment not found")
-    
+
     # Build update query
     updates = []
     values = []
-    
+
     for field, value in request_data.dict(exclude_unset=True).items():
         updates.append(f"{field} = ?")
         values.append(value)
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     updates.append("updated_at = CURRENT_TIMESTAMP")
     values.append(equipment_id)
-    
-    cursor.execute(
-        f"UPDATE equipment SET {', '.join(updates)} WHERE id = ?",
-        values
-    )
-    
+
+    cursor.execute(f"UPDATE equipment SET {', '.join(updates)} WHERE id = ?", values)
+
     # Log history if assignment changed
-    if request_data.assigned_user_id is not None and request_data.assigned_user_id != equipment['assigned_user_id']:
-        cursor.execute("""
+    if (
+        request_data.assigned_user_id is not None
+        and request_data.assigned_user_id != equipment["assigned_user_id"]
+    ):
+        cursor.execute(
+            """
             INSERT INTO equipment_history (equipment_id, action, from_user_id, to_user_id, created_by)
             VALUES (?, 'transferred', ?, ?, ?)
-        """, (equipment_id, equipment['assigned_user_id'], request_data.assigned_user_id, user_id))
-    
+        """,
+            (
+                equipment_id,
+                equipment["assigned_user_id"],
+                request_data.assigned_user_id,
+                user_id,
+            ),
+        )
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": "Equipment updated successfully"}
 
+
 @app.post("/api/equipment/{equipment_id}/transfer")
-@log_endpoint(action='transfer_equipment', resource_type='equipment')
+@log_endpoint(action="transfer_equipment", resource_type="equipment")
 async def transfer_equipment(
     equipment_id: int,
     request_data: TransferEquipmentRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Transfer equipment to another user"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get equipment
     cursor.execute("SELECT * FROM equipment WHERE id = ?", (equipment_id,))
     equipment = cursor.fetchone()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipment not found")
-    
+
     # Check permissions
-    if not check_admin(user_id) and equipment['assigned_user_id'] != user_id:
+    if not check_admin(user_id) and equipment["assigned_user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     # Update equipment
-    cursor.execute("""
+    cursor.execute(
+        """
         UPDATE equipment 
         SET assigned_user_id = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (request_data.to_user_id, equipment_id))
-    
+    """,
+        (request_data.to_user_id, equipment_id),
+    )
+
     # Log history
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO equipment_history (equipment_id, action, from_user_id, to_user_id, notes, created_by)
         VALUES (?, 'transferred', ?, ?, ?, ?)
-    """, (equipment_id, equipment['assigned_user_id'], request_data.to_user_id, 
-          request_data.notes, user_id))
-    
+    """,
+        (
+            equipment_id,
+            equipment["assigned_user_id"],
+            request_data.to_user_id,
+            request_data.notes,
+            user_id,
+        ),
+    )
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": "Equipment transferred successfully"}
 
+
 @app.post("/api/equipment/{equipment_id}/calibrate")
-@log_endpoint(action='calibrate_equipment', resource_type='equipment')
+@log_endpoint(action="calibrate_equipment", resource_type="equipment")
 async def update_calibration(
     equipment_id: int,
     request_data: UpdateCalibrationRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Update equipment calibration"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get equipment
     cursor.execute("SELECT * FROM equipment WHERE id = ?", (equipment_id,))
     equipment = cursor.fetchone()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipment not found")
-    
+
     # Check permissions - admin or assigned user
-    if not check_admin(user_id) and equipment['assigned_user_id'] != user_id:
+    if not check_admin(user_id) and equipment["assigned_user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     # Update calibration
-    cursor.execute("""
+    cursor.execute(
+        """
         UPDATE equipment 
         SET calibration_cert_number = ?,
             calibration_authority = ?,
@@ -2959,77 +3425,92 @@ async def update_calibration(
             next_calibration_date = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (
-        request_data.calibration_cert_number,
-        request_data.calibration_authority,
-        request_data.calibration_date,
-        request_data.next_calibration_date,
-        equipment_id
-    ))
-    
+    """,
+        (
+            request_data.calibration_cert_number,
+            request_data.calibration_authority,
+            request_data.calibration_date,
+            request_data.next_calibration_date,
+            equipment_id,
+        ),
+    )
+
     # Log history
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO equipment_history (
             equipment_id, action, calibration_date, notes, created_by
         ) VALUES (?, 'calibrated', ?, ?, ?)
-    """, (equipment_id, request_data.calibration_date, request_data.notes, user_id))
-    
+    """,
+        (equipment_id, request_data.calibration_date, request_data.notes, user_id),
+    )
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": "Calibration updated successfully"}
 
+
 @app.delete("/api/equipment/{equipment_id}")
-@log_endpoint(action='delete_equipment', resource_type='equipment')
+@log_endpoint(action="delete_equipment", resource_type="equipment")
 async def delete_equipment(
     equipment_id: int,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Delete/deactivate equipment (admin only)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Get equipment
     cursor.execute("SELECT equipment_name FROM equipment WHERE id = ?", (equipment_id,))
     equipment = cursor.fetchone()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipment not found")
-    
+
     # Soft delete
-    cursor.execute("""
+    cursor.execute(
+        """
         UPDATE equipment 
         SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (equipment_id,))
-    
+    """,
+        (equipment_id,),
+    )
+
     # Log history
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO equipment_history (equipment_id, action, created_by)
         VALUES (?, 'deleted', ?)
-    """, (equipment_id, user_id))
-    
+    """,
+        (equipment_id, user_id),
+    )
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"Equipment {equipment['equipment_name']} deleted successfully"}
+
+    return {
+        "success": True,
+        "message": f"Equipment {equipment['equipment_name']} deleted successfully",
+    }
+
 
 @app.get("/api/equipment/{equipment_id}/history")
-@log_endpoint(action='view_equipment_history', resource_type='equipment')
+@log_endpoint(action="view_equipment_history", resource_type="equipment")
 async def get_equipment_history(
-    equipment_id: int,
-    user_id: int = Depends(get_current_user),
-    request: Request = None
+    equipment_id: int, user_id: int = Depends(get_current_user), request: Request = None
 ):
     """Get equipment history"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("""
+
+    cursor.execute(
+        """
         SELECT 
             eh.*,
             u1.name as from_user_name,
@@ -3041,69 +3522,82 @@ async def get_equipment_history(
         LEFT JOIN users u3 ON eh.created_by = u3.id
         WHERE eh.equipment_id = ?
         ORDER BY eh.created_at DESC
-    """, (equipment_id,))
-    
+    """,
+        (equipment_id,),
+    )
+
     history = cursor.fetchall()
     conn.close()
-    
+
     return [dict(h) for h in history]
+
 
 # System Settings endpoint
 @app.get("/api/settings/calibration-reminder-days")
-@log_endpoint(action='view_calibration_settings', resource_type='settings')
+@log_endpoint(action="view_calibration_settings", resource_type="settings")
 async def get_calibration_reminder_days(
-    user_id: int = Depends(get_current_user),
-    request: Request = None
+    user_id: int = Depends(get_current_user), request: Request = None
 ):
     """Get calibration reminder days setting"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT setting_value FROM system_settings 
         WHERE setting_key = 'calibration_reminder_days'
     """)
     result = cursor.fetchone()
     conn.close()
-    
-    return {"days": int(result['setting_value']) if result else 30}
+
+    return {"days": int(result["setting_value"]) if result else 30}
+
 
 @app.put("/api/settings/calibration-reminder-days")
-@log_endpoint(action='update_calibration_settings', resource_type='settings')
+@log_endpoint(action="update_calibration_settings", resource_type="settings")
 async def update_calibration_reminder_days(
     days: int,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Update calibration reminder days setting (admin only)"""
     if days < 1 or days > 365:
         raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if not check_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    cursor.execute("""
+
+    cursor.execute(
+        """
         UPDATE system_settings 
         SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE setting_key = 'calibration_reminder_days'
-    """, (str(days), user_id))
-    
+    """,
+        (str(days), user_id),
+    )
+
     conn.commit()
     conn.close()
-    
+
     return {"success": True, "message": f"Calibration reminder set to {days} days"}
+
 
 @app.get("/")
 async def root():
     """Serve the main application"""
-    return {"message": "Inventory Management API", "docs": "/docs", "frontend": "/static/index.html"}
+    return {
+        "message": "Inventory Management API",
+        "docs": "/docs",
+        "frontend": "/static/index.html",
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
+
     print("🎯 Starting Inventory Management API...")
     print("📊 Frontend: http://localhost:8000/static/index.html")
     print("📚 API Docs: http://localhost:8000/docs")
