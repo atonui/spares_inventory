@@ -111,7 +111,7 @@
                         </template>
                     </select>
                     
-                    <button class="btn btn-success" @click="showAddModal = true">Add Stock</button>
+                    <button class="btn btn-success" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true">Add Stock</button>
 
                     <!-- UPDATED: Export dropdown button -->
                     <div style="position: relative;" x-data="{ showExportMenu: false }">
@@ -350,13 +350,13 @@
                 </div>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button class="btn btn-sm" 
-                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)"
+                            x-show="currentUser?.role === 'admin' || selectedStore?.assigned_user_id === currentUser?.id || selectedStore?.type === 'central' || selectedStore?.type === 'office'"
                             @click="downloadStoreImportTemplate()">
                         Download Template
                     </button>
                     <label class="btn btn-sm" 
                         style="cursor: pointer;"
-                        x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)">
+                        x-show="currentUser?.role === 'admin' || selectedStore?.assigned_user_id === currentUser?.id || selectedStore?.type === 'central' || selectedStore?.type === 'office'">
                         Import CSV
                         <input type="file" 
                             accept=".csv" 
@@ -364,7 +364,7 @@
                             style="display: none;">
                     </label>
                     <button class="btn btn-success" 
-                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)"
+                            x-show="currentUser?.role === 'admin' || selectedStore?.assigned_user_id === currentUser?.id || selectedStore?.type === 'central' || selectedStore?.type === 'office'"
                             @click="addStockToStore(selectedStore)">
                         Add Single Part
                     </button>
@@ -372,7 +372,7 @@
                         Export CSV
                     </button>
                     <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
-                </div>
+            </div>
             </div>
             <table>
                 <thead>
@@ -1207,7 +1207,7 @@
                 </div>
             </div>
             
-            <!-- Add Stock Modal -->
+            <!-- Add Stock Modal
             <div x-show="showAddModal" class="modal" @click.outside="showAddModal = false">
                 <div class="modal-content">
                     <h3>Add Stock</h3>
@@ -1241,6 +1241,95 @@
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showAddModal = false">Cancel</button>
                             <button type="submit" class="btn btn-success" :disabled="addingStock">
+                                <span x-show="!addingStock">Add Stock</span>
+                                <span x-show="addingStock">Adding...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div> -->
+
+            <!-- Add Stock Modal with Autocomplete -->
+            <div x-show="showAddModal" class="modal" @click.outside="showAddModal = false">
+                <div class="modal-content">
+                    <h3>Add Stock</h3>
+                    <form @submit.prevent="addStock()">
+                        <div class="form-group" x-data="{ showSuggestions: false }">
+                            <label>Search and Select Part</label>
+                            <div style="position: relative;">
+                                <input 
+                                    type="text" 
+                                    x-model="partSearchTerm"
+                                    @input="filterPartsForSelection(); showSuggestions = true;"
+                                    @focus="showSuggestions = true"
+                                    placeholder="Type to search by part number, description, or category..."
+                                    autocomplete="off"
+                                    style="margin-bottom: 0.5rem;">
+                                
+                                <!-- Suggestions dropdown -->
+                                <div x-show="showSuggestions && partSearchTerm && filteredPartsForSelection.length > 0"
+                                    @click.outside="showSuggestions = false"
+                                    style="position: absolute; top: 100%; left: 0; right: 0; max-height: 300px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 1000; margin-top: 4px;">
+                                    <template x-for="part in filteredPartsForSelection.slice(0, 20)" :key="part.id">
+                                        <div @click="selectPart(part); showSuggestions = false;"
+                                            style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0;"
+                                            :style="addForm.part_id === part.id ? 'background: #e3f2fd;' : ''"
+                                            @mouseenter="$el.style.background = '#f8f9fa'"
+                                            @mouseleave="$el.style.background = addForm.part_id === part.id ? '#e3f2fd' : 'white'">
+                                            <div style="font-weight: 600; color: #333;" x-text="part.part_number"></div>
+                                            <div style="font-size: 0.9em; color: #666;" x-text="part.description"></div>
+                                            <div style="font-size: 0.85em; color: #999;">
+                                                <span x-text="part.category"></span> • 
+                                                <span x-text="'$' + part.unit_cost.toFixed(2)"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="filteredPartsForSelection.length > 20" style="padding: 0.5rem; text-align: center; color: #666; font-size: 0.9em; background: #f8f9fa;">
+                                        Showing 20 of <span x-text="filteredPartsForSelection.length"></span> results. Keep typing to narrow down...
+                                    </div>
+                                </div>
+                                
+                                <div x-show="filteredPartsForSelection.length === 0 && partSearchTerm" style="color: #dc3545; font-size: 0.9em; margin-top: 0.25rem;">
+                                    No parts match your search
+                                </div>
+                            </div>
+                            
+                            <!-- Selected part display -->
+                            <div x-show="addForm.part_id" style="margin-top: 0.5rem; padding: 0.75rem; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #2196F3;">
+                                <div style="font-weight: 600; color: #1976d2;">Selected Part:</div>
+                                <div style="margin-top: 0.25rem;">
+                                    <span x-text="parts.find(p => p.id == addForm.part_id)?.part_number"></span> - 
+                                    <span x-text="parts.find(p => p.id == addForm.part_id)?.description"></span>
+                                </div>
+                                <button type="button" @click="addForm.part_id = ''; partSearchTerm = ''" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.85em;" class="btn btn-sm">
+                                    Clear Selection
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Store</label>
+                            <select x-model="addForm.store_id" required>
+                                <option value="">Select Store</option>
+                                <template x-for="store in editableStores" :key="store.id">
+                                    <option :value="store.id" x-text="store.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" x-model="addForm.quantity" min="1" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Work Order (leave blank for original stock)</label>
+                            <input type="text" x-model="addForm.work_order_number" placeholder="WO-2024-001">
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showAddModal = false; partSearchTerm = ''; addForm.part_id = '';">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="addingStock || !addForm.part_id">
                                 <span x-show="!addingStock">Add Stock</span>
                                 <span x-show="addingStock">Adding...</span>
                             </button>

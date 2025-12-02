@@ -60,6 +60,8 @@ function inventoryApp() {
         // Search and filters
         searchTerm: '',
         storeFilter: '',
+        partSearchTerm: '',
+        filteredPartsForSelection: [],
         // modals
         showAddModal: false,
         showEditModal: false,
@@ -596,10 +598,18 @@ function inventoryApp() {
         //     return 'store-' + storeType;
         // },
 
-        // canEdit(storeOwner, storeType) {
-        //     if (this.currentUser.role === 'admin') return true;
-        //     return storeOwner === this.currentUser.id || storeType === 'central';
-        // },
+        canEdit(storeOwner, storeType) {
+            // Admin can edit everything
+            if (this.currentUser?.role === 'admin') return true;
+            
+            // Can edit if you own the store
+            if (storeOwner === this.currentUser?.id) return true;
+            
+            // Can edit central/office stores
+            if (storeType === 'central' || storeType === 'office') return true;
+            
+            return false;
+        },
 
         get editableStores() {
             if (!this.currentUser) return [];
@@ -637,11 +647,12 @@ function inventoryApp() {
             this.openPanel('showStoreInventoryPanel');
         },
         async addStockToStore(store) {
-            // Pre-fill the add form with the store
             this.addForm.store_id = store.id;
             this.addForm.part_id = '';
             this.addForm.quantity = '';
             this.addForm.work_order_number = '';
+            this.partSearchTerm = '';  // Reset search
+            this.filteredPartsForSelection = this.parts;  // Show all parts initially
             this.showAddModal = true;
         },
 
@@ -732,6 +743,26 @@ function inventoryApp() {
             a.download = 'store_parts_import_template.csv';
             a.click();
             URL.revokeObjectURL(url);
+        },
+
+        // search parts for selection
+        filterPartsForSelection() {
+            if (!this.partSearchTerm) {
+                this.filteredPartsForSelection = this.parts;
+                return;
+            }
+            
+            const term = this.partSearchTerm.toLowerCase();
+            this.filteredPartsForSelection = this.parts.filter(part =>
+                part.part_number.toLowerCase().includes(term) ||
+                part.description.toLowerCase().includes(term) ||
+                part.category.toLowerCase().includes(term)
+            );
+        },
+
+        selectPart(part) {
+            this.addForm.part_id = part.id;
+            this.partSearchTerm = `${part.part_number} - ${part.description}`;
         },
 
         // Store Type Management
@@ -1235,28 +1266,41 @@ exportComprehensiveReport() {
 
         // Actions
         async addStock() {
+            if (!this.addForm.part_id) {
+                this.error = 'Please select a part';
+                return;
+            }
+            
+            if (!this.addForm.store_id) {
+                this.error = 'Please select a store';
+                return;
+            }
+            
             this.addingStock = true;
             this.error = '';
-            this.successMessage = '';
             
             try {
                 await this.apiCall('/inventory/add', {
                     method: 'POST',
                     body: JSON.stringify({
-                        part_id: parseInt(this.addForm.part_id),
-                        store_id: parseInt(this.addForm.store_id),
-                        quantity: parseInt(this.addForm.quantity),
-                        // work_order_number: this.addForm.work_order_number || null
+                        part_id: this.addForm.part_id,
+                        store_id: this.addForm.store_id,
+                        quantity: this.addForm.quantity,
+                        work_order_number: this.addForm.work_order_number || null
                     })
                 });
                 
-                this.successMessage = 'Stock added successfully!';
+                this.successMessage = 'Stock added successfully';
                 this.showAddModal = false;
                 this.addForm = { part_id: '', store_id: '', quantity: '', work_order_number: '' };
+                this.partSearchTerm = '';  // Clear search
                 
-                await this.loadAllData();
+                await this.loadInventory();
+                if (this.selectedStore) {
+                    await this.viewStoreInventory(this.selectedStore);
+                }
+                
                 setTimeout(() => this.successMessage = '', 3000);
-                
             } catch (error) {
                 this.error = 'Failed to add stock: ' + error.message;
             } finally {

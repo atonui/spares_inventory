@@ -2450,3 +2450,97 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2025-11-29 17:10:44,478 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
 2025-11-29 17:15:00,377 - inventory_app - INFO - Application shutting down
 2025-11-29 17:15:00,389 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-30 09:06:56,661 - inventory_app - INFO - Application starting up
+2025-11-30 09:06:56,681 - inventory_app - INFO - [startup] Application initialized
+2025-11-30 09:06:56,684 - inventory_app - INFO - Database initialized successfully
+2025-11-30 09:07:01,964 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-30 09:07:01,985 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-30 09:07:01,999 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-30 09:07:02,072 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-30 09:07:02,090 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-30 09:07:39,096 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-30 09:07:39,119 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-30 09:07:39,134 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-30 09:07:39,147 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-30 09:07:39,163 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-30 09:11:15,694 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-30 09:11:15,741 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-30 09:11:15,756 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-30 09:11:15,767 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-30 09:11:15,785 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-30 09:11:26,826 - inventory_app - INFO - Application shutting down
+2025-11-30 09:11:26,834 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-30 09:11:41,083 - inventory_app - INFO - Application starting up
+2025-11-30 09:11:41,097 - inventory_app - INFO - [startup] Application initialized
+2025-11-30 09:11:41,101 - inventory_app - INFO - Database initialized successfully
+2025-11-30 09:11:47,331 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-30 09:11:47,377 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-30 09:11:47,391 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-30 09:11:47,403 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-30 09:11:47,420 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-30 09:12:17,562 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-30 09:12:17,586 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-30 09:12:17,600 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-30 09:12:17,613 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-30 09:12:17,631 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-11-30 09:12:45,046 - inventory_app - INFO - Application shutting down
+2025-11-30 09:12:45,065 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-11-30 09:13:00,810 - inventory_app - INFO - Application starting up
+2025-11-30 09:13:00,825 - inventory_app - INFO - [startup] Application initialized
+2025-11-30 09:13:00,830 - inventory_app - INFO - Database initialized successfully
+2025-11-30 09:13:18,121 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-11-30 09:13:18,122 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-11-30 09:13:18,155 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-11-30 09:13:18,186 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-11-30 09:13:18,200 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-11-30 09:13:18,212 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-11-30 09:13:18,231 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-12-01 19:34:38,685 - inventory_app - INFO - Application shutting down
+2025-12-01 19:34:38,704 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-12-01 19:37:13,329 - inventory_app - INFO - Application starting up
+2025-12-01 19:37:13,336 - inventory_app - INFO - [startup] Application initialized
+2025-12-01 19:37:13,339 - inventory_app - INFO - Database initialized successfully
+2025-12-01 19:37:30,814 - audit - INFO - USER=valentine.opiyo@vaian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-12-01 19:37:44,024 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2025-12-01 19:37:44,024 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2025-12-01 19:37:44,057 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 19:37:44,073 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-12-01 19:37:44,085 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-12-01 19:37:44,099 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-12-01 19:37:44,110 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-12-01 19:44:52,869 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_part RESOURCE=part/None STATUS=success
+2025-12-01 19:44:52,889 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 19:45:17,861 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/1 STATUS=success
+2025-12-01 19:45:17,892 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 19:45:17,920 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-12-01 19:45:17,937 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-12-01 19:45:17,951 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-12-01 19:45:17,970 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-12-01 19:45:21,463 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 19:45:21,485 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-12-01 19:45:21,498 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-12-01 19:45:21,511 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-12-01 19:45:21,528 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2025-12-01 19:47:11,279 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2025-12-01 19:47:26,895 - audit - INFO - USER=allan.kibetkoech@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2025-12-01 19:47:30,783 - audit - INFO - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2025-12-01 19:47:30,783 - inventory_app - INFO - User Allan Koech (6) logged in from 127.0.0.1
+2025-12-01 19:47:30,814 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 19:47:30,844 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-12-01 19:47:30,859 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-12-01 19:47:30,872 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-12-01 19:48:56,992 - inventory_app - INFO - Application shutting down
+2025-12-01 19:48:56,998 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2025-12-01 19:48:59,084 - inventory_app - INFO - Application starting up
+2025-12-01 19:48:59,090 - inventory_app - INFO - [startup] Application initialized
+2025-12-01 19:48:59,093 - inventory_app - INFO - Database initialized successfully
+2025-12-01 19:56:04,051 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 19:56:04,076 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-12-01 19:56:04,092 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-12-01 19:56:04,106 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-12-01 20:07:08,631 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2025-12-01 20:07:08,657 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2025-12-01 20:07:08,675 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2025-12-01 20:07:08,695 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2025-12-02 05:15:03,437 - inventory_app - INFO - Application shutting down
+2025-12-02 05:15:03,456 - inventory_app - INFO - [shutdown] Application shut down gracefully
