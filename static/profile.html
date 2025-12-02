@@ -18,11 +18,10 @@
                         <h2>Profile Management</h2>
                         <p>Manage your account settings</p>
                     </div>
-                    
                 </div>
                 <div class="back-link">
-                        <a href="/static/index.html">← Back to Dashboard</a>
-                    </div>
+                    <a href="/static/index.html">← Back to Dashboard</a>
+                </div>
             </div>
 
             <!-- Loading State -->
@@ -32,120 +31,92 @@
             <div x-show="error" class="error" x-text="error"></div>
             <div x-show="successMessage" class="success" x-text="successMessage"></div>
 
-            <!-- Profile Card -->
-            <!-- <div x-show="!loading" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
-                    <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid #e5e7eb;">
-                        <button 
-                            @click="activeTab = 'profile'" 
-                            :style="activeTab === 'profile' ? 'border-bottom: 2px solid #007bff; margin-bottom: -2px;' : ''"
-                            style="padding: 0.5rem 1rem; background: none; border: none; cursor: pointer; font-weight: 500;"
-                            class="btn">
-                            Profile Info
-                        </button>
-                        <button 
-                            @click="activeTab = 'password'" 
-                            :style="activeTab === 'password' ? 'border-bottom: 2px solid #007bff; margin-bottom: -2px;' : ''"
-                            style="padding: 0.5rem 1rem; background: none; border: none; cursor: pointer; font-weight: 500;"
-                            class="btn btn-warning">
-                            Change Password
-                        </button>
+            <!-- Tab links -->
+            <div class="tab" x-show="!loading">
+                <button class="tablinks" @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'active' : ''">Profile</button>
+                <button class="tablinks" @click="activeTab = 'password'" :class="activeTab === 'password' ? 'active' : ''">Change Password</button>
+            </div>
+
+            <!-- Profile Info Tab -->
+            <div x-show="activeTab === 'profile' && !loading" style="padding: 2rem;">
+                <form @submit.prevent="updateProfile()">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" x-model="profile.name" disabled style="background: #f8f9fa; cursor: not-allowed;">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Contact your administrator to change your name
+                        </small>
                     </div>
-                </div> -->
 
-                <!-- Tab links -->
-                <div class="tab">
-                <button class="tablinks" @click="activeTab = 'profile'">Profile</button>
-                <button class="tablinks" @click="activeTab = 'password'" :style="activeTab === 'password'">Change Password</button>
-                </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input 
+                            type="email" 
+                            x-model="profile.email"
+                            disabled style="background: #f8f9fa; cursor: not-allowed;">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Contact your administrator to change your email
+                        </small>
+                    </div>
 
-                <!-- Tab content -->
-                <!-- Profile Info Tab -->
-                <div x-show="activeTab === 'profile'" style="padding: 2rem;">
-                    <form @submit.prevent="updateProfile()">
-                        <div class="form-group">
-                            <label>Name</label>
-                            <input type="text" x-model="profile.name" disabled style="background: #f8f9fa; cursor: not-allowed;">
-                            <small style="color: #666; display: block; margin-top: 0.25rem;">
-                                Contact your administrator to change your name
-                            </small>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <input type="text" x-model="profile.role" disabled style="background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group" x-show="profile.territory">
+                        <label>Territory</label>
+                        <input type="text" x-model="profile.territory" disabled style="background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                </form>
+            </div>
+
+            <!-- Change Password Tab -->
+            <div x-show="activeTab === 'password' && !loading" style="padding: 2rem;">
+                <form @submit.prevent="changePassword()">
+                    <div class="form-group">
+                        <label>Current Password</label>
+                        <input 
+                            type="password" 
+                            x-model="passwordForm.current_password"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input 
+                            type="password" 
+                            x-model="passwordForm.new_password"
+                            @input="checkPasswordStrength()"
+                            required
+                            minlength="8"
+                        >
+                        <div class="password-strength" x-show="passwordForm.new_password">
+                            <div class="password-strength-bar" :class="passwordStrength"></div>
                         </div>
+                        <small style="color: #666; display: block; margin-top: 0.5rem;">
+                            Password must be at least 8 characters long
+                        </small>
+                    </div>
 
-                        <div class="form-group">
-                            <label>Email Address</label>
-                            <input 
-                                type="email" 
-                                x-model="profile.email"
-                                disabled style="background: #f8f9fa; cursor: not-allowed;">
-                            <small style="color: #666; display: block; margin-top: 0.25rem;">
-                                Contact your administrator to change your email
-                            </small>
-                        </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <input 
+                            type="password" 
+                            x-model="passwordForm.confirm_password"
+                            required
+                            minlength="8"
+                        >
+                    </div>
 
-                        <div class="form-group">
-                            <label>Role</label>
-                            <input type="text" x-model="profile.role" disabled style="background: #f8f9fa; cursor: not-allowed;">
-                        </div>
-
-                        <div class="form-group" x-show="profile.territory">
-                            <label>Territory</label>
-                            <input type="text" x-model="profile.territory" disabled style="background: #f8f9fa; cursor: not-allowed;">
-                        </div>
-
-                        <!-- <button type="submit" class="btn btn-success" :disabled="saving">
-                            <span x-show="!saving">Update Profile</span>
-                            <span x-show="saving">Updating...</span>
-                        </button> -->
-                    </form>
-                </div>
-
-                <!-- Change Password Tab -->
-                <div x-show="activeTab === 'password'" style="padding: 2rem;">
-                    <form @submit.prevent="changePassword()">
-                        <div class="form-group">
-                            <label>Current Password</label>
-                            <input 
-                                type="password" 
-                                x-model="passwordForm.current_password"
-                                required
-                            >
-                        </div>
-
-                        <div class="form-group">
-                            <label>New Password</label>
-                            <input 
-                                type="password" 
-                                x-model="passwordForm.new_password"
-                                @input="checkPasswordStrength()"
-                                required
-                                minlength="8"
-                            >
-                            <div class="password-strength" x-show="passwordForm.new_password">
-                                <div class="password-strength-bar" :class="passwordStrength"></div>
-                            </div>
-                            <small style="color: #666; display: block; margin-top: 0.5rem;">
-                                Password must be at least 8 characters long
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Confirm New Password</label>
-                            <input 
-                                type="password" 
-                                x-model="passwordForm.confirm_password"
-                                required
-                                minlength="8"
-                            >
-                        </div>
-
-                        <button type="submit" class="btn btn-warning" :disabled="saving">
-                            <span x-show="!saving">Change Password</span>
-                            <span x-show="saving">Changing...</span>
-                        </button>
-                    </form>
-                </div>
+                    <button type="submit" class="btn btn-warning" :disabled="saving">
+                        <span x-show="!saving">Change Password</span>
+                        <span x-show="saving">Changing...</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
-    </body>
+</body>
 </html>
