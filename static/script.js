@@ -593,10 +593,10 @@ function inventoryApp() {
         },
 
         // UI helpers
-        // getStoreClass(storeType, storeOwner) {
-        //     if (storeOwner === this.currentUser.id) return 'store-mine';
-        //     return 'store-' + storeType;
-        // },
+        getStoreClass(storeType, storeOwner) {
+            if (storeOwner === this.currentUser.id) return 'store-mine';
+            return 'store-' + storeType;
+        },
 
         canEdit(storeOwner, storeType) {
             // Admin can edit everything
