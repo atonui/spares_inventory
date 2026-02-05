@@ -71,6 +71,12 @@ function inventoryApp() {
         showPartModal: false,
         showProfileModal: false,
         showStoreTypeModal: false,
+
+        // part import modal properties
+        showDuplicateResolutionModal: false,
+        csvDuplicates: [],
+        storeConflicts: [],
+        pendingImportData: null,
         
         // panels
         showUsersPanel: false,
@@ -187,8 +193,7 @@ function inventoryApp() {
         showTransferEquipmentModal: false,
         showEquipmentPanel: false,
         showEquipmentHistoryModal: false,
-        showCalibrationSettingsModal: false,
-       
+        showCalibrationSettingsModal: false, 
 
         // API Base URL
         apiUrl: '/api',
@@ -209,7 +214,7 @@ function inventoryApp() {
                     this.currentUser = null;
                     this.isAuthenticated = false;
                 }
-                    }
+            }
         },
 
         // Authentication
@@ -641,6 +646,215 @@ function inventoryApp() {
             return this.movements.slice(0, 20);
         },
 
+        getResolutionSummary() {
+            let willAdd = 0;
+            let willUpdate = 0;
+            let willSkip = 0;
+            
+            // Count CSV duplicates
+            this.csvDuplicates.forEach(dup => {
+                if (dup.action === 'skip') {
+                    willSkip += dup.count;
+                } else if (dup.action === 'tally') {
+                    willAdd += 1; // One combined entry
+                } else {
+                    willAdd += dup.count; // Keep separate
+                }
+            });
+            
+            // Count store conflicts
+            this.storeConflicts.forEach(conflict => {
+                if (conflict.action === 'skip') {
+                    willSkip += 1;
+                } else if (conflict.action === 'add' || conflict.action === 'replace') {
+                    willUpdate += 1;
+                }
+            });
+            
+            return { willAdd, willUpdate, willSkip };
+        },
+
+        setAllCsvDuplicates(action) {
+            this.csvDuplicates.forEach(dup => dup.action = action);
+        },
+
+        setAllStoreConflicts(action) {
+            this.storeConflicts.forEach(conflict => conflict.action = action);
+        },
+
+        setAllActions(action) {
+            this.setAllCsvDuplicates(action);
+            this.setAllStoreConflicts(action);
+        },
+
+        cancelDuplicateResolution() {
+            this.showDuplicateResolutionModal = false;
+            this.csvDuplicates = [];
+            this.storeConflicts = [];
+            this.pendingImportData = null;
+        },
+
+        async processDuplicateResolution() {
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                let addedCount = 0;
+                let updatedCount = 0;
+                let skippedCount = 0;
+                let errors = [];
+                
+                if (!this.pendingImportData) {
+                    throw new Error('No pending import data');
+                }
+                
+                const { parsedRows, storeId } = this.pendingImportData;
+                
+                // First, handle CSV duplicates - consolidate based on user choice
+                const consolidatedRows = [];
+                const processedParts = new Set();
+                
+                for (const row of parsedRows) {
+                    const csvDup = this.csvDuplicates.find(d => d.partNumber === row.partNumber);
+                    
+                    if (csvDup) {
+                        // This part has duplicates in CSV
+                        if (processedParts.has(row.partNumber)) {
+                            continue; // Already processed
+                        }
+                        
+                        processedParts.add(row.partNumber);
+                        
+                        if (csvDup.action === 'skip') {
+                            skippedCount += csvDup.count;
+                            continue;
+                        } else if (csvDup.action === 'tally') {
+                            // Use tallied quantity
+                            consolidatedRows.push({
+                                partNumber: row.partNumber,
+                                quantity: csvDup.totalQuantity
+                            });
+                        } else if (csvDup.action === 'separate') {
+                            // Keep all separate entries
+                            csvDup.rows.forEach(r => {
+                                consolidatedRows.push(r);
+                            });
+                        }
+                    } else {
+                        // No duplicates, add as-is
+                        consolidatedRows.push(row);
+                    }
+                }
+                
+                console.log('Consolidated rows:', consolidatedRows);
+                
+                // Now process each row - add or update based on store conflicts
+                for (const row of consolidatedRows) {
+                    const { partNumber, quantity } = row;
+                    
+                    // Find part in catalog
+                    const part = this.parts.find(p => p.part_number === partNumber);
+                    if (!part) {
+                        errors.push(`Part ${partNumber} not found in catalog`);
+                        skippedCount++;
+                        continue;
+                    }
+                    
+                    // Check if this has a store conflict
+                    const conflict = this.storeConflicts.find(c => c.partNumber === partNumber);
+                    
+                    if (conflict) {
+                        if (conflict.action === 'skip') {
+                            skippedCount++;
+                            continue;
+                        } else if (conflict.action === 'add') {
+                            // Add to existing
+                            try {
+                                await this.apiCall('/inventory/update', {
+                                    method: 'PUT',
+                                    body: JSON.stringify({
+                                        inventory_id: conflict.inventoryId,
+                                        new_quantity: conflict.currentQuantity + quantity
+                                    })
+                                });
+                                updatedCount++;
+                            } catch (error) {
+                                errors.push(`Failed to update ${partNumber}: ${error.message}`);
+                                skippedCount++;
+                            }
+                        } else if (conflict.action === 'replace') {
+                            // Replace quantity
+                            try {
+                                await this.apiCall('/inventory/update', {
+                                    method: 'PUT',
+                                    body: JSON.stringify({
+                                        inventory_id: conflict.inventoryId,
+                                        new_quantity: quantity
+                                    })
+                                });
+                                updatedCount++;
+                            } catch (error) {
+                                errors.push(`Failed to replace ${partNumber}: ${error.message}`);
+                                skippedCount++;
+                            }
+                        }
+                    } else {
+                        // No conflict - add new
+                        try {
+                            await this.apiCall('/inventory/add', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    part_id: part.id,
+                                    store_id: storeId,
+                                    quantity: quantity
+                                })
+                            });
+                            addedCount++;
+                        } catch (error) {
+                            errors.push(`Failed to add ${partNumber}: ${error.message}`);
+                            skippedCount++;
+                        }
+                    }
+                }
+                
+                // Build success message
+                let message = `Import complete! `;
+                if (addedCount > 0) message += `Added: ${addedCount} `;
+                if (updatedCount > 0) message += `Updated: ${updatedCount} `;
+                if (skippedCount > 0) message += `Skipped: ${skippedCount}`;
+                
+                this.successMessage = message;
+                
+                if (errors.length > 0) {
+                    console.error('Import errors:', errors);
+                    this.error = `Some errors occurred: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`;
+                    setTimeout(() => this.error = '', 10000);
+                }
+                
+                // Close modal and refresh
+                this.showDuplicateResolutionModal = false;
+                this.csvDuplicates = [];
+                this.storeConflicts = [];
+                this.pendingImportData = null;
+                
+                await this.loadInventory();
+                if (this.selectedStore) {
+                    this.storeInventory = this.inventory.filter(item => item.store_name === this.selectedStore.name);
+                }
+                
+                setTimeout(() => {
+                    this.successMessage = '';
+                }, 5000);
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                this.error = 'Failed to process import: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async viewStoreInventory(store) {
             this.selectedStore = store;
             this.storeInventory = this.inventory.filter(item => item.store_name === store.name);
@@ -672,65 +886,106 @@ function inventoryApp() {
                 // Skip header line
                 const dataLines = lines.slice(1);
                 
-                let addedCount = 0;
-                let skippedCount = 0;
-                let errors = [];
+                // Parse all rows
+                const parsedRows = [];
                 
                 for (const line of dataLines) {
                     const [partNumber, quantity] = line.split(',').map(s => s.trim());
                     
-                    if (!partNumber || !quantity) {
-                        skippedCount++;
+                    if (!partNumber || !quantity || isNaN(parseInt(quantity))) {
+                        console.warn(`Skipping invalid line: ${line}`);
                         continue;
                     }
                     
-                    // Find part by part number
-                    const part = this.parts.find(p => p.part_number === partNumber);
-                    if (!part) {
-                        errors.push(`Part ${partNumber} not found`);
-                        skippedCount++;
-                        continue;
+                    parsedRows.push({ 
+                        partNumber, 
+                        quantity: parseInt(quantity) 
+                    });
+                }
+                
+                if (parsedRows.length === 0) {
+                    this.error = 'No valid data found in CSV';
+                    this.loading = false;
+                    event.target.value = '';
+                    return;
+                }
+                
+                // Detect CSV duplicates
+                const partNumberGroups = {};
+                parsedRows.forEach(row => {
+                    if (!partNumberGroups[row.partNumber]) {
+                        partNumberGroups[row.partNumber] = [];
                     }
-                    
-                    try {
-                        await this.apiCall('/inventory/add', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                part_id: part.id,
-                                store_id: storeId,
-                                quantity: parseInt(quantity)
-                            })
+                    partNumberGroups[row.partNumber].push(row);
+                });
+                
+                this.csvDuplicates = [];
+                Object.keys(partNumberGroups).forEach(partNumber => {
+                    const group = partNumberGroups[partNumber];
+                    if (group.length > 1) {
+                        const quantities = group.map(r => r.quantity);
+                        const totalQuantity = quantities.reduce((sum, q) => sum + q, 0);
+                        
+                        this.csvDuplicates.push({
+                            partNumber,
+                            count: group.length,
+                            quantities,
+                            totalQuantity,
+                            rows: group,
+                            action: 'tally' // Default action
                         });
-                        addedCount++;
-                    } catch (error) {
-                        errors.push(`Failed to add ${partNumber}: ${error.message}`);
-                        skippedCount++;
+                    }
+                });
+                
+                // Detect store conflicts (only check unique part numbers)
+                this.storeConflicts = [];
+                const uniquePartNumbers = [...new Set(parsedRows.map(r => r.partNumber))];
+                
+                for (const partNumber of uniquePartNumbers) {
+                    const existingInventory = this.inventory.find(
+                        i => i.part_number === partNumber && 
+                            i.store_name === this.selectedStore?.name &&
+                            !i.work_order
+                    );
+                    
+                    if (existingInventory) {
+                        const part = this.parts.find(p => p.part_number === partNumber);
+                        
+                        // Calculate CSV quantity (sum all if duplicates exist)
+                        const csvQuantity = parsedRows
+                            .filter(r => r.partNumber === partNumber)
+                            .reduce((sum, r) => sum + r.quantity, 0);
+                        
+                        this.storeConflicts.push({
+                            partNumber: partNumber,
+                            description: part?.description || 'Unknown',
+                            currentQuantity: existingInventory.quantity,
+                            csvQuantity: csvQuantity,
+                            inventoryId: existingInventory.id,
+                            action: 'add' // Default action
+                        });
                     }
                 }
                 
-                this.successMessage = `Import complete! Added: ${addedCount}, Skipped: ${skippedCount}`;
-                
-                if (errors.length > 0) {
-                    console.error('Import errors:', errors);
-                    this.error = `Some errors occurred. Check console for details.`;
+                // If no duplicates or conflicts, process directly
+                if (this.csvDuplicates.length === 0 && this.storeConflicts.length === 0) {
+                    this.pendingImportData = { parsedRows, storeId };
+                    await this.processDuplicateResolution();
+                    event.target.value = '';
+                    return;
                 }
                 
-                await this.loadInventory();
-                if (this.selectedStore) {
-                    this.storeInventory = this.inventory.filter(item => item.store_name === this.selectedStore.name);
-                }
-                
-                event.target.value = ''; // Reset file input
-                
-                setTimeout(() => {
-                    this.successMessage = '';
-                    this.error = '';
-                }, 5000);
+                // Show resolution modal
+                this.pendingImportData = { parsedRows, storeId };
+                this.showDuplicateResolutionModal = true;
+                this.loading = false;
+                event.target.value = '';
                 
             } catch (error) {
+                console.error('Import error:', error);
                 this.error = 'Failed to import: ' + error.message;
-            } finally {
                 this.loading = false;
+                event.target.value = '';
             }
         },
 

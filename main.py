@@ -2614,7 +2614,7 @@ async def bulk_import_parts(
 
     added, skipped = 0, 0
     skipped_details = []  # keep track of skipped parts with reasons
-
+    # these should be moved from hardcoded to a db table in future and mapped to dropdown in frontend as well as validation on backend
     for row in reader:
         try:
             # Validate required fields

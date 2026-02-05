@@ -1338,6 +1338,131 @@
                 </div>
             </div>
 
+            <!-- Duplicate Resolution Modal -->
+            <div x-show="showDuplicateResolutionModal" class="modal" @click.outside="showDuplicateResolutionModal = false">
+                <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                    <h3>🔍 Duplicate Parts Detected</h3>
+                    <p style="color: #666; margin-bottom: 1.5rem;">
+                        The following parts appear multiple times or already exist in the store. 
+                        Choose how to handle each one:
+                    </p>
+
+                    <!-- CSV Duplicates Section -->
+                    <div x-show="csvDuplicates.length > 0" style="margin-bottom: 2rem;">
+                        <h4 style="color: #f59e0b; margin-bottom: 1rem;">📄 Duplicates in CSV File</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 1rem;">
+                            These parts appear multiple times in your CSV file.
+                        </p>
+                        
+                        <table style="margin-bottom: 1rem;">
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Occurrences</th>
+                                    <th>Individual Quantities</th>
+                                    <th>Total if Tallied</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="dup in csvDuplicates" :key="dup.partNumber">
+                                    <tr>
+                                        <td><strong x-text="dup.partNumber"></strong></td>
+                                        <td x-text="dup.count"></td>
+                                        <td x-text="dup.quantities.join(' + ')"></td>
+                                        <td><strong x-text="dup.totalQuantity"></strong></td>
+                                        <td>
+                                            <select x-model="dup.action" style="width: 100%; padding: 0.4rem;">
+                                                <option value="tally">✓ Tally (Sum all)</option>
+                                                <option value="separate">↔ Keep Separate</option>
+                                                <option value="skip">✗ Skip All</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Store Conflicts Section -->
+                    <div x-show="storeConflicts.length > 0" style="margin-bottom: 2rem;">
+                        <h4 style="color: #dc2626; margin-bottom: 1rem;">⚠️ Already in Store</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 1rem;">
+                            These parts already exist in the selected store.
+                        </p>
+                        
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Current Qty</th>
+                                    <th>CSV Qty</th>
+                                    <th>New Total</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="conflict in storeConflicts" :key="conflict.partNumber">
+                                    <tr>
+                                        <td><strong x-text="conflict.partNumber"></strong></td>
+                                        <td x-text="conflict.description"></td>
+                                        <td x-text="conflict.currentQuantity"></td>
+                                        <td x-text="conflict.csvQuantity"></td>
+                                        <td>
+                                            <strong x-text="conflict.action === 'add' ? (conflict.currentQuantity + conflict.csvQuantity) : 
+                                                        conflict.action === 'replace' ? conflict.csvQuantity : 
+                                                        conflict.currentQuantity"></strong>
+                                        </td>
+                                        <td>
+                                            <select x-model="conflict.action" style="width: 100%; padding: 0.4rem;">
+                                                <option value="add">➕ Add to Existing</option>
+                                                <option value="replace">🔄 Replace Quantity</option>
+                                                <option value="skip">✗ Skip</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Action Summary -->
+                    <div style="background: #f0f9ff; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; border-left: 4px solid #3b82f6;">
+                        <h4 style="margin-bottom: 0.5rem;">📊 Import Summary</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; font-size: 0.9em;">
+                            <div>Will Add: <strong x-text="getResolutionSummary().willAdd"></strong></div>
+                            <div>Will Update: <strong x-text="getResolutionSummary().willUpdate"></strong></div>
+                            <div>Will Skip: <strong x-text="getResolutionSummary().willSkip"></strong></div>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div style="display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" class="btn btn-sm" @click="setAllCsvDuplicates('tally')">
+                                Tally All CSV
+                            </button>
+                            <button type="button" class="btn btn-sm" @click="setAllStoreConflicts('add')">
+                                Add All to Store
+                            </button>
+                            <button type="button" class="btn btn-sm" @click="setAllActions('skip')">
+                                Skip All
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" class="btn" @click="cancelDuplicateResolution()">
+                                Cancel Import
+                            </button>
+                            <button type="button" class="btn btn-success" @click="processDuplicateResolution()" :disabled="loading">
+                                <span x-show="!loading">✓ Proceed with Import</span>
+                                <span x-show="loading">Processing...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Edit Stock Modal -->
             <div x-show="showEditModal" class="modal" @click.outside="showEditModal = false">
                 <div class="modal-content">
