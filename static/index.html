@@ -46,6 +46,17 @@
                     <span x-show="!loading">Login</span>
                     <span x-show="loading">Logging in...</span>
                 </button>
+
+     <div class="form-group">
+        <label style="cursor: pointer;">
+            <table style="border: none; margin: 0; padding: 0;">
+                <tr>
+                    <td style="padding: 0; vertical-align: middle;"><input type="checkbox" x-model="loginForm.remember_me"></td>
+                    <td style="padding: 0 0 0 8px; vertical-align: middle; white-space: nowrap;"><small>Remember me for 30 days</small></td>
+                </tr>
+            </table>
+        </label>
+    </div>
             </form>
             <div class="back-link" style="margin-top: 1rem; text-align: center;">
                 <a href="/static/forgot_password.html">Forgot Password?</a>

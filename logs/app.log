@@ -3254,3 +3254,168 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2026-02-05 20:30:11,713 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_store RESOURCE=store/None STATUS=success
 2026-02-05 20:39:01,606 - inventory_app - INFO - Application shutting down
 2026-02-05 20:39:01,627 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-02-06 09:45:42,243 - inventory_app - INFO - Application starting up
+2026-02-06 09:45:42,258 - inventory_app - INFO - [startup] Application initialized
+2026-02-06 09:45:42,262 - inventory_app - INFO - Database initialized successfully
+2026-02-06 09:45:48,195 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 09:45:48,243 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 09:45:48,286 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 09:45:48,314 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 09:45:48,346 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 09:46:01,173 - audit - INFO - USER=Valentine Opiyo(1) ACTION=bulk_import_parts RESOURCE=part/None STATUS=success
+2026-02-06 09:46:01,232 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 09:52:46,643 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_store RESOURCE=store/5 STATUS=success
+2026-02-06 09:54:18,492 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/280 STATUS=success
+2026-02-06 09:54:18,518 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/281 STATUS=success
+2026-02-06 09:54:18,544 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/282 STATUS=success
+2026-02-06 09:54:18,569 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/283 STATUS=success
+2026-02-06 09:54:18,594 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/284 STATUS=success
+2026-02-06 09:54:18,626 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/285 STATUS=success
+2026-02-06 09:54:18,656 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/286 STATUS=success
+2026-02-06 09:54:18,688 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/287 STATUS=success
+2026-02-06 09:54:18,718 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/288 STATUS=success
+2026-02-06 09:54:18,751 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/289 STATUS=success
+2026-02-06 09:54:18,783 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/290 STATUS=success
+2026-02-06 09:54:18,817 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/291 STATUS=success
+2026-02-06 09:54:18,850 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/292 STATUS=success
+2026-02-06 09:54:18,884 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/293 STATUS=success
+2026-02-06 09:54:18,919 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/294 STATUS=success
+2026-02-06 09:54:18,956 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/295 STATUS=success
+2026-02-06 09:54:18,994 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/296 STATUS=success
+2026-02-06 09:54:19,028 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/297 STATUS=success
+2026-02-06 09:54:19,063 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/298 STATUS=success
+2026-02-06 09:54:19,096 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/299 STATUS=success
+2026-02-06 09:54:19,134 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/300 STATUS=success
+2026-02-06 09:54:19,168 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/301 STATUS=success
+2026-02-06 09:54:19,205 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/302 STATUS=success
+2026-02-06 09:54:19,246 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/303 STATUS=success
+2026-02-06 09:54:19,280 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/304 STATUS=success
+2026-02-06 09:54:19,313 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/305 STATUS=success
+2026-02-06 09:54:19,346 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/306 STATUS=success
+2026-02-06 09:54:19,390 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/307 STATUS=success
+2026-02-06 09:54:19,431 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/308 STATUS=success
+2026-02-06 09:54:19,474 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/309 STATUS=success
+2026-02-06 09:54:19,519 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/310 STATUS=success
+2026-02-06 09:54:19,568 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/311 STATUS=success
+2026-02-06 09:54:19,612 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/312 STATUS=success
+2026-02-06 09:54:19,654 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/313 STATUS=success
+2026-02-06 09:54:19,700 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/314 STATUS=success
+2026-02-06 09:54:19,744 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/315 STATUS=success
+2026-02-06 09:54:19,786 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/316 STATUS=success
+2026-02-06 09:54:19,828 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/317 STATUS=success
+2026-02-06 09:54:19,871 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/318 STATUS=success
+2026-02-06 09:54:19,913 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/319 STATUS=success
+2026-02-06 09:54:19,957 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/320 STATUS=success
+2026-02-06 09:54:20,006 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/321 STATUS=success
+2026-02-06 09:54:20,051 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/322 STATUS=success
+2026-02-06 09:54:20,096 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/323 STATUS=success
+2026-02-06 09:54:20,135 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/324 STATUS=success
+2026-02-06 09:54:20,178 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/325 STATUS=success
+2026-02-06 09:54:20,220 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/326 STATUS=success
+2026-02-06 09:54:20,259 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/327 STATUS=success
+2026-02-06 09:54:20,299 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/328 STATUS=success
+2026-02-06 09:54:20,329 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/329 STATUS=success
+2026-02-06 09:54:20,368 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/330 STATUS=success
+2026-02-06 09:54:20,410 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/331 STATUS=success
+2026-02-06 09:54:20,452 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/332 STATUS=success
+2026-02-06 09:54:20,492 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/333 STATUS=success
+2026-02-06 09:54:20,534 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/334 STATUS=success
+2026-02-06 09:54:20,577 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/335 STATUS=success
+2026-02-06 09:54:20,614 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/336 STATUS=success
+2026-02-06 09:54:20,655 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/337 STATUS=success
+2026-02-06 09:54:20,695 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/338 STATUS=success
+2026-02-06 09:54:20,729 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/339 STATUS=success
+2026-02-06 09:54:20,789 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/340 STATUS=success
+2026-02-06 09:54:20,823 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/341 STATUS=success
+2026-02-06 09:54:20,860 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/342 STATUS=success
+2026-02-06 09:54:20,895 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/343 STATUS=success
+2026-02-06 09:54:20,928 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/344 STATUS=success
+2026-02-06 09:54:20,964 - audit - INFO - USER=Valentine Opiyo(1) ACTION=add_stock RESOURCE=inventory/345 STATUS=success
+2026-02-06 09:54:29,677 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 09:54:29,700 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 09:54:29,720 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 09:54:29,733 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 09:54:29,751 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 10:43:22,621 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 10:43:22,621 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2026-02-06 10:43:22,647 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 10:43:22,668 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 10:43:22,688 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 10:43:22,699 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 10:43:22,709 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 10:43:57,368 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_user RESOURCE=user/None STATUS=success
+2026-02-06 10:43:57,379 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 10:44:29,823 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_user RESOURCE=user/None STATUS=success
+2026-02-06 10:44:29,836 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 10:44:55,729 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_user RESOURCE=user/None STATUS=success
+2026-02-06 10:44:55,742 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 14:02:55,335 - inventory_app - INFO - Application shutting down
+2026-02-06 14:02:55,347 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-02-06 14:18:10,560 - inventory_app - INFO - Application starting up
+2026-02-06 14:18:10,567 - inventory_app - INFO - [startup] Application initialized
+2026-02-06 14:23:53,888 - inventory_app - INFO - Application starting up
+2026-02-06 14:23:53,905 - inventory_app - INFO - [startup] Application initialized
+2026-02-06 14:27:29,942 - inventory_app - INFO - Application starting up
+2026-02-06 14:27:29,949 - inventory_app - INFO - [startup] Application initialized
+2026-02-06 14:27:29,954 - inventory_app - INFO - Database initialized successfully
+2026-02-06 16:01:06,917 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 16:01:06,918 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2026-02-06 16:01:06,953 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:01:06,985 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:01:07,012 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:01:07,040 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 16:01:07,069 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 16:02:53,468 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2026-02-06 16:03:12,055 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-02-06 16:03:18,297 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-02-06 16:03:37,164 - audit - INFO - USER=tonuiallan@gmail.com(7) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-02-06 16:03:39,725 - audit - INFO - USER=tonuiallan@gmail.com(7) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-02-06 16:10:00,249 - audit - INFO - USER=Walter Korir(9) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 16:10:00,250 - inventory_app - INFO - User Walter Korir (9) logged in from 127.0.0.1
+2026-02-06 16:10:00,288 - audit - INFO - USER=Walter Korir(9) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:10:00,320 - audit - INFO - USER=Walter Korir(9) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:10:00,347 - audit - INFO - USER=Walter Korir(9) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:10:00,370 - audit - INFO - USER=Walter Korir(9) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 16:10:05,380 - audit - INFO - USER=Walter Korir(9) ACTION=logout RESOURCE=None/None STATUS=success
+2026-02-06 16:11:57,886 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-02-06 16:12:18,269 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 16:12:18,270 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2026-02-06 16:12:18,314 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:12:18,336 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:12:18,382 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:12:18,408 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 16:12:18,442 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 16:13:00,352 - audit - INFO - USER=Valentine Opiyo(1) ACTION=update_user RESOURCE=user/None STATUS=success
+2026-02-06 16:13:00,372 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 16:13:08,344 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2026-02-06 16:13:17,089 - audit - INFO - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 16:13:17,089 - inventory_app - INFO - User Allan Koech (6) logged in from 127.0.0.1
+2026-02-06 16:13:17,121 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:13:17,146 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:13:17,174 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:13:17,191 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 16:14:43,690 - errors - ERROR - HTTPException in transfer_stock: Permission denied for transfer
+2026-02-06 16:14:43,697 - audit - INFO - USER=Allan Koech(6) ACTION=transfer_stock RESOURCE=inventory/None STATUS=error
+2026-02-06 16:15:28,878 - errors - ERROR - HTTPException in transfer_stock: Permission denied for transfer
+2026-02-06 16:15:28,891 - audit - INFO - USER=Allan Koech(6) ACTION=transfer_stock RESOURCE=inventory/None STATUS=error
+2026-02-06 16:22:02,009 - audit - INFO - USER=Allan Koech(6) ACTION=logout RESOURCE=None/None STATUS=success
+2026-02-06 16:22:20,267 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 16:22:20,267 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2026-02-06 16:22:20,299 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:22:20,326 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:22:20,352 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:22:20,367 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 16:22:20,385 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 16:22:36,461 - audit - INFO - USER=Valentine Opiyo(1) ACTION=transfer_stock RESOURCE=inventory/None STATUS=success
+2026-02-06 16:22:36,491 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:22:36,517 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:22:36,538 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:22:36,551 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-06 16:22:36,571 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-02-06 16:22:41,173 - audit - INFO - USER=Valentine Opiyo(1) ACTION=logout RESOURCE=None/None STATUS=success
+2026-02-06 16:22:49,467 - audit - INFO - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-06 16:22:49,468 - inventory_app - INFO - User Allan Koech (6) logged in from 127.0.0.1
+2026-02-06 16:22:49,498 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-06 16:22:49,524 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-06 16:22:49,544 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-06 16:22:49,559 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success

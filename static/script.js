@@ -14,7 +14,8 @@ function inventoryApp() {
         // Forms
         loginForm: {
             email: '',
-            password: ''
+            password: '',
+            remember_me: false
         },
         
         addForm: {

@@ -104,6 +104,12 @@ SMTP_PASSWORD = settings.SMTP_PASSWORD
 FRONTEND_URL = settings.FRONTEND_URL
 CSRF_SECRET = settings.CSRF_SECRET
 
+# authentication andlogin variables
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
+SESSION_DURATION_HOURS = 24
+REMEMBER_ME_DURATION_DAYS = 30
+
 # csrf configuration
 # CSRF_SECRET = os.getenv("CSRF_SECRET", SECRET_KEY)
 csrf_serializer = URLSafeTimedSerializer(CSRF_SECRET)
@@ -127,6 +133,53 @@ def init_db():
             session_token TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+
+    #     # Update users table to add new fields
+    # cursor.execute('''
+    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
+    #     session_expires TIMESTAMP NULL
+    # ''')
+
+    # cursor.execute('''
+    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
+    #     failed_login_attempts INTEGER DEFAULT 0
+    # ''')
+
+    # cursor.execute('''
+    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
+    #     account_locked_until TIMESTAMP NULL
+    # ''')
+
+    # cursor.execute('''
+    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
+    #     last_login TIMESTAMP NULL
+    # ''')
+
+    # Create sessions table for better session management
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_token TEXT UNIQUE NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ip_address TEXT,
+            user_agent TEXT,
+            is_active INTEGER DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_sessions_token 
+        ON sessions(session_token)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_sessions_user 
+        ON sessions(user_id, is_active)
     """)
 
     # Stores table
@@ -669,6 +722,7 @@ class ResetPasswordRequest(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+    remember_me: bool = False
 
 
 class UserResponse(BaseModel):
@@ -908,20 +962,55 @@ class EquipmentStatsResponse(BaseModel):
 
 # Authentication dependency
 async def get_current_user(session_token: str = Cookie(None)):
-    """Get current user from HTTPOnly cookie"""
+    """Enhanced session validation"""
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE session_token = ?", (session_token,))
-    user = cursor.fetchone()
-    conn.close()
 
-    if not user:
+    # Check session in sessions table
+    cursor.execute(
+        """
+        SELECT s.user_id, s.expires_at, s.id as session_id, u.role, u.name
+        FROM sessions s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.session_token = ? AND s.is_active = 1
+    """,
+        (session_token,),
+    )
+
+    session = cursor.fetchone()
+
+    if not session:
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    return user["id"]
+    # Check if session is expired
+    expires_at = datetime.fromisoformat(session["expires_at"])
+    if datetime.utcnow() > expires_at:
+        # Deactivate expired session
+        cursor.execute(
+            "UPDATE sessions SET is_active = 0 WHERE id = ?", (session["session_id"],)
+        )
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    # Update last activity
+    cursor.execute(
+        """
+        UPDATE sessions 
+        SET last_activity = CURRENT_TIMESTAMP 
+        WHERE id = ?
+    """,
+        (session["session_id"],),
+    )
+
+    conn.commit()
+    conn.close()
+
+    return session["user_id"]
 
 
 # csrf middleware
@@ -1272,24 +1361,87 @@ async def verify_reset_token(token: str, request: Request = None):
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")  # 5 attempts per minute
 async def login(user_login: UserLogin, request: Request):
-    """User login"""
+    """Enhanced user login with security features"""
     ip_address = request.client.host if hasattr(request, "client") else None
-    user_agent = request.headers.get("user-agent", "")[
-        :200
-    ]  # Truncate long user agents
+    user_agent = request.headers.get("user-agent", "")[:200]
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Get user
     cursor.execute(
-        "SELECT id, email, name, role, territory, password_hash FROM users WHERE email = ?",
+        """SELECT id, email, name, role, territory, password_hash, 
+           failed_login_attempts, account_locked_until 
+           FROM users WHERE email = ?""",
         (user_login.email,),
     )
     user = cursor.fetchone()
 
+    # Check if account is locked
+    if user and user["account_locked_until"]:
+        lockout_time = datetime.fromisoformat(user["account_locked_until"])
+        if datetime.utcnow() < lockout_time:
+            remaining_minutes = int(
+                (lockout_time - datetime.utcnow()).total_seconds() / 60
+            )
+            log_activity(
+                user_id=user["id"],
+                username=user["name"],
+                action="login_blocked",
+                status="error",
+                error_message="Account locked",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            conn.close()
+            raise HTTPException(
+                status_code=423,
+                detail=f"Account locked. Try again in {remaining_minutes} minutes.",
+            )
+
+    # Verify password
     if not user or not verify_password(user_login.password, user["password_hash"]):
-        # Log failed login attempt
+        # Log failed attempt
+        if user:
+            failed_attempts = user["failed_login_attempts"] + 1
+
+            if failed_attempts >= MAX_LOGIN_ATTEMPTS:
+                # Lock account
+                lockout_until = datetime.utcnow() + timedelta(
+                    minutes=LOCKOUT_DURATION_MINUTES
+                )
+                cursor.execute(
+                    """UPDATE users 
+                       SET failed_login_attempts = ?, account_locked_until = ? 
+                       WHERE id = ?""",
+                    (failed_attempts, lockout_until.isoformat(), user["id"]),
+                )
+                conn.commit()
+
+                log_activity(
+                    user_id=user["id"],
+                    username=user["name"],
+                    action="account_locked",
+                    status="error",
+                    error_message=f"Too many failed attempts",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
+
+                conn.close()
+                raise HTTPException(
+                    status_code=423,
+                    detail=f"Account locked due to too many failed attempts. Try again in {LOCKOUT_DURATION_MINUTES} minutes.",
+                )
+            else:
+                cursor.execute(
+                    "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
+                    (failed_attempts, user["id"]),
+                )
+                conn.commit()
+
         log_activity(
-            user_id=0,
+            user_id=user["id"] if user else 0,
             username=user_login.email,
             action="login_failed",
             status="error",
@@ -1300,11 +1452,38 @@ async def login(user_login: UserLogin, request: Request):
         conn.close()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Generate a new session token
+    # Successful login - reset failed attempts and unlock
     session_token = secrets.token_urlsafe(32)
+
+    # Calculate session expiration
+    if user_login.remember_me:
+        expires = datetime.utcnow() + timedelta(days=REMEMBER_ME_DURATION_DAYS)
+        max_age = REMEMBER_ME_DURATION_DAYS * 24 * 60 * 60
+    else:
+        expires = datetime.utcnow() + timedelta(hours=SESSION_DURATION_HOURS)
+        max_age = SESSION_DURATION_HOURS * 60 * 60
+
+    # Create session in sessions table
     cursor.execute(
-        "UPDATE users SET session_token = ? WHERE id = ?", (session_token, user["id"])
+        """
+        INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+    """,
+        (user["id"], session_token, expires.isoformat(), ip_address, user_agent),
     )
+
+    # Update user record
+    cursor.execute(
+        """
+        UPDATE users 
+        SET failed_login_attempts = 0, 
+            account_locked_until = NULL,
+            last_login = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """,
+        (user["id"],),
+    )
+
     conn.commit()
     conn.close()
 
@@ -1313,14 +1492,14 @@ async def login(user_login: UserLogin, request: Request):
         user_id=user["id"],
         username=user["name"],
         action="login",
-        details={"role": user["role"], "territory": user["territory"]},
+        details={"role": user["role"], "remember_me": user_login.remember_me},
         ip_address=ip_address,
         user_agent=user_agent,
     )
 
     logger.info(f"User {user['name']} ({user['id']}) logged in from {ip_address}")
 
-    # Create response with HTTPOnly cookie
+    # Create response
     response_data = {
         "success": True,
         "user": {
@@ -1334,17 +1513,107 @@ async def login(user_login: UserLogin, request: Request):
 
     response = JSONResponse(content=response_data)
 
-    # Set HTTPOnly cookie (secure in production with HTTPS)
+    # Set HTTPOnly cookie
     response.set_cookie(
         key="session_token",
         value=session_token,
-        httponly=True,  # Prevents JavaScript access (XSS protection)
+        httponly=True,
         secure=False,  # Set to True in production with HTTPS
-        samesite="lax",  # CSRF protection
-        max_age=86400,  # 24 hours
+        samesite="lax",
+        max_age=max_age,
     )
 
     return response
+
+
+# session management endpoints
+# -------------------------------------------------------------------------------------------------------
+@app.get("/api/auth/sessions")
+async def get_active_sessions(
+    user_id: int = Depends(get_current_user), request: Request = None
+):
+    """Get user's active sessions"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id, created_at, last_activity, ip_address, user_agent,
+               CASE WHEN session_token = ? THEN 1 ELSE 0 END as is_current
+        FROM sessions
+        WHERE user_id = ? AND is_active = 1
+        ORDER BY last_activity DESC
+    """,
+        (request.cookies.get("session_token"), user_id),
+    )
+
+    sessions = cursor.fetchall()
+    conn.close()
+
+    return [dict(session) for session in sessions]
+
+
+@app.delete("/api/auth/sessions/{session_id}")
+async def revoke_session(
+    session_id: int,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Revoke a specific session"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Verify session belongs to user
+    cursor.execute(
+        """
+        UPDATE sessions 
+        SET is_active = 0 
+        WHERE id = ? AND user_id = ?
+    """,
+        (session_id, user_id),
+    )
+
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    conn.commit()
+    conn.close()
+
+    return {"success": True, "message": "Session revoked"}
+
+
+@app.post("/api/auth/sessions/revoke-all")
+async def revoke_all_sessions(
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Revoke all sessions except current"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    current_token = request.cookies.get("session_token")
+
+    cursor.execute(
+        """
+        UPDATE sessions 
+        SET is_active = 0 
+        WHERE user_id = ? AND session_token != ?
+    """,
+        (user_id, current_token),
+    )
+
+    revoked_count = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    return {"success": True, "revoked_count": revoked_count}
+
+
+# -------------------------------------------------------------------------------------------------------
 
 
 @app.post("/api/auth/logout")
