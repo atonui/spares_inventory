@@ -2249,3 +2249,9 @@
 2026-02-06 16:22:49,524 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
 2026-02-06 16:22:49,544 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
 2026-02-06 16:22:49,559 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-09 10:59:52,623 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-09 10:59:52,668 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-09 10:59:52,694 - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-09 10:59:52,715 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-09 10:59:52,728 - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-09 10:59:52,746 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success

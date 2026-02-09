@@ -3419,3 +3419,13 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2026-02-06 16:22:49,524 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
 2026-02-06 16:22:49,544 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
 2026-02-06 16:22:49,559 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-09 10:40:46,920 - inventory_app - INFO - Application starting up
+2026-02-09 10:40:46,941 - inventory_app - INFO - [startup] Application initialized
+2026-02-09 10:40:46,944 - inventory_app - INFO - Database initialized successfully
+2026-02-09 10:59:52,623 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-02-09 10:59:52,624 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2026-02-09 10:59:52,668 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-02-09 10:59:52,694 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-02-09 10:59:52,715 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-02-09 10:59:52,728 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-02-09 10:59:52,746 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
