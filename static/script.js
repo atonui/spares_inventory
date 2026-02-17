@@ -72,6 +72,7 @@ function inventoryApp() {
         showPartModal: false,
         showProfileModal: false,
         showStoreTypeModal: false,
+        showConsumeModal: false,
 
         // part import modal properties
         showDuplicateResolutionModal: false,
@@ -181,6 +182,17 @@ function inventoryApp() {
             description: '',
             display_order: 0,
             is_active: true
+        },
+
+        consumeForm: {
+            inventory_id: '',
+            part_number: '',
+            description: '',
+            store_name: '',
+            available_quantity: 0,
+            quantity: '',
+            work_order_number: '',
+            notes: ''
         },
 
         editingEquipment: null,
@@ -465,7 +477,23 @@ function inventoryApp() {
         },
 
         async loadStats() {
-            this.stats = await this.apiCall('/stats');
+            console.log('🔄 Loading stats...'); // Debug log
+            try {
+                const response = await this.apiCall('/stats');
+                console.log('📊 Stats response:', response); // Debug log
+                
+                // Force Alpine reactivity by creating a new object
+                this.stats = {
+                    total_parts: response.total_parts || 0,
+                    total_stores: response.total_stores || 0,
+                    low_stock: response.low_stock || 0,
+                    my_parts: response.my_parts || 0
+                };
+                
+                console.log('✅ Stats updated:', this.stats); // Debug log
+            } catch (error) {
+                console.error('❌ Failed to load stats:', error);
+            }
         },
 
         async loadStores() {
@@ -843,6 +871,8 @@ function inventoryApp() {
                 if (this.selectedStore) {
                     this.storeInventory = this.inventory.filter(item => item.store_name === this.selectedStore.name);
                 }
+
+                await this.loadStats();
                 
                 setTimeout(() => {
                     this.successMessage = '';
@@ -1522,18 +1552,9 @@ exportComprehensiveReport() {
 
         // Actions
         async addStock() {
-            if (!this.addForm.part_id) {
-                this.error = 'Please select a part';
-                return;
-            }
-            
-            if (!this.addForm.store_id) {
-                this.error = 'Please select a store';
-                return;
-            }
-            
             this.addingStock = true;
             this.error = '';
+            this.successMessage = '';
             
             try {
                 await this.apiCall('/inventory/add', {
@@ -1549,9 +1570,12 @@ exportComprehensiveReport() {
                 this.successMessage = 'Stock added successfully';
                 this.showAddModal = false;
                 this.addForm = { part_id: '', store_id: '', quantity: '', work_order_number: '' };
-                this.partSearchTerm = '';  // Clear search
+                this.partSearchTerm = '';
                 
                 await this.loadInventory();
+                await this.loadStats(); 
+                await this.loadEquipmentStats(); 
+                
                 if (this.selectedStore) {
                     await this.viewStoreInventory(this.selectedStore);
                 }
@@ -1588,7 +1612,9 @@ exportComprehensiveReport() {
                 this.showEditModal = false;
                 this.editForm = { inventory_id: '', new_quantity: '' };
                 
-                await this.loadAllData();
+                await this.loadInventory();
+                await this.loadStats(); 
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -1603,6 +1629,57 @@ exportComprehensiveReport() {
             this.transferForm.quantity = 1;
             this.transferForm.to_store_id = '';
             this.showTransferModal = true;
+        },
+
+        consumeItem(item) {
+            this.consumeForm = {
+                inventory_id: item.id,
+                part_number: item.part_number,
+                description: item.description,
+                store_name: item.store_name,
+                available_quantity: item.quantity,
+                quantity: 1,
+                work_order_number: '',
+                notes: ''
+            };
+            this.showConsumeModal = true;
+        },
+
+        async consumeStock() {
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            
+            try {
+                const result = await this.apiCall('/inventory/consume', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        inventory_id: parseInt(this.consumeForm.inventory_id),
+                        quantity: parseInt(this.consumeForm.quantity),
+                        work_order_number: this.consumeForm.work_order_number.trim(),
+                        notes: this.consumeForm.notes || null
+                    })
+                });
+                
+                this.successMessage = result.message;
+                this.showConsumeModal = false;
+                this.consumeForm = {};
+                
+                await this.loadInventory();
+                await this.loadMovements();
+                await this.refreshDashboard();
+                
+                if (this.selectedStore) {
+                    this.storeInventory = this.inventory.filter(item => item.store_name === this.selectedStore.name);
+                }
+                
+                setTimeout(() => this.successMessage = '', 5000);
+                
+            } catch (error) {
+                this.error = 'Failed to consume stock: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
         },
 
         async transferStock() {
@@ -1624,7 +1701,9 @@ exportComprehensiveReport() {
                 this.showTransferModal = false;
                 this.transferForm = { inventory_id: '', to_store_id: '', quantity: '' };
                 
-                await this.loadAllData();
+                await this.loadInventory();
+                await this.loadStats();  
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2133,6 +2212,8 @@ exportComprehensiveReport() {
                 this.storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' };
                 
                 await this.loadStores();
+                await this.loadStats(); 
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2141,7 +2222,6 @@ exportComprehensiveReport() {
                 this.loading = false;
             }
         },
-
         editStore(store) {
             this.editingStore = store.id;
             this.storeForm = {
@@ -2176,6 +2256,8 @@ exportComprehensiveReport() {
                 
                 await this.loadStores();
                 await this.loadInventory();
+                await this.loadStats(); 
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2201,6 +2283,8 @@ exportComprehensiveReport() {
                 
                 this.successMessage = 'Store deleted successfully!';
                 await this.loadStores();
+                await this.loadStats();  
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2232,6 +2316,8 @@ exportComprehensiveReport() {
                 this.partForm = { part_number: '', description: '', category: '', unit_cost: '' };
                 
                 await this.loadParts();
+                await this.loadStats();  
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2275,6 +2361,8 @@ exportComprehensiveReport() {
                 
                 await this.loadParts();
                 await this.loadInventory();
+                await this.loadStats();
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2300,6 +2388,8 @@ exportComprehensiveReport() {
                 
                 this.successMessage = 'Part deleted successfully!';
                 await this.loadParts();
+                await this.loadStats(); 
+                
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
@@ -2310,6 +2400,17 @@ exportComprehensiveReport() {
         },
 
         // Helper functions
+
+        async refreshDashboard() {
+            // helper method to refresh all key data on the dashboard after changes
+            console.log('🔄 Refreshing dashboard...');
+            await Promise.all([
+                this.loadStats(),
+                this.loadEquipmentStats()
+            ]);
+            console.log('✅ Dashboard refreshed');
+        },
+
         getUserName(userId) {
             if (!userId) return 'Unassigned';
             const user = this.users.find(u => u.id === userId);
@@ -2394,37 +2495,34 @@ exportComprehensiveReport() {
             this.successMessage = '';
             
             try {
-                // ensure CSRF token is present
                 if (!this.csrfToken) {
                     await this.getCsrfToken();
                 }
-
+                
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                // apiCall handles everything: CSRF, cookies, errors
                 const result = await this.apiCall('/parts/bulk-import', {
                     method: 'POST',
-                    body: formData  // apiCall detects FormData automatically
+                    body: formData
                 });
                 
                 this.successMessage = `Import complete! Added: ${result.added}, Skipped: ${result.skipped}`;
-
-                // Show skip reasons if any
-                if (result.details && result.details.length > 0) {
-                    console.log('Skipped parts details:', result.details);
-                    this.error = 'Some parts were skipped. Check console for details.';
-                    setTimeout(() => this.error = '', 8000);
+                
+                if (result.skipped > 0) {
+                    console.log(`${result.skipped} parts were skipped - check if they already exist`);
                 }
                 
                 await this.loadParts();
+                await this.loadStats();  
+                
                 event.target.value = '';
                 
                 setTimeout(() => this.successMessage = '', 5000);
                 
             } catch (error) {
                 this.error = 'Failed to import parts: ' + error.message;
-                console.error('Import error: ',error);
+                console.error('Import error:', error);
             } finally {
                 this.loading = false;
             }

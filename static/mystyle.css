@@ -886,14 +886,3 @@ label.btn {
         cursor: pointer;
     }
 }
-
-/* .checkbox-label {
-    display: block;
-    cursor: pointer;
-    user-select: none;
-}
-
-.checkbox-label input[type="checkbox"] {
-    margin-right: 0.5rem;
-    vertical-align: middle;
-} */

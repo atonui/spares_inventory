@@ -135,26 +135,26 @@ def init_db():
         )
     """)
 
-    #     # Update users table to add new fields
-    # cursor.execute('''
-    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
-    #     session_expires TIMESTAMP NULL
-    # ''')
+        # Update users table to add new fields
+    cursor.execute('''
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS
+        session_expires TIMESTAMP NULL
+    ''')
 
-    # cursor.execute('''
-    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
-    #     failed_login_attempts INTEGER DEFAULT 0
-    # ''')
+    cursor.execute('''
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS
+        failed_login_attempts INTEGER DEFAULT 0
+    ''')
 
-    # cursor.execute('''
-    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
-    #     account_locked_until TIMESTAMP NULL
-    # ''')
+    cursor.execute('''
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS
+        account_locked_until TIMESTAMP NULL
+    ''')
 
-    # cursor.execute('''
-    #     ALTER TABLE users ADD COLUMN IF NOT EXISTS
-    #     last_login TIMESTAMP NULL
-    # ''')
+    cursor.execute('''
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS
+        last_login TIMESTAMP NULL
+    ''')
 
     # Create sessions table for better session management
     cursor.execute("""
@@ -249,6 +249,7 @@ def init_db():
             movement_type TEXT NOT NULL,
             work_order_id INTEGER,
             created_by INTEGER NOT NULL,
+            notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (from_store_id) REFERENCES stores (id),
             FOREIGN KEY (to_store_id) REFERENCES stores (id),
@@ -318,6 +319,13 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+        # Check and add notes column if it doesn't exist
+    cursor.execute("PRAGMA table_info(movements)")
+    movement_columns = [column[1] for column in cursor.fetchall()]
+
+    if 'notes' not in movement_columns:
+        cursor.execute('ALTER TABLE movements ADD COLUMN notes TEXT')
 
     # Insert default store types if table is empty
     cursor.execute("SELECT COUNT(*) FROM store_types")
@@ -696,9 +704,8 @@ app.add_middleware(
 
 # Serve static files - frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
+#-----------------------------------------------------------
 # Pydantic models
-
 
 # ----User Mangaement Models----
 class UserProfileUpdate(BaseModel):
@@ -731,9 +738,6 @@ class UserResponse(BaseModel):
     name: str
     role: str
     territory: Optional[str]
-
-
-# -------------------------------
 
 
 class StoreResponse(BaseModel):
@@ -959,6 +963,14 @@ class EquipmentStatsResponse(BaseModel):
     due_soon: int
     overdue: int
 
+
+class ConsumeStockRequest(BaseModel):
+    inventory_id: int
+    quantity: int
+    work_order_number: str
+    notes: Optional[str] = None
+
+#-----------------------------------------------------------
 
 # Authentication dependency
 async def get_current_user(session_token: str = Cookie(None)):
@@ -1723,6 +1735,105 @@ async def get_inventory(
 
     return [dict(item) for item in inventory]
 
+@app.post("/api/inventory/consume")
+@log_endpoint(action='consume_stock', resource_type='inventory')
+async def consume_stock(
+    request_data: ConsumeStockRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None
+):
+    """Consume stock from inventory (requires work order)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get inventory item and check permissions
+    cursor.execute("""
+        SELECT i.*, s.type, s.assigned_user_id, s.name as store_name, p.part_number, p.description
+        FROM inventory i
+        JOIN stores s ON i.store_id = s.id
+        JOIN parts p ON i.part_id = p.id
+        WHERE i.id = ?
+    """, (request_data.inventory_id,))
+    item = cursor.fetchone()
+    
+    if not item:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    
+    # Check permissions
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if (item['type'] not in ['central', 'office'] and 
+        item['assigned_user_id'] != user_id and 
+        user['role'] != 'admin'):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Check if sufficient quantity
+    if item['quantity'] < request_data.quantity:
+        conn.close()
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient quantity. Available: {item['quantity']}, Requested: {request_data.quantity}"
+        )
+    
+    # Validate work order number
+    if not request_data.work_order_number or not request_data.work_order_number.strip():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Work order number is required")
+    
+    # Get or create work order
+    cursor.execute("SELECT id FROM work_orders WHERE work_order_number = ?", (request_data.work_order_number,))
+    wo = cursor.fetchone()
+    
+    if wo:
+        work_order_id = wo['id']
+    else:
+        # Create new work order
+        cursor.execute("""
+            INSERT INTO work_orders (work_order_number, assigned_engineer_id, status)
+            VALUES (?, ?, 'in_progress')
+        """, (request_data.work_order_number, user_id))
+        work_order_id = cursor.lastrowid
+    
+    # Update inventory - reduce quantity
+    new_quantity = item['quantity'] - request_data.quantity
+    
+    if new_quantity == 0:
+        # Remove inventory item if quantity becomes 0
+        cursor.execute("DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,))
+    else:
+        cursor.execute("""
+            UPDATE inventory 
+            SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (new_quantity, request_data.inventory_id))
+    
+    # Log movement as consumption
+    cursor.execute("""
+        INSERT INTO movements (
+            from_store_id, part_id, quantity, movement_type, 
+            work_order_id, created_by, notes
+        ) VALUES (?, ?, ?, 'consume', ?, ?, ?)
+    """, (
+        item['store_id'], 
+        item['part_id'], 
+        request_data.quantity, 
+        work_order_id, 
+        user_id,
+        request_data.notes
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "success": True, 
+        "message": f"Consumed {request_data.quantity} x {item['part_number']} for WO #{request_data.work_order_number}",
+        "remaining_quantity": new_quantity
+    }
 
 @app.get("/api/stats", response_model=StatsResponse)
 async def get_stats(user_id: int = Depends(get_current_user), request: Request = None):

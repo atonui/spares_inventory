@@ -419,6 +419,12 @@
                                         @click="transferItem(item)">
                                     Transfer
                                 </button>
+                                <button class="btn btn-sm" 
+                                        style="background: #ff9800; color: white;"
+                                        x-show="canEdit(item.store_owner, item.store_type)"
+                                        @click="consumeItem(item)">
+                                    🔧 Consume
+                                </button>
                             </td>
                         </tr>
                     </template>
@@ -507,6 +513,11 @@
                                 <td x-text="movement.to_store_name || '-'"></td>
                                 <td x-text="movement.work_order || '-'"></td>
                                 <td x-text="movement.created_by_name"></td>
+                                <td>
+                                    <span class="wo-tag" 
+                                        :style="movement.movement_type === 'consume' ? 'background: #fff3cd; color: #856404; border: 1px solid #ffc107;' : ''"
+                                        x-text="movement.movement_type"></span>
+                                </td>
                             </tr>
                         </template>
                     </tbody>
@@ -545,8 +556,22 @@
                                     <span x-show="!item.work_order" class="wo-tag">Original</span>
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm" @click="editItem(item)">Edit</button>
-                                    <button class="btn btn-sm btn-warning" @click="transferItem(item)">Transfer</button>
+                                    <button class="btn btn-sm" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="editItem(item)">
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-warning" 
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="transferItem(item)">
+                                        Transfer
+                                    </button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #ff9800; color: white;"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="consumeItem(item)">
+                                        🔧 Consume
+                                    </button>
                                 </td>
                             </tr>
                         </template>
@@ -783,6 +808,12 @@
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="transferItem(item)">
                                         Transfer
+                                    </button>
+                                    <button class="btn btn-sm" 
+                                            style="background: #ff9800; color: white;"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="consumeItem(item)">
+                                        🔧 Consume
                                     </button>
                                 </td>
                             </tr>
@@ -1517,6 +1548,78 @@
                             <button type="submit" class="btn btn-warning" :disabled="loading">
                                 <span x-show="!loading">Transfer</span>
                                 <span x-show="loading">Transferring...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Consume Stock Modal -->
+            <div x-show="showConsumeModal" class="modal" @click.outside="showConsumeModal = false">
+                <div class="modal-content">
+                    <h3>🔧 Consume Part for Work Order</h3>
+                    
+                    <div x-show="consumeForm.part_number" style="background: #fff3cd; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #ffc107;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">Consuming:</div>
+                        <div>
+                            <strong x-text="consumeForm.part_number"></strong> - 
+                            <span x-text="consumeForm.description"></span>
+                        </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
+                            From: <strong x-text="consumeForm.store_name"></strong> 
+                            (Available: <strong x-text="consumeForm.available_quantity"></strong>)
+                        </div>
+                    </div>
+                    
+                    <form @submit.prevent="consumeStock()">
+                        <div class="form-group">
+                            <label>Work Order Number *</label>
+                            <input 
+                                type="text" 
+                                x-model="consumeForm.work_order_number" 
+                                placeholder="e.g., WO-2024-001 or 12345"
+                                required
+                                pattern="[A-Za-z0-9\-]+"
+                                title="Alphanumeric characters and dashes only"
+                                autofocus>
+                            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                                Enter the work order number for this consumption
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Quantity to Consume *</label>
+                            <input 
+                                type="number" 
+                                x-model="consumeForm.quantity" 
+                                :max="consumeForm.available_quantity"
+                                min="1" 
+                                required>
+                            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                                Maximum available: <strong x-text="consumeForm.available_quantity"></strong>
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Notes (Optional)</label>
+                            <textarea 
+                                x-model="consumeForm.notes" 
+                                rows="3" 
+                                placeholder="e.g., Replaced faulty component, Customer site installation, etc."
+                                style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                        </div>
+                        
+                        <div style="background: #e3f2fd; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9em;">
+                            <strong>ℹ️ Note:</strong> This action will deduct the quantity from inventory and record it against the work order.
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showConsumeModal = false; consumeForm = {};">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn" style="background: #ff9800; color: white;" :disabled="loading">
+                                <span x-show="!loading">✓ Consume Part</span>
+                                <span x-show="loading">Processing...</span>
                             </button>
                         </div>
                     </form>
