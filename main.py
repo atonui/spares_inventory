@@ -120,9 +120,9 @@ def init_db():
     """Initialize the database with tables"""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-
+    
     # Users table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
@@ -131,59 +131,32 @@ def init_db():
             role TEXT NOT NULL DEFAULT 'engineer',
             territory TEXT,
             session_token TEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-        # Update users table to add new fields
-    cursor.execute('''
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS
-        session_expires TIMESTAMP NULL
-    ''')
-
-    cursor.execute('''
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS
-        failed_login_attempts INTEGER DEFAULT 0
-    ''')
-
-    cursor.execute('''
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS
-        account_locked_until TIMESTAMP NULL
-    ''')
-
-    cursor.execute('''
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS
-        last_login TIMESTAMP NULL
-    ''')
-
-    # Create sessions table for better session management
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            session_token TEXT UNIQUE NOT NULL,
-            expires_at TIMESTAMP NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            ip_address TEXT,
-            user_agent TEXT,
-            is_active INTEGER DEFAULT 1,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            session_expires TIMESTAMP NULL,
+            failed_login_attempts INTEGER DEFAULT 0,
+            account_locked_until TIMESTAMP NULL,
+            last_login TIMESTAMP NULL
         )
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_sessions_token 
-        ON sessions(session_token)
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_sessions_user 
-        ON sessions(user_id, is_active)
-    """)
-
+    ''')
+    
+    # Check and add columns to existing users table if they don't exist
+    cursor.execute("PRAGMA table_info(users)")
+    existing_columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'session_expires' not in existing_columns:
+        cursor.execute('ALTER TABLE users ADD COLUMN session_expires TIMESTAMP NULL')
+    
+    if 'failed_login_attempts' not in existing_columns:
+        cursor.execute('ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0')
+    
+    if 'account_locked_until' not in existing_columns:
+        cursor.execute('ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP NULL')
+    
+    if 'last_login' not in existing_columns:
+        cursor.execute('ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL')
+    
     # Stores table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS stores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -193,10 +166,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (assigned_user_id) REFERENCES users (id)
         )
-    """)
-
+    ''')
+    
     # Work Orders table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS work_orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             work_order_number TEXT UNIQUE NOT NULL,
@@ -207,10 +180,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (assigned_engineer_id) REFERENCES users (id)
         )
-    """)
-
+    ''')
+    
     # Parts table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS parts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             part_number TEXT UNIQUE NOT NULL,
@@ -219,10 +192,10 @@ def init_db():
             unit_cost REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
-
+    ''')
+    
     # Inventory table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             store_id INTEGER NOT NULL,
@@ -236,10 +209,10 @@ def init_db():
             FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
             UNIQUE(store_id, part_id, work_order_id)
         )
-    """)
-
+    ''')
+    
     # Movements table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS movements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             from_store_id INTEGER,
@@ -249,7 +222,6 @@ def init_db():
             movement_type TEXT NOT NULL,
             work_order_id INTEGER,
             created_by INTEGER NOT NULL,
-            notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (from_store_id) REFERENCES stores (id),
             FOREIGN KEY (to_store_id) REFERENCES stores (id),
@@ -257,10 +229,10 @@ def init_db():
             FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
             FOREIGN KEY (created_by) REFERENCES users (id)
         )
-    """)
+    ''')
 
     # Activity Logs table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS activity_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -276,26 +248,26 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
-    """)
-
+    ''')
+    
     # Create indexes for better query performance
-    cursor.execute("""
+    cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_activity_user 
         ON activity_logs(user_id)
-    """)
-
-    cursor.execute("""
+    ''')
+    
+    cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_activity_action 
         ON activity_logs(action)
-    """)
-
-    cursor.execute("""
+    ''')
+    
+    cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_activity_created 
         ON activity_logs(created_at)
-    """)
-
+    ''')
+    
     # System Logs table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS system_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             level TEXT NOT NULL,
@@ -304,10 +276,10 @@ def init_db():
             details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
-
+    ''')
+    
     # Store Types table
-    cursor.execute("""
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS store_types (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type_code TEXT UNIQUE NOT NULL,
@@ -318,44 +290,114 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
-
-        # Check and add notes column if it doesn't exist
-    cursor.execute("PRAGMA table_info(movements)")
-    movement_columns = [column[1] for column in cursor.fetchall()]
-
-    if 'notes' not in movement_columns:
-        cursor.execute('ALTER TABLE movements ADD COLUMN notes TEXT')
-
+    ''')
+    
     # Insert default store types if table is empty
     cursor.execute("SELECT COUNT(*) FROM store_types")
     if cursor.fetchone()[0] == 0:
         default_types = [
-            ("office", "Office/Warehouse", "Main office or warehouse location", 1, 1),
-            ("customer_site", "Customer Site", "Equipment at customer location", 1, 2),
-            ("engineer", "Engineer Personal", "Parts assigned to field engineer", 1, 3),
-            (
-                "fe_consignment",
-                "FE Consignment",
-                "Field engineer consignment stock",
-                1,
-                4,
-            ),
-            ("admin", "Administration", "Administrative storage", 1, 5),
-            ("warehouse", "Warehouse", "General warehouse storage", 1, 6),
+            ('office', 'Office/Warehouse', 'Main office or warehouse location', 1, 1),
+            ('customer_site', 'Customer Site', 'Equipment at customer location', 1, 2),
+            ('engineer', 'Engineer Personal', 'Parts assigned to field engineer', 1, 3),
+            ('fe_consignment', 'FE Consignment', 'Field engineer consignment stock', 1, 4),
+            ('admin', 'Administration', 'Administrative storage', 1, 5),
+            ('warehouse', 'Warehouse', 'General warehouse storage', 1, 6),
         ]
-
-        cursor.executemany(
-            """
+        
+        cursor.executemany('''
             INSERT INTO store_types (type_code, type_name, description, is_active, display_order)
             VALUES (?, ?, ?, ?, ?)
-        """,
-            default_types,
+        ''', default_types)
+    
+    # Sessions table for better session management
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_token TEXT UNIQUE NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ip_address TEXT,
+            user_agent TEXT,
+            is_active INTEGER DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
-
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sessions_token 
+        ON sessions(session_token)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sessions_user 
+        ON sessions(user_id, is_active)
+    ''')
+    
+    # Equipment table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS equipment (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            equipment_name TEXT NOT NULL,
+            make TEXT NOT NULL,
+            model TEXT NOT NULL,
+            serial_number TEXT UNIQUE NOT NULL,
+            assigned_user_id INTEGER,
+            calibration_cert_number TEXT,
+            calibration_authority TEXT,
+            calibration_date TEXT,
+            next_calibration_date TEXT,
+            status TEXT DEFAULT 'active',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (assigned_user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Equipment History table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS equipment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            equipment_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            from_user_id INTEGER,
+            to_user_id INTEGER,
+            calibration_date TEXT,
+            notes TEXT,
+            created_by INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (equipment_id) REFERENCES equipment (id),
+            FOREIGN KEY (from_user_id) REFERENCES users (id),
+            FOREIGN KEY (to_user_id) REFERENCES users (id),
+            FOREIGN KEY (created_by) REFERENCES users (id)
+        )
+    ''')
+    
+    # System Settings table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            setting_key TEXT UNIQUE NOT NULL,
+            setting_value TEXT NOT NULL,
+            description TEXT,
+            updated_by INTEGER,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (updated_by) REFERENCES users (id)
+        )
+    ''')
+    
+    # Insert default system settings
+    cursor.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key = 'calibration_reminder_days'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('''
+            INSERT INTO system_settings (setting_key, setting_value, description)
+            VALUES ('calibration_reminder_days', '30', 'Days before calibration due to send reminders')
+        ''')
+    
     conn.commit()
     conn.close()
-
 
 # ============ CSRF UTILITIES ============
 def generate_csrf_token() -> str:

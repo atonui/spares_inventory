@@ -70,3 +70,4 @@ sqlite3.OperationalError: no such table: system_settings
 2025-11-12 19:59:44,808 - ERROR - HTTPException in create_part: Part number already exists
 2026-02-06 16:14:43,690 - ERROR - HTTPException in transfer_stock: Permission denied for transfer
 2026-02-06 16:15:28,878 - ERROR - HTTPException in transfer_stock: Permission denied for transfer
+2026-02-14 21:48:28,443 - ERROR - HTTPException in create_part: Part number already exists
