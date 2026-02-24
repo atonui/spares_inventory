@@ -633,16 +633,16 @@ function inventoryApp() {
         },
 
         canEdit(storeOwner, storeType) {
-            // Admin can edit everything
-            if (this.currentUser?.role === 'admin') return true;
+            // // Admin can edit everything
+            // if (this.currentUser?.role === 'admin') return true;
             
-            // Can edit if you own the store
-            if (storeOwner === this.currentUser?.id) return true;
+            // // Can edit if you own the store
+            // if (storeOwner === this.currentUser?.id) return true;
             
-            // Can edit central/office stores
-            if (storeType === 'central' || storeType === 'office') return true;
+            // // Can edit central/office stores
+            // if (storeType === 'central' || storeType === 'office') return true;
             
-            return false;
+            return true;
         },
 
         get editableStores() {

@@ -120,9 +120,9 @@ def init_db():
     """Initialize the database with tables"""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    
+
     # Users table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
@@ -137,26 +137,30 @@ def init_db():
             account_locked_until TIMESTAMP NULL,
             last_login TIMESTAMP NULL
         )
-    ''')
-    
+    """)
+
     # Check and add columns to existing users table if they don't exist
     cursor.execute("PRAGMA table_info(users)")
     existing_columns = [column[1] for column in cursor.fetchall()]
-    
-    if 'session_expires' not in existing_columns:
-        cursor.execute('ALTER TABLE users ADD COLUMN session_expires TIMESTAMP NULL')
-    
-    if 'failed_login_attempts' not in existing_columns:
-        cursor.execute('ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0')
-    
-    if 'account_locked_until' not in existing_columns:
-        cursor.execute('ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP NULL')
-    
-    if 'last_login' not in existing_columns:
-        cursor.execute('ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL')
-    
+
+    if "session_expires" not in existing_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN session_expires TIMESTAMP NULL")
+
+    if "failed_login_attempts" not in existing_columns:
+        cursor.execute(
+            "ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0"
+        )
+
+    if "account_locked_until" not in existing_columns:
+        cursor.execute(
+            "ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP NULL"
+        )
+
+    if "last_login" not in existing_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL")
+
     # Stores table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS stores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -166,10 +170,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (assigned_user_id) REFERENCES users (id)
         )
-    ''')
-    
+    """)
+
     # Work Orders table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS work_orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             work_order_number TEXT UNIQUE NOT NULL,
@@ -180,10 +184,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (assigned_engineer_id) REFERENCES users (id)
         )
-    ''')
-    
+    """)
+
     # Parts table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS parts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             part_number TEXT UNIQUE NOT NULL,
@@ -192,10 +196,10 @@ def init_db():
             unit_cost REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-    
+    """)
+
     # Inventory table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             store_id INTEGER NOT NULL,
@@ -209,9 +213,9 @@ def init_db():
             FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
             UNIQUE(store_id, part_id, work_order_id)
         )
-    ''')
-    
-    # Movements table
+    """)
+
+   # Movements table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS movements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -222,6 +226,7 @@ def init_db():
             movement_type TEXT NOT NULL,
             work_order_id INTEGER,
             created_by INTEGER NOT NULL,
+            notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (from_store_id) REFERENCES stores (id),
             FOREIGN KEY (to_store_id) REFERENCES stores (id),
@@ -231,173 +236,191 @@ def init_db():
         )
     ''')
 
-    # Activity Logs table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS activity_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            action TEXT NOT NULL,
-            resource_type TEXT,
-            resource_id INTEGER,
-            details TEXT,
-            ip_address TEXT,
-            user_agent TEXT,
-            status TEXT DEFAULT 'success',
-            error_message TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
+    # Check and add notes column if it doesn't exist
+    cursor.execute("PRAGMA table_info(movements)")
+    movement_columns = [column[1] for column in cursor.fetchall()]
+
+    if 'notes' not in movement_columns:
+        cursor.execute('ALTER TABLE movements ADD COLUMN notes TEXT')
+        # Activity Logs table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT,
+                action TEXT NOT NULL,
+                resource_type TEXT,
+                resource_id INTEGER,
+                details TEXT,
+                ip_address TEXT,
+                user_agent TEXT,
+                status TEXT DEFAULT 'success',
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+
+        # Create indexes for better query performance
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_activity_user 
+            ON activity_logs(user_id)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_activity_action 
+            ON activity_logs(action)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_activity_created 
+            ON activity_logs(created_at)
+        """)
+
+        # System Logs table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS system_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                level TEXT NOT NULL,
+                component TEXT,
+                message TEXT NOT NULL,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Store Types table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS store_types (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type_code TEXT UNIQUE NOT NULL,
+                type_name TEXT NOT NULL,
+                description TEXT,
+                is_active INTEGER DEFAULT 1,
+                display_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Insert default store types if table is empty
+        cursor.execute("SELECT COUNT(*) FROM store_types")
+        if cursor.fetchone()[0] == 0:
+            default_types = [
+                ("office", "Office/Warehouse", "Main office or warehouse location", 1, 1),
+                ("customer_site", "Customer Site", "Equipment at customer location", 1, 2),
+                ("engineer", "Engineer Personal", "Parts assigned to field engineer", 1, 3),
+                (
+                    "fe_consignment",
+                    "FE Consignment",
+                    "Field engineer consignment stock",
+                    1,
+                    4,
+                ),
+                ("admin", "Administration", "Administrative storage", 1, 5),
+                ("warehouse", "Warehouse", "General warehouse storage", 1, 6),
+            ]
+
+            cursor.executemany(
+                """
+                INSERT INTO store_types (type_code, type_name, description, is_active, display_order)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                default_types,
+            )
+
+        # Sessions table for better session management
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_token TEXT UNIQUE NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ip_address TEXT,
+                user_agent TEXT,
+                is_active INTEGER DEFAULT 1,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sessions_token 
+            ON sessions(session_token)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sessions_user 
+            ON sessions(user_id, is_active)
+        """)
+
+        # Equipment table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS equipment (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                equipment_name TEXT NOT NULL,
+                make TEXT NOT NULL,
+                model TEXT NOT NULL,
+                serial_number TEXT UNIQUE NOT NULL,
+                assigned_user_id INTEGER,
+                calibration_cert_number TEXT,
+                calibration_authority TEXT,
+                calibration_date TEXT,
+                next_calibration_date TEXT,
+                status TEXT DEFAULT 'active',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (assigned_user_id) REFERENCES users (id)
+            )
+        """)
+
+        # Equipment History table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS equipment_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                equipment_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                from_user_id INTEGER,
+                to_user_id INTEGER,
+                calibration_date TEXT,
+                notes TEXT,
+                created_by INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (equipment_id) REFERENCES equipment (id),
+                FOREIGN KEY (from_user_id) REFERENCES users (id),
+                FOREIGN KEY (to_user_id) REFERENCES users (id),
+                FOREIGN KEY (created_by) REFERENCES users (id)
+            )
+        """)
+
+        # System Settings table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT UNIQUE NOT NULL,
+                setting_value TEXT NOT NULL,
+                description TEXT,
+                updated_by INTEGER,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (updated_by) REFERENCES users (id)
+            )
+        """)
+
+        # Insert default system settings
+        cursor.execute(
+            "SELECT COUNT(*) FROM system_settings WHERE setting_key = 'calibration_reminder_days'"
         )
-    ''')
-    
-    # Create indexes for better query performance
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_activity_user 
-        ON activity_logs(user_id)
-    ''')
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_activity_action 
-        ON activity_logs(action)
-    ''')
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_activity_created 
-        ON activity_logs(created_at)
-    ''')
-    
-    # System Logs table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS system_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            level TEXT NOT NULL,
-            component TEXT,
-            message TEXT NOT NULL,
-            details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Store Types table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS store_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type_code TEXT UNIQUE NOT NULL,
-            type_name TEXT NOT NULL,
-            description TEXT,
-            is_active INTEGER DEFAULT 1,
-            display_order INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Insert default store types if table is empty
-    cursor.execute("SELECT COUNT(*) FROM store_types")
-    if cursor.fetchone()[0] == 0:
-        default_types = [
-            ('office', 'Office/Warehouse', 'Main office or warehouse location', 1, 1),
-            ('customer_site', 'Customer Site', 'Equipment at customer location', 1, 2),
-            ('engineer', 'Engineer Personal', 'Parts assigned to field engineer', 1, 3),
-            ('fe_consignment', 'FE Consignment', 'Field engineer consignment stock', 1, 4),
-            ('admin', 'Administration', 'Administrative storage', 1, 5),
-            ('warehouse', 'Warehouse', 'General warehouse storage', 1, 6),
-        ]
-        
-        cursor.executemany('''
-            INSERT INTO store_types (type_code, type_name, description, is_active, display_order)
-            VALUES (?, ?, ?, ?, ?)
-        ''', default_types)
-    
-    # Sessions table for better session management
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            session_token TEXT UNIQUE NOT NULL,
-            expires_at TIMESTAMP NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            ip_address TEXT,
-            user_agent TEXT,
-            is_active INTEGER DEFAULT 1,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_sessions_token 
-        ON sessions(session_token)
-    ''')
-    
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_sessions_user 
-        ON sessions(user_id, is_active)
-    ''')
-    
-    # Equipment table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS equipment (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            equipment_name TEXT NOT NULL,
-            make TEXT NOT NULL,
-            model TEXT NOT NULL,
-            serial_number TEXT UNIQUE NOT NULL,
-            assigned_user_id INTEGER,
-            calibration_cert_number TEXT,
-            calibration_authority TEXT,
-            calibration_date TEXT,
-            next_calibration_date TEXT,
-            status TEXT DEFAULT 'active',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (assigned_user_id) REFERENCES users (id)
-        )
-    ''')
-    
-    # Equipment History table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS equipment_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            equipment_id INTEGER NOT NULL,
-            action TEXT NOT NULL,
-            from_user_id INTEGER,
-            to_user_id INTEGER,
-            calibration_date TEXT,
-            notes TEXT,
-            created_by INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (equipment_id) REFERENCES equipment (id),
-            FOREIGN KEY (from_user_id) REFERENCES users (id),
-            FOREIGN KEY (to_user_id) REFERENCES users (id),
-            FOREIGN KEY (created_by) REFERENCES users (id)
-        )
-    ''')
-    
-    # System Settings table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS system_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            setting_key TEXT UNIQUE NOT NULL,
-            setting_value TEXT NOT NULL,
-            description TEXT,
-            updated_by INTEGER,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (updated_by) REFERENCES users (id)
-        )
-    ''')
-    
-    # Insert default system settings
-    cursor.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key = 'calibration_reminder_days'")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute('''
-            INSERT INTO system_settings (setting_key, setting_value, description)
-            VALUES ('calibration_reminder_days', '30', 'Days before calibration due to send reminders')
-        ''')
-    
-    conn.commit()
-    conn.close()
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                INSERT INTO system_settings (setting_key, setting_value, description)
+                VALUES ('calibration_reminder_days', '30', 'Days before calibration due to send reminders')
+            """)
+
+        conn.commit()
+        conn.close()
+
 
 # ============ CSRF UTILITIES ============
 def generate_csrf_token() -> str:
@@ -746,8 +769,9 @@ app.add_middleware(
 
 # Serve static files - frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
-#-----------------------------------------------------------
+# -----------------------------------------------------------
 # Pydantic models
+
 
 # ----User Mangaement Models----
 class UserProfileUpdate(BaseModel):
@@ -1012,7 +1036,9 @@ class ConsumeStockRequest(BaseModel):
     work_order_number: str
     notes: Optional[str] = None
 
-#-----------------------------------------------------------
+
+# -----------------------------------------------------------
+
 
 # Authentication dependency
 async def get_current_user(session_token: str = Cookie(None)):
@@ -1777,105 +1803,113 @@ async def get_inventory(
 
     return [dict(item) for item in inventory]
 
+
 @app.post("/api/inventory/consume")
-@log_endpoint(action='consume_stock', resource_type='inventory')
+@log_endpoint(action="consume_stock", resource_type="inventory")
 async def consume_stock(
     request_data: ConsumeStockRequest,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
-    request: Request = None
+    request: Request = None,
 ):
     """Consume stock from inventory (requires work order)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Get inventory item and check permissions
-    cursor.execute("""
-        SELECT i.*, s.type, s.assigned_user_id, s.name as store_name, p.part_number, p.description
+
+    # Get inventory item
+    cursor.execute(
+        """
+        SELECT i.*, s.type, s.assigned_user_id, s.name as store_name, 
+               p.part_number, p.description
         FROM inventory i
         JOIN stores s ON i.store_id = s.id
         JOIN parts p ON i.part_id = p.id
         WHERE i.id = ?
-    """, (request_data.inventory_id,))
+    """,
+        (request_data.inventory_id,),
+    )
     item = cursor.fetchone()
-    
+
     if not item:
         conn.close()
         raise HTTPException(status_code=404, detail="Inventory item not found")
-    
-    # Check permissions
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if (item['type'] not in ['central', 'office'] and 
-        item['assigned_user_id'] != user_id and 
-        user['role'] != 'admin'):
-        conn.close()
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Check if sufficient quantity
-    if item['quantity'] < request_data.quantity:
+
+    # Check sufficient quantity
+    if item["quantity"] < request_data.quantity:
         conn.close()
         raise HTTPException(
-            status_code=400, 
-            detail=f"Insufficient quantity. Available: {item['quantity']}, Requested: {request_data.quantity}"
+            status_code=400,
+            detail=f"Insufficient quantity. Available: {item['quantity']}, Requested: {request_data.quantity}",
         )
-    
+
     # Validate work order number
     if not request_data.work_order_number or not request_data.work_order_number.strip():
         conn.close()
         raise HTTPException(status_code=400, detail="Work order number is required")
-    
+
     # Get or create work order
-    cursor.execute("SELECT id FROM work_orders WHERE work_order_number = ?", (request_data.work_order_number,))
+    cursor.execute(
+        "SELECT id FROM work_orders WHERE work_order_number = ?",
+        (request_data.work_order_number,),
+    )
     wo = cursor.fetchone()
-    
+
     if wo:
-        work_order_id = wo['id']
+        work_order_id = wo["id"]
     else:
-        # Create new work order
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO work_orders (work_order_number, assigned_engineer_id, status)
             VALUES (?, ?, 'in_progress')
-        """, (request_data.work_order_number, user_id))
+        """,
+            (request_data.work_order_number, user_id),
+        )
         work_order_id = cursor.lastrowid
-    
-    # Update inventory - reduce quantity
-    new_quantity = item['quantity'] - request_data.quantity
-    
+
+    # Update inventory
+    new_quantity = item["quantity"] - request_data.quantity
+
     if new_quantity == 0:
-        # Remove inventory item if quantity becomes 0
-        cursor.execute("DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,))
+        cursor.execute(
+            "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
+        )
     else:
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE inventory 
             SET quantity = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (new_quantity, request_data.inventory_id))
-    
-    # Log movement as consumption
-    cursor.execute("""
+        """,
+            (new_quantity, request_data.inventory_id),
+        )
+
+    # Log movement
+    cursor.execute(
+        """
         INSERT INTO movements (
             from_store_id, part_id, quantity, movement_type, 
             work_order_id, created_by, notes
         ) VALUES (?, ?, ?, 'consume', ?, ?, ?)
-    """, (
-        item['store_id'], 
-        item['part_id'], 
-        request_data.quantity, 
-        work_order_id, 
-        user_id,
-        request_data.notes
-    ))
-    
+    """,
+        (
+            item["store_id"],
+            item["part_id"],
+            request_data.quantity,
+            work_order_id,
+            user_id,
+            request_data.notes,
+        ),
+    )
+
     conn.commit()
     conn.close()
-    
+
     return {
-        "success": True, 
+        "success": True,
         "message": f"Consumed {request_data.quantity} x {item['part_number']} for WO #{request_data.work_order_number}",
-        "remaining_quantity": new_quantity
+        "remaining_quantity": new_quantity,
     }
+
 
 @app.get("/api/stats", response_model=StatsResponse)
 async def get_stats(user_id: int = Depends(get_current_user), request: Request = None):
@@ -2031,7 +2065,7 @@ async def update_stock(
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get inventory item and check permissions
+    # Get inventory item
     cursor.execute(
         """
         SELECT i.*, s.type, s.assigned_user_id, p.part_number
@@ -2046,17 +2080,6 @@ async def update_stock(
 
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
-
-    # Check permissions
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    if (
-        item["type"] not in ["central"]
-        and item["assigned_user_id"] != user_id
-        and user["role"] != "admin"
-    ):
-        raise HTTPException(status_code=403, detail="Permission denied")
 
     old_quantity = item["quantity"]
     quantity_change = request_data.new_quantity - old_quantity
@@ -2140,31 +2163,9 @@ async def transfer_stock(
     if not dest_store:
         raise HTTPException(status_code=404, detail="Destination store not found")
 
-    # Check permissions for both stores
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    # Can transfer from stores you can edit
-    can_edit_from = (
-        source_item["from_store_type"] == "central"
-        or source_item["from_store_owner"] == user_id
-        or user["role"] == "admin"
-    )
-
-    # Can transfer to stores you can edit
-    can_edit_to = (
-        dest_store["type"] == "central"
-        or dest_store["assigned_user_id"] == user_id
-        or user["role"] == "admin"
-    )
-
-    if not (can_edit_from and can_edit_to):
-        raise HTTPException(status_code=403, detail="Permission denied for transfer")
-
     # Update source inventory
     new_source_quantity = source_item["quantity"] - request_data.quantity
     if new_source_quantity == 0:
-        # Remove the inventory record if quantity becomes 0
         cursor.execute(
             "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
         )

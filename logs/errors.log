@@ -71,3 +71,21 @@ sqlite3.OperationalError: no such table: system_settings
 2026-02-06 16:14:43,690 - ERROR - HTTPException in transfer_stock: Permission denied for transfer
 2026-02-06 16:15:28,878 - ERROR - HTTPException in transfer_stock: Permission denied for transfer
 2026-02-14 21:48:28,443 - ERROR - HTTPException in create_part: Part number already exists
+2026-02-24 05:38:49,336 - ERROR - Exception in consume_stock: table movements has no column named notes
+Traceback (most recent call last):
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 667, in wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\grc2639\Downloads\Allan\projects\inventory\main.py", line 1880, in consume_stock
+    cursor.execute(
+    ~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<12 lines>...
+        ),
+        ^^
+    )
+    ^
+sqlite3.OperationalError: table movements has no column named notes
+2026-02-24 05:38:54,867 - ERROR - Failed to log activity: database is locked
+2026-02-24 05:44:44,759 - ERROR - Failed to log system event: database is locked

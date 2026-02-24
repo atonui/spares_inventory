@@ -341,7 +341,7 @@
                                 <td x-text="inventory.filter(i => i.store_name === store.name).length"></td>
                                 <td>
                                     <button class="btn btn-sm btn-success" 
-                                            x-show="currentUser?.role === 'admin' || store.assigned_user_id === currentUser?.id || store.type === 'central'"
+                                        
                                             @click="viewStoreInventory(store)">
                                         View Inventory
                                     </button>
@@ -361,13 +361,13 @@
                 </div>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button class="btn btn-sm" 
-                            x-show="currentUser?.role === 'admin' || selectedStore?.assigned_user_id === currentUser?.id || selectedStore?.type === 'central' || selectedStore?.type === 'office'"
+                            
                             @click="downloadStoreImportTemplate()">
                         Download Template
                     </button>
                     <label class="btn btn-sm" 
-                        style="cursor: pointer;"
-                        x-show="currentUser?.role === 'admin' || selectedStore?.assigned_user_id === currentUser?.id || selectedStore?.type === 'central' || selectedStore?.type === 'office'">
+                        style="cursor: pointer;">
+                        
                         Import CSV
                         <input type="file" 
                             accept=".csv" 
@@ -375,7 +375,7 @@
                             style="display: none;">
                     </label>
                     <button class="btn btn-success" 
-                            x-show="currentUser?.role === 'admin' || selectedStore?.assigned_user_id === currentUser?.id || selectedStore?.type === 'central' || selectedStore?.type === 'office'"
+                            
                             @click="addStockToStore(selectedStore)">
                         Add Single Part
                     </button>
@@ -410,20 +410,20 @@
                             </td>
                             <td>
                                 <button class="btn btn-sm" 
-                                        x-show="canEdit(item.store_owner, item.store_type)"
+                                        
                                         @click="editItem(item)">
                                     Adjust
                                 </button>
                                 <button class="btn btn-sm btn-warning" 
-                                        x-show="canEdit(item.store_owner, item.store_type)"
+                                        
                                         @click="transferItem(item)">
                                     Transfer
                                 </button>
                                 <button class="btn btn-sm" 
                                         style="background: #ff9800; color: white;"
-                                        x-show="canEdit(item.store_owner, item.store_type)"
+                                        
                                         @click="consumeItem(item)">
-                                    🔧 Consume
+                                    Consume
                                 </button>
                             </td>
                         </tr>
@@ -570,7 +570,7 @@
                                             style="background: #ff9800; color: white;"
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="consumeItem(item)">
-                                        🔧 Consume
+                                        Consume
                                     </button>
                                 </td>
                             </tr>
@@ -813,7 +813,7 @@
                                             style="background: #ff9800; color: white;"
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="consumeItem(item)">
-                                        🔧 Consume
+                                        Consume
                                     </button>
                                 </td>
                             </tr>
@@ -1557,7 +1557,7 @@
             <!-- Consume Stock Modal -->
             <div x-show="showConsumeModal" class="modal" @click.outside="showConsumeModal = false">
                 <div class="modal-content">
-                    <h3>🔧 Consume Part for Work Order</h3>
+                    <h3>Consume Part for Work Order</h3>
                     
                     <div x-show="consumeForm.part_number" style="background: #fff3cd; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #ffc107;">
                         <div style="font-weight: 600; margin-bottom: 0.5rem;">Consuming:</div>
