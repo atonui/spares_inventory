@@ -2920,7 +2920,7 @@ exportComprehensiveReport() {
                 const data = await response.json();
 
                 if (response.ok) {
-                    this.successMessage = data.message;
+                    this.successMessage = data.message + ' Redirecting to login...';
                     this.passwordForm = {
                         current_password: '',
                         new_password: '',
@@ -2928,10 +2928,13 @@ exportComprehensiveReport() {
                     };
                     this.passwordStrength = '';
                     
-                    // Redirect to login after 3 seconds
+                    // Clear any stored user data
+                    localStorage.removeItem('currentUser');
+                    
+                    // Redirect to login after 2 seconds
                     setTimeout(() => {
                         window.location.href = '/static/index.html';
-                    }, 3000);
+                    }, 2000);
                 } else {
                     this.error = data.detail || 'Failed to change password';
                     setTimeout(() => this.error = '', 5000);

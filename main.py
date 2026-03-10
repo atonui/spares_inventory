@@ -215,8 +215,8 @@ def init_db():
         )
     """)
 
-   # Movements table
-    cursor.execute('''
+    # Movements table
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS movements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             from_store_id INTEGER,
@@ -234,14 +234,14 @@ def init_db():
             FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
             FOREIGN KEY (created_by) REFERENCES users (id)
         )
-    ''')
+    """)
 
     # Check and add notes column if it doesn't exist
     cursor.execute("PRAGMA table_info(movements)")
     movement_columns = [column[1] for column in cursor.fetchall()]
 
-    if 'notes' not in movement_columns:
-        cursor.execute('ALTER TABLE movements ADD COLUMN notes TEXT')
+    if "notes" not in movement_columns:
+        cursor.execute("ALTER TABLE movements ADD COLUMN notes TEXT")
         # Activity Logs table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
@@ -307,9 +307,27 @@ def init_db():
         cursor.execute("SELECT COUNT(*) FROM store_types")
         if cursor.fetchone()[0] == 0:
             default_types = [
-                ("office", "Office/Warehouse", "Main office or warehouse location", 1, 1),
-                ("customer_site", "Customer Site", "Equipment at customer location", 1, 2),
-                ("engineer", "Engineer Personal", "Parts assigned to field engineer", 1, 3),
+                (
+                    "office",
+                    "Office/Warehouse",
+                    "Main office or warehouse location",
+                    1,
+                    1,
+                ),
+                (
+                    "customer_site",
+                    "Customer Site",
+                    "Equipment at customer location",
+                    1,
+                    2,
+                ),
+                (
+                    "engineer",
+                    "Engineer Personal",
+                    "Parts assigned to field engineer",
+                    1,
+                    3,
+                ),
                 (
                     "fe_consignment",
                     "FE Consignment",
@@ -1196,9 +1214,10 @@ async def change_password(
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Verify current password
-    if user["password_hash"] != hash_password(password_data.current_password):
+    # Verify current password using bcrypt
+    if not verify_password(password_data.current_password, user["password_hash"]):
         conn.close()
+        logger.error(f"Password verification failed for user {user_id}")
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     # Validate new password
@@ -1209,15 +1228,54 @@ async def change_password(
         )
 
     # Update password and invalidate session token
+    new_hash = hash_password(password_data.new_password)
+
     cursor.execute(
         "UPDATE users SET password_hash = ?, session_token = NULL WHERE id = ?",
-        (hash_password(password_data.new_password), user_id),
+        (new_hash, user_id),
     )
+
+    # Deactivate all sessions for this user i.e. force logout from all devices
+    cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
 
     conn.commit()
     conn.close()
 
+    logger.info(f"Password changed successfully for user {user_id}")
+
     return {"message": "Password changed successfully. Please login again."}
+
+
+@app.post("/api/auth/revoke-other-sessions")
+async def revoke_other_sessions(
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Revoke all sessions except the current one"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    current_token = request.cookies.get("session_token")
+
+    cursor.execute(
+        """
+        UPDATE sessions 
+        SET is_active = 0 
+        WHERE user_id = ? AND session_token != ? AND is_active = 1
+    """,
+        (user_id, current_token),
+    )
+
+    revoked_count = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "success": True,
+        "message": f"Logged out from {revoked_count} other device(s)",
+    }
 
 
 @app.post("/api/forgot-password")

@@ -4,6 +4,7 @@ inventory_management_system_plan.pdf
 inventory.old
 mvp.pdf
 wip.md
+inventory.db
 .env
 .env.production
 test_email.py
