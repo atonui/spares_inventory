@@ -3972,3 +3972,234 @@ ConnectionResetError: [WinError 10054] An existing connection was forcibly close
 2026-03-10 19:56:41,006 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
 2026-03-10 19:58:17,408 - inventory_app - INFO - Application shutting down
 2026-03-10 19:58:17,415 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-04-01 17:19:09,052 - inventory_app - INFO - Application starting up
+2026-04-01 17:19:09,088 - inventory_app - INFO - [startup] Application initialized
+2026-04-01 17:19:09,098 - inventory_app - INFO - Database initialized successfully
+2026-04-01 17:20:17,160 - audit - INFO - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:18,904 - audit - INFO - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:25,927 - audit - INFO - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:37,715 - audit - INFO - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:47,760 - audit - INFO - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:51,625 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-04-01 17:21:18,255 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:21:20,223 - audit - INFO - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-04-01 17:21:20,224 - inventory_app - INFO - User Allan Koech (6) logged in from 127.0.0.1
+2026-04-01 17:21:20,251 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-01 17:21:20,262 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-04-01 17:21:20,289 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-01 17:21:20,304 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-04-01 17:21:51,977 - audit - INFO - USER=Allan Koech(6) ACTION=logout RESOURCE=None/None STATUS=success
+2026-04-01 17:22:04,377 - audit - INFO - USER=valentine.opiyo@varian.com(1) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:22:07,540 - audit - INFO - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-04-01 17:22:07,540 - inventory_app - INFO - User Valentine Opiyo (1) logged in from 127.0.0.1
+2026-04-01 17:22:07,565 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-04-01 17:22:07,577 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-01 17:22:07,586 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-04-01 17:22:07,605 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-04-01 17:22:07,623 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-01 17:22:39,746 - audit - INFO - USER=Valentine Opiyo(1) ACTION=create_part RESOURCE=part/None STATUS=success
+2026-04-01 17:22:39,759 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-01 19:16:24,150 - inventory_app - INFO - Application shutting down
+2026-04-01 19:16:24,158 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-04-02 11:39:38,366 - inventory_app - INFO - Application starting up
+2026-04-02 11:39:38,385 - inventory_app - INFO - [startup] Application initialized
+2026-04-02 11:39:38,389 - inventory_app - INFO - Database initialized successfully
+2026-04-02 11:40:06,638 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-02 11:40:06,671 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-04-02 11:40:06,734 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-02 11:40:06,795 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-04-02 11:40:06,840 - audit - INFO - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-01 18:06:47,231 - inventory_app - INFO - Application starting up
+2026-05-01 18:06:47,244 - inventory_app - INFO - [startup] Application initialized
+2026-05-01 18:06:47,247 - inventory_app - INFO - Database initialized successfully
+2026-05-01 18:07:11,749 - audit - INFO - USER=tonuiallan@gmail.com(7) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:07:13,699 - audit - INFO - USER=tonuiallan@gmail.com(7) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:07:18,429 - audit - INFO - USER=Allan Tonui(7) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-01 18:08:03,365 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:08:25,149 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:07,745 - audit - INFO - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:11,601 - audit - INFO - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:14,160 - audit - INFO - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:16,488 - audit - INFO - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-01 18:12:16,488 - inventory_app - INFO - User Winnex Maina (10) logged in from 127.0.0.1
+2026-05-01 18:12:16,524 - audit - INFO - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-01 18:12:16,548 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-01 18:12:16,571 - audit - INFO - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-01 18:12:16,586 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-01 18:12:26,018 - audit - INFO - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-01 18:12:53,315 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:12:55,608 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:12:57,167 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:13:02,475 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:13:03,615 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:14:51,683 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:34,684 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:36,202 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:37,250 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:38,411 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:39,521 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:40,608 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:41,545 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:44,677 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:48,185 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:49,234 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:50,213 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:51,163 - slowapi - WARNING - ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/auth/login
+2026-05-01 18:15:52,228 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:53,310 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:54,452 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:16:07,723 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:33:41,529 - audit - INFO - USER=Allan Tonui(7) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:06:10,345 - audit - INFO - USER=Allan Tonui(7) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:06:14,891 - audit - INFO - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 07:06:38,513 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:06:50,117 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:06:58,850 - inventory_app - INFO - Application shutting down
+2026-05-02 07:06:58,865 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-02 07:07:09,204 - inventory_app - INFO - Application starting up
+2026-05-02 07:07:09,210 - inventory_app - INFO - [startup] Application initialized
+2026-05-02 07:07:09,213 - inventory_app - INFO - Database initialized successfully
+2026-05-02 07:07:24,922 - audit - INFO - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:07:39,835 - audit - INFO - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:07:49,226 - audit - INFO - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:07:57,762 - audit - INFO - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-02 07:07:57,762 - inventory_app - INFO - User Winnex Maina (10) logged in from 127.0.0.1
+2026-05-02 07:07:57,790 - audit - INFO - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-02 07:07:57,820 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-02 07:07:57,833 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-02 07:07:57,846 - audit - INFO - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-02 07:08:01,234 - audit - INFO - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-02 07:08:12,168 - audit - INFO - USER=Allan Koech(6) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 07:21:36,426 - inventory_app - INFO - Application shutting down
+2026-05-02 07:21:41,832 - errors - ERROR - Failed to log system event: database is locked
+2026-05-02 07:22:22,386 - inventory_app - INFO - Application starting up
+2026-05-02 07:22:22,403 - inventory_app - INFO - [startup] Application initialized
+2026-05-02 07:22:22,406 - inventory_app - INFO - Database initialized successfully
+2026-05-02 07:22:29,396 - audit - INFO - USER=Walter Korir(9) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-02 07:22:29,396 - inventory_app - INFO - User Walter Korir (9) logged in from 127.0.0.1
+2026-05-02 07:22:29,426 - audit - INFO - USER=Walter Korir(9) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-02 07:22:29,450 - audit - INFO - USER=Walter Korir(9) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-02 07:22:29,469 - audit - INFO - USER=Walter Korir(9) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-02 07:22:29,485 - audit - INFO - USER=Walter Korir(9) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-02 07:22:29,497 - audit - INFO - USER=Walter Korir(9) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-02 07:22:58,637 - audit - INFO - USER=Walter Korir(9) ACTION=update_user RESOURCE=user/None STATUS=success
+2026-05-02 07:22:58,649 - audit - INFO - USER=Walter Korir(9) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-02 07:23:03,465 - audit - INFO - USER=Walter Korir(9) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-02 07:23:15,632 - audit - INFO - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:23:17,968 - audit - INFO - USER=Allan Koech(6) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 08:15:18,337 - inventory_app - INFO - Application shutting down
+2026-05-02 08:15:18,345 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-02 17:57:05,335 - inventory_app - INFO - Application starting up
+2026-05-02 17:57:05,352 - inventory_app - INFO - [startup] Application initialized
+2026-05-02 17:57:05,356 - inventory_app - INFO - Database initialized successfully
+2026-05-02 17:57:20,599 - audit - INFO - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 17:57:23,394 - audit - INFO - USER=Allan Koech(6) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 17:59:37,638 - errors - ERROR - Failed to log activity: database is locked
+2026-05-02 17:59:48,422 - inventory_app - INFO - Application shutting down
+2026-05-02 17:59:54,006 - errors - ERROR - Failed to log system event: database is locked
+2026-05-02 18:00:23,825 - inventory_app - INFO - Application starting up
+2026-05-02 18:00:23,841 - inventory_app - INFO - [startup] Application initialized
+2026-05-02 18:00:23,844 - inventory_app - INFO - Database initialized successfully
+2026-05-02 18:00:41,376 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 18:01:10,461 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 18:05:21,700 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-04 19:48:26,409 - inventory_app - INFO - Application starting up
+2026-05-04 19:48:31,922 - errors - ERROR - Failed to log system event: database is locked
+2026-05-04 19:48:31,934 - inventory_app - INFO - Database initialized successfully
+2026-05-05 08:41:20,568 - inventory_app - INFO - Application shutting down
+2026-05-05 08:41:26,047 - errors - ERROR - Failed to log system event: database is locked
+2026-05-05 08:41:30,760 - inventory_app - INFO - Application starting up
+2026-05-05 08:41:36,212 - errors - ERROR - Failed to log system event: database is locked
+2026-05-05 08:41:36,214 - inventory_app - INFO - Database initialized successfully
+2026-05-05 08:42:32,413 - inventory_app - INFO - Application shutting down
+2026-05-05 08:42:32,423 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-05 08:42:34,121 - inventory_app - INFO - Application starting up
+2026-05-05 08:42:34,129 - inventory_app - INFO - [startup] Application initialized
+2026-05-05 08:42:34,131 - inventory_app - INFO - Database initialized successfully
+2026-05-05 08:42:38,897 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 08:42:59,202 - audit - INFO - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-05 08:43:11,529 - inventory_app - INFO - Application shutting down
+2026-05-05 08:43:11,539 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-05 09:16:57,159 - inventory_app - INFO - Application starting up
+2026-05-05 09:16:57,176 - inventory_app - INFO - [startup] Application initialized
+2026-05-05 09:16:57,180 - inventory_app - INFO - Database initialized successfully
+2026-05-05 09:17:08,331 - audit - INFO - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 09:17:14,780 - audit - INFO - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 09:17:14,780 - inventory_app - INFO - User Winnex Maina (10) logged in from 127.0.0.1
+2026-05-05 09:17:14,815 - audit - INFO - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:17:14,839 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:17:14,858 - audit - INFO - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:17:14,870 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 09:17:20,451 - audit - INFO - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 09:17:40,064 - audit - INFO - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-05 09:17:52,627 - inventory_app - INFO - Application shutting down
+2026-05-05 09:17:52,643 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-05 09:18:59,673 - inventory_app - INFO - Application starting up
+2026-05-05 09:18:59,678 - inventory_app - INFO - [startup] Application initialized
+2026-05-05 09:18:59,681 - inventory_app - INFO - Database initialized successfully
+2026-05-05 09:19:07,709 - audit - INFO - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-05 09:19:22,310 - inventory_app - INFO - Application shutting down
+2026-05-05 09:19:22,330 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-05 09:20:29,048 - inventory_app - INFO - Application starting up
+2026-05-05 09:20:29,055 - inventory_app - INFO - [startup] Application initialized
+2026-05-05 09:20:29,058 - inventory_app - INFO - Database initialized successfully
+2026-05-05 09:20:40,659 - audit - INFO - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 09:20:40,659 - inventory_app - INFO - User Winnex Maina (10) logged in from 127.0.0.1
+2026-05-05 09:20:40,690 - audit - INFO - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:20:40,713 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:20:40,733 - audit - INFO - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:20:40,745 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 09:21:19,857 - audit - INFO - USER=superadmin(10) ACTION=unlock_account RESOURCE=user/6 STATUS=success
+2026-05-05 09:22:31,598 - audit - INFO - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:33,478 - audit - INFO - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:34,904 - audit - INFO - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:36,860 - audit - INFO - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:49,301 - audit - INFO - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:22:49,323 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:22:49,342 - audit - INFO - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:22:49,356 - audit - INFO - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 09:22:52,003 - audit - INFO - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 09:23:05,676 - audit - INFO - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 09:23:09,673 - audit - INFO - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 09:23:09,673 - inventory_app - INFO - User Allan Koech (6) logged in from 127.0.0.1
+2026-05-05 09:23:09,701 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:23:09,721 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:23:09,738 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:23:09,752 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 17:47:21,154 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 17:47:21,173 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 17:47:21,202 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 17:47:21,216 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:00:46,380 - inventory_app - INFO - Application shutting down
+2026-05-05 18:00:46,390 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-05 18:01:22,530 - inventory_app - INFO - Application starting up
+2026-05-05 18:01:22,541 - inventory_app - INFO - [startup] Application initialized
+2026-05-05 18:01:22,545 - inventory_app - INFO - Database initialized successfully
+2026-05-05 18:35:24,433 - inventory_app - INFO - Application shutting down
+2026-05-05 18:35:24,444 - inventory_app - INFO - [shutdown] Application shut down gracefully
+2026-05-05 18:35:28,492 - inventory_app - INFO - Application starting up
+2026-05-05 18:35:28,510 - inventory_app - INFO - [startup] Application initialized
+2026-05-05 18:35:28,514 - inventory_app - INFO - Database initialized successfully
+2026-05-05 18:42:59,169 - audit - INFO - USER=superadmin(6) ACTION=force_logout RESOURCE=user/8 STATUS=success
+2026-05-05 18:48:58,487 - audit - INFO - USER=superadmin(6) ACTION=reset_user_password RESOURCE=user/7 STATUS=success
+2026-05-05 18:49:03,520 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 18:49:03,544 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:03,557 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:03,571 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 18:49:04,948 - audit - INFO - USER=Allan Koech(6) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 18:49:18,455 - audit - INFO - USER=Allan Tonui(7) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 18:49:18,455 - inventory_app - INFO - User Allan Tonui (7) logged in from 127.0.0.1
+2026-05-05 18:49:18,485 - audit - INFO - USER=Allan Tonui(7) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 18:49:18,511 - audit - INFO - USER=Allan Tonui(7) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:18,537 - audit - INFO - USER=Allan Tonui(7) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 18:49:18,549 - audit - INFO - USER=Allan Tonui(7) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:18,565 - audit - INFO - USER=Allan Tonui(7) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-05 18:51:08,317 - audit - INFO - USER=Allan Tonui(7) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 18:51:27,322 - audit - INFO - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 18:51:27,322 - inventory_app - INFO - User Allan Koech (6) logged in from 127.0.0.1
+2026-05-05 18:51:27,348 - audit - INFO - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 18:51:27,371 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 18:51:27,393 - audit - INFO - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 18:51:27,406 - audit - INFO - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:54:59,378 - inventory_app - INFO - Application shutting down
+2026-05-05 18:54:59,400 - inventory_app - INFO - [shutdown] Application shut down gracefully

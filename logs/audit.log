@@ -2439,3 +2439,139 @@
 2026-03-10 19:56:40,966 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
 2026-03-10 19:56:40,991 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
 2026-03-10 19:56:41,006 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-01 17:20:17,160 - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:18,904 - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:25,927 - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:37,715 - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:20:47,760 - USER=valentine.opyio@varian.com(0) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:21:18,255 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:21:20,223 - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-04-01 17:21:20,251 - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-01 17:21:20,262 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-04-01 17:21:20,289 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-01 17:21:20,304 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-04-01 17:21:51,977 - USER=Allan Koech(6) ACTION=logout RESOURCE=None/None STATUS=success
+2026-04-01 17:22:04,377 - USER=valentine.opiyo@varian.com(1) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-04-01 17:22:07,540 - USER=Valentine Opiyo(1) ACTION=login RESOURCE=None/None STATUS=success
+2026-04-01 17:22:07,565 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-04-01 17:22:07,577 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-01 17:22:07,586 - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-04-01 17:22:07,605 - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-04-01 17:22:07,623 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-01 17:22:39,746 - USER=Valentine Opiyo(1) ACTION=create_part RESOURCE=part/None STATUS=success
+2026-04-01 17:22:39,759 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-02 11:40:06,638 - USER=Valentine Opiyo(1) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-04-02 11:40:06,671 - USER=Valentine Opiyo(1) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-04-02 11:40:06,734 - USER=Valentine Opiyo(1) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-04-02 11:40:06,795 - USER=Valentine Opiyo(1) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-04-02 11:40:06,840 - USER=Valentine Opiyo(1) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-01 18:07:11,749 - USER=tonuiallan@gmail.com(7) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:07:13,699 - USER=tonuiallan@gmail.com(7) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:07:18,429 - USER=Allan Tonui(7) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-01 18:08:03,365 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:08:25,149 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:07,745 - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:11,601 - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:14,160 - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-01 18:12:16,488 - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-01 18:12:16,524 - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-01 18:12:16,548 - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-01 18:12:16,571 - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-01 18:12:16,586 - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-01 18:12:26,018 - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-01 18:12:53,315 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:14:51,683 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:34,684 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:36,202 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:37,250 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:38,411 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:52,228 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:53,310 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:15:54,452 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:16:07,723 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-01 18:33:41,529 - USER=Allan Tonui(7) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:06:10,345 - USER=Allan Tonui(7) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:06:14,891 - USER=Allan Tonui(7) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 07:06:38,513 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:06:50,117 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:07:24,922 - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:07:39,835 - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:07:49,226 - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 07:07:57,762 - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-02 07:07:57,790 - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-02 07:07:57,820 - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-02 07:07:57,833 - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-02 07:07:57,846 - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-02 07:08:01,234 - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-02 07:08:12,168 - USER=Allan Koech(6) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 07:22:29,396 - USER=Walter Korir(9) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-02 07:22:29,426 - USER=Walter Korir(9) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-02 07:22:29,450 - USER=Walter Korir(9) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-02 07:22:29,469 - USER=Walter Korir(9) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-02 07:22:29,485 - USER=Walter Korir(9) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-02 07:22:29,497 - USER=Walter Korir(9) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-02 07:22:58,637 - USER=Walter Korir(9) ACTION=update_user RESOURCE=user/None STATUS=success
+2026-05-02 07:22:58,649 - USER=Walter Korir(9) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-02 07:23:03,465 - USER=Walter Korir(9) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-02 07:23:15,632 - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 07:23:17,968 - USER=Allan Koech(6) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 17:57:20,599 - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-02 17:57:23,394 - USER=Allan Koech(6) ACTION=login_blocked RESOURCE=None/None STATUS=error
+2026-05-02 18:00:41,376 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 18:01:10,461 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-02 18:05:21,700 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 08:42:38,897 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 08:42:59,202 - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-05 09:17:08,331 - USER=winnex.maina@varian.com(10) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 09:17:14,780 - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 09:17:14,815 - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:17:14,839 - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:17:14,858 - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:17:14,870 - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 09:17:20,451 - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 09:17:40,064 - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-05 09:19:07,709 - USER=Allan Koech(6) ACTION=account_locked RESOURCE=None/None STATUS=error
+2026-05-05 09:20:40,659 - USER=Winnex Maina(10) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 09:20:40,690 - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:20:40,713 - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:20:40,733 - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:20:40,745 - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 09:21:19,857 - USER=superadmin(10) ACTION=unlock_account RESOURCE=user/6 STATUS=success
+2026-05-05 09:22:31,598 - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:33,478 - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:34,904 - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:36,860 - USER=superadmin(10) ACTION=update_security_config RESOURCE=None/None STATUS=success
+2026-05-05 09:22:49,301 - USER=Winnex Maina(10) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:22:49,323 - USER=Winnex Maina(10) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:22:49,342 - USER=Winnex Maina(10) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:22:49,356 - USER=Winnex Maina(10) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 09:22:52,003 - USER=Winnex Maina(10) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 09:23:05,676 - USER=allan.kibetkoech@varian.com(6) ACTION=login_failed RESOURCE=None/None STATUS=error
+2026-05-05 09:23:09,673 - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 09:23:09,701 - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 09:23:09,721 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 09:23:09,738 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 09:23:09,752 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 17:47:21,154 - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 17:47:21,173 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 17:47:21,202 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 17:47:21,216 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:42:59,169 - USER=superadmin(6) ACTION=force_logout RESOURCE=user/8 STATUS=success
+2026-05-05 18:48:58,487 - USER=superadmin(6) ACTION=reset_user_password RESOURCE=user/7 STATUS=success
+2026-05-05 18:49:03,520 - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 18:49:03,544 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:03,557 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:03,571 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 18:49:04,948 - USER=Allan Koech(6) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 18:49:18,455 - USER=Allan Tonui(7) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 18:49:18,485 - USER=Allan Tonui(7) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 18:49:18,511 - USER=Allan Tonui(7) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:18,537 - USER=Allan Tonui(7) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 18:49:18,549 - USER=Allan Tonui(7) ACTION=view_equipment RESOURCE=equipment/None STATUS=success
+2026-05-05 18:49:18,565 - USER=Allan Tonui(7) ACTION=view_users RESOURCE=user/None STATUS=success
+2026-05-05 18:51:08,317 - USER=Allan Tonui(7) ACTION=logout RESOURCE=None/None STATUS=success
+2026-05-05 18:51:27,322 - USER=Allan Koech(6) ACTION=login RESOURCE=None/None STATUS=success
+2026-05-05 18:51:27,348 - USER=Allan Koech(6) ACTION=view_parts RESOURCE=parts/None STATUS=success
+2026-05-05 18:51:27,371 - USER=Allan Koech(6) ACTION=view_equipment_stats RESOURCE=equipment/None STATUS=success
+2026-05-05 18:51:27,393 - USER=Allan Koech(6) ACTION=view_calibration_settings RESOURCE=settings/None STATUS=success
+2026-05-05 18:51:27,406 - USER=Allan Koech(6) ACTION=view_equipment RESOURCE=equipment/None STATUS=success

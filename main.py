@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -6,6 +6,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi import Cookie
 from fastapi import Header
+from fastapi.responses import FileResponse
+
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, EmailStr, Field, validator
 from pydantic_settings import BaseSettings
@@ -16,7 +18,6 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 import sqlite3
 import hashlib
-import jwt
 from datetime import datetime, timedelta
 import os
 import csv
@@ -28,15 +29,16 @@ import logging
 from logging.handlers import RotatingFileHandler
 import json
 from functools import wraps
-from typing import Optional
 
 # rate limiting imports
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from itsdangerous import URLSafeTimedSerializer
+
+
+import shutil
 
 # setup password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -436,6 +438,17 @@ def init_db():
                 VALUES ('calibration_reminder_days', '30', 'Days before calibration due to send reminders')
             """)
 
+        cursor.executemany(
+            "INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description) VALUES (?, ?, ?)",
+            [
+                ("max_login_attempts",        str(MAX_LOGIN_ATTEMPTS),        "Max failed logins before lockout"),
+                ("lockout_duration_minutes",  str(LOCKOUT_DURATION_MINUTES),  "Minutes account stays locked"),
+                ("session_duration_hours",    str(SESSION_DURATION_HOURS),    "Session lifetime in hours"),
+                ("remember_me_duration_days", str(REMEMBER_ME_DURATION_DAYS), "Remember-me lifetime in days"),
+            ],
+)    
+
+
         conn.commit()
         conn.close()
 
@@ -491,6 +504,26 @@ def check_admin(user_id: int) -> bool:
     if user["role"] == "admin":
         return True
     return False
+
+def get_security_config() -> dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT setting_key, setting_value
+        FROM system_settings
+        WHERE setting_key IN (
+            'max_login_attempts', 'lockout_duration_minutes',
+            'session_duration_hours', 'remember_me_duration_days'
+        )
+    """)
+    rows = {r["setting_key"]: int(r["setting_value"]) for r in cursor.fetchall()}
+    conn.close()
+    return {
+        "max_login_attempts":        rows.get("max_login_attempts",        MAX_LOGIN_ATTEMPTS),
+        "lockout_duration_minutes":  rows.get("lockout_duration_minutes",  LOCKOUT_DURATION_MINUTES),
+        "session_duration_hours":    rows.get("session_duration_hours",    SESSION_DURATION_HOURS),
+        "remember_me_duration_days": rows.get("remember_me_duration_days", REMEMBER_ME_DURATION_DAYS),
+    }
 
 
 def send_reset_email(email: str, token: str):
@@ -779,7 +812,7 @@ security = HTTPBearer()
 # CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # remember to specify the domain in production
+    allow_origins=["*"],  # please, please, pleaseeeeeee... remember to specify the domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1252,7 +1285,7 @@ async def revoke_other_sessions(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    """Revoke all sessions except the current one"""
+    # Revoke all sessions except the current one
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1503,6 +1536,12 @@ async def login(user_login: UserLogin, request: Request):
     ip_address = request.client.host if hasattr(request, "client") else None
     user_agent = request.headers.get("user-agent", "")[:200]
 
+    cfg              = get_security_config()
+    max_attempts     = cfg["max_login_attempts"]
+    lockout_minutes  = cfg["lockout_duration_minutes"]
+    session_hours    = cfg["session_duration_hours"]
+    remember_me_days = cfg["remember_me_duration_days"]
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1543,10 +1582,10 @@ async def login(user_login: UserLogin, request: Request):
         if user:
             failed_attempts = user["failed_login_attempts"] + 1
 
-            if failed_attempts >= MAX_LOGIN_ATTEMPTS:
+            if failed_attempts >= max_attempts:
                 # Lock account
                 lockout_until = datetime.utcnow() + timedelta(
-                    minutes=LOCKOUT_DURATION_MINUTES
+                    minutes=lockout_minutes
                 )
                 cursor.execute(
                     """UPDATE users 
@@ -1561,7 +1600,7 @@ async def login(user_login: UserLogin, request: Request):
                     username=user["name"],
                     action="account_locked",
                     status="error",
-                    error_message=f"Too many failed attempts",
+                    error_message="Too many failed attempts",
                     ip_address=ip_address,
                     user_agent=user_agent,
                 )
@@ -1569,7 +1608,7 @@ async def login(user_login: UserLogin, request: Request):
                 conn.close()
                 raise HTTPException(
                     status_code=423,
-                    detail=f"Account locked due to too many failed attempts. Try again in {LOCKOUT_DURATION_MINUTES} minutes.",
+                    detail=f"Account locked due to too many failed attempts. Try again in {lockout_minutes} minutes.",
                 )
             else:
                 cursor.execute(
@@ -1595,11 +1634,11 @@ async def login(user_login: UserLogin, request: Request):
 
     # Calculate session expiration
     if user_login.remember_me:
-        expires = datetime.utcnow() + timedelta(days=REMEMBER_ME_DURATION_DAYS)
-        max_age = REMEMBER_ME_DURATION_DAYS * 24 * 60 * 60
+        expires = datetime.utcnow() + timedelta(days=remember_me_days)
+        max_age = remember_me_days * 24 * 60 * 60
     else:
-        expires = datetime.utcnow() + timedelta(hours=SESSION_DURATION_HOURS)
-        max_age = SESSION_DURATION_HOURS * 60 * 60
+        expires = datetime.utcnow() + timedelta(hours=session_hours)
+        max_age = session_hours * 60 * 60
 
     # Create session in sessions table
     cursor.execute(
@@ -4075,6 +4114,693 @@ async def root():
         "frontend": "/static/index.html",
     }
 
+#-----------------------------------------------------------------------------------
+# super admin routes
+
+superadmin_router = APIRouter(prefix="/api/superadmin", tags=["superadmin"])
+
+# ── Re-usable guard ──────────────────────────────────────────────────────────
+
+def require_superadmin(user_id: int, conn=None):
+    """Raise 403 unless the caller has role == 'superadmin'."""
+    close = conn is None
+    if close:
+        conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    if close:
+        conn.close()
+    if not row or row["role"] != "superadmin":
+        raise HTTPException(status_code=403, detail="Superadmin access required")
+
+
+# ── Pydantic models ──────────────────────────────────────────────────────────
+
+class SystemSettingUpdate(BaseModel):
+    value: str
+
+class AccountUnlockRequest(BaseModel):
+    user_id: int
+
+class BulkUnlockRequest(BaseModel):
+    user_ids: List[int]
+
+class SecurityConfigUpdate(BaseModel):
+    max_login_attempts: Optional[int] = None
+    lockout_duration_minutes: Optional[int] = None
+    session_duration_hours: Optional[int] = None
+    remember_me_duration_days: Optional[int] = None
+
+class DatabaseQueryRequest(BaseModel):
+    sql: str                    # SELECT only – enforced server-side
+    params: Optional[list] = []
+
+class UserRoleUpdate(BaseModel):
+    role: str                   # engineer | manager | admin | superadmin
+
+class ForceLogoutRequest(BaseModel):
+    user_id: int
+
+class SystemAnnouncementRequest(BaseModel):
+    message: str
+    level: str = "info"         # info | warning | danger
+
+class SuperadminPasswordReset(BaseModel):
+    user_id: int
+    new_password: str
+
+@superadmin_router.post("/users/{target_id}/reset-password")
+async def superadmin_reset_password(
+    target_id: int,
+    body: SuperadminPasswordReset,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, email FROM users WHERE id = ?", (target_id,))
+    target = cursor.fetchone()
+    if not target:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    cursor.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (hash_password(body.new_password), target_id),
+    )
+    # Force logout all their sessions so new password takes effect immediately
+    cursor.execute(
+        "UPDATE sessions SET is_active = 0 WHERE user_id = ?",
+        (target_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "reset_user_password",
+                 resource_type="user", resource_id=target_id,
+                 details={"target_email": target["email"]})
+
+    return {"success": True, "message": f"Password reset for {target['email']}"}
+
+
+# ── 1. Dashboard overview ────────────────────────────────────────────────────
+
+@superadmin_router.get("/dashboard")
+async def superadmin_dashboard(
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Locked accounts
+    cur.execute("""
+        SELECT COUNT(*) as n FROM users
+        WHERE account_locked_until IS NOT NULL
+          AND account_locked_until > datetime('now')
+    """)
+    locked_count = cur.fetchone()["n"]
+
+    # Active sessions
+    cur.execute("""
+        SELECT COUNT(*) as n FROM sessions
+        WHERE is_active = 1 AND expires_at > datetime('now')
+    """)
+    active_sessions = cur.fetchone()["n"]
+
+    # Total users by role
+    cur.execute("SELECT role, COUNT(*) as n FROM users GROUP BY role")
+    users_by_role = {r["role"]: r["n"] for r in cur.fetchall()}
+
+    # Recent failed logins (last 24 h)
+    cur.execute("""
+        SELECT COUNT(*) as n FROM activity_logs
+        WHERE action IN ('login_failed','account_locked')
+          AND created_at >= datetime('now','-1 day')
+    """)
+    recent_failures = cur.fetchone()["n"]
+
+    # DB file size
+    db_path = DATABASE
+    db_size_bytes = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+
+    # Log counts
+    cur.execute("SELECT COUNT(*) as n FROM activity_logs")
+    total_logs = cur.fetchone()["n"]
+
+    cur.execute("SELECT COUNT(*) as n FROM system_logs")
+    total_sys_logs = cur.fetchone()["n"]
+
+    # Current security config from system_settings
+    cur.execute("""
+        SELECT setting_key, setting_value FROM system_settings
+        WHERE setting_key IN (
+            'max_login_attempts','lockout_duration_minutes',
+            'session_duration_hours','remember_me_duration_days'
+        )
+    """)
+    sec_settings = {r["setting_key"]: r["setting_value"] for r in cur.fetchall()}
+
+    conn.close()
+
+    return {
+        "locked_accounts": locked_count,
+        "active_sessions": active_sessions,
+        "users_by_role": users_by_role,
+        "recent_failed_logins_24h": recent_failures,
+        "database_size_bytes": db_size_bytes,
+        "total_activity_logs": total_logs,
+        "total_system_logs": total_sys_logs,
+        "security_config": sec_settings,
+    }
+
+
+# ── 2. Locked accounts ───────────────────────────────────────────────────────
+
+@superadmin_router.get("/locked-accounts")
+async def get_locked_accounts(
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, name, email, role, failed_login_attempts,
+               account_locked_until, last_login
+        FROM users
+        WHERE account_locked_until IS NOT NULL
+          AND account_locked_until > datetime('now')
+        ORDER BY account_locked_until DESC
+    """)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@superadmin_router.post("/unlock-account")
+async def unlock_account(
+    body: AccountUnlockRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
+    target = cur.fetchone()
+    if not target:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    cur.execute("""
+        UPDATE users
+        SET account_locked_until = NULL,
+            failed_login_attempts = 0
+        WHERE id = ?
+    """, (body.user_id,))
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "unlock_account",
+                 resource_type="user", resource_id=body.user_id,
+                 details={"target_email": target["email"]})
+    return {"success": True, "message": f"Account {target['email']} unlocked"}
+
+
+@superadmin_router.post("/unlock-accounts/bulk")
+async def bulk_unlock_accounts(
+    body: BulkUnlockRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    if not body.user_ids:
+        raise HTTPException(status_code=400, detail="No user IDs provided")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    placeholders = ",".join("?" * len(body.user_ids))
+    cur.execute(f"""
+        UPDATE users
+        SET account_locked_until = NULL, failed_login_attempts = 0
+        WHERE id IN ({placeholders})
+    """, body.user_ids)
+    unlocked = cur.rowcount
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "bulk_unlock_accounts",
+                 details={"user_ids": body.user_ids, "unlocked": unlocked})
+    return {"success": True, "unlocked_count": unlocked}
+
+
+# ── 3. Active sessions ───────────────────────────────────────────────────────
+
+@superadmin_router.get("/sessions")
+async def get_all_sessions(
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT s.id, s.user_id, u.name, u.email, u.role,
+               s.created_at, s.last_activity, s.expires_at,
+               s.ip_address, s.user_agent, s.is_active
+        FROM sessions s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.is_active = 1 AND s.expires_at > datetime('now')
+        ORDER BY s.last_activity DESC
+    """)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@superadmin_router.post("/sessions/force-logout")
+async def force_logout_user(
+    body: ForceLogoutRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
+    target = cur.fetchone()
+    if not target:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    cur.execute("""
+        UPDATE sessions SET is_active = 0
+        WHERE user_id = ? AND is_active = 1
+    """, (body.user_id,))
+    killed = cur.rowcount
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "force_logout",
+                 resource_type="user", resource_id=body.user_id,
+                 details={"target_email": target["email"], "sessions_killed": killed})
+    return {"success": True, "sessions_terminated": killed}
+
+
+@superadmin_router.post("/sessions/force-logout-all")
+async def force_logout_all(
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Preserve the calling superadmin's own session
+    current_token = request.cookies.get("session_token")
+    cur.execute("""
+        UPDATE sessions SET is_active = 0
+        WHERE session_token != ? AND is_active = 1
+    """, (current_token,))
+    killed = cur.rowcount
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "force_logout_all",
+                 details={"sessions_killed": killed})
+    return {"success": True, "sessions_terminated": killed}
+
+
+# ── 4. Security configuration ────────────────────────────────────────────────
+
+@superadmin_router.get("/security-config")
+# async def get_security_config(
+#     user_id: int = Depends(get_current_user),
+#     request: Request = None,
+# ):
+#     require_superadmin(user_id)
+#     conn = get_db_connection()
+#     cur = conn.cursor()
+
+#     keys = [
+#         "max_login_attempts",
+#         "lockout_duration_minutes",
+#         "session_duration_hours",
+#         "remember_me_duration_days",
+#         "calibration_reminder_days",
+#     ]
+#     placeholders = ",".join("?" * len(keys))
+#     cur.execute(f"""
+#         SELECT setting_key, setting_value, description, updated_at
+#         FROM system_settings
+#         WHERE setting_key IN ({placeholders})
+#     """, keys)
+#     settings = {r["setting_key"]: dict(r) for r in cur.fetchall()}
+#     conn.close()
+#     return settings
+
+
+@superadmin_router.put("/security-config/{key}")
+async def update_security_config(
+    key: str,
+    body: SystemSettingUpdate,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+
+    allowed_keys = {
+        "max_login_attempts", "lockout_duration_minutes",
+        "session_duration_hours", "remember_me_duration_days",
+        "calibration_reminder_days",
+    }
+    if key not in allowed_keys:
+        raise HTTPException(status_code=400, detail=f"Unknown config key: {key}")
+
+    # Validate numeric
+    try:
+        val = int(body.value)
+        if val < 1:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Value must be a positive integer")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO system_settings (setting_key, setting_value, updated_by)
+        VALUES (?, ?, ?)
+        ON CONFLICT(setting_key)
+        DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    """, (key, str(val), user_id, str(val), user_id))
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "update_security_config",
+                 details={"key": key, "new_value": val})
+    return {"success": True, "key": key, "value": val}
+
+
+# ── 5. User role management ──────────────────────────────────────────────────
+
+@superadmin_router.get("/users")
+async def superadmin_get_users(
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, name, email, role, territory,
+               failed_login_attempts, account_locked_until,
+               last_login, created_at
+        FROM users ORDER BY created_at DESC
+    """)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@superadmin_router.put("/users/{target_id}/role")
+async def update_user_role(
+    target_id: int,
+    body: UserRoleUpdate,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    valid_roles = {"engineer", "manager", "admin", "superadmin"}
+    if body.role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of {valid_roles}")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name, email, role FROM users WHERE id = ?", (target_id,))
+    target = cur.fetchone()
+    if not target:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    old_role = target["role"]
+    cur.execute("UPDATE users SET role = ? WHERE id = ?", (body.role, target_id))
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "change_user_role",
+                 resource_type="user", resource_id=target_id,
+                 details={"email": target["email"], "old_role": old_role, "new_role": body.role})
+    return {"success": True, "message": f"Role updated from {old_role} → {body.role}"}
+
+
+# ── 6. Database administration ───────────────────────────────────────────────
+
+@superadmin_router.get("/database/tables")
+async def get_db_tables(
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    tables = [r["name"] for r in cur.fetchall()]
+
+    result = {}
+    for table in tables:
+        cur.execute(f"SELECT COUNT(*) as n FROM [{table}]")
+        count = cur.fetchone()["n"]
+        cur.execute(f"PRAGMA table_info([{table}])")
+        columns = [{"name": c["name"], "type": c["type"]} for c in cur.fetchall()]
+        result[table] = {"row_count": count, "columns": columns}
+
+    conn.close()
+    return result
+
+
+@superadmin_router.post("/database/query")
+async def run_readonly_query(
+    body: DatabaseQueryRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Execute a read-only SQL query (SELECT only)."""
+    require_superadmin(user_id)
+    sql = body.sql.strip()
+
+    # Allow only SELECT statements
+    first_word = sql.split()[0].upper() if sql else ""
+    if first_word != "SELECT":
+        raise HTTPException(status_code=400, detail="Only SELECT queries are allowed")
+
+    # Block dangerous keywords
+    forbidden = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE", "TRUNCATE", "ATTACH"]
+    upper_sql = sql.upper()
+    for kw in forbidden:
+        if kw in upper_sql:
+            raise HTTPException(status_code=400, detail=f"Keyword '{kw}' is not allowed")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(sql, body.params or [])
+        rows = cur.fetchmany(500)  # cap at 500 rows
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        result = [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Query error: {str(e)}")
+    finally:
+        conn.close()
+
+    log_activity(user_id, "superadmin", "db_query",
+                 details={"sql": sql[:200]})
+    return {"columns": columns, "rows": result, "count": len(result)}
+
+
+@superadmin_router.get("/database/backup")
+async def download_db_backup(
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    """Stream the SQLite DB file as a download."""
+    require_superadmin(user_id)
+    if not os.path.exists(DATABASE):
+        raise HTTPException(status_code=404, detail="Database file not found")
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"inventory_backup_{timestamp}.db"
+    backup_path = f"/tmp/{backup_name}"
+
+    # Use SQLite backup API for a consistent copy
+    src = sqlite3.connect(DATABASE)
+    dst = sqlite3.connect(backup_path)
+    src.backup(dst)
+    dst.close()
+    src.close()
+
+    log_activity(user_id, "superadmin", "db_backup",
+                 details={"filename": backup_name})
+    return FileResponse(backup_path, filename=backup_name,
+                        media_type="application/octet-stream")
+
+
+@superadmin_router.post("/database/vacuum")
+async def vacuum_database(
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Run VACUUM to reclaim space and defragment the SQLite file."""
+    require_superadmin(user_id)
+    before = os.path.getsize(DATABASE) if os.path.exists(DATABASE) else 0
+    conn = sqlite3.connect(DATABASE)
+    conn.execute("VACUUM")
+    conn.close()
+    after = os.path.getsize(DATABASE) if os.path.exists(DATABASE) else 0
+
+    log_activity(user_id, "superadmin", "db_vacuum",
+                 details={"before_bytes": before, "after_bytes": after})
+    return {
+        "success": True,
+        "before_bytes": before,
+        "after_bytes": after,
+        "saved_bytes": before - after,
+    }
+
+
+@superadmin_router.delete("/database/logs/purge")
+async def purge_all_logs(
+    days: int = 0,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Purge activity_logs and system_logs older than `days` days (0 = all)."""
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if days == 0:
+        cur.execute("DELETE FROM activity_logs")
+        act_deleted = cur.rowcount
+        cur.execute("DELETE FROM system_logs")
+        sys_deleted = cur.rowcount
+    else:
+        cur.execute("""
+            DELETE FROM activity_logs
+            WHERE created_at < datetime('now', ? )
+        """, (f"-{days} days",))
+        act_deleted = cur.rowcount
+        cur.execute("""
+            DELETE FROM system_logs
+            WHERE created_at < datetime('now', ?)
+        """, (f"-{days} days",))
+        sys_deleted = cur.rowcount
+
+    conn.commit()
+    conn.close()
+
+    log_activity(user_id, "superadmin", "purge_logs",
+                 details={"days": days, "activity_deleted": act_deleted, "system_deleted": sys_deleted})
+    return {
+        "success": True,
+        "activity_logs_deleted": act_deleted,
+        "system_logs_deleted": sys_deleted,
+    }
+
+
+# ── 7. System announcement (stored in system_settings) ──────────────────────
+
+@superadmin_router.post("/announcement")
+async def set_announcement(
+    body: SystemAnnouncementRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    payload = json.dumps({"message": body.message, "level": body.level,
+                           "set_at": datetime.utcnow().isoformat()})
+    cur.execute("""
+        INSERT INTO system_settings (setting_key, setting_value, updated_by)
+        VALUES ('system_announcement', ?, ?)
+        ON CONFLICT(setting_key)
+        DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    """, (payload, user_id, payload, user_id))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@superadmin_router.delete("/announcement")
+async def clear_announcement(
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM system_settings WHERE setting_key = 'system_announcement'")
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@superadmin_router.get("/announcement")
+async def get_announcement(request: Request = None):
+    """Public endpoint – any authenticated user can read the announcement."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT setting_value FROM system_settings WHERE setting_key = 'system_announcement'")
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return {"announcement": None}
+    return {"announcement": json.loads(row["setting_value"])}
+
+
+# ── 8. Audit trail for superadmin actions ────────────────────────────────────
+
+@superadmin_router.get("/audit-log")
+async def get_superadmin_audit(
+    limit: int = 200,
+    user_id: int = Depends(get_current_user),
+    request: Request = None,
+):
+    require_superadmin(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT * FROM activity_logs
+        WHERE username = 'superadmin'
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+app.include_router(superadmin_router)
 
 if __name__ == "__main__":
     import uvicorn

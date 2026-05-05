@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Superadmin Panel</title>
+<link rel="stylesheet" href="superadmin.css">
+<link rel="stylesheet" href="mystyle.css">
+<script src="script.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
+</head>
+
+<body x-data="superPanel()" x-init="init()">
+
+<!-- Toasts -->
+<div class="toast-wrap">
+  <template x-for="t in toasts" :key="t.id">
+    <div class="toast" :class="'toast-' + t.type" x-text="t.msg"></div>
+  </template>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" x-show="dlg.open" style="display:none" x-cloak>
+  <div class="confirm-box">
+    <h3 x-text="dlg.title"></h3>
+    <p x-text="dlg.msg"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-outline" @click="dlg.open=false">Cancel</button>
+      <button class="btn btn-red" @click="dlg.resolve(); dlg.open=false" x-text="dlg.action||'Confirm'"></button>
+    </div>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h2>Inventory Management</h2>
+      <p>Superadmin Panel</p>
+    </div>
+
+    <nav>
+      <div class="nav-section">
+        <div class="nav-label">Overview</div>
+        <div class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'">
+          <span class="ni">📊</span> Dashboard
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Security</div>
+        <div class="nav-item" :class="tab==='accounts'&&'active'" @click="tab='accounts'; loadLocked()">
+          <span class="ni">🔒</span> Locked Accounts
+          <span x-show="dashboard.locked_accounts>0" class="nav-badge" x-text="dashboard.locked_accounts"></span>
+        </div>
+        <div class="nav-item" :class="tab==='sessions'&&'active'" @click="tab='sessions'; loadSessions()">
+          <span class="ni">📡</span> Active Sessions
+        </div>
+        <div class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()">
+          <span class="ni">⚙️</span> Security Config
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Users</div>
+        <div class="nav-item" :class="tab==='users'&&'active'" @click="tab='users'; loadUsers()">
+          <span class="ni">👥</span> All Users
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Database</div>
+        <div class="nav-item" :class="tab==='tables'&&'active'" @click="tab='tables'; loadTables()">
+          <span class="ni">🗄️</span> Tables
+        </div>
+        <div class="nav-item" :class="tab==='query'&&'active'" @click="tab='query'">
+          <span class="ni">💻</span> SQL Console
+        </div>
+        <div class="nav-item" :class="tab==='maintenance'&&'active'" @click="tab='maintenance'">
+          <span class="ni">🔧</span> Maintenance
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">System</div>
+        <div class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; loadAnnouncement()">
+          <span class="ni">📢</span> Announcement
+        </div>
+        <div class="nav-item" :class="tab==='audit'&&'active'" @click="tab='audit'; loadAudit()">
+          <span class="ni">📋</span> Audit Log
+        </div>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sf-name" x-text="me?.name || '...'"></div>
+      <div class="sf-role">Superadmin</div>
+      <a href="/static/index.html">← Back to App</a>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main-wrap">
+
+    <!-- Announcement banner (visible to all) -->
+    <div x-show="announcement" class="ann-bar" :class="'ann-'+(announcement?.level||'info')">
+      <span>📢</span>
+      <span x-text="announcement?.message"></span>
+    </div>
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
+      <div class="topbar-right">
+        <span x-show="loading" class="spin"></span>
+        <button class="btn btn-sm btn-outline" @click="refresh()">↻ Refresh</button>
+        <a href="/static/index.html" class="btn btn-sm btn-outline">← Dashboard</a>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══════════ DASHBOARD ══════════ -->
+      <div x-show="tab==='dashboard'">
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-num red" x-text="dashboard.locked_accounts ?? '—'"></div>
+            <div class="stat-lbl">Locked Accounts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" x-text="dashboard.active_sessions ?? '—'"></div>
+            <div class="stat-lbl">Active Sessions</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num amber" x-text="dashboard.recent_failed_logins_24h ?? '—'"></div>
+            <div class="stat-lbl">Failed Logins (24h)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num green" x-text="dashboard.total_activity_logs ?? '—'"></div>
+            <div class="stat-lbl">Activity Log Entries</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num grey" x-text="fmtBytes(dashboard.database_size_bytes)"></div>
+            <div class="stat-lbl">Database Size</div>
+          </div>
+        </div>
+
+        <!-- Users by role -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Users by Role</span></div>
+          <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:2rem;">
+            <template x-for="[role, count] in Object.entries(dashboard.users_by_role||{})">
+              <div style="text-align:center;">
+                <div style="font-size:1.6rem;font-weight:700;color:#007bff;" x-text="count"></div>
+                <div style="font-size:0.75rem;color:#888;text-transform:capitalize;" x-text="role"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Quick Actions</span></div>
+          <div class="panel-body">
+            <div class="qa-grid">
+              <button class="qa-btn" @click="tab='accounts'; loadLocked()">
+                <span class="qa-icon">🔓</span>
+                <div class="qa-label">Unlock Accounts</div>
+                <div class="qa-sub">Release locked users</div>
+              </button>
+              <button class="qa-btn" @click="tab='sessions'; loadSessions()">
+                <span class="qa-icon">📡</span>
+                <div class="qa-label">View Sessions</div>
+                <div class="qa-sub">See who's logged in</div>
+              </button>
+              <button class="qa-btn" @click="backupDB()">
+                <span class="qa-icon">💾</span>
+                <div class="qa-label">Download Backup</div>
+                <div class="qa-sub">SQLite snapshot</div>
+              </button>
+              <button class="qa-btn" @click="tab='config'; loadConfig()">
+                <span class="qa-icon">⚙️</span>
+                <div class="qa-label">Security Config</div>
+                <div class="qa-sub">Login limits &amp; timeouts</div>
+              </button>
+              <button class="qa-btn" @click="tab='announcement'; loadAnnouncement()">
+                <span class="qa-icon">📢</span>
+                <div class="qa-label">Broadcast Message</div>
+                <div class="qa-sub">System-wide banner</div>
+              </button>
+              <button class="qa-btn qa-danger" @click="confirmLogoutAll()">
+                <span class="qa-icon">🚫</span>
+                <div class="qa-label" style="color:#dc3545;">Force Logout All</div>
+                <div class="qa-sub">Terminate all sessions</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /dashboard -->
+
+
+      <!-- ══════════ LOCKED ACCOUNTS ══════════ -->
+      <div x-show="tab==='accounts'">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              Locked Accounts
+              <span x-show="locked.length>0" class="tag tag-red" style="margin-left:6px;" x-text="locked.length"></span>
+            </span>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0">Unlock All</button>
+              <button class="btn btn-sm btn-outline" @click="loadLocked()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div x-show="locked.length===0 && !loading" class="empty">✅ No accounts are currently locked</div>
+
+          <div x-show="locked.length>0" style="overflow-x:auto;">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" @change="toggleAll($event)" style="cursor:pointer;"></th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Failed Attempts</th>
+                  <th>Locked Until</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="u in locked" :key="u.id">
+                  <tr>
+                    <td><input type="checkbox" :value="u.id" x-model="selectedLocked" style="cursor:pointer;"></td>
+                    <td style="font-weight:600;" x-text="u.name"></td>
+                    <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
+                    <td><span class="tag tag-grey" x-text="u.role"></span></td>
+                    <td><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
+                    <td style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
+                    <td><button class="btn btn-sm btn-green" @click="unlock(u)">🔓 Unlock</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- bulk action bar -->
+          <div x-show="selectedLocked.length>0"
+               style="padding:0.75rem 1rem;border-top:1px solid #eee;display:flex;align-items:center;gap:0.75rem;background:#f8f9fa;">
+            <span style="font-size:0.8rem;color:#666;" x-text="selectedLocked.length + ' selected'"></span>
+            <button class="btn btn-sm btn-green" @click="unlockSelected()">Unlock Selected</button>
+          </div>
+        </div>
+      </div><!-- /accounts -->
+
+
+      <!-- ══════════ ACTIVE SESSIONS ══════════ -->
+      <div x-show="tab==='sessions'">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              Active Sessions
+              <span class="tag tag-blue" style="margin-left:6px;" x-text="sessions.length"></span>
+            </span>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn btn-sm btn-red" @click="confirmLogoutAll()">🚫 Logout All</button>
+              <button class="btn btn-sm btn-outline" @click="loadSessions()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>IP Address</th>
+                  <th>Last Activity</th>
+                  <th>Expires</th>
+                  <th>Browser</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="s in sessions" :key="s.id">
+                  <tr>
+                    <td>
+                      <div style="font-weight:600;" x-text="s.name"></div>
+                      <div style="font-size:0.75rem;color:#888;" x-text="s.email"></div>
+                    </td>
+                    <td><span class="tag tag-grey" x-text="s.role"></span></td>
+                    <td style="font-size:0.8rem;font-family:monospace;" x-text="s.ip_address||'—'"></td>
+                    <td style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
+                    <td style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
+                    <td style="font-size:0.75rem;color:#888;" x-text="parseUA(s.user_agent)"></td>
+                    <td><button class="btn btn-sm btn-red" @click="forceLogout(s)">Terminate</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div x-show="sessions.length===0 && !loading" class="empty">No active sessions found</div>
+          </div>
+        </div>
+      </div><!-- /sessions -->
+
+
+      <!-- ══════════ SECURITY CONFIG ══════════ -->
+      <div x-show="tab==='config'">
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Security Parameters</span>
+            <span style="font-size:0.75rem;color:#888;">Changes apply to new logins immediately</span>
+          </div>
+          <div class="panel-body">
+            <template x-for="[key, meta] in Object.entries(cfgMeta)">
+              <div class="cfg-row">
+                <div>
+                  <div class="cfg-label" x-text="meta.label"></div>
+                  <div class="cfg-desc"  x-text="meta.desc"></div>
+                </div>
+                <div class="cfg-ctrl">
+                  <input type="number" :min="meta.min" :max="meta.max"
+                         x-model="cfgVals[key]"
+                         @keydown.enter="saveConfig(key)">
+                  <span class="cfg-unit" x-text="meta.unit"></span>
+                  <button class="btn btn-sm btn-success" @click="saveConfig(key)">Save</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Current Values (from database)</span>
+            <button class="btn btn-sm btn-outline" @click="loadConfig()">↻ Refresh</button>
+          </div>
+          <div class="panel-body">
+            <div x-show="Object.keys(secConfig).length===0 && !loading" style="color:#aaa;font-size:0.875rem;">
+              No values saved yet — save a parameter above to create them.
+            </div>
+            <template x-for="[key, row] in Object.entries(secConfig)">
+              <div class="cfg-row">
+                <div>
+                  <div class="cfg-label" style="font-family:monospace;font-size:0.82rem;" x-text="key"></div>
+                  <div class="cfg-desc" x-text="'Last updated: ' + (row.updated_at ? fmtDate(row.updated_at) : 'never')"></div>
+                </div>
+                <span class="tag tag-blue" style="font-family:monospace;" x-text="row.setting_value"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+      </div><!-- /config -->
+
+
+      <!-- ══════════ USERS ══════════ -->
+      <div x-show="tab==='users'">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">All Users</span>
+            <button class="btn btn-sm btn-outline" @click="loadUsers()">↻ Refresh</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Territory</th>
+                  <th>Failed Logins</th>
+                  <th>Last Login</th>
+                  <th>Status</th>
+                  <th>Force Logout</th>
+                  <th>Reset Password</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="u in allUsers" :key="u.id">
+                  <tr>
+                    <td style="font-weight:600;" x-text="u.name"></td>
+                    <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
+                    <td>
+                      <select style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;background:white;"
+                              x-model="u._role" @change="changeRole(u)">
+                        <option value="engineer">engineer</option>
+                        <option value="manager">manager</option>
+                        <option value="admin">admin</option>
+                        <option value="superadmin">superadmin</option>
+                      </select>
+                    </td>
+                    <td style="font-size:0.8rem;" x-text="u.territory||'—'"></td>
+                    <td>
+                      <span :class="u.failed_login_attempts>0?'tag tag-amber':'tag tag-grey'"
+                            x-text="u.failed_login_attempts"></span>
+                    </td>
+                    <td style="font-size:0.8rem;" x-text="u.last_login ? fmtDate(u.last_login) : 'Never'"></td>
+                    <td>
+                      <span x-show="isLocked(u)"  class="tag tag-red">Locked</span>
+                      <span x-show="!isLocked(u)" class="tag tag-green">Active</span>
+                    </td>
+                    <td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+                      <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" title="Unlock">🔓</button>
+                      <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout">⏏</button>
+                    </td>
+                    <td>
+                      <button class="btn btn-sm btn-amber" @click="openResetModal(u)" title="Reset password">🔑</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /users -->
+
+
+      <!-- ══════════ DB TABLES ══════════ -->
+      <div x-show="tab==='tables'">
+        <div class="table-grid">
+          <template x-for="[tname, tinfo] in Object.entries(dbTables)">
+            <div class="tbl-card">
+              <div class="tbl-card-head">
+                <span class="tbl-card-name" x-text="tname"></span>
+                <span class="tag tag-blue" x-text="tinfo.row_count + ' rows'"></span>
+              </div>
+              <div class="tbl-card-body">
+                <div style="margin-bottom:0.5rem;">
+                  <template x-for="col in tinfo.columns">
+                    <span class="col-pill" x-text="col.name"></span>
+                  </template>
+                </div>
+                <button class="btn btn-sm btn-outline" style="width:100%;margin-top:4px;"
+                        @click="sqlInput='SELECT * FROM ['+tname+'] LIMIT 50'; tab='query'">
+                  Preview →
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div><!-- /tables -->
+
+
+      <!-- ══════════ SQL CONSOLE ══════════ -->
+      <div x-show="tab==='query'">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">SQL Console</span>
+            <span class="tag tag-amber">SELECT only — read-only</span>
+          </div>
+          <div class="panel-body">
+            <textarea class="sql-editor" x-model="sqlInput"
+                      placeholder="SELECT * FROM users LIMIT 10;"
+                      @keydown.ctrl.enter="runQuery()"></textarea>
+            <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-success" @click="runQuery()" :disabled="loading">
+                ▶ Run <small style="opacity:.7;">(Ctrl+Enter)</small>
+              </button>
+              <button class="btn btn-sm btn-outline" @click="sqlInput=''">Clear</button>
+              <div style="margin-left:auto;display:flex;gap:0.4rem;flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline" @click="sqlInput='SELECT * FROM users LIMIT 20'">users</button>
+                <button class="btn btn-sm btn-outline" @click="sqlInput='SELECT * FROM sessions WHERE is_active=1 LIMIT 20'">sessions</button>
+                <button class="btn btn-sm btn-outline" @click="sqlInput='SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 50'">logs</button>
+                <button class="btn btn-sm btn-outline" @click="sqlInput='SELECT * FROM system_settings'">settings</button>
+                <button class="btn btn-sm btn-outline" @click="sqlInput='SELECT * FROM inventory LIMIT 30'">inventory</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" x-show="queryResult !== null">
+          <div class="panel-header">
+            <span class="panel-title">Results</span>
+            <span class="tag tag-green" x-text="(queryResult?.count ?? 0) + ' rows'"></span>
+          </div>
+          <div class="result-wrap">
+            <table class="tbl" x-show="queryResult?.rows?.length > 0">
+              <thead>
+                <tr>
+                  <template x-for="col in queryResult.columns">
+                    <th x-text="col"></th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, ri) in queryResult.rows" :key="ri">
+                  <tr>
+                    <template x-for="col in queryResult.columns">
+                      <td style="font-size:0.8rem;font-family:monospace;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                          :title="String(row[col])"
+                          x-text="row[col] ?? 'NULL'"></td>
+                    </template>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div x-show="queryResult?.rows?.length===0" class="empty">Query returned no rows</div>
+          </div>
+        </div>
+      </div><!-- /query -->
+
+
+      <!-- ══════════ MAINTENANCE ══════════ -->
+      <div x-show="tab==='maintenance'">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.25rem;">
+
+          <div class="panel" style="margin-bottom:0;">
+            <div class="panel-header"><span class="panel-title">💾 Database Backup</span></div>
+            <div class="panel-body">
+              <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Download a consistent SQLite snapshot of the live database.</p>
+              <div style="margin-bottom:1rem;">
+                <div style="font-size:0.75rem;color:#888;">Current size</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#333;" x-text="fmtBytes(dashboard.database_size_bytes)"></div>
+              </div>
+              <button class="btn btn-success" @click="backupDB()">⬇ Download Backup</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:0;">
+            <div class="panel-header"><span class="panel-title">🧹 Vacuum Database</span></div>
+            <div class="panel-body">
+              <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Reclaim unused space and defragment. The app stays online.</p>
+              <button class="btn btn-warning" @click="vacuumDB()" :disabled="loading">Run VACUUM</button>
+              <div x-show="vacuumResult"
+                   style="margin-top:1rem;padding:0.75rem;background:#d4edda;border-radius:6px;font-size:0.85rem;color:#155724;">
+                ✅ Saved <strong x-text="fmtBytes(vacuumResult?.saved_bytes)"></strong>
+                (<span x-text="fmtBytes(vacuumResult?.before_bytes)"></span>
+                → <span x-text="fmtBytes(vacuumResult?.after_bytes)"></span>)
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:0;">
+            <div class="panel-header"><span class="panel-title">🗑️ Purge Logs</span></div>
+            <div class="panel-body">
+              <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Delete old activity and system log entries to free up space.</p>
+              <div class="form-group">
+                <label>Older than (days) — 0 deletes all logs</label>
+                <input type="number" x-model="purgeDays" min="0" placeholder="90">
+              </div>
+              <button class="btn btn-sm btn-red" @click="purgeLogs()">Purge Logs</button>
+              <div x-show="purgeResult"
+                   style="margin-top:1rem;padding:0.75rem;background:#f8d7da;border-radius:6px;font-size:0.85rem;color:#721c24;">
+                Deleted <strong x-text="purgeResult?.activity_logs_deleted"></strong> activity
+                + <strong x-text="purgeResult?.system_logs_deleted"></strong> system logs
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /maintenance -->
+
+
+      <!-- ══════════ ANNOUNCEMENT ══════════ -->
+      <div x-show="tab==='announcement'">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">📢 System Announcement</span></div>
+          <div class="panel-body">
+
+            <!-- Current banner preview -->
+            <div x-show="announcement" style="margin-bottom:1.25rem;">
+              <div style="font-size:0.75rem;color:#888;margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
+                Active Banner
+              </div>
+              <div class="ann-bar" :class="'ann-'+(announcement?.level||'info')"
+                   style="border-radius:6px;border:1px solid #ddd;">
+                <span x-text="announcement?.message"></span>
+                <button class="btn btn-sm btn-outline" style="margin-left:auto;flex-shrink:0;"
+                        @click="clearAnnouncement()">✕ Remove</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Message</label>
+              <textarea style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
+                        x-model="annForm.message"
+                        placeholder="e.g. Scheduled maintenance tonight at 22:00 UTC…"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Level</label>
+              <select x-model="annForm.level">
+                <option value="info">Info (blue)</option>
+                <option value="warning">Warning (yellow)</option>
+                <option value="danger">Danger (red)</option>
+              </select>
+            </div>
+            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message">
+              📢 Broadcast
+            </button>
+          </div>
+        </div>
+      </div><!-- /announcement -->
+
+
+      <!-- ══════════ AUDIT LOG ══════════ -->
+      <div x-show="tab==='audit'">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Superadmin Audit Log</span>
+            <button class="btn btn-sm btn-outline" @click="loadAudit()">↻ Refresh</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Action</th>
+                  <th>Resource</th>
+                  <th>Status</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="log in auditLog" :key="log.id">
+                  <tr>
+                    <td style="font-size:0.8rem;white-space:nowrap;" x-text="fmtDate(log.created_at)"></td>
+                    <td><span class="tag tag-blue" style="font-family:monospace;" x-text="log.action"></span></td>
+                    <td style="font-size:0.8rem;"
+                        x-text="(log.resource_type||'') + (log.resource_id ? ' #'+log.resource_id : '')"></td>
+                    <td>
+                      <span :class="log.status==='success' ? 'tag tag-green' : 'tag tag-red'"
+                            x-text="log.status"></span>
+                    </td>
+                    <td style="font-size:0.75rem;color:#888;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                        x-text="log.details||'—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div x-show="auditLog.length===0 && !loading" class="empty">No superadmin actions recorded yet</div>
+          </div>
+        </div>
+      </div><!-- /audit -->
+
+    </div><!-- /content -->
+  </div><!-- /main-wrap -->
+</div><!-- /shell -->
+
+<!-- Reset Password Modal -->
+<div class="confirm-overlay" x-show="resetModal.open" style="display:none" x-cloak>
+  <div class="confirm-box">
+    <h3>Reset Password</h3>
+    <p style="color:#666;font-size:0.875rem;margin-bottom:1rem;">
+      Setting a new password for <strong x-text="resetModal.userName"></strong>.
+      Their active sessions will be terminated.
+    </p>
+    <div class="form-group">
+      <label>New Password</label>
+      <input type="password" x-model="resetModal.password"
+             placeholder="Minimum 8 characters"
+             style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
+    </div>
+    <div class="form-group">
+      <label>Confirm Password</label>
+      <input type="password" x-model="resetModal.confirm"
+             placeholder="Repeat new password"
+             style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
+    </div>
+    <div x-show="resetModal.error"
+         style="background:#f8d7da;color:#721c24;padding:.5rem .75rem;border-radius:4px;font-size:.85rem;margin-bottom:.75rem;"
+         x-text="resetModal.error"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-outline" @click="resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''">Cancel</button>
+      <button class="btn btn-red" @click="submitPasswordReset()" :disabled="loading">Reset Password</button>
+    </div>
+  </div>
+</div>
+<script>
+  function superPanel() {
+  return {
+    tab: 'dashboard',
+    loading: false,
+    apiUrl: '/api',
+    csrfToken: '',
+    me: null,
+
+    tabTitles: {
+      dashboard: 'Dashboard',    accounts: 'Locked Accounts',
+      sessions:  'Active Sessions', config: 'Security Config',
+      users:     'All Users',    tables: 'Database Tables',
+      query:     'SQL Console',  maintenance: 'Maintenance',
+      announcement: 'System Announcement', audit: 'Audit Log',
+    },
+
+    // data stores
+    dashboard: {},
+    locked: [], selectedLocked: [],
+    sessions: [],
+    secConfig: {}, cfgVals: {},
+    allUsers: [],
+    dbTables: {},
+    sqlInput: 'SELECT * FROM users LIMIT 20',
+    queryResult: null,
+    vacuumResult: null, purgeResult: null, purgeDays: 90,
+    auditLog: [],
+    announcement: null,
+    annForm: { message: '', level: 'info' },
+
+    toasts: [],
+    dlg: { open: false, title: '', msg: '', action: '', resolve: () => {} },
+
+    resetModal: { open: false, userId: null, userName: '', password: '', confirm: '', error: '' },
+
+    cfgMeta: {
+      max_login_attempts:        { label: 'Max Login Attempts',     desc: 'Consecutive failures before account lockout',      unit: 'attempts', min: 1, max: 100  },
+      lockout_duration_minutes:  { label: 'Lockout Duration',       desc: 'How long an account stays locked after failure',   unit: 'minutes',  min: 1, max: 1440 },
+      session_duration_hours:    { label: 'Session Duration',       desc: 'Normal login session lifetime',                   unit: 'hours',    min: 1, max: 720  },
+      remember_me_duration_days: { label: '"Remember Me" Duration', desc: 'Session lifetime when remember-me is checked',    unit: 'days',     min: 1, max: 365  },
+    },
+
+    // ── Boot ──────────────────────────────────────────────────
+    async init() {
+      await this.getCsrf();
+      await this.getMe();
+      await this.loadDashboard();
+      await this.loadAnnouncement();
+    },
+
+    refresh() {
+      const loaders = {
+        dashboard: () => this.loadDashboard(),
+        accounts:  () => this.loadLocked(),
+        sessions:  () => this.loadSessions(),
+        config:    () => this.loadConfig(),
+        users:     () => this.loadUsers(),
+        tables:    () => this.loadTables(),
+        audit:     () => this.loadAudit(),
+        announcement: () => this.loadAnnouncement(),
+      };
+      (loaders[this.tab] || (() => this.loadDashboard()))();
+    },
+    
+    // add these two methods alongside your other methods:
+openResetModal(u) {
+    this.resetModal = {
+        open: true,
+        userId: u.id,
+        userName: u.name,
+        password: '',
+        confirm: '',
+        error: '',
+    };
+    console.log('resetModal state:', this.resetModal);
+},
+
+async submitPasswordReset() {
+    this.resetModal.error = '';
+
+    if (this.resetModal.password.length < 8) {
+        this.resetModal.error = 'Password must be at least 8 characters.';
+        return;
+    }
+    if (this.resetModal.password !== this.resetModal.confirm) {
+        this.resetModal.error = 'Passwords do not match.';
+        return;
+    }
+
+    this.loading = true;
+    try {
+        const r = await this.api(`/superadmin/users/${this.resetModal.userId}/reset-password`, {
+            method: 'POST',
+            body: JSON.stringify({
+                user_id: this.resetModal.userId,
+                new_password: this.resetModal.password,
+            }),
+        });
+        this.toast(r.message, 'ok');
+        this.resetModal.open = false;
+        this.resetModal.password = '';
+        this.resetModal.confirm = '';
+    } catch (e) {
+        this.resetModal.error = e.message;
+    } finally {
+        this.loading = false;
+    }
+},
+
+    // ── Auth helpers ──────────────────────────────────────────
+    async getCsrf() {
+      try {
+        const r = await fetch(`${this.apiUrl}/csrf-token`, { credentials: 'include' });
+        this.csrfToken = (await r.json()).csrf_token;
+      } catch {}
+    },
+
+    async getMe() {
+      try {
+        const r = await fetch(`${this.apiUrl}/me`, { credentials: 'include' });
+        if (r.status === 401) { location.href = '/static/index.html'; return; }
+        this.me = await r.json();
+        if (this.me.role !== 'superadmin') {
+          this.toast('Access denied — superadmin role required.', 'danger');
+          setTimeout(() => location.href = '/static/index.html', 2000);
+        }
+      } catch { location.href = '/static/index.html'; }
+    },
+
+    async api(path, opts = {}) {
+      const headers = { ...opts.headers };
+      if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+      if (['POST','PUT','DELETE'].includes((opts.method || 'GET').toUpperCase()))
+        headers['X-CSRF-Token'] = this.csrfToken;
+      const r = await fetch(`${this.apiUrl}${path}`, { ...opts, credentials: 'include', headers });
+      if (r.status === 401) { location.href = '/static/index.html'; throw new Error('Unauthenticated'); }
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+      if (r.status === 204) return null;
+      return r.json();
+    },
+
+    // ── Toast ──────────────────────────────────────────────────
+    toast(msg, type = 'ok') {
+      const id = Date.now();
+      this.toasts.push({ id, msg, type });
+      setTimeout(() => this.toasts = this.toasts.filter(t => t.id !== id), 3500);
+    },
+
+    // ── Dashboard ──────────────────────────────────────────────
+    async loadDashboard() {
+      this.loading = true;
+      try { this.dashboard = await this.api('/superadmin/dashboard'); }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    // ── Locked accounts ────────────────────────────────────────
+    async loadLocked() {
+      this.loading = true;
+      try { this.locked = await this.api('/superadmin/locked-accounts'); this.selectedLocked = []; }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    async unlock(u) {
+      try {
+        const r = await this.api('/superadmin/unlock-account', {
+          method: 'POST', body: JSON.stringify({ user_id: u.id }),
+        });
+        this.toast(r.message, 'ok');
+        await this.loadLocked(); await this.loadDashboard();
+      } catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    async bulkUnlock() {
+      if (!this.locked.length) return;
+      try {
+        const r = await this.api('/superadmin/unlock-accounts/bulk', {
+          method: 'POST', body: JSON.stringify({ user_ids: this.locked.map(u => u.id) }),
+        });
+        this.toast(`Unlocked ${r.unlocked_count} account(s)`, 'ok');
+        await this.loadLocked(); await this.loadDashboard();
+      } catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    async unlockSelected() {
+      if (!this.selectedLocked.length) return;
+      try {
+        const r = await this.api('/superadmin/unlock-accounts/bulk', {
+          method: 'POST', body: JSON.stringify({ user_ids: this.selectedLocked }),
+        });
+        this.toast(`Unlocked ${r.unlocked_count} account(s)`, 'ok');
+        await this.loadLocked(); await this.loadDashboard();
+      } catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    toggleAll(e) {
+      this.selectedLocked = e.target.checked ? this.locked.map(u => u.id) : [];
+    },
+
+    isLocked(u) {
+      return u.account_locked_until && new Date(u.account_locked_until) > new Date();
+    },
+
+    // ── Sessions ───────────────────────────────────────────────
+    async loadSessions() {
+      this.loading = true;
+      try { this.sessions = await this.api('/superadmin/sessions'); }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    forceLogout(u) {
+      this.dlg = {
+        open: true,
+        title: `Force logout ${u.name || u.email}?`,
+        msg: 'All active sessions for this user will be terminated immediately.',
+        action: 'Force Logout',
+        resolve: async () => {
+          try {
+            const r = await this.api('/superadmin/sessions/force-logout', {
+              method: 'POST', body: JSON.stringify({ user_id: u.user_id || u.id }),
+            });
+            this.toast(`Terminated ${r.sessions_terminated} session(s)`, 'ok');
+            await this.loadSessions();
+          } catch (e) { this.toast(e.message, 'danger'); }
+        },
+      };
+    },
+
+    confirmLogoutAll() {
+      this.dlg = {
+        open: true,
+        title: 'Force logout ALL users?',
+        msg: 'Every active session except yours will be terminated immediately. Users will need to log in again.',
+        action: 'Logout Everyone',
+        resolve: async () => {
+          try {
+            const r = await this.api('/superadmin/sessions/force-logout-all', { method: 'POST' });
+            this.toast(`Terminated ${r.sessions_terminated} session(s)`, 'ok');
+            await this.loadSessions(); await this.loadDashboard();
+          } catch (e) { this.toast(e.message, 'danger'); }
+        },
+      };
+    },
+
+    // ── Security config ────────────────────────────────────────
+    async loadConfig() {
+      this.loading = true;
+      try {
+        this.secConfig = await this.api('/superadmin/security-config');
+        for (const k of Object.keys(this.cfgMeta))
+          this.cfgVals[k] = this.secConfig[k]?.setting_value ?? '';
+      } catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    async saveConfig(key) {
+      const val = this.cfgVals[key];
+      if (!val) { this.toast('Please enter a value', 'warn'); return; }
+      try {
+        await this.api(`/superadmin/security-config/${key}`, {
+          method: 'PUT', body: JSON.stringify({ value: String(val) }),
+        });
+        this.toast(`${key} updated to ${val}`, 'ok');
+        await this.loadConfig();
+      } catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    // ── Users ──────────────────────────────────────────────────
+    async loadUsers() {
+      this.loading = true;
+      try {
+        this.allUsers = (await this.api('/superadmin/users')).map(u => ({ ...u, _role: u.role }));
+      } catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    async changeRole(u) {
+      if (u._role === u.role) return;
+      try {
+        const r = await this.api(`/superadmin/users/${u.id}/role`, {
+          method: 'PUT', body: JSON.stringify({ role: u._role }),
+        });
+        this.toast(r.message, 'ok');
+        u.role = u._role;
+      } catch (e) { this.toast(e.message, 'danger'); u._role = u.role; }
+    },
+
+    // ── DB Tables ──────────────────────────────────────────────
+    async loadTables() {
+      this.loading = true;
+      try { this.dbTables = await this.api('/superadmin/database/tables'); }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    // ── SQL ────────────────────────────────────────────────────
+    async runQuery() {
+      if (!this.sqlInput.trim()) return;
+      this.loading = true; this.queryResult = null;
+      try {
+        this.queryResult = await this.api('/superadmin/database/query', {
+          method: 'POST', body: JSON.stringify({ sql: this.sqlInput }),
+        });
+      } catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    // ── Maintenance ────────────────────────────────────────────
+    backupDB() {
+      const a = document.createElement('a');
+      a.href = `${this.apiUrl}/superadmin/database/backup`;
+      a.click();
+      this.toast('Backup download started', 'ok');
+    },
+
+    vacuumDB() {
+      this.dlg = {
+        open: true, title: 'Run VACUUM?',
+        msg: 'This defragments the database and reclaims unused space. Takes a few seconds.',
+        action: 'Run VACUUM',
+        resolve: async () => {
+          this.loading = true;
+          try {
+            this.vacuumResult = await this.api('/superadmin/database/vacuum', { method: 'POST' });
+            this.toast(`Saved ${this.fmtBytes(this.vacuumResult.saved_bytes)}`, 'ok');
+            await this.loadDashboard();
+          } catch (e) { this.toast(e.message, 'danger'); }
+          finally { this.loading = false; }
+        },
+      };
+    },
+
+    purgeLogs() {
+      const days = parseInt(this.purgeDays) || 0;
+      this.dlg = {
+        open: true,
+        title: days === 0 ? 'Purge ALL Logs?' : `Purge Logs Older Than ${days} Days?`,
+        msg: days === 0
+          ? 'This permanently deletes ALL log entries and cannot be undone.'
+          : `This deletes all logs older than ${days} days and cannot be undone.`,
+        action: 'Purge',
+        resolve: async () => {
+          this.loading = true;
+          try {
+            this.purgeResult = await this.api(
+              `/superadmin/database/logs/purge?days=${days}`, { method: 'DELETE' }
+            );
+            this.toast(
+              `Deleted ${this.purgeResult.activity_logs_deleted + this.purgeResult.system_logs_deleted} entries`,
+              'ok'
+            );
+            await this.loadDashboard();
+          } catch (e) { this.toast(e.message, 'danger'); }
+          finally { this.loading = false; }
+        },
+      };
+    },
+
+    // ── Announcement ───────────────────────────────────────────
+    async loadAnnouncement() {
+      try {
+        const r = await this.api('/superadmin/announcement');
+        this.announcement = r.announcement;
+        if (this.announcement) {
+          this.annForm.message = this.announcement.message;
+          this.annForm.level   = this.announcement.level;
+        }
+      } catch {}
+    },
+
+    async saveAnnouncement() {
+      try {
+        await this.api('/superadmin/announcement', {
+          method: 'POST', body: JSON.stringify(this.annForm),
+        });
+        this.toast('Announcement broadcast!', 'ok');
+        await this.loadAnnouncement();
+      } catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    async clearAnnouncement() {
+      try {
+        await this.api('/superadmin/announcement', { method: 'DELETE' });
+        this.announcement = null;
+        this.annForm = { message: '', level: 'info' };
+        this.toast('Announcement cleared', 'ok');
+      } catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    // ── Audit ──────────────────────────────────────────────────
+    async loadAudit() {
+      this.loading = true;
+      try { this.auditLog = await this.api('/superadmin/audit-log'); }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    // ── Helpers ────────────────────────────────────────────────
+    fmtBytes(b) {
+      if (!b && b !== 0) return '—';
+      if (b < 1024)        return b + ' B';
+      if (b < 1048576)     return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1048576).toFixed(2) + ' MB';
+    },
+
+    fmtDate(d) { return d ? new Date(d).toLocaleString() : '—'; },
+
+    parseUA(ua) {
+      if (!ua) return '—';
+      if (ua.includes('Chrome'))  return 'Chrome';
+      if (ua.includes('Firefox')) return 'Firefox';
+      if (ua.includes('Safari'))  return 'Safari';
+      if (ua.includes('Edge'))    return 'Edge';
+      return ua.slice(0, 25);
+    },
+  };
+}
+</script>
+</body>
+</html>

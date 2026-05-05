@@ -89,3 +89,9 @@ Traceback (most recent call last):
 sqlite3.OperationalError: table movements has no column named notes
 2026-02-24 05:38:54,867 - ERROR - Failed to log activity: database is locked
 2026-02-24 05:44:44,759 - ERROR - Failed to log system event: database is locked
+2026-05-02 07:21:41,832 - ERROR - Failed to log system event: database is locked
+2026-05-02 17:59:37,638 - ERROR - Failed to log activity: database is locked
+2026-05-02 17:59:54,006 - ERROR - Failed to log system event: database is locked
+2026-05-04 19:48:31,922 - ERROR - Failed to log system event: database is locked
+2026-05-05 08:41:26,047 - ERROR - Failed to log system event: database is locked
+2026-05-05 08:41:36,212 - ERROR - Failed to log system event: database is locked

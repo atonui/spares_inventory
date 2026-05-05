@@ -75,7 +75,11 @@
                     </div>
                     <div class="controls" style="margin-bottom: 1.5rem;">
                             <button class="btn" @click="logout()">Logout</button>
-                            <button class="btn" @click="$el.ownerDocument.location.href='/static/profile.html'">Profile</button></a>
+                            <button class="btn" @click="$el.ownerDocument.location.href='/static/profile.html'">Profile</button>
+                            <button x-show="currentUser?.role === 'superadmin'" class="btn" style="background:#dc3545;"
+                             @click="window.location.href='/static/superadmin.html'">
+                                ⚡ Superadmin
+                            </button>
                             
                 </div>
             </div>
