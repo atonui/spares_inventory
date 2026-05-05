@@ -1165,6 +1165,27 @@ async def get_csrf_token():
     return {"csrf_token": token}
 
 
+# -----------Database Download Endpoint-----------
+# TEMPORARY: Remove this endpoint after downloading the database.
+# Requires ?token=<SECRET_KEY> query parameter to prevent accidental exposure.
+@app.get("/download-database")
+async def download_database(token: str):
+    """Download the SQLite database file. Protected by SECRET_KEY token."""
+    if not secrets.compare_digest(token, SECRET_KEY):
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+    if not os.path.exists(DATABASE):
+        raise HTTPException(status_code=404, detail="Database file not found")
+
+    filename = os.path.basename(DATABASE)
+    return FileResponse(
+        path=DATABASE,
+        media_type="application/octet-stream",
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # -----------Profile Management Routes-----------
 @app.get("/api/profile")
 async def get_profile(
