@@ -15,7 +15,7 @@ from passlib.context import CryptContext
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, List
+from typing import Optional, List, Literal
 import sqlite3
 import hashlib
 from datetime import datetime, timedelta
@@ -505,6 +505,23 @@ def check_admin(user_id: int) -> bool:
         return True
     return False
 
+def require_user_management(user_id: int, requested_role=None, target_user_id=None):
+    """Protect privileged role assignment and existing superadmin accounts."""
+    conn = get_db_connection()
+    try:
+        actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+        target = (conn.execute("SELECT role FROM users WHERE id = ?", (target_user_id,)).fetchone()
+                  if target_user_id is not None else None)
+    finally:
+        conn.close()
+    if not actor or actor["role"] not in {"admin", "superadmin"}:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if actor["role"] != "superadmin" and (
+        requested_role == "superadmin" or (target and target["role"] == "superadmin")
+    ):
+        raise HTTPException(status_code=403, detail="Superadmin access required")
+
+
 def get_security_config() -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -915,7 +932,7 @@ class InventoryResponse(BaseModel):
 class AddStockRequest(BaseModel):
     part_id: int
     store_id: int
-    quantity: int
+    quantity: int = Field(gt=0, strict=True)
     work_order_number: Optional[str] = None
 
 
@@ -961,26 +978,29 @@ class MovementResponse(BaseModel):
 
 class UpdateStockRequest(BaseModel):
     inventory_id: int
-    new_quantity: int
+    new_quantity: int = Field(ge=0, strict=True)
 
 
 class TransferStockRequest(BaseModel):
     inventory_id: int
     to_store_id: int
-    quantity: int
+    quantity: int = Field(gt=0, strict=True)
+
+
+UserRole = Literal["engineer", "manager", "admin", "superadmin"]
 
 
 class CreateUserRequest(BaseModel):
     email: str
     name: str
     password: str
-    role: str
+    role: UserRole
     territory: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):
     name: Optional[str] = None
-    role: Optional[str] = None
+    role: Optional[UserRole] = None
     territory: Optional[str] = None
     password: Optional[str] = None
 
@@ -1083,7 +1103,7 @@ class EquipmentStatsResponse(BaseModel):
 
 class ConsumeStockRequest(BaseModel):
     inventory_id: int
-    quantity: int
+    quantity: int = Field(gt=0, strict=True)
     work_order_number: str
     notes: Optional[str] = None
 
@@ -2245,6 +2265,10 @@ async def transfer_stock(
     if not source_item:
         raise HTTPException(status_code=404, detail="Source inventory item not found")
 
+    if source_item["store_id"] == request_data.to_store_id:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Source and destination stores must differ")
+
     if source_item["quantity"] < request_data.quantity:
         raise HTTPException(
             status_code=400, detail="Insufficient quantity in source store"
@@ -2433,8 +2457,11 @@ async def create_user(
     cursor = conn.cursor()
 
     # Check if current user is admin
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        require_user_management(user_id, requested_role=request_data.role)
+    except HTTPException:
+        conn.close()
+        raise
 
     # Check if email already exists
     cursor.execute("SELECT id FROM users WHERE email = ?", (request_data.email,))
@@ -2479,11 +2506,11 @@ async def update_user(
     cursor = conn.cursor()
 
     # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        require_user_management(user_id, requested_role=request_data.role, target_user_id=target_user_id)
+    except HTTPException:
+        conn.close()
+        raise
 
     # Check if target user exists
     cursor.execute("SELECT id FROM users WHERE id = ?", (target_user_id,))
@@ -2536,8 +2563,11 @@ async def delete_user(
     cursor = conn.cursor()
 
     # Check if current user is admin
-    if check_admin(user_id) is False:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        require_user_management(user_id, target_user_id=target_user_id)
+    except HTTPException:
+        conn.close()
+        raise
 
     # Don't allow deleting yourself
     if target_user_id == user_id:
