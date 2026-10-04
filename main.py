@@ -1491,6 +1491,8 @@ async def reset_password(
         (hash_password(request_data.new_password), user["id"]),
     )
 
+    cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
+
     conn.commit()
     conn.close()
 
@@ -1829,6 +1831,10 @@ async def logout(user_id: int = Depends(get_current_user), request: Request = No
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
+    cursor.execute(
+        "UPDATE sessions SET is_active = 0 WHERE user_id = ? AND session_token = ?",
+        (user_id, request.cookies.get("session_token")),
+    )
     conn.commit()
     conn.close()
 
@@ -2552,6 +2558,9 @@ async def update_user(
     values.append(target_user_id)
 
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", values)
+
+    if request_data.password is not None:
+        cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (target_user_id,))
 
     conn.commit()
     conn.close()

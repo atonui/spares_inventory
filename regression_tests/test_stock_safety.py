@@ -174,3 +174,36 @@ def test_engineer_can_deliver_from_own_store_to_other_engineer(api):
     with sqlite3.connect(db) as conn:
         assert conn.execute('SELECT quantity FROM inventory WHERE store_id=999 AND part_id=999').fetchone()[0] == 8
         assert conn.execute('SELECT quantity FROM inventory WHERE store_id=998 AND part_id=999').fetchone()[0] == 2
+
+@pytest.mark.parametrize('operation', ['logout', 'reset', 'admin_password'])
+def test_session_revocation(api, operation):
+    from datetime import datetime, timedelta
+    client, db, current = api
+    with sqlite3.connect(db) as conn:
+        columns = {row[1] for row in conn.execute('PRAGMA table_info(users)')}
+        for column in ['reset_token', 'reset_token_expires', 'session_token']:
+            if column not in columns:
+                conn.execute(f'ALTER TABLE users ADD COLUMN {column} TEXT')
+        conn.execute('DELETE FROM sessions')
+        for token, uid in [('current',3),('other',3),('unrelated',4)]:
+            conn.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(?,?,?,1)', (uid,token,(datetime.utcnow()+timedelta(days=1)).isoformat()))
+        conn.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3', ('reset-test',(datetime.utcnow()+timedelta(hours=1)).isoformat()))
+    if operation == 'logout':
+        current['id'] = 3
+        client.cookies.set('session_token','current')
+        response = client.post('/api/auth/logout')
+    elif operation == 'reset':
+        response = client.post('/api/reset-password',json={'token':'reset-test','new_password':'new-test-password'})
+    else:
+        response = client.put('/api/users/3',json={'password':'new-test-password'})
+    assert response.status_code == 200
+    with sqlite3.connect(db) as conn:
+        states = dict(conn.execute('SELECT session_token,is_active FROM sessions'))
+    assert states['current'] == 0
+    assert states['other'] == (1 if operation == 'logout' else 0)
+    assert states['unrelated'] == 1
+    # Exercise the real auth dependency, independently of the test API override.
+    import asyncio
+    with pytest.raises(main.HTTPException) as error:
+        asyncio.run(main.get_current_user('current'))
+    assert error.value.status_code == 401
