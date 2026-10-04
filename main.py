@@ -269,17 +269,17 @@ def init_db():
 
     # Create indexes for better query performance
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_user 
+        CREATE INDEX IF NOT EXISTS idx_activity_user
         ON activity_logs(user_id)
     """)
 
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_action 
+        CREATE INDEX IF NOT EXISTS idx_activity_action
         ON activity_logs(action)
     """)
 
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_created 
+        CREATE INDEX IF NOT EXISTS idx_activity_created
         ON activity_logs(created_at)
     """)
 
@@ -370,12 +370,12 @@ def init_db():
     """)
 
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_sessions_token 
+        CREATE INDEX IF NOT EXISTS idx_sessions_token
         ON sessions(session_token)
     """)
 
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_sessions_user 
+        CREATE INDEX IF NOT EXISTS idx_sessions_user
         ON sessions(user_id, is_active)
     """)
 
@@ -450,7 +450,7 @@ def init_db():
             ("session_duration_hours",    str(SESSION_DURATION_HOURS),    "Session lifetime in hours"),
             ("remember_me_duration_days", str(REMEMBER_ME_DURATION_DAYS), "Remember-me lifetime in days"),
         ],
-)    
+)
 
 
     conn.commit()
