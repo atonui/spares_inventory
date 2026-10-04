@@ -4661,6 +4661,35 @@ async def download_db_backup(
                         media_type="application/octet-stream")
 
 
+# TEMPORARY: restore endpoint. Remove once the database has been restored.
+@app.post("/upload-database")
+async def upload_database(
+    token: str = "",
+    file: UploadFile = File(...),
+):
+    """Replace /data/inventory.db with the uploaded file (requires SECRET_KEY token)."""
+    if not secrets.compare_digest(token.encode(), SECRET_KEY.encode()):
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+    destination = "/data/inventory.db"
+    tmp_destination = destination + ".upload"
+    try:
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        with open(tmp_destination, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+        os.replace(tmp_destination, destination)
+    except Exception as e:
+        if os.path.exists(tmp_destination):
+            os.remove(tmp_destination)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+    return {
+        "status": "success",
+        "path": destination,
+        "size_bytes": os.path.getsize(destination),
+    }
+
+
 @superadmin_router.post("/database/vacuum")
 async def vacuum_database(
     user_id: int = Depends(get_current_user),
