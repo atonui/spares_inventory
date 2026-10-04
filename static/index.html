@@ -1538,7 +1538,7 @@
                             <label>Destination Store</label>
                             <select x-model="transferForm.to_store_id" required>
                                 <option value="">Select Store</option>
-                                <template x-for="store in editableStores" :key="store.id">
+                                <template x-for="store in stores" :key="store.id">
                                     <option :value="store.id" x-text="store.name"></option>
                                 </template>
                             </select>

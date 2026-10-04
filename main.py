@@ -522,6 +522,15 @@ def require_user_management(user_id: int, requested_role=None, target_user_id=No
         raise HTTPException(status_code=403, detail="Superadmin access required")
 
 
+def require_stock_access(conn, user_id, store_type, store_owner):
+    actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    if actor and (actor["role"] in {"admin", "superadmin"}
+                  or store_owner == user_id or store_type == "central"):
+        return
+    conn.close()
+    raise HTTPException(status_code=403, detail="Permission denied for this store")
+
+
 def get_security_config() -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1951,6 +1960,8 @@ async def consume_stock(
         conn.close()
         raise HTTPException(status_code=404, detail="Inventory item not found")
 
+    require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
+
     # Check sufficient quantity
     if item["quantity"] < request_data.quantity:
         conn.close()
@@ -2092,13 +2103,7 @@ async def add_stock(
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
 
-    # Check permissions
-    if store["type"] not in ["central"] and store["assigned_user_id"] != user_id:
-        # Get user role
-        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        if user["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Permission denied")
+    require_stock_access(conn, user_id, store["type"], store["assigned_user_id"])
 
     # Get work order ID if provided
     work_order_id = None
@@ -2198,6 +2203,8 @@ async def update_stock(
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
 
+    require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
+
     old_quantity = item["quantity"]
     quantity_change = request_data.new_quantity - old_quantity
 
@@ -2264,6 +2271,8 @@ async def transfer_stock(
 
     if not source_item:
         raise HTTPException(status_code=404, detail="Source inventory item not found")
+
+    require_stock_access(conn, user_id, source_item["from_store_type"], source_item["from_store_owner"])
 
     if source_item["store_id"] == request_data.to_store_id:
         conn.close()
@@ -4689,35 +4698,6 @@ async def download_db_backup(
                  details={"filename": backup_name})
     return FileResponse(backup_path, filename=backup_name,
                         media_type="application/octet-stream")
-
-
-# TEMPORARY: restore endpoint. Remove once the database has been restored.
-@app.post("/upload-database")
-async def upload_database(
-    token: str = "",
-    file: UploadFile = File(...),
-):
-    """Replace /data/inventory.db with the uploaded file (requires SECRET_KEY token)."""
-    if not secrets.compare_digest(token.encode(), SECRET_KEY.encode()):
-        raise HTTPException(status_code=403, detail="Invalid token")
-
-    destination = "/data/inventory.db"
-    tmp_destination = destination + ".upload"
-    try:
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        with open(tmp_destination, "wb") as out:
-            shutil.copyfileobj(file.file, out)
-        os.replace(tmp_destination, destination)
-    except Exception as e:
-        if os.path.exists(tmp_destination):
-            os.remove(tmp_destination)
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-
-    return {
-        "status": "success",
-        "path": destination,
-        "size_bytes": os.path.getsize(destination),
-    }
 
 
 @superadmin_router.post("/database/vacuum")
