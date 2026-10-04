@@ -633,25 +633,13 @@ function inventoryApp() {
         },
 
         canEdit(storeOwner, storeType) {
-            // // Admin can edit everything
-            // if (this.currentUser?.role === 'admin') return true;
-            
-            // // Can edit if you own the store
-            // if (storeOwner === this.currentUser?.id) return true;
-            
-            // // Can edit central/office stores
-            // if (storeType === 'central' || storeType === 'office') return true;
-            
-            return true;
+            if (!this.currentUser) return false;
+            return ['admin', 'superadmin'].includes(this.currentUser.role) ||
+                storeOwner === this.currentUser.id || storeType === 'central';
         },
 
         get editableStores() {
-            if (!this.currentUser) return [];
-            if (this.currentUser?.role === 'admin') return this.stores;
-            return this.stores.filter(store => 
-                store.assigned_user_id === this.currentUser.id || 
-                store.type === 'central'
-            );
+            return this.stores.filter(store => this.canEdit(store.assigned_user_id, store.type));
         },
 
         get allPartsView() {

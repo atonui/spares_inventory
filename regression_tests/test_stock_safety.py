@@ -130,3 +130,47 @@ if (sent.quantity !== 2) throw new Error('Stock form must send quantity as a num
 """
     result = subprocess.run(['node', '-e', code, str(script)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+@pytest.mark.parametrize('role', [3, 4])
+@pytest.mark.parametrize('operation', ['add', 'update', 'consume', 'transfer'])
+def test_other_users_store_cannot_be_changed(api, role, operation):
+    client, db, current = api
+    current['id'] = role
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(999,'Other Store','car',2),(998,'Destination','central',NULL)")
+        conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'PERM','Permission Test','test',0)")
+        conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,10)')
+    payloads = {
+        'add': {'store_id':999,'part_id':999,'quantity':2},
+        'update': {'inventory_id':9999,'new_quantity':5},
+        'consume': {'inventory_id':9999,'quantity':2,'work_order_number':'TEST'},
+        'transfer': {'inventory_id':9999,'to_store_id':998,'quantity':2},
+    }
+    response = client.request('PUT' if operation == 'update' else 'POST', '/api/inventory/' + operation, json=payloads[operation])
+    assert response.status_code == 403
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT quantity FROM inventory WHERE id=9999').fetchone()[0] == 10
+        assert conn.execute('SELECT COUNT(*) FROM inventory WHERE part_id=999').fetchone()[0] == 1
+
+@pytest.mark.parametrize('actor,owner,kind', [(1,2,'car'),(2,1,'car'),(3,3,'car'),(3,None,'central')])
+def test_existing_authorized_store_access(api, actor, owner, kind):
+    with sqlite3.connect(api[1]) as conn:
+        conn.row_factory = sqlite3.Row
+        main.require_stock_access(conn, actor, kind, owner)
+
+
+def test_temporary_restore_route_removed():
+    assert not any(route.path == '/upload-database' for route in main.app.routes)
+
+
+def test_engineer_can_deliver_from_own_store_to_other_engineer(api):
+    client, db, current = api
+    current['id'] = 3
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(999,'Mine','car',3),(998,'Other','car',4)")
+        conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'DELIVERY','Delivery Test','test',0)")
+        conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,10)')
+    assert client.post('/api/inventory/transfer', json={'inventory_id':9999,'to_store_id':998,'quantity':2}).status_code == 200
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT quantity FROM inventory WHERE store_id=999 AND part_id=999').fetchone()[0] == 8
+        assert conn.execute('SELECT quantity FROM inventory WHERE store_id=998 AND part_id=999').fetchone()[0] == 2
