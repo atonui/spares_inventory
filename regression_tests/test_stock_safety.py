@@ -17,16 +17,6 @@ def api(tmp_path, monkeypatch):
                 src.backup(dst)
     monkeypatch.setattr(main, 'DATABASE', str(db))
     main.init_db()
-    # Complete a fresh fixture's schema without changing the app's existing
-    # startup migration behaviour (outside this patch's scope).
-    import ast
-    import inspect
-    schema = ast.parse(inspect.getsource(main.init_db))
-    with sqlite3.connect(db) as conn:
-        for node in ast.walk(schema):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                if node.value.strip().upper().startswith('CREATE TABLE IF NOT EXISTS'):
-                    conn.execute(node.value)
     with sqlite3.connect(db) as conn:
         conn.execute('DELETE FROM users')
         for uid, role in [(1, 'admin'), (2, 'superadmin'), (3, 'engineer'), (4, 'manager')]:
@@ -207,3 +197,26 @@ def test_session_revocation(api, operation):
     with pytest.raises(main.HTTPException) as error:
         asyncio.run(main.get_current_user('current'))
     assert error.value.status_code == 401
+
+
+def test_initializer_creates_complete_schema_and_preserves_stock(tmp_path, monkeypatch):
+    db = tmp_path / 'fresh.db'
+    monkeypatch.setattr(main, 'DATABASE', str(db))
+    main.init_db()
+    with sqlite3.connect(db) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert {'users','stores','parts','inventory','movements','work_orders','activity_logs','system_logs','sessions','equipment','equipment_history','store_types','system_settings'} <= tables
+        columns = {row[1] for row in conn.execute('PRAGMA table_info(users)')}
+        assert {'reset_token','reset_token_expires'} <= columns
+        conn.execute("INSERT INTO stores(id,name,type) VALUES(99,'Keep','central')")
+        conn.execute("INSERT INTO parts(id,part_number) VALUES(99,'KEEP')")
+        conn.execute('INSERT INTO inventory(store_id,part_id,quantity) VALUES(99,99,7)')
+        conn.execute("UPDATE system_settings SET setting_value='42' WHERE setting_key='calibration_reminder_days'")
+        conn.execute("UPDATE store_types SET type_name='Customized' WHERE type_code='office'")
+    main.init_db()
+    main.init_db()
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT quantity FROM inventory WHERE part_id=99').fetchall() == [(7,)]
+        assert conn.execute("SELECT setting_value FROM system_settings WHERE setting_key='calibration_reminder_days'").fetchone()[0] == '42'
+        assert conn.execute("SELECT type_name FROM store_types WHERE type_code='office'").fetchone()[0] == 'Customized'
+        assert conn.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
