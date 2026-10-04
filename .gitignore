@@ -18,3 +18,15 @@ logs
 .env.*
 !.env.example
 **/__pycache__/
+
+# Generated databases, backups and runtime logs
+/backups/
+/logs/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.log
+*.log.*
