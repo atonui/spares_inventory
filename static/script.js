@@ -1562,7 +1562,7 @@ exportComprehensiveReport() {
                     body: JSON.stringify({
                         part_id: this.addForm.part_id,
                         store_id: this.addForm.store_id,
-                        quantity: this.addForm.quantity,
+                        quantity: Number(this.addForm.quantity),
                         work_order_number: this.addForm.work_order_number || null
                     })
                 });
