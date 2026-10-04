@@ -220,3 +220,53 @@ def test_initializer_creates_complete_schema_and_preserves_stock(tmp_path, monke
         assert conn.execute("SELECT setting_value FROM system_settings WHERE setting_key='calibration_reminder_days'").fetchone()[0] == '42'
         assert conn.execute("SELECT type_name FROM store_types WHERE type_code='office'").fetchone()[0] == 'Customized'
         assert conn.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+
+@pytest.mark.parametrize('work_order', [None, 'DUP-WO'])
+def test_repeated_receipts_and_transfers_reuse_inventory_row(api, work_order):
+    client, db, _ = api
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Source','central'),(998,'Destination','central')")
+        conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'DUP-TEST')")
+    for store, qty in [(999,10),(999,5),(998,2)]:
+        assert client.post('/api/inventory/add',json={'store_id':store,'part_id':999,'quantity':qty,'work_order_number':work_order}).status_code == 200
+    with sqlite3.connect(db) as conn:
+        rows = conn.execute('SELECT id,store_id,quantity FROM inventory WHERE part_id=999 ORDER BY store_id').fetchall()
+        assert len(rows) == 2
+        source_id = next(row[0] for row in rows if row[1] == 999)
+    for _ in range(2):
+        assert client.post('/api/inventory/transfer',json={'inventory_id':source_id,'to_store_id':998,'quantity':3}).status_code == 200
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT store_id,quantity FROM inventory WHERE part_id=999 ORDER BY store_id').fetchall() == [(998,8),(999,9)]
+        assert conn.execute('SELECT COUNT(*) FROM movements WHERE part_id=999').fetchone()[0] == 5
+
+
+def test_receipt_preserves_existing_duplicate_rows(api):
+    client, db, _ = api
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Source','central')")
+        conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'OLD-DUP')")
+        conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9998,999,999,4),(9999,999,999,7)')
+    assert client.post('/api/inventory/add',json={'store_id':999,'part_id':999,'quantity':2}).status_code == 200
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT id,quantity FROM inventory WHERE part_id=999 ORDER BY id').fetchall() == [(9998,6),(9999,7)]
+
+
+def test_simultaneous_receipts_create_one_row(api):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    db = api[1]
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Concurrent','central')")
+        conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'CONCURRENT')")
+    start = Barrier(2)
+    def receipt():
+        with sqlite3.connect(db, timeout=5) as conn:
+            conn.row_factory = sqlite3.Row
+            start.wait(timeout=5)
+            main.add_inventory_quantity(conn,999,999,3,None)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(receipt) for _ in range(2)]
+        for future in futures:
+            future.result(timeout=10)
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT quantity FROM inventory WHERE part_id=999').fetchall() == [(6,)]

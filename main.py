@@ -526,6 +526,27 @@ def require_user_management(user_id: int, requested_role=None, target_user_id=No
         raise HTTPException(status_code=403, detail="Superadmin access required")
 
 
+def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
+    """Reuse one matching row, including NULL allocations, under a write lock."""
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = conn.execute(
+        "SELECT id FROM inventory WHERE store_id = ? AND part_id = ? "
+        "AND work_order_id IS ? ORDER BY id LIMIT 1",
+        (store_id, part_id, work_order_id),
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (quantity, row["id"]),
+        )
+        return row["id"]
+    return conn.execute(
+        "INSERT INTO inventory(store_id,part_id,quantity,work_order_id) VALUES(?,?,?,?)",
+        (store_id, part_id, quantity, work_order_id),
+    ).lastrowid
+
+
 def require_stock_access(conn, user_id, store_type, store_owner):
     actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
     if actor and (actor["role"] in {"admin", "superadmin"}
@@ -2136,28 +2157,10 @@ async def add_stock(
             )
             work_order_id = cursor.lastrowid
 
-    # Add or update inventory
-    cursor.execute(
-        """
-        INSERT INTO inventory (store_id, part_id, quantity, work_order_id)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(store_id, part_id, work_order_id) 
-        DO UPDATE SET quantity = quantity + ?
-    """,
-        (
-            request_data.store_id,
-            request_data.part_id,
-            request_data.quantity,
-            work_order_id,
-            request_data.quantity,
-        ),
+    inventory_id = add_inventory_quantity(
+        conn, request_data.store_id, request_data.part_id,
+        request_data.quantity, work_order_id,
     )
-
-    # get id of last inserted inventory item
-    cursor.execute("""
-        SELECT last_insert_rowid()
-    """)
-    inventory_id = cursor.fetchone()[0]
 
     # Log movement
     cursor.execute(
@@ -2264,6 +2267,7 @@ async def transfer_stock(
 ):
     """Transfer stock between stores"""
     conn = get_db_connection()
+    conn.execute("BEGIN IMMEDIATE")
     cursor = conn.cursor()
 
     # Get source inventory item
@@ -2280,6 +2284,7 @@ async def transfer_stock(
     source_item = cursor.fetchone()
 
     if not source_item:
+        conn.close()
         raise HTTPException(status_code=404, detail="Source inventory item not found")
 
     require_stock_access(conn, user_id, source_item["from_store_type"], source_item["from_store_owner"])
@@ -2289,6 +2294,7 @@ async def transfer_stock(
         raise HTTPException(status_code=400, detail="Source and destination stores must differ")
 
     if source_item["quantity"] < request_data.quantity:
+        conn.close()
         raise HTTPException(
             status_code=400, detail="Insufficient quantity in source store"
         )
@@ -2301,6 +2307,7 @@ async def transfer_stock(
     dest_store = cursor.fetchone()
 
     if not dest_store:
+        conn.close()
         raise HTTPException(status_code=404, detail="Destination store not found")
 
     # Update source inventory
@@ -2319,21 +2326,9 @@ async def transfer_stock(
             (new_source_quantity, request_data.inventory_id),
         )
 
-    # Add or update destination inventory
-    cursor.execute(
-        """
-        INSERT INTO inventory (store_id, part_id, quantity, work_order_id)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(store_id, part_id, work_order_id) 
-        DO UPDATE SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
-    """,
-        (
-            request_data.to_store_id,
-            source_item["part_id"],
-            request_data.quantity,
-            source_item["work_order_id"],
-            request_data.quantity,
-        ),
+    add_inventory_quantity(
+        conn, request_data.to_store_id, source_item["part_id"],
+        request_data.quantity, source_item["work_order_id"],
     )
 
     # Log movement
