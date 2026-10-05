@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css">
+    <link rel="stylesheet" href="mystyle.css?v=20261005-inventory-usability">
     <style>[x-cloak] { display: none !important; }</style>
-    <script src="script.js?v=20261005-stock-counts" defer></script>
+    <script src="script.js?v=20261005-inventory-usability" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -86,9 +86,99 @@
             </div>
 
             <!-- Loading State -->
-            <div x-show="loading" class="loading">
-                <div>Loading inventory data...</div>
+            <div x-show="loading" class="loading" role="status" aria-live="polite">
+                <div>Loading data…</div>
             </div>
+
+            <!-- Inventory navigation and controls -->
+            <section class="controls inventory-controls" aria-label="Inventory navigation and filters">
+                <div class="view-heading">
+                    <h2 x-text="currentViewLabel"></h2>
+                    <button class="btn btn-sm" @click="loadInventory()" :disabled="loading">Refresh inventory</button>
+                </div>
+                <nav class="inventory-nav" aria-label="Main navigation">
+                    <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')">Inventory</button>
+                    <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')">Stores</button>
+                    <button class="btn" :class="showAllPartsPanel ? 'is-active' : ''" @click="openPanel('showAllPartsPanel')">Parts catalog</button>
+                    <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()">Equipment</button>
+                    <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()">Movement history</button>
+                </nav>
+                <details class="management-menu" x-show="['admin','superadmin'].includes(currentUser?.role)">
+                    <summary>Management</summary>
+                    <div class="management-actions">
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()">Archived records</button>
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel')">
+                        <span>Manage Users</span>
+                    </button>
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()">
+                        <span>Manage Stores</span>
+                    </button>
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')">
+                        <span>Manage Parts</span>
+                    </button>
+                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()">
+                        <span>Store Types</span>
+                    </button>
+                    </div>
+                </details>
+                <div x-show="showInventoryPanel" class="inventory-filters">
+                    <div class="filter-field">
+                        <label for="inventory-search">Find stock</label>
+                        <input id="inventory-search" type="search" placeholder="Part number, description or work order" class="search-box"
+                               x-model="searchTerm" @input.debounce.150ms="filterInventory()">
+                    </div>
+                    <div class="filter-field">
+                        <label for="inventory-store">Store</label>
+                        <select id="inventory-store" x-model="storeFilter" @change="filterInventory()">
+                            <option value="">All stores</option>
+                            <template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name + ' — ' + store.type + (store.location ? ', ' + store.location : '')"></option></template>
+                        </select>
+                    </div>
+                    <button class="btn" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter">Clear filters</button>
+                    <button class="btn" @click="viewStoreInventory(stores.find(store=>store.id===Number(storeFilter)))" :disabled="!storeFilter">Open store</button>
+                </div>
+                <div x-show="showInventoryPanel" class="inventory-toolbar">
+                    <p role="status" aria-live="polite" x-text="filteredInventory.length + ' of ' + inventory.length + ' stock entries'"></p>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-success" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true">Add Stock</button>
+                    <!-- UPDATED: Export dropdown button -->
+                    <div style="position: relative;" x-data="{ showExportMenu: false }">
+                        <button class="btn" @click="showExportMenu = !showExportMenu">
+                            Export CSV ▼
+                        </button>
+                        <div x-show="showExportMenu" 
+                            @click.outside="showExportMenu = false"
+                            style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                                    @click="exportInventoryCSV(); showExportMenu = false">
+                                Current View
+                            </button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                                    @click="exportAllPartsCSV(); showExportMenu = false">
+                                All Parts Catalog
+                            </button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                                    @click="exportStoresCSV(); showExportMenu = false">
+                                All Stores
+                            </button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                                    @click="exportMovementsCSV(); showExportMenu = false">
+                                Movement History
+                            </button>
+                            <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;" 
+                                    @click="exportComprehensiveReport(); showExportMenu = false">
+                                📊 Comprehensive Report
+                            </button>
+                            
+                        </div>
+                    </div>
+
+                    </div>
+                </div>
+                <div x-show="error" role="alert" class="error" x-text="error"></div>
+                <div x-show="successMessage" role="status" aria-live="polite" class="success" x-text="successMessage"></div>
+                <p x-show="inventoryLoadFailed" class="refresh-warning">Inventory could not refresh. Previously loaded balances may be out of date. Use Refresh inventory to retry.</p>
+            </section>
 
             <!-- Quick Stats -->
             <div x-show="!loading" class="stats">
@@ -141,84 +231,6 @@
                 </div>
                 <p x-show="pendingTransfers.length === 0" style="padding:0 1rem 1rem;">No transfers awaiting receipt.</p>
             </section>
-
-            <!-- Controls -->
-            <div x-show="!loading" class="controls">
-                <div class="control-row">
-                    <input type="text" 
-                           placeholder="Search parts..." 
-                           class="search-box"
-                           x-model="searchTerm"
-                           @input="console.log('Search input:', searchTerm); filterInventory()"
-                           @keyup="console.log('Search keyup:', searchTerm); filterInventory()">
-                    
-                    <select x-model="storeFilter" @change="filterInventory()">
-                        <option value="">All Stores</option>
-                        <template x-for="store in stores" :key="store.id">
-                            <option :value="store.id" x-text="store.name"></option>
-                        </template>
-                    </select>
-                    
-                    <button class="btn btn-success" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true">Add Stock</button>
-
-                    <!-- UPDATED: Export dropdown button -->
-                    <div style="position: relative;" x-data="{ showExportMenu: false }">
-                        <button class="btn" @click="showExportMenu = !showExportMenu">
-                            Export CSV ▼
-                        </button>
-                        <div x-show="showExportMenu" 
-                            @click.outside="showExportMenu = false"
-                            style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
-                                    @click="exportInventoryCSV(); showExportMenu = false">
-                                Current View
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
-                                    @click="exportAllPartsCSV(); showExportMenu = false">
-                                All Parts Catalog
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
-                                    @click="exportStoresCSV(); showExportMenu = false">
-                                All Stores
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
-                                    @click="exportMovementsCSV(); showExportMenu = false">
-                                Movement History
-                            </button>
-                            <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;" 
-                                    @click="exportComprehensiveReport(); showExportMenu = false">
-                                📊 Comprehensive Report
-                            </button>
-                            
-                        </div>
-                    </div>
-
-                    <!-- <button class="btn" @click="exportCSV()">Export Inventory</button> -->
-                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()">Archived records</button>
-                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel')">
-                        <span>Manage Users</span>
-                    </button>
-                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()">
-                        <span>Manage Stores</span>
-                    </button>
-                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')">
-                        <span>Manage Parts</span>
-                    </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()">
-                        <span>Store Types</span>
-                    </button>
-                    <button class="btn" @click="openPanel('showEquipmentPanel'); loadEquipment()">
-                        <span>Equipment</span>
-                    </button>
-                    <button class="btn" @click="openPanel('showMovementsPanel'); loadMovements()">
-                        <span>Movement History</span>
-                    </button>
-          
-                </div>
-                
-                <div x-show="error" class="error" x-text="error"></div>
-                <div x-show="successMessage" class="success" x-text="successMessage"></div>
-            </div>
 
             <!-- All Parts Panel -->
             <div x-show="showAllPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
@@ -393,7 +405,7 @@
                                 </td>
                                 <td x-text="store.location || 'N/A'"></td>
                                 <td x-text="getUserName(store.assigned_user_id)"></td>
-                                <td x-text="inventory.filter(i => i.store_name === store.name).length"></td>
+                                <td x-text="inventory.filter(i => i.store_id === store.id).length"></td>
                                 <td>
                                     <button class="btn btn-sm btn-success" 
                                         
@@ -420,7 +432,7 @@
                             @click="downloadStoreImportTemplate()">
                         Download Template
                     </button>
-                    <label class="btn btn-sm" 
+                    <label x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" class="btn btn-sm"
                         style="cursor: pointer;">
                         
                         Import CSV
@@ -431,10 +443,10 @@
                     </label>
                     <button class="btn btn-success" 
                             
-                            @click="addStockToStore(selectedStore)">
+                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" @click="addStockToStore(selectedStore)">
                         Add Single Part
                     </button>
-                    <button class="btn btn-sm" @click="exportStoreInventoryCSV(selectedStore?.name)">
+                    <button class="btn btn-sm" @click="exportStoreInventoryCSV(selectedStore?.id)">
                         Export CSV
                     </button>
                     <button class="btn btn-sm" @click="startStockCount(selectedStore, $event.currentTarget)" :disabled="stockCountBusy"
@@ -442,7 +454,12 @@
                     <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
             </div>
             </div>
-            <table>
+            <div class="store-search">
+                <label for="store-stock-search">Find stock in this store</label>
+                <input id="store-stock-search" type="search" x-model="storeSearchTerm" placeholder="Part number, description or work order">
+                <p role="status" aria-live="polite" x-text="filteredStoreInventory.length + ' of ' + storeInventory.length + ' stock entries'"></p>
+            </div>
+            <table class="stock-table" role="table">
                 <thead>
                     <tr>
                         <th>Part Number</th>
@@ -453,42 +470,43 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="item in storeInventory" :key="item.id">
-                        <tr :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
-                            <td><strong x-text="item.part_number"></strong></td>
-                            <td x-text="item.description"></td>
-                            <td>
+                    <template x-for="item in filteredStoreInventory" :key="item.id">
+                        <tr role="row" :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                            <td role="cell" data-label="Part number"><div class="stock-cell-value"><strong x-text="item.part_number"></strong></div></td>
+                            <td role="cell" data-label="Description" x-text="item.description"></td>
+                            <td role="cell" data-label="Quantity"><div class="stock-cell-value">
                                 <strong x-text="item.quantity"></strong>
-                                <span x-show="item.quantity <= item.min_threshold">⚠️</span>
-                            </td>
-                            <td>
+                                <span x-show="item.quantity <= item.min_threshold" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
+                            </div></td>
+                            <td role="cell" data-label="Work order"><div class="stock-cell-value">
                                 <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
                                 <span x-show="!item.work_order" class="wo-tag">Original</span>
-                            </td>
-                            <td>
+                            </div></td>
+                            <td role="cell" data-label="Actions"><div class="stock-cell-value">
                                 <button class="btn btn-sm" 
                                         
-                                        @click="editItem(item)">
+                                        x-show="canEdit(item.store_owner, item.store_type)" @click="editItem(item)">
                                     Adjust
                                 </button>
                                 <button class="btn btn-sm btn-warning" 
                                         
-                                        @click="transferItem(item)">
+                                        x-show="canEdit(item.store_owner, item.store_type)" @click="transferItem(item)">
                                     Transfer
                                 </button>
-                                <button class="btn btn-sm" 
-                                        style="background: #ff9800; color: white;"
+                                <button class="btn btn-sm btn-consume"
                                         
-                                        @click="consumeItem(item)">
+                                        x-show="canEdit(item.store_owner, item.store_type)" @click="consumeItem(item)">
                                     Consume
                                 </button>
-                            </td>
+                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                                </div></td>
                         </tr>
                     </template>
                 </tbody>
             </table>
-            <div x-show="storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
-                This store has no inventory yet. Click "Add Single Part" or "Import CSV" to add parts.
+            <p x-show="!inventoryLoadFailed && storeInventory.length > 0 && filteredStoreInventory.length === 0" class="stock-empty">No stock matches this search. <button class="btn btn-sm" @click="storeSearchTerm=''">Clear search</button></p>
+            <div x-show="!inventoryLoadFailed && storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                No stock is recorded in this store. Authorized staff can add stock or confirm incoming transfers.
             </div>
             </div>
 
@@ -821,7 +839,7 @@
 
             <!-- Inventory Panel -->
             <div x-show="showInventoryPanel" class="inventory-table">
-                <table>
+                <table class="stock-table" role="table">
                     <thead>
                         <tr>
                             <th>Part Number</th>
@@ -834,51 +852,52 @@
                     </thead>
                     <tbody>
                         <template x-for="item in filteredInventory" :key="item.id">
-                            <tr :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
-                                <td x-text="item.part_number"></td>
-                                <td x-text="item.description"></td>
-                                <td>
+                            <tr role="row" :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                                <td role="cell" data-label="Part number" x-text="item.part_number"></td>
+                                <td role="cell" data-label="Description" x-text="item.description"></td>
+                                <td role="cell" data-label="Store"><div class="stock-cell-value">
                                     <span class="store-tag" 
                                           :class="getStoreClass(item.store_type, item.store_owner)"
                                           x-text="item.store_name">
                                     </span>
-                                </td>
-                                <td>
+                                </div></td>
+                                <td role="cell" data-label="Quantity"><div class="stock-cell-value">
                                     <strong x-text="item.quantity"></strong>
-                                    <span x-show="item.quantity <= item.min_threshold">⚠️</span>
-                                </td>
-                                <td>
+                                    <span x-show="item.quantity <= item.min_threshold" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
+                                </div></td>
+                                <td role="cell" data-label="Work order"><div class="stock-cell-value">
                                     <span x-show="item.work_order" 
                                           class="wo-tag" 
                                           x-text="item.work_order">
                                     </span>
                                     <span x-show="!item.work_order" class="wo-tag">Original</span>
-                                </td>
-                                <td>
+                                </div></td>
+                                <td role="cell" data-label="Actions"><div class="stock-cell-value">
                                     <button class="btn btn-sm" 
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="editItem(item)">
-                                        Edit
+                                        Adjust
                                     </button>
                                     <button class="btn btn-sm btn-warning" 
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="transferItem(item)">
                                         Transfer
                                     </button>
-                                    <button class="btn btn-sm" 
-                                            style="background: #ff9800; color: white;"
+                                    <button class="btn btn-sm btn-consume"
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="consumeItem(item)">
                                         Consume
                                     </button>
-                                </td>
+                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                                </div></td>
                             </tr>
                         </template>
                     </tbody>
                 </table>
                 
-                <div x-show="filteredInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
-                    No inventory found matching your search criteria.
+                <div x-show="!inventoryLoadFailed && !loading && filteredInventory.length === 0" class="stock-empty">
+                    <p x-text="inventory.length === 0 ? 'No stock is recorded yet. Add stock to get started.' : 'No stock matches these filters.'"></p>
+                    <button class="btn btn-sm" x-show="inventory.length > 0" @click="clearInventoryFilters()">Clear filters</button>
                 </div>
             </div>
 
