@@ -8,8 +8,8 @@ from fastapi import Cookie
 from fastapi import Header
 from fastapi.responses import FileResponse
 
-from contextlib import asynccontextmanager
-from pydantic import BaseModel, EmailStr, Field, validator
+from contextlib import asynccontextmanager, contextmanager
+from pydantic import BaseModel, EmailStr, Field, validator, field_validator
 from pydantic_settings import BaseSettings
 from passlib.context import CryptContext
 import smtplib
@@ -90,6 +90,15 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str
     FRONTEND_URL: str
     CSRF_SECRET: str
+    COOKIE_SECURE: bool = True
+    CORS_ALLOWED_ORIGINS: List[str] = ["https://sparesinventory-production.up.railway.app"]
+
+    @field_validator("CORS_ALLOWED_ORIGINS")
+    @classmethod
+    def reject_wildcard_origins(cls, origins):
+        if any("*" in origin for origin in origins):
+            raise ValueError("Credentialed CORS requires exact origins; wildcards are not allowed")
+        return origins
 
     class Config:
         env_file = ".env"
@@ -547,6 +556,27 @@ def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
     ).lastrowid
 
 
+@contextmanager
+def stock_write_transaction():
+    """Lock before reading stock; commit the balance and movement together."""
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        yield conn
+        conn.commit()
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except sqlite3.ProgrammingError:
+            # Permission rejection closes the shared connection.
+            pass
+        if isinstance(exc, sqlite3.OperationalError) and any(word in str(exc).lower() for word in ("locked", "busy")):
+            raise HTTPException(status_code=409, detail="Stock is busy; no changes saved. Try again") from exc
+        raise
+    finally:
+        conn.close()
+
+
 def require_stock_access(conn, user_id, store_type, store_owner):
     actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
     if actor and (actor["role"] in {"admin", "superadmin"}
@@ -863,10 +893,10 @@ security = HTTPBearer()
 # CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # please, please, pleaseeeeeee... remember to specify the domain in production
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
 )
 
 # Serve static files - frontend
@@ -1763,7 +1793,7 @@ async def login(user_login: UserLogin, request: Request):
         key="session_token",
         value=session_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=max_age,
     )
@@ -1983,104 +2013,99 @@ async def consume_stock(
     request: Request = None,
 ):
     """Consume stock from inventory (requires work order)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with stock_write_transaction() as conn:
+        cursor = conn.cursor()
 
-    # Get inventory item
-    cursor.execute(
-        """
-        SELECT i.*, s.type, s.assigned_user_id, s.name as store_name, 
-               p.part_number, p.description
-        FROM inventory i
-        JOIN stores s ON i.store_id = s.id
-        JOIN parts p ON i.part_id = p.id
-        WHERE i.id = ?
-    """,
-        (request_data.inventory_id,),
-    )
-    item = cursor.fetchone()
-
-    if not item:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-
-    require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
-
-    # Check sufficient quantity
-    if item["quantity"] < request_data.quantity:
-        conn.close()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient quantity. Available: {item['quantity']}, Requested: {request_data.quantity}",
-        )
-
-    # Validate work order number
-    if not request_data.work_order_number or not request_data.work_order_number.strip():
-        conn.close()
-        raise HTTPException(status_code=400, detail="Work order number is required")
-
-    # Get or create work order
-    cursor.execute(
-        "SELECT id FROM work_orders WHERE work_order_number = ?",
-        (request_data.work_order_number,),
-    )
-    wo = cursor.fetchone()
-
-    if wo:
-        work_order_id = wo["id"]
-    else:
+        # Get inventory item
         cursor.execute(
             """
-            INSERT INTO work_orders (work_order_number, assigned_engineer_id, status)
-            VALUES (?, ?, 'in_progress')
+            SELECT i.*, s.type, s.assigned_user_id, s.name as store_name,
+                   p.part_number, p.description
+            FROM inventory i
+            JOIN stores s ON i.store_id = s.id
+            JOIN parts p ON i.part_id = p.id
+            WHERE i.id = ?
         """,
-            (request_data.work_order_number, user_id),
+            (request_data.inventory_id,),
         )
-        work_order_id = cursor.lastrowid
+        item = cursor.fetchone()
 
-    # Update inventory
-    new_quantity = item["quantity"] - request_data.quantity
+        if not item:
+            raise HTTPException(status_code=404, detail="Inventory item not found")
 
-    if new_quantity == 0:
+        require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
+
+        # Check sufficient quantity
+        if item["quantity"] < request_data.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient quantity. Available: {item['quantity']}, Requested: {request_data.quantity}",
+            )
+
+        # Validate work order number
+        if not request_data.work_order_number or not request_data.work_order_number.strip():
+            raise HTTPException(status_code=400, detail="Work order number is required")
+
+        # Get or create work order
         cursor.execute(
-            "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
+            "SELECT id FROM work_orders WHERE work_order_number = ?",
+            (request_data.work_order_number,),
         )
-    else:
+        wo = cursor.fetchone()
+
+        if wo:
+            work_order_id = wo["id"]
+        else:
+            cursor.execute(
+                """
+                INSERT INTO work_orders (work_order_number, assigned_engineer_id, status)
+                VALUES (?, ?, 'in_progress')
+            """,
+                (request_data.work_order_number, user_id),
+            )
+            work_order_id = cursor.lastrowid
+
+        # Update inventory
+        new_quantity = item["quantity"] - request_data.quantity
+
+        if new_quantity == 0:
+            cursor.execute(
+                "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE inventory
+                SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """,
+                (new_quantity, request_data.inventory_id),
+            )
+
+        # Log movement
         cursor.execute(
             """
-            UPDATE inventory 
-            SET quantity = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            INSERT INTO movements (
+                from_store_id, part_id, quantity, movement_type,
+                work_order_id, created_by, notes
+            ) VALUES (?, ?, ?, 'consume', ?, ?, ?)
         """,
-            (new_quantity, request_data.inventory_id),
+            (
+                item["store_id"],
+                item["part_id"],
+                request_data.quantity,
+                work_order_id,
+                user_id,
+                request_data.notes,
+            ),
         )
 
-    # Log movement
-    cursor.execute(
-        """
-        INSERT INTO movements (
-            from_store_id, part_id, quantity, movement_type, 
-            work_order_id, created_by, notes
-        ) VALUES (?, ?, ?, 'consume', ?, ?, ?)
-    """,
-        (
-            item["store_id"],
-            item["part_id"],
-            request_data.quantity,
-            work_order_id,
-            user_id,
-            request_data.notes,
-        ),
-    )
 
-    conn.commit()
-    conn.close()
-
-    return {
-        "success": True,
-        "message": f"Consumed {request_data.quantity} x {item['part_number']} for WO #{request_data.work_order_number}",
-        "remaining_quantity": new_quantity,
-    }
+        return {
+            "success": True,
+            "message": f"Consumed {request_data.quantity} x {item['part_number']} for WO #{request_data.work_order_number}",
+            "remaining_quantity": new_quantity,
+        }
 
 
 @app.get("/api/stats", response_model=StatsResponse)
@@ -2284,64 +2309,62 @@ async def update_stock(
     request: Request = None,
 ):
     """Update inventory quantity"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with stock_write_transaction() as conn:
+        cursor = conn.cursor()
 
-    # Get inventory item
-    cursor.execute(
-        """
-        SELECT i.*, s.type, s.assigned_user_id, p.part_number
-        FROM inventory i
-        JOIN stores s ON i.store_id = s.id
-        JOIN parts p ON i.part_id = p.id
-        WHERE i.id = ?
-    """,
-        (request_data.inventory_id,),
-    )
-    item = cursor.fetchone()
+        # Get inventory item
+        cursor.execute(
+            """
+            SELECT i.*, s.type, s.assigned_user_id, p.part_number
+            FROM inventory i
+            JOIN stores s ON i.store_id = s.id
+            JOIN parts p ON i.part_id = p.id
+            WHERE i.id = ?
+        """,
+            (request_data.inventory_id,),
+        )
+        item = cursor.fetchone()
 
-    if not item:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
+        if not item:
+            raise HTTPException(status_code=404, detail="Inventory item not found")
 
-    require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
+        require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
 
-    old_quantity = item["quantity"]
-    quantity_change = request_data.new_quantity - old_quantity
+        old_quantity = item["quantity"]
+        quantity_change = request_data.new_quantity - old_quantity
 
-    # Update inventory
-    cursor.execute(
-        """
-        UPDATE inventory 
-        SET quantity = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    """,
-        (request_data.new_quantity, request_data.inventory_id),
-    )
+        # Update inventory
+        cursor.execute(
+            """
+            UPDATE inventory
+            SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """,
+            (request_data.new_quantity, request_data.inventory_id),
+        )
 
-    # Log movement
-    movement_type = "add" if quantity_change > 0 else "remove"
-    cursor.execute(
-        """
-        INSERT INTO movements (to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """,
-        (
-            item["store_id"],
-            item["part_id"],
-            abs(quantity_change),
-            movement_type,
-            item["work_order_id"],
-            user_id,
-        ),
-    )
+        # Log movement
+        movement_type = "add" if quantity_change > 0 else "remove"
+        cursor.execute(
+            """
+            INSERT INTO movements (to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """,
+            (
+                item["store_id"],
+                item["part_id"],
+                abs(quantity_change),
+                movement_type,
+                item["work_order_id"],
+                user_id,
+            ),
+        )
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": f"Updated {item['part_number']} quantity from {old_quantity} to {request_data.new_quantity}",
-    }
+        return {
+            "success": True,
+            "message": f"Updated {item['part_number']} quantity from {old_quantity} to {request_data.new_quantity}",
+        }
 
 
 @app.post("/api/inventory/transfer")
