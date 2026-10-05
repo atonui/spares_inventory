@@ -1,8 +1,9 @@
 """Minimum settings and a read-only, globally allocated replenishment plan."""
 import json
 from contextlib import closing
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from stock_audit import balance_snapshot, change_after, record_stock_audit
 
 class MinimumRequest(BaseModel):
     store_id: int = Field(gt=0, strict=True)
@@ -67,13 +68,14 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
             return build_plan(conn,user_id)
 
     @app.put('/api/inventory/minimum')
-    async def minimum(data: MinimumRequest, user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf)):
+    async def minimum(data: MinimumRequest, user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
         with write_transaction() as conn:
             require_active(conn,'users',user_id)
             require_active(conn,'stores',data.store_id)
             require_active(conn,'parts',data.part_id)
             store = conn.execute('SELECT type,assigned_user_id FROM stores WHERE id=?',(data.store_id,)).fetchone()
             require_access(conn,user_id,store['type'],store['assigned_user_id'])
+            before_balance = balance_snapshot(conn,data.store_id,data.part_id,None)
             item = conn.execute('SELECT id,min_threshold FROM inventory WHERE store_id=? AND part_id=? AND work_order_id IS NULL',(data.store_id,data.part_id)).fetchone()
             before = item['min_threshold'] if item else 0
             if before != data.expected_minimum:
@@ -89,6 +91,6 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
             conn.execute('''UPDATE stock_transfers SET source_min_threshold=? WHERE status='in_transit'
                 AND movement_id IN (SELECT id FROM movements WHERE from_store_id=? AND part_id=? AND work_order_id IS NULL)''',
                 (data.min_threshold,data.store_id,data.part_id))
-            details = json.dumps({'store_id':data.store_id,'part_id':data.part_id,'before_minimum':before,'after_minimum':data.min_threshold})
-            conn.execute("INSERT INTO activity_logs(user_id,username,action,resource_type,resource_id,details) SELECT id,name,'set_stock_minimum','inventory',?,? FROM users WHERE id=?",(identifier,details,user_id))
+            record_stock_audit(conn,user_id,'set_stock_minimum',[change_after(conn,before_balance)],
+                resource_id=identifier,request=request,extra={'store_id':data.store_id,'part_id':data.part_id,'before_minimum':before,'after_minimum':data.min_threshold})
             return {'success':True,'id':identifier,'message':'Minimum stock saved'}

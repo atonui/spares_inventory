@@ -1216,6 +1216,8 @@ function inventoryApp() {
             }
         },
 
+        formatAuditDetails(details) { return formatStockAuditDetails(details); },
+
         // logging functions
         async loadActivityLogs() {
             this.loading = true;
@@ -1245,19 +1247,7 @@ function inventoryApp() {
                 const queryString = params.toString();
                 const endpoint = queryString ? `/logs/activity?${queryString}` : '/logs/activity';
                 
-                const response = await fetch(`${this.apiUrl}${endpoint}`, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `Failed to load logs: ${response.status}`);
-                }
-                
-                this.activityLogs = await response.json();
+                this.activityLogs = await this.apiCall(endpoint);
                 
             } catch (error) {
                 console.error('Error loading activity logs:', error);
@@ -1334,7 +1324,7 @@ function inventoryApp() {
             const days = prompt('Delete logs older than how many days?', '90');
             if (!days) return;
             
-            if (!confirm(`Are you sure you want to delete logs older than ${days} days? This cannot be undone.`)) {
+            if (!confirm(`Delete general logs older than ${days} days? Stock audit evidence is retained. This cannot be undone.`)) {
                 return;
             }
             
@@ -1376,7 +1366,7 @@ function inventoryApp() {
                 log.status,
                 log.ip_address || '-',
                 log.error_message || '-',
-                log.details ? JSON.stringify(JSON.parse(log.details)) : '-'
+                this.formatAuditDetails(log.details)
             ]);
             
             this.downloadCSV(

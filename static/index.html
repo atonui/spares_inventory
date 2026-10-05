@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261005-replenishment">
+    <link rel="stylesheet" href="mystyle.css?v=20261005-stock-audit">
     <style>[x-cloak] { display: none !important; }</style>
-    <script src="script.js?v=20261005-replenishment" defer></script>
+    <script src="audit.js?v=20261005-stock-audit" defer></script>
+    <script src="script.js?v=20261005-stock-audit" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -117,6 +118,7 @@
                     <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')">
                         <span>Manage Parts</span>
                     </button>
+                    <button class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()">Activity log</button>
                     <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()">
                         <span>Store Types</span>
                     </button>
@@ -1672,6 +1674,26 @@
                         <td role="cell" data-label="Purchase"><strong class="stock-cell-value" x-text="row.purchase_quantity"></strong></td>
                     </tr></template></tbody></table>
                 </div>
+            </section>
+
+            <section x-show="showLogsPanel" class="controls audit-panel" aria-labelledby="audit-heading">
+                <h3 id="audit-heading">Activity log</h3>
+                <p>Stock changes include recorded balances and linked movements. Older entries retain their original details; missing historical balances cannot be reconstructed here.</p>
+                <form class="replenishment-toolbar" @submit.prevent="loadActivityLogs()">
+                    <div><label for="audit-start">From date</label><input id="audit-start" type="date" x-model="logFilters.startDate"></div>
+                    <div><label for="audit-end">Through date</label><input id="audit-end" type="date" x-model="logFilters.endDate"></div>
+                    <div><label for="audit-action">Action</label><select id="audit-action" x-model="logFilters.action"><option value="">All actions</option><option value="add_stock">Add stock</option><option value="consume_stock">Consume stock</option><option value="update_stock">Adjust stock</option><option value="import_stock_balances">Import balances</option><option value="transfer_stock">Dispatch transfer</option><option value="receive_transfer">Receive transfer</option><option value="return_transfer">Return transfer</option><option value="confirm_stock_count">Physical count</option><option value="set_stock_minimum">Set minimum</option></select></div>
+                    <div><label for="audit-status">Result</label><select id="audit-status" x-model="logFilters.status"><option value="">All results</option><option value="success">Successful</option><option value="error">Failed attempts</option></select></div>
+                    <button class="btn" type="submit" :disabled="loading">Refresh log</button><button class="btn" type="button" @click="exportActivityLogsCSV()" :disabled="loading || !activityLogs.length">Export displayed entries</button>
+                </form>
+                <p x-show="loading" role="status">Loading activity…</p>
+                <p x-show="!loading && !activityLogs.length && !error">No entries match these filters.</p>
+                <p x-show="activityLogs.length">Showing up to 200 recent matching entries. Use dates and action filters to narrow the history.</p>
+                <div style="overflow-x:auto" x-show="activityLogs.length"><table class="stock-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Time / user</th><th role="columnheader">Action / result</th><th role="columnheader">Evidence</th></tr></thead><tbody role="rowgroup"><template x-for="log in activityLogs" :key="log.id"><tr role="row">
+                    <td role="cell" data-label="Time / user"><div class="stock-cell-value"><span x-text="log.created_at"></span><strong x-text="log.username || 'Unknown user'"></strong></div></td>
+                    <td role="cell" data-label="Action / result"><div class="stock-cell-value"><span x-text="log.action.replaceAll('_',' ')"></span><span x-text="log.status"></span><span x-show="log.error_message" x-text="log.error_message"></span></div></td>
+                    <td role="cell" data-label="Evidence"><div class="stock-cell-value"><details><summary>View recorded details</summary><p class="audit-details" x-text="formatAuditDetails(log.details)"></p><details><summary>Raw record</summary><pre class="audit-details" x-text="log.details || 'No details recorded'"></pre></details></details></div></td>
+                </tr></template></tbody></table></div>
             </section>
 
             <!-- Transfer Stock Modal -->
