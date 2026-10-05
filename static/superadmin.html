@@ -525,7 +525,8 @@
             <div class="panel-header"><span class="panel-title">Restore Database</span></div>
             <div class="panel-body">
               <p>Replace all current data with a SQLite backup. Later changes will be overwritten. Pause inventory work before restoring. A snapshot of the current database is saved first; changes made during restoration may not be in that snapshot. Everyone must sign in again.</p>
-              <input type="file" accept=".db,.sqlite,.sqlite3" @change="restoreFile = $event.target.files[0]" :disabled="loading">
+              <label for="restore-database-file">Choose database file</label>
+              <input id="restore-database-file" type="file" style="display:block; margin:12px 0;" accept=".db,.sqlite,.sqlite3" @change="restoreFile = $event.target.files[0]" :disabled="loading">
               <button class="btn btn-danger" @click="restoreDB()" :disabled="loading || !restoreFile">Upload and Restore</button>
             </div>
           </div>
