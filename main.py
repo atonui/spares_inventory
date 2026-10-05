@@ -833,15 +833,7 @@ class UpdateUserRequest(BaseModel):
     password: Optional[str] = None
 
 
-class WorkOrderResponse(BaseModel):
-    id: int
-    work_order_number: str
-    customer_name: Optional[str]
-    description: Optional[str]
-    status: str
-    assigned_engineer_id: Optional[int]
-    engineer_name: Optional[str]
-
+from backend.schemas.work_orders import WorkOrderResponse
 
 class StatsResponse(BaseModel):
     in_transit_quantity: int = 0
@@ -2265,42 +2257,11 @@ async def return_transfer(transfer_id: int,data: TransferConfirmationRequest,
     return complete_transfer(transfer_id,data,user_id,'returned',request)
 
 
-@app.get("/api/work-orders", response_model=List[WorkOrderResponse])
-async def get_work_orders(
-    user_id: int = Depends(get_current_user), request: Request = None
-):
-    """Get work orders"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+from backend.routes.work_orders import create_work_order_router
 
-    # Get user role
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    if user["role"] == "admin":
-        # Admin sees all work orders
-        query = """
-            SELECT wo.*, u.name as engineer_name
-            FROM work_orders wo
-            LEFT JOIN users u ON wo.assigned_engineer_id = u.id
-            ORDER BY wo.created_at DESC
-        """
-        cursor.execute(query)
-    else:
-        # Engineers see only their work orders
-        query = """
-            SELECT wo.*, u.name as engineer_name
-            FROM work_orders wo
-            LEFT JOIN users u ON wo.assigned_engineer_id = u.id
-            WHERE wo.assigned_engineer_id = ?
-            ORDER BY wo.created_at DESC
-        """
-        cursor.execute(query, (user_id,))
-
-    work_orders = cursor.fetchall()
-    conn.close()
-
-    return [dict(wo) for wo in work_orders]
+app.include_router(create_work_order_router(
+    get_connection=get_db_connection, current_user=get_current_user,
+))
 
 
 @app.post('/api/parts/{part_id}/restore')
