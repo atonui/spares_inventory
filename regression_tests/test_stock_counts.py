@@ -204,7 +204,7 @@ def test_archived_actor_or_store_cannot_confirm_count(api,table,identifier):
     p = preview(api).json()
     with sqlite3.connect(api[1]) as c:
         c.execute(f'UPDATE {table} SET archived_at=CURRENT_TIMESTAMP WHERE id=?',(identifier,))
-    assert confirm(api,p).status_code == 400
+    assert confirm(api,p).status_code == (401 if table=='users' else 400)
 
 
 def test_count_confirmation_requires_authenticated_session(api):

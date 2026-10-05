@@ -119,7 +119,7 @@ def test_completion_race_cannot_duplicate_or_return_received_stock(api):
     seed(api);mid=dispatch(api).json()['transfer_id']
     def run(action):
         try:
-            return main.complete_transfer(mid,main.TransferConfirmationRequest(confirmed=True),1,action)['success']
+            return main.complete_transfer(mid,main.TransferConfirmationRequest(confirmed=True),1,action,session_token='fixture-session-1')['success']
         except main.HTTPException as exc:
             return exc.status_code
     with ThreadPoolExecutor(max_workers=2) as pool:

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import main
+from fastapi import Request
 from regression_tests.test_stock_safety import api
 
 
@@ -88,13 +89,14 @@ def test_concurrent_stock_mutations_preserve_balances_and_history(api,monkeypatc
         return c
     monkeypatch.setattr(main,'get_db_connection',connect)
     def run(index):
+        request=Request({'type':'http','headers':[(b'cookie',b'session_token=fixture-session-1')]})
         try:
             if operation=='consume':
                 payload=main.ConsumeStockRequest(inventory_id=990,quantity=4,work_order_number=f'CONCURRENT-{index}')
-                asyncio.run(main.consume_stock.__wrapped__(payload,user_id=1,csrf_valid=True))
+                asyncio.run(main.consume_stock.__wrapped__(payload,user_id=1,csrf_valid=True,request=request))
             else:
                 payload=main.UpdateStockRequest(inventory_id=990,new_quantity=[3,1][index])
-                asyncio.run(main.update_stock.__wrapped__(payload,user_id=1,csrf_valid=True))
+                asyncio.run(main.update_stock.__wrapped__(payload,user_id=1,csrf_valid=True,request=request))
             return 200
         except main.HTTPException as exc:
             return exc.status_code
