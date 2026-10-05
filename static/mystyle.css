@@ -943,3 +943,29 @@ label.btn {
         cursor: pointer;
     }
 }
+
+/* Replenishment follows the inventory controls and responsive stock tables. */
+.replenishment-panel { margin-top: 1.5rem; background: white; padding: 1.5rem; border-radius: 8px; }
+.replenishment-panel h3 { margin-bottom: .75rem; }
+.replenishment-panel .table-responsive { overflow-x: auto; }
+.replenishment-panel .btn { background: #005ab8; }
+.replenishment-panel .btn:hover { background: #004a96; }
+.replenishment-panel .btn:disabled { opacity: .55; cursor: not-allowed; }
+.replenishment-panel .btn:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
+.replenishment-copy { max-width: 72ch; line-height: 1.55; }
+.minimum-settings { margin: 1.5rem 0 2rem; padding: 1rem 0; border-block: 1px solid #cbd5e1; }
+.minimum-settings summary { font-weight: 600; cursor: pointer; padding: .5rem 0; }
+.minimum-form { display: grid; grid-template-columns: minmax(10rem,1fr) minmax(14rem,2fr) minmax(8rem,1fr); gap: 1rem; }
+.minimum-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .75rem; }
+.replenishment-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 1rem; margin-block: 1.5rem 1rem; }
+.replenishment-toolbar label { display: block; margin-bottom: .5rem; }
+.replenishment-table .stock-cell-value { display: flex; flex-direction: column; gap: .4rem; overflow-wrap: anywhere; }
+.replenishment-suggestions > div { display: flex; flex-direction: column; align-items: start; gap: .4rem; margin-bottom: .75rem; }
+.source-owner-note { color: #475569; font-size: .875rem; }
+.replenishment-panel input:focus-visible, .replenishment-panel select:focus-visible, .minimum-settings summary:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
+@media (max-width: 768px) {
+    .minimum-form { grid-template-columns: minmax(0,1fr); }
+    .replenishment-toolbar > div { width: 100%; }
+    .replenishment-toolbar select { width: 100%; }
+    .replenishment-panel button, .replenishment-panel input, .replenishment-panel select { min-height: 44px; }
+}

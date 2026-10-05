@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261005-inventory-usability">
+    <link rel="stylesheet" href="mystyle.css?v=20261005-replenishment">
     <style>[x-cloak] { display: none !important; }</style>
-    <script src="script.js?v=20261005-inventory-usability" defer></script>
+    <script src="script.js?v=20261005-replenishment" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -99,6 +99,7 @@
                 <nav class="inventory-nav" aria-label="Main navigation">
                     <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')">Inventory</button>
                     <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')">Stores</button>
+                    <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')">Replenishment</button>
                     <button class="btn" :class="showAllPartsPanel ? 'is-active' : ''" @click="openPanel('showAllPartsPanel')">Parts catalog</button>
                     <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()">Equipment</button>
                     <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()">Movement history</button>
@@ -471,12 +472,12 @@
                 </thead>
                 <tbody>
                     <template x-for="item in filteredStoreInventory" :key="item.id">
-                        <tr role="row" :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                        <tr role="row" :class="isLowStock(item) ? 'low-stock' : ''">
                             <td role="cell" data-label="Part number"><div class="stock-cell-value"><strong x-text="item.part_number"></strong></div></td>
                             <td role="cell" data-label="Description" x-text="item.description"></td>
                             <td role="cell" data-label="Quantity"><div class="stock-cell-value">
                                 <strong x-text="item.quantity"></strong>
-                                <span x-show="item.quantity <= item.min_threshold" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
+                                <span x-show="isLowStock(item)" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
                             </div></td>
                             <td role="cell" data-label="Work order"><div class="stock-cell-value">
                                 <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
@@ -852,7 +853,7 @@
                     </thead>
                     <tbody>
                         <template x-for="item in filteredInventory" :key="item.id">
-                            <tr role="row" :class="item.quantity <= item.min_threshold ? 'low-stock' : ''">
+                            <tr role="row" :class="isLowStock(item) ? 'low-stock' : ''">
                                 <td role="cell" data-label="Part number" x-text="item.part_number"></td>
                                 <td role="cell" data-label="Description" x-text="item.description"></td>
                                 <td role="cell" data-label="Store"><div class="stock-cell-value">
@@ -863,7 +864,7 @@
                                 </div></td>
                                 <td role="cell" data-label="Quantity"><div class="stock-cell-value">
                                     <strong x-text="item.quantity"></strong>
-                                    <span x-show="item.quantity <= item.min_threshold" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
+                                    <span x-show="isLowStock(item)" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
                                 </div></td>
                                 <td role="cell" data-label="Work order"><div class="stock-cell-value">
                                     <span x-show="item.work_order" 
@@ -1639,15 +1640,50 @@
                 </div>
             </div>
 
+            <section x-show="showLowStockPanel" class="panel replenishment-panel" aria-labelledby="replenishment-heading">
+                <h3 id="replenishment-heading">Plan stock replenishment</h3>
+                <p class="replenishment-copy">Set a minimum for each store and part. The plan uses unallocated stock above each donor’s minimum. Incoming transfers remain unavailable until physical receipt.</p>
+                <details class="minimum-settings" open>
+                    <summary>Set minimum stock</summary>
+                    <p>Minimums apply to unallocated stock. Zero turns off the target; saving a minimum does not add parts.</p>
+                    <form @submit.prevent="saveMinimum()" class="minimum-form">
+                        <div class="form-group"><label for="minimum-store">Store</label><select id="minimum-store" x-model="minimumForm.store_id" @change="selectMinimum()" :disabled="minimumBusy" required><option value="">Choose store</option><template x-for="store in editableStores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
+                        <div class="form-group"><label for="minimum-part">Part</label><select id="minimum-part" x-model="minimumForm.part_id" @change="selectMinimum()" :disabled="minimumBusy" required><option value="">Choose part</option><template x-for="part in parts" :key="part.id"><option :value="part.id" x-text="part.part_number + ' — ' + part.description"></option></template></select></div>
+                        <div class="form-group"><label for="minimum-quantity">Minimum quantity</label><input id="minimum-quantity" type="number" min="0" max="2147483647" step="1" x-model="minimumForm.min_threshold" :disabled="minimumBusy" required></div>
+                        <div class="minimum-actions"><button type="submit" class="btn btn-primary" :disabled="minimumBusy || inventoryLoadFailed"><span x-text="minimumBusy ? 'Saving…' : 'Save minimum'"></span></button><button type="button" class="btn" @click="reloadMinimum()" :disabled="minimumBusy || loading">Reload current minimum</button></div>
+                    </form>
+                </details>
+                <div class="replenishment-toolbar">
+                    <div><label for="replenishment-store">Show shortages for</label><select id="replenishment-store" x-model="replenishmentStoreFilter"><option value="">All stores</option><template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
+                    <button class="btn" @click="loadReplenishment()" :disabled="replenishmentBusy || minimumBusy">Refresh plan</button>
+                    <button class="btn btn-primary" @click="exportProcurementCSV()" :disabled="replenishmentBusy || minimumBusy || !replenishmentPlan">Export purchases CSV</button>
+                </div>
+                <p class="replenishment-copy">Suggestions are shared across all stores and are not reservations. Purchase quantities assume the suggested internal transfers proceed. Refresh before ordering.</p>
+                <p x-show="replenishmentBusy" role="status">Loading replenishment plan…</p>
+                <p x-show="replenishmentError" x-text="replenishmentError" class="error-message" role="alert"></p>
+                <p x-show="replenishmentPlan && !replenishmentRows.length && !replenishmentBusy">No shortages for the selected stores. If targets are not configured yet, set minimum stock above.</p>
+                <div class="table-responsive" x-show="replenishmentRows.length && !replenishmentBusy">
+                    <table class="stock-table replenishment-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Store / part</th><th role="columnheader">Available / minimum</th><th role="columnheader">Incoming</th><th role="columnheader">Internal transfers</th><th role="columnheader">Purchase</th></tr></thead>
+                    <tbody role="rowgroup"><template x-for="row in replenishmentRows" :key="row.inventory_id"><tr role="row">
+                        <td role="cell" data-label="Store / part"><div class="stock-cell-value"><strong x-text="row.store_name"></strong><span x-text="row.part_number"></span><span x-text="row.description"></span></div></td>
+                        <td role="cell" data-label="Available / minimum"><span class="stock-cell-value" x-text="row.quantity + ' / ' + row.min_threshold"></span></td>
+                        <td role="cell" data-label="Incoming"><span class="stock-cell-value" x-text="row.incoming_quantity + ' awaiting receipt'"></span></td>
+                        <td role="cell" data-label="Internal transfers"><div class="stock-cell-value replenishment-suggestions"><span x-show="!row.suggestions.length">No transfer suggested</span><template x-for="suggestion in row.suggestions" :key="suggestion.inventory_id"><div><span x-text="suggestion.quantity + ' from ' + suggestion.store_name"></span><button x-show="suggestion.can_dispatch" class="btn btn-sm" @click="reviewReplenishmentTransfer(row,suggestion)" :disabled="replenishmentBusy || minimumBusy || loading">Review transfer</button><span x-show="!suggestion.can_dispatch" class="source-owner-note">Source owner must dispatch</span></div></template></div></td>
+                        <td role="cell" data-label="Purchase"><strong class="stock-cell-value" x-text="row.purchase_quantity"></strong></td>
+                    </tr></template></tbody></table>
+                </div>
+            </section>
+
             <!-- Transfer Stock Modal -->
             <div x-show="showTransferModal" class="modal" @click.outside="showTransferModal = false">
                 <div class="modal-content">
                     <h3>Dispatch Stock</h3>
+                    <p x-show="transferForm.replenishment">Replenishment transfer: the server will recheck the plan and protect the source minimum before dispatch.</p>
                     <p>The destination can use these parts only after confirming physical receipt.</p>
                     <form @submit.prevent="transferStock()">
                         <div class="form-group">
                             <label>Destination Store</label>
-                            <select x-model="transferForm.to_store_id" required>
+                            <select x-model="transferForm.to_store_id" :disabled="transferForm.replenishment" required>
                                 <option value="">Select Store</option>
                                 <template x-for="store in stores" :key="store.id">
                                     <option :value="store.id" x-text="store.name"></option>
@@ -1656,7 +1692,7 @@
                         </div>
                         <div class="form-group">
                             <label>Quantity to Transfer</label>
-                            <input type="number" x-model="transferForm.quantity" min="1" required>
+                            <input type="number" x-model="transferForm.quantity" min="1" step="1" :max="transferForm.replenishment ? transferForm.max_quantity : null" required>
                         </div>
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showTransferModal = false">Cancel</button>

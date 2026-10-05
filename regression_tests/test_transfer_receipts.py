@@ -70,6 +70,8 @@ def test_sender_cannot_confirm_receipt_for_another_engineer(api):
 def test_return_preserves_threshold_after_source_is_restocked(api,restock_threshold,expected_threshold):
     seed(api);mid=dispatch(api,10).json()['transfer_id']
     with sqlite3.connect(api[1]) as c:
+        # Legacy dispatches may have deleted the source balance before zero rows were preserved.
+        c.execute('DELETE FROM inventory WHERE store_id=980 AND part_id=980 AND quantity=0')
         c.execute('INSERT INTO inventory(store_id,part_id,quantity,min_threshold) VALUES(980,980,5,?)',(restock_threshold,))
     assert finish(api,mid,'return').status_code==200
     with sqlite3.connect(api[1]) as c:
