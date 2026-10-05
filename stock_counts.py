@@ -1,4 +1,5 @@
 """Physical counting over existing inventory rows; no reservation redistribution."""
+from stock_audit import balance_snapshot, change_after, record_stock_audit
 import hashlib
 import json
 from contextlib import closing
@@ -121,8 +122,11 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
             store = permitted_store(conn,data['store_id'],user_id)
             fresh_snapshot(conn,data)
             changed = 0
+            audit_changes, movement_ids = [], []
             for row in data['rows']:
+                before = balance_snapshot(conn,data['store_id'],row['part_id'],row['work_order_id'])
                 if not row['difference']:
+                    audit_changes.append(change_after(conn,before))
                     continue
                 changed += 1
                 conn.execute('UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (row['counted_quantity'],row['inventory_id']))
@@ -131,10 +135,10 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
                              (data['store_id'],row['part_id'],abs(row['difference']),
                               'add' if row['difference']>0 else 'remove',row['work_order_id'],user_id,
                               f"Physical stock count: {row['before_quantity']} → {row['counted_quantity']}. {row['reason']}"))
+                movement_ids.append(conn.execute('SELECT last_insert_rowid()').fetchone()[0])
+                audit_changes.append(change_after(conn,before))
             # Count evidence must commit with every balance/movement, including unchanged counts.
-            details = json.dumps({'store_name':store['name'],'rows':data['rows']})
-            conn.execute('''INSERT INTO activity_logs(user_id,username,action,resource_type,resource_id,details,ip_address,user_agent)
-                            SELECT id,name,'confirm_stock_count','stock_count',?,?,?,? FROM users WHERE id=?''',
-                         (data['store_id'],details,request.client.host if request.client else None,
-                          request.headers.get('user-agent'),user_id))
+            record_stock_audit(conn,user_id,'confirm_stock_count',audit_changes,movement_ids,
+                resource_id=data['store_id'],resource_type='stock_count',request=request,
+                extra={'store_name':store['name'],'rows':data['rows']})
             return {'success':True,'changed':changed,'unchanged':len(data['rows'])-changed}

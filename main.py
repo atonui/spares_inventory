@@ -41,6 +41,7 @@ from itsdangerous import URLSafeTimedSerializer
 import shutil
 from transfer_schema import ensure_transfer_schema
 from archive_schema import ensure_archive_schema
+from stock_audit import balance_snapshot, change_after, record_stock_audit, STOCK_AUDIT_ACTIONS, PROTECTED_AUDIT_SQL
 
 # setup password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -903,7 +904,7 @@ def log_endpoint(action: str, resource_type: str = None):
 
             finally:
                 # Log the activity
-                if user_id:
+                if user_id and not (status == "success" and action in STOCK_AUDIT_ACTIONS):
                     try:
                         log_activity(
                             user_id=user_id,
@@ -2126,6 +2127,8 @@ async def consume_stock(
         require_active_record(conn,"stores",item["store_id"])
         require_active_record(conn,"parts",item["part_id"])
 
+        before = balance_snapshot(conn,item["store_id"],item["part_id"],item["work_order_id"])
+
         # Check sufficient quantity
         if item["quantity"] < request_data.quantity:
             raise HTTPException(
@@ -2191,6 +2194,7 @@ async def consume_stock(
             ),
         )
 
+        record_stock_audit(conn,user_id,"consume_stock",[change_after(conn,before)],[cursor.lastrowid],resource_id=item["id"],request=request,extra={"consumed_work_order_id":work_order_id,"consumed_work_order":request_data.work_order_number,"notes":request_data.notes})
 
         return {
             "success": True,
@@ -2276,8 +2280,10 @@ async def import_stock_balances(
             if current != row.expected_quantity:
                 raise HTTPException(status_code=409, detail=f"Stock changed for {number}. Cancel and upload again to refresh the preview")
             changes.append((row, part["id"], stock[0] if stock else None))
+        audit_changes, movement_ids = [], []
         added = updated = unchanged = 0
         for row, part_id, stock in changes:
+            before = balance_snapshot(conn,request_data.store_id,part_id,None)
             old = stock["quantity"] if stock else 0
             if stock:
                 if old == row.quantity:
@@ -2295,6 +2301,9 @@ async def import_stock_balances(
                 conn.execute("INSERT INTO movements(to_store_id,part_id,quantity,movement_type,created_by,notes) VALUES(?,?,?,?,?,?)",
                              (request_data.store_id, part_id, abs(delta), "add" if delta > 0 else "remove",
                               user_id, f"CSV balance import: {old} -> {row.quantity}"))
+                movement_ids.append(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+            audit_changes.append(change_after(conn,before))
+        record_stock_audit(conn,user_id,"import_stock_balances",audit_changes,movement_ids,resource_id=request_data.store_id,resource_type="store",request=request,extra={"added":added,"updated":updated,"unchanged":unchanged})
         conn.commit()
         return {"success": True, "added": added, "updated": updated, "unchanged": unchanged}
     except HTTPException:
@@ -2363,6 +2372,7 @@ async def add_stock(
                 )
                 work_order_id = cursor.lastrowid
 
+        before = balance_snapshot(conn,request_data.store_id,request_data.part_id,work_order_id)
         inventory_id = add_inventory_quantity(
             conn, request_data.store_id, request_data.part_id,
             request_data.quantity, work_order_id,
@@ -2383,7 +2393,7 @@ async def add_stock(
             ),
         )
 
-        # The decorator will automatically log this action
+        record_stock_audit(conn,user_id,"add_stock",[change_after(conn,before)],[cursor.lastrowid],resource_id=inventory_id,request=request)
         return {
             "success": True,
             "id": inventory_id,
@@ -2423,6 +2433,7 @@ async def update_stock(
         require_active_record(conn,"stores",item["store_id"])
         require_active_record(conn,"parts",item["part_id"])
 
+        before = balance_snapshot(conn,item["store_id"],item["part_id"],item["work_order_id"])
         old_quantity = item["quantity"]
         quantity_change = request_data.new_quantity - old_quantity
 
@@ -2453,6 +2464,7 @@ async def update_stock(
             ),
         )
 
+        record_stock_audit(conn,user_id,"update_stock",[change_after(conn,before)],[cursor.lastrowid],resource_id=item["id"],request=request)
 
         return {
             "success": True,
@@ -2486,6 +2498,7 @@ async def transfer_stock(
         require_active_record(conn,'parts',item['part_id'])
         if request_data.replenishment:
             require_planned_dispatch(conn,user_id,item['id'],request_data.to_store_id,request_data.quantity)
+        before=balance_snapshot(conn,item['store_id'],item['part_id'],item['work_order_id'])
         remaining=item['quantity']-request_data.quantity
         if remaining or item['min_threshold']:
             conn.execute('UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(remaining,item['id']))
@@ -2494,6 +2507,7 @@ async def transfer_stock(
         mid=conn.execute("INSERT INTO movements(from_store_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes) VALUES(?,?,?,?,'transfer',?,?,?)",
                          (item['store_id'],request_data.to_store_id,item['part_id'],request_data.quantity,item['work_order_id'],user_id,'Dispatched; awaiting receipt')).lastrowid
         conn.execute('INSERT INTO stock_transfers(movement_id,source_min_threshold) VALUES(?,?)',(mid,item['min_threshold'] or 0))
+        record_stock_audit(conn,user_id,'transfer_stock',[change_after(conn,before)],[mid],resource_id=item['id'],request=request,extra={'transfer_id':mid,'before_status':None,'after_status':'in_transit','to_store_id':request_data.to_store_id,'to_store_name':conn.execute('SELECT name FROM stores WHERE id=?',(request_data.to_store_id,)).fetchone()['name']})
         return {'success':True,'transfer_id':mid,'message':f"Dispatched {request_data.quantity} {item['part_number']}; awaiting receipt"}
 
 
@@ -2537,7 +2551,7 @@ async def pending_transfers(user_id: int = Depends(get_current_user)):
         conn.close()
 
 
-def complete_transfer(transfer_id, data, user_id, action):
+def complete_transfer(transfer_id, data, user_id, action, request=None):
     if not data.confirmed:
         raise HTTPException(status_code=400,detail='Physical receipt or return must be confirmed')
     with stock_write_transaction() as conn:
@@ -2555,6 +2569,7 @@ def complete_transfer(transfer_id, data, user_id, action):
         if row['status']!='in_transit':
             raise HTTPException(status_code=409,detail='Transfer is already completed; stock was not changed')
         store_id=row['to_store_id'] if action=='received' else row['from_store_id']
+        before=balance_snapshot(conn,store_id,row['part_id'],row['work_order_id'])
         inventory_id=add_inventory_quantity(conn,store_id,row['part_id'],row['quantity'],row['work_order_id'])
         if action=='returned':
             # Ordinary restocking may have recreated the row with its default 0.
@@ -2566,6 +2581,9 @@ def complete_transfer(transfer_id, data, user_id, action):
         if action=='returned':
             conn.execute("INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes) VALUES(?,?,?,'return',?,?,?)",
                          (store_id,row['part_id'],row['quantity'],row['work_order_id'],user_id,f'Physical return confirmed for transfer #{transfer_id}'))
+        movement_ids=[transfer_id]
+        if action=='returned': movement_ids.append(conn.execute('SELECT last_insert_rowid()').fetchone()[0])
+        record_stock_audit(conn,user_id,'receive_transfer' if action=='received' else 'return_transfer',[change_after(conn,before)],movement_ids,resource_id=inventory_id,request=request,extra={'transfer_id':transfer_id,'before_status':'in_transit','after_status':action,'notes':data.notes})
         return {'success':True,'message':'Receipt confirmed; destination stock is available' if action=='received' else 'Physical return confirmed; source stock restored'}
 
 
@@ -2573,14 +2591,14 @@ def complete_transfer(transfer_id, data, user_id, action):
 @log_endpoint(action='receive_transfer',resource_type='inventory')
 async def receive_transfer(transfer_id: int,data: TransferConfirmationRequest,
     user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
-    return complete_transfer(transfer_id,data,user_id,'received')
+    return complete_transfer(transfer_id,data,user_id,'received',request)
 
 
 @app.post('/api/inventory/transfers/{transfer_id}/return')
 @log_endpoint(action='return_transfer',resource_type='inventory')
 async def return_transfer(transfer_id: int,data: TransferConfirmationRequest,
     user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
-    return complete_transfer(transfer_id,data,user_id,'returned')
+    return complete_transfer(transfer_id,data,user_id,'returned',request)
 
 
 @app.get("/api/work-orders", response_model=List[WorkOrderResponse])
@@ -3741,17 +3759,18 @@ async def cleanup_old_logs(
     cursor = conn.cursor()
 
     # Check if user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT role,name FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
 
-    if user["role"] != "admin":
+    if not user or user["role"] != "admin":
+        conn.close()
         raise HTTPException(status_code=403, detail="Admin access required")
 
     # Delete old logs
     cursor.execute(
-        """
+        f"""
         DELETE FROM activity_logs 
-        WHERE created_at < datetime('now', '-' || ? || ' days')
+        WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', '-' || ? || ' days')
     """,
         (days,),
     )
@@ -4908,14 +4927,14 @@ async def purge_all_logs(
     cur = conn.cursor()
 
     if days == 0:
-        cur.execute("DELETE FROM activity_logs")
+        cur.execute(f"DELETE FROM activity_logs WHERE action NOT IN {PROTECTED_AUDIT_SQL}")
         act_deleted = cur.rowcount
         cur.execute("DELETE FROM system_logs")
         sys_deleted = cur.rowcount
     else:
-        cur.execute("""
+        cur.execute(f"""
             DELETE FROM activity_logs
-            WHERE created_at < datetime('now', ? )
+            WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', ? )
         """, (f"-{days} days",))
         act_deleted = cur.rowcount
         cur.execute("""

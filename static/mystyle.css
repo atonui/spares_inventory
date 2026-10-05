@@ -969,3 +969,11 @@ label.btn {
     .replenishment-toolbar select { width: 100%; }
     .replenishment-panel button, .replenishment-panel input, .replenishment-panel select { min-height: 44px; }
 }
+
+/* Recorded evidence uses the existing responsive stock table. */
+.audit-panel h3 { margin-bottom: .75rem; }
+.audit-panel .stock-cell-value { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.audit-details { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; line-height: 1.5; margin-block: .75rem; max-width: 75ch; }
+.audit-panel summary { cursor: pointer; padding: .5rem 0; }
+.audit-panel :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
+@media(max-width:768px) { .audit-panel input, .audit-panel select, .audit-panel button, .audit-panel summary { min-height: 44px; } }

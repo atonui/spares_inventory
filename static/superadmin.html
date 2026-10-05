@@ -6,7 +6,8 @@
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="superadmin.css">
 <link rel="stylesheet" href="mystyle.css">
-<script src="script.js" defer></script>
+<script src="audit.js?v=20261005-stock-audit" defer></script>
+<script src="script.js?v=20261005-stock-audit" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 
@@ -550,7 +551,7 @@
             <div class="panel-body">
               <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Delete old activity and system log entries to free up space.</p>
               <div class="form-group">
-                <label>Older than (days) — 0 deletes all logs</label>
+                <label>Older than (days) — 0 deletes all general logs; stock audit evidence is retained</label>
                 <input type="number" x-model="purgeDays" min="0" placeholder="90">
               </div>
               <button class="btn btn-sm btn-red" @click="purgeLogs()">Purge Logs</button>
@@ -636,8 +637,7 @@
                       <span :class="log.status==='success' ? 'tag tag-green' : 'tag tag-red'"
                             x-text="log.status"></span>
                     </td>
-                    <td style="font-size:0.75rem;color:#888;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                        x-text="log.details||'—'"></td>
+                    <td><details><summary>View details</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere" x-text="formatStockAuditDetails(log.details)"></p></details></td>
                   </tr>
                 </template>
               </tbody>
@@ -1032,10 +1032,10 @@ async submitPasswordReset() {
       const days = parseInt(this.purgeDays) || 0;
       this.dlg = {
         open: true,
-        title: days === 0 ? 'Purge ALL Logs?' : `Purge Logs Older Than ${days} Days?`,
+        title: days === 0 ? 'Purge All General Logs?' : `Purge Logs Older Than ${days} Days?`,
         msg: days === 0
-          ? 'This permanently deletes ALL log entries and cannot be undone.'
-          : `This deletes all logs older than ${days} days and cannot be undone.`,
+          ? 'This permanently deletes general logs. Stock audit evidence is retained. This cannot be undone.'
+          : `This deletes general logs older than ${days} days. Stock audit evidence is retained. This cannot be undone.`,
         action: 'Purge',
         resolve: async () => {
           this.loading = true;
