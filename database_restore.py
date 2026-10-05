@@ -2,6 +2,7 @@
 import os
 import sqlite3
 import time
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,14 +21,18 @@ def restore_database(upload, live, actor_id, *, defaults=None):
             raise ValueError('Uploaded database contains unsupported schema objects')
         from backend.database import bootstrap_defaults, DEFAULT_SETTINGS
         from backend.migrations import apply_migrations, check_database
-        live_status=check_database(target)
-        if live_status.pending:
-            raise ValueError('Live database must be initialized to the current migration version before restore')
         apply_migrations(source,bootstrap=lambda c:bootstrap_defaults(c,DEFAULT_SETTINGS if defaults is None else defaults))
         if source.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise ValueError('Upgraded upload failed its integrity check')
         if source.execute('PRAGMA foreign_key_check').fetchone():
             raise ValueError('Uploaded database contains invalid foreign references')
+        # Reserve the live writer before validating/snapshotting its state.
+        # Other processes use the same SQLite lock; no process-local mutex is needed.
+        target.execute('PRAGMA foreign_keys=ON')
+        target.execute('BEGIN IMMEDIATE')
+        live_status=check_database(target)
+        if live_status.pending:
+            raise ValueError('Live database must be initialized to the current migration version before restore')
         # Match the running application schema before copying any data.
         from backend.migrations.validation import schema_signature
         if schema_signature(source) != schema_signature(target):
@@ -51,14 +56,46 @@ def restore_database(upload, live, actor_id, *, defaults=None):
         def progress(status,remaining,total):
             if time.monotonic()>deadline:
                 raise TimeoutError('Database is busy; restore was stopped')
-        with sqlite3.connect(backup) as saved:
-            target.backup(saved,pages=128,progress=progress,sleep=0.05)
+        # A separate reader can snapshot the committed state while target holds
+        # the reserved write lock. Backing up target itself would wait on its transaction.
+        from backend.database import connect_database
+        with closing(connect_database(live,readonly=True)) as reader, closing(sqlite3.connect(backup)) as saved:
+            reader.backup(saved,pages=128,progress=progress,sleep=0.05)
             if saved.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                 raise ValueError('Pre-restore backup failed validation')
         deadline=time.monotonic()+30
-        # SQLite backup writes atomically and preserves the destination file.
-        source.backup(target,pages=128,progress=progress,sleep=0.05)
+        # The backup API cannot write into an active destination transaction.
+        # Keep the validated live schema and replace its records under the same lock.
+        target.set_progress_handler(lambda: int(time.monotonic()>deadline),10000)
+        target.execute('PRAGMA defer_foreign_keys=ON')
+        tables=[row[0] for row in source.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        for table in tables:
+            target.execute(f'DELETE FROM "{table}"')
+        for table in tables:
+            names=[row[1] for row in source.execute(f'PRAGMA table_xinfo("{table}")')]
+            fields=','.join('"'+name+'"' for name in names)
+            placeholders=','.join('?' for _ in names)
+            target.executemany(f'INSERT INTO "{table}" ({fields}) VALUES ({placeholders})',
+                               source.execute(f'SELECT {fields} FROM "{table}"'))
+        # Preserve counters even when their highest allocated row was deleted.
+        target.execute('DELETE FROM sqlite_sequence')
+        target.executemany('INSERT INTO sqlite_sequence(name,seq) VALUES(?,?)',
+                           source.execute('SELECT name,seq FROM sqlite_sequence'))
+        check_database(target)
+        if target.execute('PRAGMA integrity_check').fetchone()[0]!='ok':
+            raise ValueError('Restored database failed its integrity check')
+        target.commit()
         return backup.name
+    except Exception as error:
+        target.rollback()
+        if isinstance(error,sqlite3.OperationalError):
+            code=getattr(error,'sqlite_errorcode',0)&0xff
+            if code in (sqlite3.SQLITE_BUSY,sqlite3.SQLITE_LOCKED):
+                raise TimeoutError('Database is busy; retry the restore when other writes finish') from error
+            if code==sqlite3.SQLITE_INTERRUPT:
+                raise TimeoutError('Restore exceeded its time limit; no live changes were committed') from error
+        raise
     finally:
         source.close()
         target.close()
