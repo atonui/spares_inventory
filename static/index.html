@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261005-stock-audit">
+    <link rel="stylesheet" href="mystyle.css?v=20261005-stock-reports">
     <style>[x-cloak] { display: none !important; }</style>
-    <script src="audit.js?v=20261005-stock-audit" defer></script>
-    <script src="script.js?v=20261005-stock-audit" defer></script>
+    <script src="audit.js?v=20261005-stock-reports" defer></script>
+    <script src="script.js?v=20261005-stock-reports" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -101,6 +101,7 @@
                     <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')">Inventory</button>
                     <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')">Stores</button>
                     <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')">Replenishment</button>
+                    <button class="btn" :class="showReportsPanel ? 'is-active' : ''" :aria-current="showReportsPanel ? 'page' : null" @click="openPanel('showReportsPanel')">Reports</button>
                     <button class="btn" :class="showAllPartsPanel ? 'is-active' : ''" @click="openPanel('showAllPartsPanel')">Parts catalog</button>
                     <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()">Equipment</button>
                     <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()">Movement history</button>
@@ -796,7 +797,7 @@
             <!-- Recent Activity Feed (Home View) -->
             <div x-show="!loading && !showArchivedPanel && !showUsersPanel && !showStoresPanel && !showPartsPanel && !showMovementsPanel &&
             !showAllPartsPanel && !showAllStoresPanel && !showLowStockPanel && !showMyPartsPanel && !showStoreInventoryPanel &&
-             !showEquipmentPanel && !showInventoryPanel && !showStoreTypesPanel" class="inventory-table">
+             !showEquipmentPanel && !showInventoryPanel && !showStoreTypesPanel && !showReportsPanel && !showLogsPanel" class="inventory-table">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <h3 style="margin: 0;">Recent Activity</h3>
                     <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;">
@@ -1673,6 +1674,41 @@
                         <td role="cell" data-label="Internal transfers"><div class="stock-cell-value replenishment-suggestions"><span x-show="!row.suggestions.length">No transfer suggested</span><template x-for="suggestion in row.suggestions" :key="suggestion.inventory_id"><div><span x-text="suggestion.quantity + ' from ' + suggestion.store_name"></span><button x-show="suggestion.can_dispatch" class="btn btn-sm" @click="reviewReplenishmentTransfer(row,suggestion)" :disabled="replenishmentBusy || minimumBusy || loading">Review transfer</button><span x-show="!suggestion.can_dispatch" class="source-owner-note">Source owner must dispatch</span></div></template></div></td>
                         <td role="cell" data-label="Purchase"><strong class="stock-cell-value" x-text="row.purchase_quantity"></strong></td>
                     </tr></template></tbody></table>
+                </div>
+            </section>
+
+            <section x-show="showReportsPanel" class="controls reports-panel" aria-labelledby="reports-heading">
+                <h3 id="reports-heading">Consumption reports</h3>
+                <p x-text="['admin','superadmin'].includes(currentUser?.role) ? 'All recorded consumption. Filter by the engineer who recorded it.' : 'Your recorded consumption, including work orders assigned to other engineers.'"></p>
+                <p>Dates use Africa/Nairobi. Archived parts and stores remain in history.</p>
+                <form @submit.prevent="loadConsumptionReport()" class="report-filters">
+                    <fieldset :disabled="reportBusy || reportExportBusy">
+                        <label><input type="checkbox" x-model="reportForm.allDates" @change="markReportDirty()"> All dates</label>
+                        <label>From <input type="date" x-model="reportForm.start_date" :disabled="reportForm.allDates" @change="markReportDirty()"></label>
+                        <label>Through <input type="date" x-model="reportForm.end_date" :disabled="reportForm.allDates" @change="markReportDirty()"></label>
+                        <label>Part <select x-model="reportForm.part_id" @change="markReportDirty()"><option value="">All parts</option><template x-for="p in reportOptions.parts" :key="p.id"><option :value="p.id" x-text="p.part_number+' — '+p.description"></option></template></select></label>
+                        <label>Source store <select x-model="reportForm.store_id" @change="markReportDirty()"><option value="">All stores</option><template x-for="s in reportOptions.stores" :key="s.id"><option :value="s.id" x-text="s.name"></option></template></select></label>
+                        <label x-show="['admin','superadmin'].includes(currentUser?.role)">Recorded by <select x-model="reportForm.engineer_id" @change="markReportDirty()"><option value="">All engineers</option><template x-for="u in reportOptions.engineers" :key="u.id"><option :value="u.id" x-text="u.name"></option></template></select></label>
+                        <label>Exact work-order number <input type="text" maxlength="200" x-model="reportForm.work_order_number" @input="markReportDirty()" placeholder="Leave blank for all work orders"></label>
+                        <button type="submit" class="btn btn-primary" x-text="reportBusy ? 'Loading…' : 'Refresh report'"></button>
+                    </fieldset>
+                </form>
+                <p x-show="reportBusy" role="status">Loading consumption history…</p>
+                <p x-show="reportError" x-text="reportError" role="alert" class="report-error"></p>
+                <p x-show="reportDirty && consumptionReport" role="status">Filters changed. Refresh the report to update results and enable export.</p>
+                <div x-show="consumptionReport && !reportBusy">
+                    <p class="report-summary"><strong x-text="consumptionReport?.totals.quantity || 0"></strong> units consumed across <span x-text="consumptionReport?.totals.parts || 0"></span> parts in <span x-text="consumptionReport?.totals.events || 0"></span> consumption events. Totals include all matching records.</p>
+                    <button class="btn" @click="exportConsumptionReport()" :disabled="reportDirty || reportExportBusy" x-text="reportExportBusy ? 'Downloading…' : 'Export all matching records (CSV)'"></button>
+                    <p x-show="consumptionReport?.totals.events === 0">No consumption matches these filters. Try a wider date range or all dates.</p>
+                    <h4>Parts used</h4>
+                    <div class="report-table-wrap"><table><thead><tr><th>Part number</th><th>Description</th><th>Quantity</th><th>Events</th></tr></thead><tbody><template x-for="p in consumptionReport?.by_part || []" :key="p.part_id"><tr><td x-text="p.part_number || 'Unknown'"></td><td x-text="p.description || 'Unknown'"></td><td x-text="p.quantity"></td><td x-text="p.events"></td></tr></template></tbody></table></div>
+                    <h4>Work orders</h4>
+                    <p>Select a work order to see its parts and consumption events within the current filters.</p>
+                    <div class="report-table-wrap"><table><thead><tr><th>Work order</th><th>Quantity</th><th>Events</th></tr></thead><tbody><template x-for="w in consumptionReport?.by_work_order || []" :key="w.work_order_id ?? 'unknown'"><tr><td><button x-show="w.work_order" class="btn btn-sm" :disabled="reportDirty || reportExportBusy" @click="openWorkOrderReport(w.work_order)" x-text="w.work_order"></button><span x-show="!w.work_order">Unlinked work order</span></td><td x-text="w.quantity"></td><td x-text="w.events"></td></tr></template></tbody></table></div>
+                    <h4>Consumption events</h4>
+                    <p>Up to 100 events per page. CSV includes all matching events. Names reflect the current catalog.</p>
+                    <div class="report-table-wrap"><table><thead><tr><th>Time (Nairobi)</th><th>Part</th><th>Quantity</th><th>Source store</th><th>Recorded by</th><th>Work order</th><th>Notes</th></tr></thead><tbody><template x-for="r in consumptionReport?.rows || []" :key="r.movement_id"><tr><td x-text="r.recorded_at ? r.recorded_at.replace('T',' ').replace('+03:00','') : 'Unknown'"></td><td><span x-text="r.part_number || 'Unknown'"></span><br><span x-text="r.description"></span></td><td x-text="r.quantity"></td><td x-text="r.store_name || 'Unknown'"></td><td x-text="r.engineer_name || 'Unknown'"></td><td x-text="r.work_order || 'Unlinked'"></td><td x-text="r.notes || '—'"></td></tr></template></tbody></table></div>
+                    <div class="report-pagination"><button class="btn" :disabled="reportDirty || reportOffset===0 || reportExportBusy" @click="loadConsumptionReport(Math.max(0,reportOffset-100))">Previous</button><span x-text="consumptionReport?.totals.events ? 'Events '+(reportOffset+1)+'–'+Math.min(reportOffset+100,consumptionReport.totals.events)+' of '+consumptionReport.totals.events : '0 events'"></span><button class="btn" :disabled="reportDirty || reportOffset+100 >= (consumptionReport?.totals.events || 0) || reportExportBusy" @click="loadConsumptionReport(reportOffset+100)">Next</button></div>
                 </div>
             </section>
 

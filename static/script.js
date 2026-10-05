@@ -1,5 +1,80 @@
 function inventoryApp() {
     return {
+        showReportsPanel: false,
+        consumptionReport: null,
+        reportOptions: {parts:[], stores:[], engineers:[]},
+        reportForm: {allDates:false,start_date:'',end_date:'',part_id:'',store_id:'',engineer_id:'',work_order_number:''},
+        reportBusy: false,
+        reportExportBusy: false,
+        reportError: '',
+        reportDirty: true,
+        reportOffset: 0,
+        reportRequest: 0,
+        reportAppliedQuery: '',
+
+        markReportDirty() { this.reportDirty=true; },
+
+        reportQuery() {
+            const f=this.reportForm;
+            if(!f.start_date && !f.end_date) {
+                const pieces=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+                const value=t=>pieces.find(p=>p.type===t).value;
+                f.end_date=`${value('year')}-${value('month')}-${value('day')}`;
+                const start=new Date(f.end_date+'T00:00:00Z');start.setUTCDate(start.getUTCDate()-29);
+                f.start_date=start.toISOString().slice(0,10);
+            }
+            const q=new URLSearchParams();
+            if(!f.allDates) {
+                if(!/^\d{4}-\d{2}-\d{2}$/.test(f.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(f.end_date) || f.start_date>f.end_date) throw Error('Choose valid start and end dates, with the end on or after the start.');
+                q.set('start_date',f.start_date);q.set('end_date',f.end_date);
+            }
+            for(const key of ['part_id','store_id','engineer_id','work_order_number']) {
+                const value=String(f[key] || '').trim();if(value) q.set(key,value);
+            }
+            return q;
+        },
+
+        async loadConsumptionReport(offset=0) {
+            if(this.reportBusy) return;
+            this.reportError='';
+            let query;
+            try { query=this.reportQuery(); }
+            catch(error) { this.reportError=error.message;this.reportDirty=true;return; }
+            const request=++this.reportRequest, actor=this.currentUser?.id;
+            this.reportBusy=true;this.consumptionReport=null;this.reportDirty=true;
+            const applied=query.toString();query.set('limit','100');query.set('offset',String(offset));
+            try {
+                const result=await this.apiCall('/reports/consumption?'+query);
+                if(request!==this.reportRequest || actor!==this.currentUser?.id) return;
+                if(!result) throw Error('Your session expired. Sign in and refresh the report.');
+                this.consumptionReport=result;this.reportOptions=result.filter_options || {parts:[],stores:[],engineers:[]};
+                this.reportOffset=result.offset;this.reportAppliedQuery=applied;this.reportDirty=false;
+            } catch(error) { if(request===this.reportRequest) this.reportError='Report could not be loaded. Retry: '+error.message; }
+            finally { if(request===this.reportRequest) this.reportBusy=false; }
+        },
+
+        async openWorkOrderReport(number) {
+            if(this.reportBusy) return;
+            this.closeAllPanels();this.showInventoryPanel=false;this.showReportsPanel=true;
+            this.reportForm.work_order_number=number;this.markReportDirty();
+            await this.loadConsumptionReport();
+        },
+
+        async exportConsumptionReport() {
+            if(this.reportDirty || !this.consumptionReport || this.reportBusy || this.reportExportBusy) return;
+            this.reportExportBusy=true;this.reportError='';
+            const actor=this.currentUser?.id, request=this.reportRequest;
+            try {
+                const response=await fetch(this.apiUrl+'/reports/consumption.csv?'+this.reportAppliedQuery,{credentials:'include',headers:this.token?{Authorization:'Bearer '+this.token}:{}});
+                if(!response.ok) { if(response.status===401) this.logout();throw Error('Download failed ('+response.status+'). Refresh the report and retry.'); }
+                const blob=await response.blob();
+                if(actor!==this.currentUser?.id || request!==this.reportRequest) return;
+                const url=URL.createObjectURL(blob),link=document.createElement('a');
+                link.href=url;link.download='consumption_report.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+            } catch(error) { this.reportError=error.message; }
+            finally { this.reportExportBusy=false; }
+        },
+
         replenishmentPlan: null,
         replenishmentBusy: false,
         replenishmentError: '',
@@ -382,6 +457,8 @@ function inventoryApp() {
                 console.error('Logout error:', error);
             }
             
+            this.reportRequest++;this.reportBusy=false;this.consumptionReport=null;
+            this.reportOptions={parts:[],stores:[],engineers:[]};this.reportAppliedQuery='';this.reportDirty=true;
             // Clear local state
             this.currentUser = null;
             this.isAuthenticated = false;
@@ -752,7 +829,7 @@ function inventoryApp() {
         get filteredStoreInventory() { return this.matchInventoryRows(this.storeInventory,this.storeSearchTerm); },
 
         get currentViewLabel() {
-            const views=[['showStoreInventoryPanel',this.selectedStore?.name + ' inventory'],['showInventoryPanel','Inventory'],['showAllStoresPanel','Stores'],['showAllPartsPanel','Parts catalog'],['showMyPartsPanel','My parts'],['showLowStockPanel','Replenishment'],['showEquipmentPanel','Equipment'],['showMovementsPanel','Movement history'],['showUsersPanel','Manage users'],['showStoresPanel','Manage stores'],['showPartsPanel','Manage parts'],['showStoreTypesPanel','Store types'],['showArchivedPanel','Archived records'],['showLogsPanel','Activity logs']];
+            const views=[['showStoreInventoryPanel',this.selectedStore?.name + ' inventory'],['showInventoryPanel','Inventory'],['showAllStoresPanel','Stores'],['showAllPartsPanel','Parts catalog'],['showMyPartsPanel','My parts'],['showLowStockPanel','Replenishment'],['showEquipmentPanel','Equipment'],['showMovementsPanel','Movement history'],['showUsersPanel','Manage users'],['showStoresPanel','Manage stores'],['showPartsPanel','Manage parts'],['showStoreTypesPanel','Store types'],['showArchivedPanel','Archived records'],['showLogsPanel','Activity logs'],['showReportsPanel','Reports']];
             return views.find(([key])=>this[key])?.[1] || 'Inventory';
         },
 
@@ -2504,6 +2581,7 @@ exportComprehensiveReport() {
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
             this.showLogsPanel = false;
+            this.showReportsPanel = false;
             this.showEquipmentPanel = false;
             this.showStoreTypesPanel = false;
             // Don't close inventory panel
@@ -2521,6 +2599,7 @@ exportComprehensiveReport() {
             this.showMyPartsPanel = false;
             this.showStoreInventoryPanel = false;
             this.showLogsPanel = false;
+            this.showReportsPanel = false;
             this.showEquipmentPanel = false;
             this.showStoreTypesPanel = false;
             this.showInventoryPanel = true;
@@ -2550,6 +2629,7 @@ exportComprehensiveReport() {
             }
             // open the requested panel
             this[panelName] = true;
+            if(panelName === 'showReportsPanel') this.loadConsumptionReport();
             if(panelName === 'showLowStockPanel') this.loadReplenishment();
 
         },

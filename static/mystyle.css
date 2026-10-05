@@ -977,3 +977,16 @@ label.btn {
 .audit-panel summary { cursor: pointer; padding: .5rem 0; }
 .audit-panel :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
 @media(max-width:768px) { .audit-panel input, .audit-panel select, .audit-panel button, .audit-panel summary { min-height: 44px; } }
+/* Read-only consumption reports */
+.report-filters fieldset { border:0; padding:0; margin:1rem 0; display:flex; flex-wrap:wrap; align-items:end; gap:1rem; }
+.report-filters label { display:flex; flex-direction:column; gap:.35rem; max-width:100%; }
+.report-filters input,.report-filters select { max-width:100%; min-height:2.5rem; }
+.report-table-wrap { overflow-x:auto; margin:.75rem 0 1.5rem; }
+.report-table-wrap table { width:100%; border-collapse:collapse; }
+.report-table-wrap th,.report-table-wrap td { padding:.75rem; text-align:left; border-bottom:1px solid #d1d5db; overflow-wrap:anywhere; }
+.report-table-wrap td { font-variant-numeric:tabular-nums; }
+.report-table-wrap th { background:#f3f4f6; }
+.report-summary { margin:1.25rem 0; }
+.report-error { color:#991b1b; }
+.report-pagination { display:flex; flex-wrap:wrap; align-items:center; gap:1rem; }
+@media(max-width:600px) { .report-filters label { width:100%; } .report-table-wrap table { min-width:560px; } }
