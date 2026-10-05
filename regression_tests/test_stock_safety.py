@@ -247,15 +247,17 @@ def test_repeated_receipts_and_transfers_reuse_inventory_row(api, work_order):
         assert conn.execute('SELECT COUNT(*) FROM movements WHERE part_id=999').fetchone()[0] == 5
 
 
-def test_receipt_preserves_existing_duplicate_rows(api):
+def test_duplicate_stock_is_rejected_and_receipt_preserves_existing_balance(api):
     client, db, _ = api
     with sqlite3.connect(db) as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Source','central')")
         conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'OLD-DUP')")
-        conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9998,999,999,4),(9999,999,999,7)')
+        conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9998,999,999,4)')
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,7)')
     assert client.post('/api/inventory/add',json={'store_id':999,'part_id':999,'quantity':2}).status_code == 200
     with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT id,quantity FROM inventory WHERE part_id=999 ORDER BY id').fetchall() == [(9998,6),(9999,7)]
+        assert conn.execute('SELECT id,quantity FROM inventory WHERE part_id=999 ORDER BY id').fetchall() == [(9998,6)]
 
 
 def test_simultaneous_receipts_create_one_row(api):

@@ -22,6 +22,11 @@ def restore_database(upload, live, actor_id):
         if target.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_transfers'").fetchone() and not source.execute("SELECT 1 FROM sqlite_master WHERE name='stock_transfers'").fetchone():
             from transfer_schema import ensure_transfer_schema
             ensure_transfer_schema(source)
+        if any(row[1]=='archived_at' for row in target.execute('PRAGMA table_info(users)')):
+            from archive_schema import ensure_archive_schema
+            ensure_archive_schema(source)
+        if source.execute('PRAGMA foreign_key_check').fetchone():
+            raise ValueError('Uploaded database contains invalid foreign references')
         # Match the running application schema before copying any data.
         def schema(connection):
             return {(kind, name, table, ' '.join((sql or '').split()))
@@ -30,8 +35,9 @@ def restore_database(upload, live, actor_id):
                         "WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%'")}
         if schema(source) != schema(target):
             raise ValueError('Uploaded database schema differs from the live database')
-        actor = target.execute('SELECT email FROM users WHERE id=? AND role=?',(actor_id,'superadmin')).fetchone()
-        restored_actor = source.execute('SELECT email FROM users WHERE id=? AND role=?',(actor_id,'superadmin')).fetchone()
+        active_clause=' AND archived_at IS NULL' if any(row[1]=='archived_at' for row in target.execute('PRAGMA table_info(users)')) else ''
+        actor = target.execute('SELECT email FROM users WHERE id=? AND role=?'+active_clause,(actor_id,'superadmin')).fetchone()
+        restored_actor = source.execute('SELECT email FROM users WHERE id=? AND role=?'+active_clause,(actor_id,'superadmin')).fetchone()
         if not actor or restored_actor != actor:
             raise ValueError('The backup must retain your superadmin account')
         source.execute('UPDATE sessions SET is_active=0')

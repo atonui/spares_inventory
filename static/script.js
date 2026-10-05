@@ -144,6 +144,8 @@ function inventoryApp() {
         users: [],
         movements: [],
         pendingTransfers: [],
+        archivedRecords: [],
+        showArchivedPanel: false,
         filteredInventory: [],
         storeTypes: [],
         csrfToken: '',
@@ -466,7 +468,7 @@ function inventoryApp() {
                     this.loadStoreTypes()
                 ];
                 
-                if (this.currentUser?.role === 'admin') {
+                if (['admin','superadmin'].includes(this.currentUser?.role)) {
                     promises.push(this.loadUsers());
                 }
                 
@@ -531,9 +533,33 @@ function inventoryApp() {
         },
 
         async loadUsers() {
-            if (this.currentUser?.role === 'admin') {
+            if (['admin','superadmin'].includes(this.currentUser?.role)) {
                 this.users = await this.apiCall('/users');
             }
+        },
+
+        async loadArchivedRecords() {
+            this.error='';
+            try {
+                const kinds=['parts','stores','users'];
+                const groups=await Promise.all(kinds.map(kind=>this.apiCall('/'+kind+'?include_archived=true')));
+                this.archivedRecords=groups.flatMap((rows,index)=>rows.filter(row=>row.archived_at).map(row=>({
+                    kind:kinds[index],id:row.id,label:row.part_number || row.name,archived_at:row.archived_at
+                })));
+            } catch(error) { this.error='Failed to load archived records: '+error.message; }
+        },
+
+        async restoreArchivedRecord(record) {
+            if(this.loading || !['parts','stores','users'].includes(record.kind)) return;
+            if(!confirm(`Restore ${record.label} to active use?`)) return;
+            this.loading=true; this.error='';
+            try {
+                const result=await this.apiCall(`/${record.kind}/${record.id}/restore`,{method:'POST'});
+                this.successMessage=result.message;
+                await this.loadParts(); await this.loadStores(); await this.loadUsers();
+                await this.loadInventory(); await this.loadStats(); await this.loadArchivedRecords();
+            } catch(error) { this.error='Failed to restore record: '+error.message; }
+            finally { this.loading=false; }
         },
 
         async loadPendingTransfers() {
@@ -1620,7 +1646,7 @@ exportComprehensiveReport() {
         },
 
         async deleteUser(userId, userName) {
-            if (!confirm(`Are you sure you want to delete user ${userName}?`)) {
+            if (!confirm(`Archive user ${userName}? History will be preserved.`)) {
                 return;
             }
             
@@ -1629,16 +1655,18 @@ exportComprehensiveReport() {
             this.successMessage = '';
             
             try {
-                await this.apiCall(`/users/${userId}`, {
+                const result = await this.apiCall(`/users/${userId}`, {
                     method: 'DELETE'
                 });
                 
-                this.successMessage = 'User deleted successfully!';
+                this.successMessage = result.message;
                 await this.loadUsers();
+                await this.loadInventory();
+                if (this.showArchivedPanel) await this.loadArchivedRecords();
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
-                this.error = 'Failed to delete user: ' + error.message;
+                this.error = 'Failed to archive user: ' + error.message;
             } finally {
                 this.loading = false;
             }
@@ -2100,7 +2128,7 @@ exportComprehensiveReport() {
         },
 
         async deleteStore(storeId, storeName) {
-            if (!confirm(`Are you sure you want to delete store ${storeName}?`)) {
+            if (!confirm(`Archive store ${storeName}? History will be preserved.`)) {
                 return;
             }
             
@@ -2109,18 +2137,21 @@ exportComprehensiveReport() {
             this.successMessage = '';
             
             try {
-                await this.apiCall(`/stores/${storeId}`, {
+                const result = await this.apiCall(`/stores/${storeId}`, {
                     method: 'DELETE'
                 });
                 
-                this.successMessage = 'Store deleted successfully!';
+                this.successMessage = result.message;
+                if (this.selectedStore?.id === storeId) { this.selectedStore=null; this.storeInventory=[]; this.showStoreInventoryPanel=false; }
                 await this.loadStores();
                 await this.loadStats();  
                 
+                await this.loadInventory();
+                if (this.showArchivedPanel) await this.loadArchivedRecords();
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
-                this.error = 'Failed to delete store: ' + error.message;
+                this.error = 'Failed to archive store: ' + error.message;
             } finally {
                 this.loading = false;
             }
@@ -2205,7 +2236,7 @@ exportComprehensiveReport() {
         },
 
         async deletePart(partId, partNumber) {
-            if (!confirm(`Are you sure you want to delete part ${partNumber}?`)) {
+            if (!confirm(`Archive part ${partNumber}? History will be preserved.`)) {
                 return;
             }
             
@@ -2214,18 +2245,20 @@ exportComprehensiveReport() {
             this.successMessage = '';
             
             try {
-                await this.apiCall(`/parts/${partId}`, {
+                const result = await this.apiCall(`/parts/${partId}`, {
                     method: 'DELETE'
                 });
                 
-                this.successMessage = 'Part deleted successfully!';
+                this.successMessage = result.message;
                 await this.loadParts();
                 await this.loadStats(); 
                 
+                await this.loadInventory();
+                if (this.showArchivedPanel) await this.loadArchivedRecords();
                 setTimeout(() => this.successMessage = '', 3000);
                 
             } catch (error) {
-                this.error = 'Failed to delete part: ' + error.message;
+                this.error = 'Failed to archive part: ' + error.message;
             } finally {
                 this.loading = false;
             }
@@ -2257,6 +2290,7 @@ exportComprehensiveReport() {
         },
 
         closeAllOtherPanels() {
+            this.showArchivedPanel = false;
             this.showUsersPanel = false;
             this.showStoresPanel = false;
             this.showPartsPanel = false;
