@@ -5039,6 +5039,12 @@ register_replenishment_routes(
     current_user=get_current_user, verify_csrf=verify_csrf,
 )
 
+from stock_reports import register_stock_report_routes
+
+register_stock_report_routes(
+    app, get_connection=get_db_connection, current_user=get_current_user, require_active=require_active_record,
+)
+
 from stock_counts import register_stock_count_routes
 
 register_stock_count_routes(
