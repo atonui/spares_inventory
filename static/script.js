@@ -61,6 +61,9 @@ function inventoryApp() {
         // Search and filters
         searchTerm: '',
         storeFilter: '',
+        storeSearchTerm: '',
+        inventoryLoadFailed: false,
+        inventoryLoadError: '',
         partSearchTerm: '',
         filteredPartsForSelection: [],
         // modals
@@ -528,9 +531,15 @@ function inventoryApp() {
             try {
                 const response = await this.apiCall('/inventory');
                 this.inventory = response;
-                this.filterInventory(); // <-- Make sure this is called!
+                if (this.error === this.inventoryLoadError) this.error = '';
+                this.inventoryLoadError = '';
+                this.inventoryLoadFailed = false;
+                this.filterInventory();
+                if (this.selectedStore) this.storeInventory=this.inventory.filter(i=>i.store_id===this.selectedStore.id);
             } catch (error) {
-                this.error = 'Failed to load inventory: ' + error.message;
+                this.inventoryLoadFailed = true;
+                this.inventoryLoadError = 'Inventory could not refresh. Retry or reload the page: ' + error.message;
+                this.error = this.inventoryLoadError;
             } finally {
                 this.loading = false;
             }
@@ -636,30 +645,30 @@ function inventoryApp() {
         },
 
         // Filtering - FIXED SEARCH FUNCTION
+        matchInventoryRows(rows, query) {
+            const terms=String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+            return rows.filter(item=>{
+                const text=[item.part_number,item.description,item.store_name,item.work_order].map(value=>String(value || '').toLowerCase()).join(' ');
+                return terms.every(term=>text.includes(term));
+            });
+        },
+
         filterInventory() {
-            let filtered = this.inventory;
-            
-            if (this.searchTerm) {
-                const term = this.searchTerm.toLowerCase();
-                filtered = filtered.filter(item => 
-                    item.part_number.toLowerCase().includes(term) ||
-                    item.description.toLowerCase().includes(term) ||
-                    item.store_name.toLowerCase().includes(term)
-                );
-                // When searching, close other panels and show inventory
-                    if (term.length > 0) {
-                        this.closeAllOtherPanels();
-                        this.showInventoryPanel = true;
-                    }
-            }
-            
-            if (this.storeFilter) {
-                const storeId = parseInt(this.storeFilter);
-                const storeName = this.stores.find(s => s.id === storeId)?.name;
-                filtered = filtered.filter(item => item.store_name === storeName);
-            }
-            
-            this.filteredInventory = filtered;
+            let rows=this.matchInventoryRows(this.inventory,this.searchTerm);
+            if (this.storeFilter) rows=rows.filter(item=>item.store_id===Number(this.storeFilter));
+            this.filteredInventory=rows;
+        },
+
+        clearInventoryFilters() {
+            this.searchTerm='';this.storeFilter='';
+            this.openPanel('showInventoryPanel');this.filterInventory();
+        },
+
+        get filteredStoreInventory() { return this.matchInventoryRows(this.storeInventory,this.storeSearchTerm); },
+
+        get currentViewLabel() {
+            const views=[['showStoreInventoryPanel',this.selectedStore?.name + ' inventory'],['showInventoryPanel','Inventory'],['showAllStoresPanel','Stores'],['showAllPartsPanel','Parts catalog'],['showMyPartsPanel','My parts'],['showLowStockPanel','Low stock'],['showEquipmentPanel','Equipment'],['showMovementsPanel','Movement history'],['showUsersPanel','Manage users'],['showStoresPanel','Manage stores'],['showPartsPanel','Manage parts'],['showStoreTypesPanel','Store types'],['showArchivedPanel','Archived records'],['showLogsPanel','Activity logs']];
+            return views.find(([key])=>this[key])?.[1] || 'Inventory';
         },
 
         // advanced search filter
@@ -793,7 +802,7 @@ function inventoryApp() {
                 this.successMessage = `Import saved: ${result.added} created, ${result.updated} updated, ${result.unchanged} unchanged.`;
                 this.cancelDuplicateResolution();
                 await this.loadInventory();
-                if (this.selectedStore) this.storeInventory = this.inventory.filter(i=>i.store_name===this.selectedStore.name);
+                if (this.selectedStore) this.storeInventory = this.inventory.filter(i=>i.store_id===this.selectedStore.id);
                 await this.loadStats();
             } catch (error) {
                 this.error = 'Import not saved: ' + error.message;
@@ -803,8 +812,10 @@ function inventoryApp() {
         },
 
         async viewStoreInventory(store) {
+            if (!store) return;
             this.selectedStore = store;
-            this.storeInventory = this.inventory.filter(item => item.store_name === store.name);
+            this.storeSearchTerm = '';
+            this.storeInventory = this.inventory.filter(item => item.store_id === store.id);
             this.openPanel('showStoreInventoryPanel');
         },
 
@@ -1323,7 +1334,7 @@ exportAllPartsCSV() {
 exportStoresCSV() {
     const headers = ['Store Name', 'Type', 'Location', 'Assigned To', 'Total Items', 'Total Quantity'];
     const rows = this.stores.map(store => {
-        const storeItems = this.inventory.filter(i => i.store_name === store.name);
+        const storeItems = this.inventory.filter(i => i.store_id === store.id);
         return [
             store.name,
             store.type,
@@ -1393,9 +1404,11 @@ exportMyPartsCSV() {
     this.downloadCSV(headers, rows, `my_parts_${new Date().toISOString().split('T')[0]}.csv`);
 },
 
-exportStoreInventoryCSV(storeName) {
+exportStoreInventoryCSV(storeId) {
+    const store=this.stores.find(s=>s.id===Number(storeId));
+    if (!store) return;
     const headers = ['Part Number', 'Description', 'Quantity', 'Min Threshold', 'Work Order', 'Status'];
-    const rows = this.storeInventory.map(item => [
+    const rows = this.inventory.filter(item=>item.store_id===store.id).map(item => [
         item.part_number,
         item.description,
         item.quantity,
@@ -1404,7 +1417,7 @@ exportStoreInventoryCSV(storeName) {
         item.quantity <= item.min_threshold ? 'Low Stock' : 'OK'
     ]);
     
-    const safeStoreName = storeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const safeStoreName = store.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     this.downloadCSV(headers, rows, `${safeStoreName}_inventory_${new Date().toISOString().split('T')[0]}.csv`);
 },
 
@@ -1471,7 +1484,7 @@ exportComprehensiveReport() {
     report += `\n\nSTORES\n`;
     report += `Store Name,Type,Location,Assigned To,Items,Total Qty\n`;
     this.stores.forEach(store => {
-        const storeItems = this.inventory.filter(i => i.store_name === store.name);
+        const storeItems = this.inventory.filter(i => i.store_id === store.id);
         const totalQty = storeItems.reduce((sum, i) => sum + i.quantity, 0);
         report += `"${store.name}",${store.type},"${store.location || 'N/A'}","${this.getUserName(store.assigned_user_id)}",${storeItems.length},${totalQty}\n`;
     });
@@ -1635,7 +1648,7 @@ exportComprehensiveReport() {
                 await this.refreshDashboard();
                 
                 if (this.selectedStore) {
-                    this.storeInventory = this.inventory.filter(item => item.store_name === this.selectedStore.name);
+                    this.storeInventory = this.inventory.filter(item => item.store_id === this.selectedStore.id);
                 }
                 
                 setTimeout(() => this.successMessage = '', 5000);
@@ -2415,6 +2428,7 @@ exportComprehensiveReport() {
         },
 
         closeAllPanels() {
+            this.showArchivedPanel = false;
             this.showUsersPanel = false;
             this.showStoresPanel = false;
             this.showPartsPanel = false;
@@ -2448,10 +2462,8 @@ exportComprehensiveReport() {
             this.showCalibrationSettingsModal = false;
             this.showStoreTypeModal = false;
 
-            // Reset filters for inventory panel
+            // Keep the user's filters when returning to inventory.
             if (panelName === 'showInventoryPanel') {
-                this.searchTerm = '';
-                this.storeFilter = '';
                 this.filterInventory();
             }
             // open the requested panel

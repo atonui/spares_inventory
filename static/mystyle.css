@@ -538,17 +538,74 @@
         font-size: 1.5rem;
     }
     
-    /* Hide less important columns on very small screens */
-    @media (max-width: 480px) {
-        /* Show only essential columns */
-        th:nth-child(3), td:nth-child(3) { /* Store column */
-            display: none;
-        }
-        
-        th:nth-child(5), td:nth-child(5) { /* Work Order column */
-            display: none;
-        }
-    }
+}
+
+/* Inventory task controls follow the existing blue/neutral application palette. */
+body > [x-data="inventoryApp()"] { width: 100%; min-width: 0; }
+body > [x-data="inventoryApp()"] > .card { margin-inline: auto; }
+.container { width: 100%; min-width: 0; }
+.inventory-controls { overflow: visible; }
+.inventory-controls .btn { background: #005ab8; }
+.inventory-controls .btn:hover { background: #004a96; }
+.inventory-controls .btn-success { background: #1c7430; }
+.inventory-controls .btn-success:hover { background: #155b25; }
+.stock-table .btn:not(.btn-warning):not(.btn-consume) { background: #005ab8; }
+.stock-table .btn:not(.btn-warning):not(.btn-consume):hover { background: #004a96; }
+.stock-table .btn-consume { background: #ff9800; color: #243746; }
+.stock-table .btn-consume:hover { background: #ea8700; }
+.stock-table .btn-warning:hover { background: #e5ac00; color: #243746; }
+.view-heading, .inventory-toolbar, .toolbar-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.75rem;
+}
+.view-heading h2 { font-size: 1.25rem; line-height: 1.4; overflow-wrap: anywhere; }
+.inventory-nav, .management-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.inventory-nav .btn { background: #eef2f6; color: #243746; }
+.inventory-nav .btn:hover { background: #dbe4ed; }
+.inventory-nav .btn.is-active { background: #005ab8; color: white; }
+.management-menu { margin-top: 0.75rem; }
+.management-menu summary { cursor: pointer; font-weight: 600; padding: 0.5rem 0; width: fit-content; }
+.inventory-filters { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-top: 1.25rem; }
+.filter-field { flex: 1 1 240px; min-width: 0; }
+.filter-field label, .store-search label { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+.inventory-filters input, .inventory-filters select, .store-search input {
+    width: 100%; min-width: 0; padding: 0.6rem 0.75rem; border: 1px solid #778899;
+    border-radius: 4px; color: #243746; background: white; font: inherit;
+}
+.inventory-filters input::placeholder, .store-search input::placeholder { color: #596774; opacity: 1; }
+.inventory-toolbar { margin-top: 1rem; }
+.inventory-toolbar p, .store-search p { color: #465561; font-size: 0.9rem; }
+.store-search { padding: 1rem; max-width: 650px; }
+.stock-empty { padding: 1.5rem; text-align: center; color: #465561; }
+.stock-empty .btn { margin-top: 0.5rem; }
+.refresh-warning { margin-top: 0.75rem; color: #704b00; }
+.stock-table td { overflow-wrap: anywhere; }
+.stock-table td[data-label="Quantity"] { font-variant-numeric: tabular-nums; }
+.stock-table td[data-label="Actions"] .btn { margin: 0.2rem 0; }
+.inventory-controls .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.inventory-controls :focus-visible, .store-search :focus-visible, .stock-table .btn:focus-visible {
+    outline: 3px solid #005ab8; outline-offset: 3px;
+}
+@media (max-width: 768px) {
+    .inventory-nav .btn { flex: 1 1 130px; }
+    .inventory-filters { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .inventory-filters .btn, .inventory-filters select { width: 100%; }
+    .inventory-controls .btn, .management-menu summary, .stock-table .btn { min-height: 44px; }
+    .inventory-toolbar { align-items: flex-start; }
+    .toolbar-actions { justify-content: flex-start; }
+    .inventory-table { max-width: 100%; min-width: 0; }
+    .stock-table { display: block; width: 100%; min-width: 0; font-size: 1rem; }
+    .stock-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .stock-table tbody { display: block; }
+    .stock-table tr { display: block; padding: 0.75rem 1rem; border-bottom: 1px solid #d5dde5; }
+    .stock-table td { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 0.75rem; padding: 0.35rem 0; border: 0; white-space: normal; }
+    .stock-table td::before { content: attr(data-label); font-size: 0.85rem; font-weight: 600; color: #465561; }
+    .stock-cell-value { min-width: 0; }
+    .stock-table td[data-label="Actions"] { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .stock-table td[data-label="Actions"]::before { flex-basis: 100%; }
+    .stock-table td[data-label="Actions"] .stock-cell-value { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .stock-table .store-tag, .stock-table .wo-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+    .store-search input { min-height: 44px; font-size: 16px; }
 }
 
 /* Tablet improvements */
