@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
     <link rel="stylesheet" href="mystyle.css">
-    <script src="script.js?v=20261005-balance-import" defer></script>
+    <script src="script.js?v=20261005-transfer-receipts" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -108,6 +108,38 @@
                     <div>My Parts</div>
                 </div>
             </div>
+
+            <section class="inventory-table" style="margin-bottom:1rem;">
+                <div style="padding:1rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0;">In-transit transfers</h3>
+                        <p style="margin:0.5rem 0;">Stock becomes available at the destination after physical receipt is confirmed.</p>
+                        <span>Units in transit: <strong x-text="stats.in_transit_quantity || 0"></strong></span>
+                    </div>
+                    <button class="btn btn-sm" @click="refreshTransfers()" :disabled="loading">Refresh transfers</button>
+                </div>
+                <div style="overflow-x:auto;" x-show="pendingTransfers.length > 0">
+                    <table>
+                        <thead><tr><th>Dispatched</th><th>Part</th><th>Qty</th><th>From</th><th>To</th><th>Sender</th><th>WO#</th><th>Confirmation</th></tr></thead>
+                        <tbody>
+                            <template x-for="transfer in pendingTransfers" :key="transfer.id">
+                                <tr>
+                                    <td x-text="new Date(transfer.created_at).toLocaleString()"></td>
+                                    <td x-text="transfer.part_number"></td><td x-text="transfer.quantity"></td>
+                                    <td x-text="transfer.from_store_name"></td><td x-text="transfer.to_store_name"></td>
+                                    <td x-text="transfer.created_by_name"></td><td x-text="transfer.work_order || '-'"></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" x-show="transfer.can_receive" @click="confirmTransfer(transfer,'receive')" :disabled="loading">Confirm receipt</button>
+                                        <button class="btn btn-sm" x-show="transfer.can_return" @click="confirmTransfer(transfer,'return')" :disabled="loading">Confirm returned to source</button>
+                                        <span x-show="!transfer.can_receive && !transfer.can_return">Awaiting recipient or sender</span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <p x-show="pendingTransfers.length === 0" style="padding:0 1rem 1rem;">No transfers awaiting receipt.</p>
+            </section>
 
             <!-- Controls -->
             <div x-show="!loading" class="controls">
@@ -501,7 +533,7 @@
                             <th>From</th>
                             <th>To</th>
                             <th>WO#</th>
-                            <th>By</th>
+                            <th>By</th><th>Transfer status / confirmation</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -518,9 +550,8 @@
                                 <td x-text="movement.work_order || '-'"></td>
                                 <td x-text="movement.created_by_name"></td>
                                 <td>
-                                    <span class="wo-tag" 
-                                        :style="movement.movement_type === 'consume' ? 'background: #fff3cd; color: #856404; border: 1px solid #ffc107;' : ''"
-                                        x-text="movement.movement_type"></span>
+                                    <span x-text="movement.transfer_status || '-'"></span>
+                                    <span x-show="movement.completed_at" x-text="(movement.completed_by_name || '') + ' — ' + new Date(movement.completed_at).toLocaleString()"></span>
                                 </td>
                             </tr>
                         </template>
@@ -1514,7 +1545,8 @@
             <!-- Transfer Stock Modal -->
             <div x-show="showTransferModal" class="modal" @click.outside="showTransferModal = false">
                 <div class="modal-content">
-                    <h3>Transfer Stock</h3>
+                    <h3>Dispatch Stock</h3>
+                    <p>The destination can use these parts only after confirming physical receipt.</p>
                     <form @submit.prevent="transferStock()">
                         <div class="form-group">
                             <label>Destination Store</label>
@@ -1532,7 +1564,7 @@
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showTransferModal = false">Cancel</button>
                             <button type="submit" class="btn btn-warning" :disabled="loading">
-                                <span x-show="!loading">Transfer</span>
+                                <span x-show="!loading">Dispatch</span>
                                 <span x-show="loading">Transferring...</span>
                             </button>
                         </div>

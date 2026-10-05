@@ -94,7 +94,9 @@ def test_valid_stock_workflow(api):
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'TEST','Test','test',0)")
     assert client.post('/api/inventory/add', json={'part_id': 999, 'store_id': 999, 'quantity': 10}).status_code == 200
     iid = sqlite3.connect(db).execute('SELECT id FROM inventory WHERE part_id=999').fetchone()[0]
-    assert client.post('/api/inventory/transfer', json={'inventory_id': iid, 'to_store_id': 998, 'quantity': 3}).status_code == 200
+    transfer = client.post('/api/inventory/transfer', json={'inventory_id': iid, 'to_store_id': 998, 'quantity': 3})
+    assert transfer.status_code == 200
+    assert client.post(f"/api/inventory/transfers/{transfer.json()['transfer_id']}/receive", json={'confirmed':True}).status_code == 200
     assert client.post('/api/inventory/consume', json={'inventory_id': iid, 'quantity': 2, 'work_order_number': 'TEST-WO'}).status_code == 200
     assert client.put('/api/inventory/update', json={'inventory_id': iid, 'new_quantity': 0}).status_code == 200
     with sqlite3.connect(db) as conn:
@@ -160,7 +162,10 @@ def test_engineer_can_deliver_from_own_store_to_other_engineer(api):
         conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(999,'Mine','car',3),(998,'Other','car',4)")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'DELIVERY','Delivery Test','test',0)")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,10)')
-    assert client.post('/api/inventory/transfer', json={'inventory_id':9999,'to_store_id':998,'quantity':2}).status_code == 200
+    transfer = client.post('/api/inventory/transfer', json={'inventory_id':9999,'to_store_id':998,'quantity':2})
+    assert transfer.status_code == 200
+    current['id'] = 4
+    assert client.post(f"/api/inventory/transfers/{transfer.json()['transfer_id']}/receive",json={'confirmed':True}).status_code == 200
     with sqlite3.connect(db) as conn:
         assert conn.execute('SELECT quantity FROM inventory WHERE store_id=999 AND part_id=999').fetchone()[0] == 8
         assert conn.execute('SELECT quantity FROM inventory WHERE store_id=998 AND part_id=999').fetchone()[0] == 2
@@ -234,7 +239,9 @@ def test_repeated_receipts_and_transfers_reuse_inventory_row(api, work_order):
         assert len(rows) == 2
         source_id = next(row[0] for row in rows if row[1] == 999)
     for _ in range(2):
-        assert client.post('/api/inventory/transfer',json={'inventory_id':source_id,'to_store_id':998,'quantity':3}).status_code == 200
+        transfer = client.post('/api/inventory/transfer',json={'inventory_id':source_id,'to_store_id':998,'quantity':3})
+        assert transfer.status_code == 200
+        assert client.post(f"/api/inventory/transfers/{transfer.json()['transfer_id']}/receive",json={'confirmed':True}).status_code == 200
     with sqlite3.connect(db) as conn:
         assert conn.execute('SELECT store_id,quantity FROM inventory WHERE part_id=999 ORDER BY store_id').fetchall() == [(998,8),(999,9)]
         assert conn.execute('SELECT COUNT(*) FROM movements WHERE part_id=999').fetchone()[0] == 5

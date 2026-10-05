@@ -18,6 +18,10 @@ def restore_database(upload, live, actor_id):
             raise ValueError('Uploaded database failed its integrity check')
         if source.execute("SELECT 1 FROM sqlite_master WHERE type IN ('trigger','view') OR upper(sql) LIKE '%VIRTUAL TABLE%'").fetchone():
             raise ValueError('Uploaded database contains unsupported schema objects')
+        # Upgrade only the known additive transfer schema on the temporary upload.
+        if target.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_transfers'").fetchone() and not source.execute("SELECT 1 FROM sqlite_master WHERE name='stock_transfers'").fetchone():
+            from transfer_schema import ensure_transfer_schema
+            ensure_transfer_schema(source)
         # Match the running application schema before copying any data.
         def schema(connection):
             return {(kind, name, table, ' '.join((sql or '').split()))
