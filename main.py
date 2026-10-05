@@ -39,6 +39,7 @@ from itsdangerous import URLSafeTimedSerializer
 
 
 import shutil
+from transfer_schema import ensure_transfer_schema
 
 # setup password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -257,6 +258,7 @@ def init_db():
 
     if "notes" not in movement_columns:
         cursor.execute("ALTER TABLE movements ADD COLUMN notes TEXT")
+    ensure_transfer_schema(conn)
     # Activity Logs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS activity_logs (
@@ -1041,6 +1043,9 @@ class UpdatePartRequest(BaseModel):
 
 
 class MovementResponse(BaseModel):
+    transfer_status: Optional[str] = None
+    completed_by_name: Optional[str] = None
+    completed_at: Optional[str] = None
     id: int
     from_store_name: Optional[str]
     to_store_name: Optional[str]
@@ -1055,6 +1060,11 @@ class MovementResponse(BaseModel):
 class UpdateStockRequest(BaseModel):
     inventory_id: int
     new_quantity: int = Field(ge=0, strict=True)
+
+
+class TransferConfirmationRequest(BaseModel):
+    confirmed: bool = Field(strict=True)
+    notes: Optional[str] = Field(default=None, max_length=1000)
 
 
 class TransferStockRequest(BaseModel):
@@ -1092,6 +1102,7 @@ class WorkOrderResponse(BaseModel):
 
 
 class StatsResponse(BaseModel):
+    in_transit_quantity: int = 0
     total_parts: int
     total_stores: int
     low_stock: int
@@ -2138,9 +2149,11 @@ async def get_stats(user_id: int = Depends(get_current_user), request: Request =
     )
     my_parts = cursor.fetchone()[0]
 
+    in_transit_quantity = conn.execute("SELECT COALESCE(SUM(m.quantity),0) FROM stock_transfers t JOIN movements m ON m.id=t.movement_id WHERE t.status='in_transit'").fetchone()[0]
     conn.close()
 
     return {
+        "in_transit_quantity": in_transit_quantity,
         "total_parts": total_parts,
         "total_stores": total_stores,
         "low_stock": low_stock,
@@ -2375,95 +2388,114 @@ async def transfer_stock(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    """Transfer stock between stores"""
-    conn = get_db_connection()
-    conn.execute("BEGIN IMMEDIATE")
-    cursor = conn.cursor()
+    """Dispatch stock; destination stock becomes available only on receipt."""
+    with stock_write_transaction() as conn:
+        item = conn.execute("SELECT i.*,s.type,s.assigned_user_id,p.part_number FROM inventory i JOIN stores s ON s.id=i.store_id JOIN parts p ON p.id=i.part_id WHERE i.id=?",
+                            (request_data.inventory_id,)).fetchone()
+        if not item:
+            raise HTTPException(status_code=404, detail="Source inventory item not found")
+        require_stock_access(conn,user_id,item['type'],item['assigned_user_id'])
+        if item['store_id']==request_data.to_store_id:
+            raise HTTPException(status_code=400, detail="Source and destination stores must differ")
+        if item['quantity']<request_data.quantity:
+            raise HTTPException(status_code=400, detail="Insufficient quantity in source store")
+        if not conn.execute('SELECT id FROM stores WHERE id=?',(request_data.to_store_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Destination store not found")
+        remaining=item['quantity']-request_data.quantity
+        if remaining:
+            conn.execute('UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(remaining,item['id']))
+        else:
+            conn.execute('DELETE FROM inventory WHERE id=?',(item['id'],))
+        mid=conn.execute("INSERT INTO movements(from_store_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes) VALUES(?,?,?,?,'transfer',?,?,?)",
+                         (item['store_id'],request_data.to_store_id,item['part_id'],request_data.quantity,item['work_order_id'],user_id,'Dispatched; awaiting receipt')).lastrowid
+        conn.execute('INSERT INTO stock_transfers(movement_id,source_min_threshold) VALUES(?,?)',(mid,item['min_threshold'] or 0))
+        return {'success':True,'transfer_id':mid,'message':f"Dispatched {request_data.quantity} {item['part_number']}; awaiting receipt"}
 
-    # Get source inventory item
-    cursor.execute(
-        """
-        SELECT i.*, s.type as from_store_type, s.assigned_user_id as from_store_owner, p.part_number
-        FROM inventory i
-        JOIN stores s ON i.store_id = s.id
-        JOIN parts p ON i.part_id = p.id
-        WHERE i.id = ?
-    """,
-        (request_data.inventory_id,),
-    )
-    source_item = cursor.fetchone()
 
-    if not source_item:
+def require_no_pending_transfer(conn, kind, identifier):
+    predicates={'part':'m.part_id=?','store':'(m.from_store_id=? OR m.to_store_id=?)',
+                'user':'(m.created_by=? OR s1.assigned_user_id=? OR s2.assigned_user_id=?)'}
+    values=(identifier,)*(1 if kind=='part' else 2 if kind=='store' else 3)
+    row=conn.execute("SELECT 1 FROM stock_transfers t JOIN movements m ON m.id=t.movement_id JOIN stores s1 ON s1.id=m.from_store_id JOIN stores s2 ON s2.id=m.to_store_id WHERE t.status='in_transit' AND "+predicates[kind]+" LIMIT 1",values).fetchone()
+    if row:
+        raise HTTPException(status_code=400,detail='Cannot delete a record used by an in-transit transfer. Complete the receipt or physical return first')
+
+
+def transfer_permissions(actor, row, user_id):
+    admin=actor and actor['role'] in ('admin','superadmin')
+    receive=bool(admin or row['dest_owner']==user_id or (row['dest_owner'] is None and row['dest_type']=='central'))
+    returned=bool(admin or row['created_by']==user_id or row['source_owner']==user_id)
+    return receive,returned
+
+
+@app.get('/api/inventory/transfers')
+async def pending_transfers(user_id: int = Depends(get_current_user)):
+    conn=get_db_connection()
+    try:
+        actor=conn.execute('SELECT role FROM users WHERE id=?',(user_id,)).fetchone()
+        rows=conn.execute("""SELECT m.id,m.quantity,m.created_at,m.created_by,m.from_store_id,m.to_store_id,
+            p.part_number,p.description,s1.name AS from_store_name,s2.name AS to_store_name,
+            s1.assigned_user_id AS source_owner,s2.assigned_user_id AS dest_owner,s2.type AS dest_type,
+            u.name AS created_by_name,wo.work_order_number AS work_order,t.status
+            FROM stock_transfers t JOIN movements m ON m.id=t.movement_id
+            JOIN parts p ON p.id=m.part_id JOIN stores s1 ON s1.id=m.from_store_id
+            JOIN stores s2 ON s2.id=m.to_store_id JOIN users u ON u.id=m.created_by
+            LEFT JOIN work_orders wo ON wo.id=m.work_order_id
+            WHERE t.status='in_transit' ORDER BY m.created_at,m.id""").fetchall()
+        result=[]
+        for row in rows:
+            item=dict(row)
+            item['can_receive'],item['can_return']=transfer_permissions(actor,row,user_id)
+            result.append(item)
+        return result
+    finally:
         conn.close()
-        raise HTTPException(status_code=404, detail="Source inventory item not found")
 
-    require_stock_access(conn, user_id, source_item["from_store_type"], source_item["from_store_owner"])
 
-    if source_item["store_id"] == request_data.to_store_id:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Source and destination stores must differ")
+def complete_transfer(transfer_id, data, user_id, action):
+    if not data.confirmed:
+        raise HTTPException(status_code=400,detail='Physical receipt or return must be confirmed')
+    with stock_write_transaction() as conn:
+        row=conn.execute("""SELECT m.*,t.status,t.source_min_threshold,s1.assigned_user_id AS source_owner,
+            s2.assigned_user_id AS dest_owner,s2.type AS dest_type
+            FROM stock_transfers t JOIN movements m ON m.id=t.movement_id
+            JOIN stores s1 ON s1.id=m.from_store_id JOIN stores s2 ON s2.id=m.to_store_id
+            WHERE t.movement_id=?""",(transfer_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404,detail='Pending transfer not found')
+        actor=conn.execute('SELECT role FROM users WHERE id=?',(user_id,)).fetchone()
+        receive,returned=transfer_permissions(actor,row,user_id)
+        if not (receive if action=='received' else returned):
+            raise HTTPException(status_code=403,detail='Permission denied for this confirmation')
+        if row['status']!='in_transit':
+            raise HTTPException(status_code=409,detail='Transfer is already completed; stock was not changed')
+        store_id=row['to_store_id'] if action=='received' else row['from_store_id']
+        inventory_id=add_inventory_quantity(conn,store_id,row['part_id'],row['quantity'],row['work_order_id'])
+        if action=='returned':
+            # Ordinary restocking may have recreated the row with its default 0.
+            # Retain any nonzero threshold configured since dispatch.
+            conn.execute('UPDATE inventory SET min_threshold=? WHERE id=? AND min_threshold=0',
+                         (row['source_min_threshold'],inventory_id))
+        conn.execute('UPDATE stock_transfers SET status=?,completed_by=?,completed_at=CURRENT_TIMESTAMP,completion_note=? WHERE movement_id=?',
+                     (action,user_id,data.notes,transfer_id))
+        if action=='returned':
+            conn.execute("INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes) VALUES(?,?,?,'return',?,?,?)",
+                         (store_id,row['part_id'],row['quantity'],row['work_order_id'],user_id,f'Physical return confirmed for transfer #{transfer_id}'))
+        return {'success':True,'message':'Receipt confirmed; destination stock is available' if action=='received' else 'Physical return confirmed; source stock restored'}
 
-    if source_item["quantity"] < request_data.quantity:
-        conn.close()
-        raise HTTPException(
-            status_code=400, detail="Insufficient quantity in source store"
-        )
 
-    # Get destination store
-    cursor.execute(
-        "SELECT type, assigned_user_id FROM stores WHERE id = ?",
-        (request_data.to_store_id,),
-    )
-    dest_store = cursor.fetchone()
+@app.post('/api/inventory/transfers/{transfer_id}/receive')
+@log_endpoint(action='receive_transfer',resource_type='inventory')
+async def receive_transfer(transfer_id: int,data: TransferConfirmationRequest,
+    user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
+    return complete_transfer(transfer_id,data,user_id,'received')
 
-    if not dest_store:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Destination store not found")
 
-    # Update source inventory
-    new_source_quantity = source_item["quantity"] - request_data.quantity
-    if new_source_quantity == 0:
-        cursor.execute(
-            "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
-        )
-    else:
-        cursor.execute(
-            """
-            UPDATE inventory 
-            SET quantity = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """,
-            (new_source_quantity, request_data.inventory_id),
-        )
-
-    add_inventory_quantity(
-        conn, request_data.to_store_id, source_item["part_id"],
-        request_data.quantity, source_item["work_order_id"],
-    )
-
-    # Log movement
-    cursor.execute(
-        """
-        INSERT INTO movements (from_store_id, to_store_id, part_id, quantity, movement_type, work_order_id, created_by)
-        VALUES (?, ?, ?, ?, 'transfer', ?, ?)
-    """,
-        (
-            source_item["store_id"],
-            request_data.to_store_id,
-            source_item["part_id"],
-            request_data.quantity,
-            source_item["work_order_id"],
-            user_id,
-        ),
-    )
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "success": True,
-        "message": f"Transferred {request_data.quantity} {source_item['part_number']} successfully",
-    }
+@app.post('/api/inventory/transfers/{transfer_id}/return')
+@log_endpoint(action='return_transfer',resource_type='inventory')
+async def return_transfer(transfer_id: int,data: TransferConfirmationRequest,
+    user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
+    return complete_transfer(transfer_id,data,user_id,'returned')
 
 
 @app.get("/api/work-orders", response_model=List[WorkOrderResponse])
@@ -2686,37 +2718,35 @@ async def delete_user(
     request: Request = None,
 ):
     """Delete user (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with stock_write_transaction() as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    try:
-        require_user_management(user_id, target_user_id=target_user_id)
-    except HTTPException:
-        conn.close()
-        raise
+        # Check if current user is admin
+        try:
+            require_user_management(user_id, target_user_id=target_user_id)
+        except HTTPException:
+            raise
 
-    # Don't allow deleting yourself
-    if target_user_id == user_id:
-        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        # Don't allow deleting yourself
+        if target_user_id == user_id:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
 
-    # Check if user exists
-    cursor.execute("SELECT name FROM users WHERE id = ?", (target_user_id,))
-    target_user = cursor.fetchone()
+        # Check if user exists
+        cursor.execute("SELECT name FROM users WHERE id = ?", (target_user_id,))
+        target_user = cursor.fetchone()
 
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Delete user (this will cascade and update related records)
-    cursor.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
+        # Delete user (this will cascade and update related records)
+        require_no_pending_transfer(conn, 'user', target_user_id)
+        cursor.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": f"User {target_user['name']} deleted successfully",
-    }
+        return {
+            "success": True,
+            "message": f"User {target_user['name']} deleted successfully",
+        }
 
 
 # Store Management
@@ -2921,42 +2951,41 @@ async def delete_store(
     request: Request = None,
 ):
     """Delete store (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with stock_write_transaction() as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
+        # Check if current user is admin
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if store exists and get name
-    cursor.execute("SELECT name FROM stores WHERE id = ?", (store_id,))
-    store = cursor.fetchone()
+        # Check if store exists and get name
+        cursor.execute("SELECT name FROM stores WHERE id = ?", (store_id,))
+        store = cursor.fetchone()
 
-    if not store:
-        raise HTTPException(status_code=404, detail="Store not found")
+        if not store:
+            raise HTTPException(status_code=404, detail="Store not found")
 
-    # Check if store has inventory
-    cursor.execute(
-        "SELECT COUNT(*) as count FROM inventory WHERE store_id = ?", (store_id,)
-    )
-    inventory_count = cursor.fetchone()["count"]
-
-    if inventory_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete store with {inventory_count} inventory items. Please transfer or remove inventory first.",
+        # Check if store has inventory
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM inventory WHERE store_id = ?", (store_id,)
         )
+        inventory_count = cursor.fetchone()["count"]
 
-    # Delete store
-    cursor.execute("DELETE FROM stores WHERE id = ?", (store_id,))
+        if inventory_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete store with {inventory_count} inventory items. Please transfer or remove inventory first.",
+            )
 
-    conn.commit()
-    conn.close()
+        # Delete store
+        require_no_pending_transfer(conn, 'store', store_id)
+        cursor.execute("DELETE FROM stores WHERE id = ?", (store_id,))
 
-    return {"success": True, "message": f"Store {store['name']} deleted successfully"}
+
+        return {"success": True, "message": f"Store {store['name']} deleted successfully"}
 
 
 # ============ STORE TYPE MANAGEMENT ============
@@ -3409,45 +3438,44 @@ async def delete_part(
     request: Request = None,
 ):
     """Delete part (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with stock_write_transaction() as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
+        # Check if current user is admin
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if part exists and get details
-    cursor.execute("SELECT part_number FROM parts WHERE id = ?", (part_id,))
-    part = cursor.fetchone()
+        # Check if part exists and get details
+        cursor.execute("SELECT part_number FROM parts WHERE id = ?", (part_id,))
+        part = cursor.fetchone()
 
-    if not part:
-        raise HTTPException(status_code=404, detail="Part not found")
+        if not part:
+            raise HTTPException(status_code=404, detail="Part not found")
 
-    # Check if part has inventory
-    cursor.execute(
-        "SELECT COUNT(*) as count FROM inventory WHERE part_id = ?", (part_id,)
-    )
-    inventory_count = cursor.fetchone()["count"]
-
-    if inventory_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete part with {inventory_count} inventory records. Please remove inventory first.",
+        # Check if part has inventory
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM inventory WHERE part_id = ?", (part_id,)
         )
+        inventory_count = cursor.fetchone()["count"]
 
-    # Delete part
-    cursor.execute("DELETE FROM parts WHERE id = ?", (part_id,))
+        if inventory_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete part with {inventory_count} inventory records. Please remove inventory first.",
+            )
 
-    conn.commit()
-    conn.close()
+        # Delete part
+        require_no_pending_transfer(conn, 'part', part_id)
+        cursor.execute("DELETE FROM parts WHERE id = ?", (part_id,))
 
-    return {
-        "success": True,
-        "message": f"Part {part['part_number']} deleted successfully",
-    }
+
+        return {
+            "success": True,
+            "message": f"Part {part['part_number']} deleted successfully",
+        }
 
 
 # Movement History
@@ -3476,8 +3504,12 @@ async def get_movements(
             m.movement_type,
             wo.work_order_number as work_order,
             u.name as created_by_name,
-            m.created_at
+            m.created_at,
+            CASE WHEN m.movement_type='transfer' THEN COALESCE(t.status,'completed') END AS transfer_status,
+            u2.name AS completed_by_name,t.completed_at
         FROM movements m
+        LEFT JOIN stock_transfers t ON t.movement_id=m.id
+        LEFT JOIN users u2 ON u2.id=t.completed_by
         LEFT JOIN stores s1 ON m.from_store_id = s1.id
         LEFT JOIN stores s2 ON m.to_store_id = s2.id
         JOIN parts p ON m.part_id = p.id

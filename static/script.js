@@ -143,6 +143,7 @@ function inventoryApp() {
         workOrders: [],
         users: [],
         movements: [],
+        pendingTransfers: [],
         filteredInventory: [],
         storeTypes: [],
         csrfToken: '',
@@ -458,6 +459,7 @@ function inventoryApp() {
                     this.loadParts(),
                     this.loadInventory(),
                     this.loadMovements(),
+                    this.loadPendingTransfers(),
                     this.loadEquipment(),
                     this.loadEquipmentStats(),
                     this.loadCalibrationSettings(),
@@ -487,7 +489,8 @@ function inventoryApp() {
                     total_parts: response.total_parts || 0,
                     total_stores: response.total_stores || 0,
                     low_stock: response.low_stock || 0,
-                    my_parts: response.my_parts || 0
+                    my_parts: response.my_parts || 0,
+                    in_transit_quantity: response.in_transit_quantity || 0
                 };
                 
                 console.log('✅ Stats updated:', this.stats); // Debug log
@@ -531,6 +534,40 @@ function inventoryApp() {
             if (this.currentUser?.role === 'admin') {
                 this.users = await this.apiCall('/users');
             }
+        },
+
+        async loadPendingTransfers() {
+            this.pendingTransfers = await this.apiCall('/inventory/transfers');
+        },
+
+        async refreshTransfers() {
+            this.error = '';
+            try {
+                await this.loadPendingTransfers();
+                await this.loadStats();
+            } catch (error) { this.error = 'Failed to refresh transfers: ' + error.message; }
+        },
+
+        async confirmTransfer(transfer, action) {
+            if (this.loading || (action === 'receive' ? !transfer.can_receive : !transfer.can_return)) return;
+            const message = action === 'receive'
+                ? `Confirm physical receipt of all ${transfer.quantity} x ${transfer.part_number} at ${transfer.to_store_name}?`
+                : `Confirm all ${transfer.quantity} x ${transfer.part_number} have physically returned to ${transfer.from_store_name}? Source stock will be restored.`;
+            if (!confirm(message)) return;
+            this.loading = true;
+            this.error = '';
+            try {
+                const result = await this.apiCall(`/inventory/transfers/${transfer.id}/${action}`, {
+                    method:'POST', body:JSON.stringify({confirmed:true})
+                });
+                this.successMessage = result.message;
+                await this.loadPendingTransfers();
+                await this.loadInventory();
+                if (this.selectedStore) this.storeInventory = this.inventory.filter(i=>i.store_id===this.selectedStore.id);
+                await this.loadMovements();
+                await this.loadStats();
+            } catch (error) { this.error = 'Confirmation failed: ' + error.message; }
+            finally { this.loading = false; }
         },
 
         async loadMovements() {
@@ -1167,7 +1204,7 @@ exportStoresCSV() {
 },
 
 exportMovementsCSV() {
-    const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By'];
+    const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By', 'Transfer Status', 'Confirmed By', 'Confirmed At'];
     const rows = this.movements.map(m => [
         new Date(m.created_at).toLocaleString(),
         m.movement_type,
@@ -1176,7 +1213,7 @@ exportMovementsCSV() {
         m.from_store_name || '-',
         m.to_store_name || '-',
         m.work_order || '-',
-        m.created_by_name
+        m.created_by_name, m.transfer_status || '', m.completed_by_name || '', m.completed_at || ''
     ]);
     
     this.downloadCSV(headers, rows, `movement_history_${new Date().toISOString().split('T')[0]}.csv`);
@@ -1284,7 +1321,7 @@ exportComprehensiveReport() {
     report += `Total Stores: ${this.stats.total_stores}\n`;
     report += `Low Stock Alerts: ${this.stats.low_stock}\n`;
     report += `Total Inventory Items: ${this.inventory.length}\n`;
-    report += `Total Parts Quantity: ${this.inventory.reduce((sum, i) => sum + i.quantity, 0)}\n\n`;
+    report += `Available Stock Quantity: ${this.inventory.reduce((sum, i) => sum + i.quantity, 0)}\nIn Transit Quantity: ${this.stats.in_transit_quantity || 0}\n\n`;
     
     // Parts Catalog
     report += `\nPARTS CATALOG\n`;
@@ -1325,9 +1362,9 @@ exportComprehensiveReport() {
     
     // Recent Movements
     report += `\n\nRECENT MOVEMENTS (Last 50)\n`;
-    report += `Date/Time,Type,Part,Qty,From,To,Work Order,By\n`;
+    report += `Date/Time,Type,Part,Qty,From,To,Work Order,By,Transfer Status,Confirmed By,Confirmed At\n`;
     this.movements.slice(0, 50).forEach(m => {
-        report += `"${new Date(m.created_at).toLocaleString()}",${m.movement_type},${m.part_number},${m.quantity},"${m.from_store_name || '-'}","${m.to_store_name || '-'}","${m.work_order || '-'}","${m.created_by_name}"\n`;
+        report += `"${new Date(m.created_at).toLocaleString()}",${m.movement_type},${m.part_number},${m.quantity},"${m.from_store_name || '-'}","${m.to_store_name || '-'}","${m.work_order || '-'}","${m.created_by_name}","${m.transfer_status || '-'}","${m.completed_by_name || '-'}","${m.completed_at || '-'}"\n`;
     });
     
     // Download the report
@@ -1482,7 +1519,7 @@ exportComprehensiveReport() {
             this.successMessage = '';
             
             try {
-                await this.apiCall('/inventory/transfer', {
+                const result = await this.apiCall('/inventory/transfer', {
                     method: 'POST',
                     body: JSON.stringify({
                         inventory_id: parseInt(this.transferForm.inventory_id),
@@ -1491,12 +1528,13 @@ exportComprehensiveReport() {
                     })
                 });
                 
-                this.successMessage = 'Stock transferred successfully!';
+                this.successMessage = result.message;
                 this.showTransferModal = false;
                 this.transferForm = { inventory_id: '', to_store_id: '', quantity: '' };
                 
                 await this.loadInventory();
-                await this.loadStats();  
+                await this.loadStats();
+                await this.loadPendingTransfers();
                 
                 setTimeout(() => this.successMessage = '', 3000);
                 
@@ -2760,4 +2798,3 @@ exportComprehensiveReport() {
         }
     }
 }
-
