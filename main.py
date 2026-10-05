@@ -201,14 +201,15 @@ def require_archive_admin(conn,user_id):
         raise HTTPException(status_code=403,detail='Admin access required')
 
 
+from backend.services.stock_access import (
+    require_active_record as _require_active_record,
+    require_stock_access as _require_stock_access,
+)
+from backend.services.inventory import add_inventory_quantity as _add_inventory_quantity
+
+
 def require_active_record(conn,table,identifier):
-    if table not in ('users','stores','parts'):
-        raise ValueError('Unsupported active record type')
-    row=conn.execute(f'SELECT archived_at FROM {table} WHERE id=?',(identifier,)).fetchone()
-    if not row:
-        raise HTTPException(status_code=400,detail=f'{table} record does not exist')
-    if row['archived_at'] is not None:
-        raise HTTPException(status_code=400,detail=f'{table} record is archived; restore it first')
+    return _require_active_record(conn,table,identifier)
 
 
 def archive_record(table,identifier,user_id,restore=False):
@@ -266,56 +267,20 @@ def require_user_management(user_id: int, requested_role=None, target_user_id=No
 
 
 def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
-    """Reuse one matching row, including NULL allocations, under a write lock."""
-    if not conn.in_transaction:
-        conn.execute("BEGIN IMMEDIATE")
-    require_active_record(conn,"stores",store_id)
-    require_active_record(conn,"parts",part_id)
-    row = conn.execute(
-        "SELECT id FROM inventory WHERE store_id = ? AND part_id = ? "
-        "AND CAST(work_order_id AS NUMERIC) IS CAST(? AS NUMERIC) ORDER BY id LIMIT 1",
-        (store_id, part_id, work_order_id),
-    ).fetchone()
-    if row:
-        conn.execute(
-            "UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (quantity, row["id"]),
-        )
-        return row["id"]
-    return conn.execute(
-        "INSERT INTO inventory(store_id,part_id,quantity,work_order_id) VALUES(?,?,?,?)",
-        (store_id, part_id, quantity, work_order_id),
-    ).lastrowid
+    return _add_inventory_quantity(conn,store_id,part_id,quantity,work_order_id)
+
+
+from backend.services.stock_transactions import write_stock_transaction
 
 
 @contextmanager
 def stock_write_transaction():
-    """Lock before reading stock; commit the balance and movement together."""
-    conn = get_db_connection()
-    try:
-        conn.execute("BEGIN IMMEDIATE")
+    """Use the current application connection factory for atomic stock writes."""
+    with write_stock_transaction(get_db_connection) as conn:
         yield conn
-        conn.commit()
-    except Exception as exc:
-        try:
-            conn.rollback()
-        except sqlite3.ProgrammingError:
-            # Permission rejection closes the shared connection.
-            pass
-        if isinstance(exc, sqlite3.OperationalError) and any(word in str(exc).lower() for word in ("locked", "busy")):
-            raise HTTPException(status_code=409, detail="Stock is busy; no changes saved. Try again") from exc
-        raise
-    finally:
-        conn.close()
-
 
 def require_stock_access(conn, user_id, store_type, store_owner):
-    actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
-    if actor and (actor["role"] in {"admin", "superadmin"}
-                  or store_owner == user_id or store_type == "central"):
-        return
-    conn.close()
-    raise HTTPException(status_code=403, detail="Permission denied for this store")
+    return _require_stock_access(conn,user_id,store_type,store_owner)
 
 
 def get_security_config() -> dict:
