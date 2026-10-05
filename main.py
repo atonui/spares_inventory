@@ -183,16 +183,17 @@ def get_db_connection():
     return connect_database(DATABASE)
 
 
-def check_admin(user_id: int) -> bool:
-    """Check if the user is an admin"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    if user and user["role"] in {"admin", "superadmin"}:
-        return True
-    return False
+def check_admin(user_id: int, conn=None) -> bool:
+    """Check current authority, borrowing an owning mutation connection."""
+    close = conn is None
+    if close:
+        conn = get_db_connection()
+    try:
+        user = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+        return bool(user and user['role'] in {'admin', 'superadmin'})
+    finally:
+        if close:
+            conn.close()
 
 
 def require_archive_admin(conn,user_id):
@@ -212,13 +213,13 @@ def require_active_record(conn,table,identifier):
     return _require_active_record(conn,table,identifier)
 
 
-def archive_record(table,identifier,user_id,restore=False):
+def archive_record(table,identifier,user_id,restore=False, *, session_token):
     if table not in ('users','stores','parts'):
         raise ValueError('Unsupported archive type')
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, session_token, busy_detail="Stock is busy; no changes saved. Try again") as conn:
         require_archive_admin(conn,user_id)
         if table=='users':
-            require_user_management(user_id,target_user_id=identifier)
+            require_user_management(user_id,target_user_id=identifier,conn=conn)
             if identifier==user_id and not restore:
                 raise HTTPException(status_code=400,detail='Cannot archive your own account')
         row=conn.execute(f'SELECT * FROM {table} WHERE id=?',(identifier,)).fetchone()
@@ -249,15 +250,18 @@ def archive_record(table,identifier,user_id,restore=False):
         return {'success':True,'message':f'Record {"restored" if restore else "archived"}; history preserved'}
 
 
-def require_user_management(user_id: int, requested_role=None, target_user_id=None):
+def require_user_management(user_id: int, requested_role=None, target_user_id=None, *, conn=None):
     """Protect privileged role assignment and existing superadmin accounts."""
-    conn = get_db_connection()
+    close = conn is None
+    if close:
+        conn = get_db_connection()
     try:
         actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
         target = (conn.execute("SELECT role FROM users WHERE id = ?", (target_user_id,)).fetchone()
                   if target_user_id is not None else None)
     finally:
-        conn.close()
+        if close:
+            conn.close()
     if not actor or actor["role"] not in {"admin", "superadmin"}:
         raise HTTPException(status_code=403, detail="Admin access required")
     if actor["role"] != "superadmin" and (
@@ -278,6 +282,18 @@ def stock_write_transaction():
     """Use the current application connection factory for atomic stock writes."""
     with write_stock_transaction(get_db_connection) as conn:
         yield conn
+
+from backend.services.session_access import require_session
+from backend.services.authenticated_transactions import (
+    authenticated_write_transaction as _authenticated_write_transaction,
+    GENERIC_BUSY_DETAIL,
+)
+
+
+def authenticated_write_transaction(user_id: int, session_token: str | None, *, busy_detail=GENERIC_BUSY_DETAIL):
+    return _authenticated_write_transaction(get_db_connection, user_id=user_id,
+        session_token=session_token, busy_detail=busy_detail)
+
 
 def require_stock_access(conn, user_id, store_type, store_owner):
     return _require_stock_access(conn,user_id,store_type,store_owner)
@@ -382,8 +398,15 @@ def log_activity(
     error_message: str = None,
     ip_address: str = None,
     user_agent: str = None,
+    conn=None,
 ):
     """Log user activity to database and audit log file"""
+    if conn is not None:
+        record_activity(conn, user_id=user_id, username=username, action=action,
+            resource_type=resource_type, resource_id=resource_id, details=details,
+            status=status, error_message=error_message, ip_address=ip_address,
+            user_agent=user_agent)
+        return
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -451,10 +474,35 @@ def log_system_event(level: str, component: str, message: str, details: dict = N
         error_logger.error(f"Failed to log system event: {str(e)}")
 
 
+from backend.services.activity import record_activity
+
+
+def log_authenticated_activity(user_id: int, session_token: str | None, **activity):
+    """Best-effort read/maintenance evidence; never write with a stale session."""
+    try:
+        with authenticated_write_transaction(user_id, session_token) as conn:
+            record_activity(conn, user_id=user_id, **activity)
+    except HTTPException:
+        # A completed read remains usable; expired request credentials cannot audit it.
+        return
+    except Exception:
+        error_logger.exception('Failed to record authenticated activity')
+
+
+def _record_mutation_activity(conn, user_id, action, resource_type, result, request):
+    actor = conn.execute('SELECT name FROM users WHERE id=?', (user_id,)).fetchone()
+    details = {k: v for k, v in result.items() if k not in {'password_hash', 'session_token', 'reset_token'}} if isinstance(result, dict) else {}
+    record_activity(conn, user_id=user_id, username=actor['name'] if actor else 'Unknown',
+        action=action, resource_type=resource_type,
+        resource_id=result.get('id') if isinstance(result, dict) else None,
+        details=details, ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get('user-agent', '')[:200] if request else None)
+
+
 # ============ LOGGING DECORATOR ============
 
 
-def log_endpoint(action: str, resource_type: str = None):
+def log_endpoint(action: str, resource_type: str = None, *, transactional: bool = False):
     """Decorator to automatically log API endpoint calls"""
 
     def decorator(func):
@@ -534,10 +582,11 @@ def log_endpoint(action: str, resource_type: str = None):
 
             finally:
                 # Log the activity
-                if user_id and not (status == "success" and action in STOCK_AUDIT_ACTIONS):
+                if user_id and not transactional and not (status == "success" and action in STOCK_AUDIT_ACTIONS):
                     try:
-                        log_activity(
+                        log_authenticated_activity(
                             user_id=user_id,
+                            session_token=request.cookies.get("session_token") if request else None,
                             username=username,
                             action=action,
                             resource_type=resource_type,
@@ -899,55 +948,12 @@ class ConsumeStockRequest(BaseModel):
 
 # Authentication dependency
 async def get_current_user(session_token: str = Cookie(None)):
-    """Enhanced session validation"""
-    if not session_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check session in sessions table
-    cursor.execute(
-        """
-        SELECT s.user_id, s.expires_at, s.id as session_id, u.role, u.name
-        FROM sessions s
-        JOIN users u ON s.user_id = u.id
-        WHERE s.session_token = ? AND s.is_active = 1 AND u.archived_at IS NULL
-    """,
-        (session_token,),
-    )
-
-    session = cursor.fetchone()
-
-    if not session:
-        conn.close()
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Check if session is expired
-    expires_at = datetime.fromisoformat(session["expires_at"])
-    if datetime.utcnow() > expires_at:
-        # Deactivate expired session
-        cursor.execute(
-            "UPDATE sessions SET is_active = 0 WHERE id = ?", (session["session_id"],)
-        )
-        conn.commit()
-        conn.close()
-        raise HTTPException(status_code=401, detail="Session expired")
-
-    # Update last activity
-    cursor.execute(
-        """
-        UPDATE sessions 
-        SET last_activity = CURRENT_TIMESTAMP 
-        WHERE id = ?
-    """,
-        (session["session_id"],),
-    )
-
-    conn.commit()
-    conn.close()
-
-    return session["user_id"]
+    """Validate and update activity within one short writer transaction."""
+    with write_stock_transaction(get_db_connection, busy_detail=GENERIC_BUSY_DETAIL) as conn:
+        session = require_session(conn, session_token)
+        conn.execute('UPDATE sessions SET last_activity=CURRENT_TIMESTAMP WHERE id=?',
+                     (session['session_id'],))
+        return session['user_id']
 
 
 # csrf middleware
@@ -1001,37 +1007,34 @@ async def update_profile(
     request: Request = None,
 ):
     """Update user profile (email)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if user exists
-    cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
-    if not cursor.fetchone():
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
+        # Check if user exists
+        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
 
-    if profile_update.email:
-        # Check if email already exists
-        cursor.execute(
-            "SELECT id FROM users WHERE email = ? AND id != ?",
-            (profile_update.email, user_id),
-        )
-        if cursor.fetchone():
-            conn.close()
-            raise HTTPException(status_code=400, detail="Email already in use")
+        if profile_update.email:
+            # Check if email already exists
+            cursor.execute(
+                "SELECT id FROM users WHERE email = ? AND id != ?",
+                (profile_update.email, user_id),
+            )
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Email already in use")
 
-        cursor.execute(
-            "UPDATE users SET email = ? WHERE id = ?", (profile_update.email, user_id)
-        )
+            cursor.execute(
+                "UPDATE users SET email = ? WHERE id = ?", (profile_update.email, user_id)
+            )
 
-    conn.commit()
 
-    # Get updated user info
-    cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+        # Get updated user info
+        cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    return {"message": "Profile updated successfully", "email": user["email"]}
+        return {"message": "Profile updated successfully", "email": user["email"]}
+
 
 
 @app.post("/api/profile/change-password")
@@ -1042,47 +1045,43 @@ async def change_password(
     request: Request = None,
 ):
     """Change user password"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Get current user
-    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
+        # Get current user
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    if not user:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Verify current password using bcrypt
-    if not verify_password(password_data.current_password, user["password_hash"]):
-        conn.close()
-        logger.error(f"Password verification failed for user {user_id}")
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        # Verify current password using bcrypt
+        if not verify_password(password_data.current_password, user["password_hash"]):
+            logger.error(f"Password verification failed for user {user_id}")
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
 
-    # Validate new password
-    if len(password_data.new_password) < 8:
-        conn.close()
-        raise HTTPException(
-            status_code=400, detail="Password must be at least 8 characters long"
+        # Validate new password
+        if len(password_data.new_password) < 8:
+            raise HTTPException(
+                status_code=400, detail="Password must be at least 8 characters long"
+            )
+
+        # Update password and invalidate session token
+        new_hash = hash_password(password_data.new_password)
+
+        cursor.execute(
+            "UPDATE users SET password_hash = ?, session_token = NULL WHERE id = ?",
+            (new_hash, user_id),
         )
 
-    # Update password and invalidate session token
-    new_hash = hash_password(password_data.new_password)
+        # Deactivate all sessions for this user i.e. force logout from all devices
+        cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
 
-    cursor.execute(
-        "UPDATE users SET password_hash = ?, session_token = NULL WHERE id = ?",
-        (new_hash, user_id),
-    )
 
-    # Deactivate all sessions for this user i.e. force logout from all devices
-    cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
+        logger.info(f"Password changed successfully for user {user_id}")
 
-    conn.commit()
-    conn.close()
+        return {"message": "Password changed successfully. Please login again."}
 
-    logger.info(f"Password changed successfully for user {user_id}")
-
-    return {"message": "Password changed successfully. Please login again."}
 
 
 @app.post("/api/auth/revoke-other-sessions")
@@ -1092,29 +1091,28 @@ async def revoke_other_sessions(
     request: Request = None,
 ):
     # Revoke all sessions except the current one
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    current_token = request.cookies.get("session_token")
+        current_token = request.cookies.get("session_token")
 
-    cursor.execute(
-        """
-        UPDATE sessions 
-        SET is_active = 0 
-        WHERE user_id = ? AND session_token != ? AND is_active = 1
-    """,
-        (user_id, current_token),
-    )
+        cursor.execute(
+            """
+            UPDATE sessions
+            SET is_active = 0
+            WHERE user_id = ? AND session_token != ? AND is_active = 1
+        """,
+            (user_id, current_token),
+        )
 
-    revoked_count = cursor.rowcount
+        revoked_count = cursor.rowcount
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": f"Logged out from {revoked_count} other device(s)",
-    }
+        return {
+            "success": True,
+            "message": f"Logged out from {revoked_count} other device(s)",
+        }
+
 
 
 @app.post("/api/forgot-password")
@@ -1561,27 +1559,25 @@ async def revoke_session(
     request: Request = None,
 ):
     """Revoke a specific session"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Verify session belongs to user
-    cursor.execute(
-        """
-        UPDATE sessions 
-        SET is_active = 0 
-        WHERE id = ? AND user_id = ?
-    """,
-        (session_id, user_id),
-    )
+        # Verify session belongs to user
+        cursor.execute(
+            """
+            UPDATE sessions
+            SET is_active = 0
+            WHERE id = ? AND user_id = ?
+        """,
+            (session_id, user_id),
+        )
 
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Session not found")
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    conn.commit()
-    conn.close()
 
-    return {"success": True, "message": "Session revoked"}
+        return {"success": True, "message": "Session revoked"}
+
 
 
 @app.post("/api/auth/sessions/revoke-all")
@@ -1591,50 +1587,51 @@ async def revoke_all_sessions(
     request: Request = None,
 ):
     """Revoke all sessions except current"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    current_token = request.cookies.get("session_token")
+        current_token = request.cookies.get("session_token")
 
-    cursor.execute(
-        """
-        UPDATE sessions 
-        SET is_active = 0 
-        WHERE user_id = ? AND session_token != ?
-    """,
-        (user_id, current_token),
-    )
+        cursor.execute(
+            """
+            UPDATE sessions
+            SET is_active = 0
+            WHERE user_id = ? AND session_token != ?
+        """,
+            (user_id, current_token),
+        )
 
-    revoked_count = cursor.rowcount
+        revoked_count = cursor.rowcount
 
-    conn.commit()
-    conn.close()
 
-    return {"success": True, "revoked_count": revoked_count}
+        return {"success": True, "revoked_count": revoked_count}
+
 
 
 # -------------------------------------------------------------------------------------------------------
 
 
 @app.post("/api/auth/logout")
-@log_endpoint(action="logout")
+@log_endpoint(action="logout", transactional=True)
 async def logout(user_id: int = Depends(get_current_user), request: Request = None):
     """Logout and clear session cookie"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
-    cursor.execute(
-        "UPDATE sessions SET is_active = 0 WHERE user_id = ? AND session_token = ?",
-        (user_id, request.cookies.get("session_token")),
-    )
-    conn.commit()
-    conn.close()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
+        cursor.execute(
+            "UPDATE sessions SET is_active = 0 WHERE user_id = ? AND session_token = ?",
+            (user_id, request.cookies.get("session_token")),
+        )
 
-    response = JSONResponse(content={"success": True})
-    # Clear the cookie
-    response.delete_cookie(key="session_token")
+        response = JSONResponse(content={"success": True})
+        # Clear the cookie
+        response.delete_cookie(key="session_token")
 
-    return response
+        _result = response
+
+        _record_mutation_activity(conn, user_id, 'logout', None, _result, request)
+        return _result
+
 
 
 @app.get("/api/me", response_model=UserResponse)
@@ -1716,7 +1713,7 @@ async def get_inventory(
 
 
 @app.post("/api/inventory/consume")
-@log_endpoint(action="consume_stock", resource_type="inventory")
+@log_endpoint(action="consume_stock", resource_type="inventory", transactional=True)
 async def consume_stock(
     request_data: ConsumeStockRequest,
     user_id: int = Depends(get_current_user),
@@ -1724,7 +1721,7 @@ async def consume_stock(
     request: Request = None,
 ):
     """Consume stock from inventory (requires work order)"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
         cursor = conn.cursor()
 
         # Get inventory item
@@ -1867,7 +1864,7 @@ async def get_stats(user_id: int = Depends(get_current_user), request: Request =
 
 
 @app.post("/api/inventory/import-balances")
-@log_endpoint(action="import_stock_balances", resource_type="inventory")
+@log_endpoint(action="import_stock_balances", resource_type="inventory", transactional=True)
 async def import_stock_balances(
     request_data: ImportBalancesRequest,
     user_id: int = Depends(get_current_user),
@@ -1875,9 +1872,8 @@ async def import_stock_balances(
     request: Request = None,
 ):
     """Set previewed unallocated stock balances as one transaction."""
-    conn = get_db_connection()
-    try:
-        conn.execute("BEGIN IMMEDIATE")
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token'),
+            busy_detail='Database busy; no balances saved. Try again') as conn:
         store = conn.execute("SELECT type,assigned_user_id FROM stores WHERE id=?",
                              (request_data.store_id,)).fetchone()
         if not store:
@@ -1925,29 +1921,11 @@ async def import_stock_balances(
                 movement_ids.append(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
             audit_changes.append(change_after(conn,before))
         record_stock_audit(conn,user_id,"import_stock_balances",audit_changes,movement_ids,resource_id=request_data.store_id,resource_type="store",request=request,extra={"added":added,"updated":updated,"unchanged":unchanged})
-        conn.commit()
         return {"success": True, "added": added, "updated": updated, "unchanged": unchanged}
-    except HTTPException:
-        # The shared permission helper closes the connection on denial.
-        try:
-            conn.rollback()
-        except sqlite3.ProgrammingError:
-            pass
-        raise
-    except sqlite3.OperationalError as exc:
-        conn.rollback()
-        if "locked" in str(exc).lower() or "busy" in str(exc).lower():
-            raise HTTPException(status_code=409, detail="Database busy; no balances saved. Try again") from exc
-        raise
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
 
 
 @app.post("/api/inventory/add")
-@log_endpoint(action="add_stock", resource_type="inventory")
+@log_endpoint(action="add_stock", resource_type="inventory", transactional=True)
 async def add_stock(
     request_data: AddStockRequest,
     user_id: int = Depends(get_current_user),
@@ -1955,7 +1933,7 @@ async def add_stock(
     request: Request = None,
 ):
     """Add stock to inventory"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
         cursor = conn.cursor()
 
         # Check if user can edit this store
@@ -2023,7 +2001,7 @@ async def add_stock(
         }
 
 @app.put("/api/inventory/update")
-@log_endpoint(action="update_stock", resource_type="inventory")
+@log_endpoint(action="update_stock", resource_type="inventory", transactional=True)
 async def update_stock(
     request_data: UpdateStockRequest,
     user_id: int = Depends(get_current_user),
@@ -2031,7 +2009,7 @@ async def update_stock(
     request: Request = None,
 ):
     """Update inventory quantity"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
         cursor = conn.cursor()
 
         # Get inventory item
@@ -2094,7 +2072,7 @@ async def update_stock(
 
 
 @app.post("/api/inventory/transfer")
-@log_endpoint(action="transfer_stock", resource_type="inventory")
+@log_endpoint(action="transfer_stock", resource_type="inventory", transactional=True)
 async def transfer_stock(
     request_data: TransferStockRequest,
     user_id: int = Depends(get_current_user),
@@ -2102,7 +2080,7 @@ async def transfer_stock(
     request: Request = None,
 ):
     """Dispatch stock; destination stock becomes available only on receipt."""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
         item = conn.execute("SELECT i.*,s.type,s.assigned_user_id,p.part_number FROM inventory i JOIN stores s ON s.id=i.store_id JOIN parts p ON p.id=i.part_id WHERE i.id=?",
                             (request_data.inventory_id,)).fetchone()
         if not item:
@@ -2172,10 +2150,10 @@ async def pending_transfers(user_id: int = Depends(get_current_user)):
         conn.close()
 
 
-def complete_transfer(transfer_id, data, user_id, action, request=None):
+def complete_transfer(transfer_id, data, user_id, action, request=None, *, session_token):
     if not data.confirmed:
         raise HTTPException(status_code=400,detail='Physical receipt or return must be confirmed')
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, session_token, busy_detail="Stock is busy; no changes saved. Try again") as conn:
         row=conn.execute("""SELECT m.*,t.status,t.source_min_threshold,s1.assigned_user_id AS source_owner,
             s2.assigned_user_id AS dest_owner,s2.type AS dest_type
             FROM stock_transfers t JOIN movements m ON m.id=t.movement_id
@@ -2209,17 +2187,17 @@ def complete_transfer(transfer_id, data, user_id, action, request=None):
 
 
 @app.post('/api/inventory/transfers/{transfer_id}/receive')
-@log_endpoint(action='receive_transfer',resource_type='inventory')
+@log_endpoint(action='receive_transfer',resource_type='inventory', transactional=True)
 async def receive_transfer(transfer_id: int,data: TransferConfirmationRequest,
     user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
-    return complete_transfer(transfer_id,data,user_id,'received',request)
+    return complete_transfer(transfer_id,data,user_id,'received',request,session_token=request.cookies.get('session_token'))
 
 
 @app.post('/api/inventory/transfers/{transfer_id}/return')
-@log_endpoint(action='return_transfer',resource_type='inventory')
+@log_endpoint(action='return_transfer',resource_type='inventory', transactional=True)
 async def return_transfer(transfer_id: int,data: TransferConfirmationRequest,
     user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
-    return complete_transfer(transfer_id,data,user_id,'returned',request)
+    return complete_transfer(transfer_id,data,user_id,'returned',request,session_token=request.cookies.get('session_token'))
 
 
 from backend.routes.work_orders import create_work_order_router
@@ -2230,18 +2208,18 @@ app.include_router(create_work_order_router(
 
 
 @app.post('/api/parts/{part_id}/restore')
-async def restore_parts(part_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf)):
-    return archive_record('parts',part_id,user_id,restore=True)
+async def restore_parts(part_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
+    return archive_record('parts',part_id,user_id,restore=True,session_token=request.cookies.get('session_token'))
 
 
 @app.post('/api/stores/{store_id}/restore')
-async def restore_stores(store_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf)):
-    return archive_record('stores',store_id,user_id,restore=True)
+async def restore_stores(store_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
+    return archive_record('stores',store_id,user_id,restore=True,session_token=request.cookies.get('session_token'))
 
 
 @app.post('/api/users/{target_user_id}/restore')
-async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf)):
-    return archive_record('users',target_user_id,user_id,restore=True)
+async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
+    return archive_record('users',target_user_id,user_id,restore=True,session_token=request.cookies.get('session_token'))
 
 
 # User Management (Admin only)
@@ -2299,7 +2277,7 @@ async def test_logging(
 
 
 @app.post("/api/users")
-@log_endpoint(action="create_user", resource_type="user")
+@log_endpoint(action="create_user", resource_type="user", transactional=True)
 async def create_user(
     request_data: CreateUserRequest,
     user_id: int = Depends(get_current_user),
@@ -2307,47 +2285,49 @@ async def create_user(
     request: Request = None,
 ):
     """Create new user (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    password_hash = hash_password(request_data.password)
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    try:
-        require_user_management(user_id, requested_role=request_data.role)
-    except HTTPException:
-        conn.close()
-        raise
+        # Check if current user is admin
+        try:
+            require_user_management(user_id, requested_role=request_data.role, conn=conn)
+        except HTTPException:
+            raise
 
-    # Check if email already exists
-    cursor.execute("SELECT id FROM users WHERE email = ?", (request_data.email,))
-    if cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Email already exists")
+        # Check if email already exists
+        cursor.execute("SELECT id FROM users WHERE email = ?", (request_data.email,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Email already exists")
 
-    # Create user
-    cursor.execute(
-        """
-        INSERT INTO users (email, name, password_hash, role, territory)
-        VALUES (?, ?, ?, ?, ?)
-    """,
-        (
-            request_data.email,
-            request_data.name,
-            hash_password(request_data.password),
-            request_data.role,
-            request_data.territory,
-        ),
-    )
+        # Create user
+        cursor.execute(
+            """
+            INSERT INTO users (email, name, password_hash, role, territory)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+            (
+                request_data.email,
+                request_data.name,
+                password_hash,
+                request_data.role,
+                request_data.territory,
+            ),
+        )
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": f"User {request_data.name} created successfully",
-    }
+        _result = {
+            "success": True,
+            "message": f"User {request_data.name} created successfully",
+        }
+
+        _record_mutation_activity(conn, user_id, 'create_user', 'user', _result, request)
+        return _result
+
 
 
 @app.put("/api/users/{target_user_id}")
-@log_endpoint(action="update_user", resource_type="user")
+@log_endpoint(action="update_user", resource_type="user", transactional=True)
 async def update_user(
     target_user_id: int,
     request_data: UpdateUserRequest,
@@ -2356,71 +2336,73 @@ async def update_user(
     request: Request = None,
 ):
     """Update user (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    password_hash = hash_password(request_data.password) if request_data.password is not None else None
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    try:
-        require_user_management(user_id, requested_role=request_data.role, target_user_id=target_user_id)
-    except HTTPException:
-        conn.close()
-        raise
+        # Check if current user is admin
+        try:
+            require_user_management(user_id, requested_role=request_data.role, target_user_id=target_user_id, conn=conn)
+        except HTTPException:
+            raise
 
-    # Check if target user exists
-    cursor.execute("SELECT id FROM users WHERE id = ?", (target_user_id,))
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="User not found")
+        # Check if target user exists
+        cursor.execute("SELECT id FROM users WHERE id = ?", (target_user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Build update query dynamically
-    updates = []
-    values = []
+        # Build update query dynamically
+        updates = []
+        values = []
 
-    if request_data.name is not None:
-        updates.append("name = ?")
-        values.append(request_data.name)
+        if request_data.name is not None:
+            updates.append("name = ?")
+            values.append(request_data.name)
 
-    if request_data.role is not None:
-        updates.append("role = ?")
-        values.append(request_data.role)
+        if request_data.role is not None:
+            updates.append("role = ?")
+            values.append(request_data.role)
 
-    if request_data.territory is not None:
-        updates.append("territory = ?")
-        values.append(request_data.territory)
+        if request_data.territory is not None:
+            updates.append("territory = ?")
+            values.append(request_data.territory)
 
-    if request_data.password is not None:
-        updates.append("password_hash = ?")
-        values.append(hash_password(request_data.password))
+        if request_data.password is not None:
+            updates.append("password_hash = ?")
+            values.append(password_hash)
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No updates provided")
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
 
-    values.append(target_user_id)
+        values.append(target_user_id)
 
-    cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", values)
+        cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", values)
 
-    if request_data.password is not None:
-        cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (target_user_id,))
+        if request_data.password is not None:
+            cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (target_user_id,))
 
-    conn.commit()
-    conn.close()
 
-    return {"success": True, "message": "User updated successfully"}
+        _result = {"success": True, "message": "User updated successfully"}
+
+        _record_mutation_activity(conn, user_id, 'update_user', 'user', _result, request)
+        return _result
+
 
 
 @app.delete("/api/users/{target_user_id}")
-@log_endpoint(action="archive_user", resource_type="user")
+@log_endpoint(action="archive_user", resource_type="user", transactional=True)
 async def delete_user(
     target_user_id: int,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    return archive_record("users", target_user_id, user_id)
+    return archive_record("users", target_user_id, user_id, session_token=request.cookies.get("session_token"))
 
 
 # Store Management
 @app.post("/api/stores")
-@log_endpoint(action="create_store", resource_type="store")
+@log_endpoint(action="create_store", resource_type="store", transactional=True)
 async def create_store(
     request_data: CreateStoreRequest,
     user_id: int = Depends(get_current_user),
@@ -2428,14 +2410,14 @@ async def create_store(
     request: Request = None,
 ):
     """Create new store (admin only)"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
         cursor = conn.cursor()
 
         if request_data.assigned_user_id is not None:
             require_active_record(conn,"users",request_data.assigned_user_id)
 
         # Check if current user is admin
-        if check_admin(user_id) is False:
+        if check_admin(user_id, conn) is False:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         # Validate store type from database
@@ -2474,16 +2456,20 @@ async def create_store(
         store_id = cursor.lastrowid
 
 
-        return {
+        _result = {
             "success": True,
             "id": store_id,
             "message": f"Store {request_data.name} created successfully",
         }
 
+        _record_mutation_activity(conn, user_id, 'create_store', 'store', _result, request)
+        return _result
+
+
 
     # Bulk import stores from CSV (admin only)
 @app.post("/api/stores/bulk-import")
-@log_endpoint(action="bulk_import_stores", resource_type="store")
+@log_endpoint(action="bulk_import_stores", resource_type="store", transactional=True)
 async def bulk_import_stores(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
@@ -2491,14 +2477,15 @@ async def bulk_import_stores(
     request: Request = None,
 ):
     """Bulk import stores from a CSV file (admin only)"""
-    with stock_write_transaction() as conn:
+    content = await file.read()
+    reader = list(csv.DictReader(io.StringIO(content.decode())))
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
         cursor = conn.cursor()
         # Check if current user is admin
-        if not check_admin(user_id):
+        if not check_admin(user_id, conn):
             raise HTTPException(status_code=403, detail="Admin access required")
 
-        content = await file.read()
-        reader = csv.DictReader(io.StringIO(content.decode()))
+
         added, skipped = 0, 0
         # this should be moved from hardcoded to a db table in future
         valid_types = [
@@ -2531,10 +2518,14 @@ async def bulk_import_stores(
             except Exception as e:
                 skipped += 1
                 continue
-        return {"success": True, "added": added, "skipped": skipped}
+        _result = {"success": True, "added": added, "skipped": skipped}
+
+        _record_mutation_activity(conn, user_id, 'bulk_import_stores', 'store', _result, request)
+        return _result
+
 
 @app.put("/api/stores/{store_id}")
-@log_endpoint(action="update_store", resource_type="store")
+@log_endpoint(action="update_store", resource_type="store", transactional=True)
 async def update_store(
     store_id: int,
     request_data: UpdateStoreRequest,
@@ -2543,7 +2534,7 @@ async def update_store(
     request: Request = None,
 ):
     """Update store (admin only)"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
         cursor = conn.cursor()
 
         require_active_record(conn,"stores",store_id)
@@ -2551,7 +2542,7 @@ async def update_store(
             require_active_record(conn,"users",request_data.assigned_user_id)
 
         # Check if current user is admin
-        if check_admin(user_id) is False:
+        if check_admin(user_id, conn) is False:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         # Check if store exists
@@ -2610,17 +2601,21 @@ async def update_store(
         cursor.execute(f"UPDATE stores SET {', '.join(updates)} WHERE id = ?", values)
 
 
-        return {"success": True, "message": "Store updated successfully"}
+        _result = {"success": True, "message": "Store updated successfully"}
+
+        _record_mutation_activity(conn, user_id, 'update_store', 'store', _result, request)
+        return _result
+
 
 @app.delete("/api/stores/{store_id}")
-@log_endpoint(action="archive_store", resource_type="store")
+@log_endpoint(action="archive_store", resource_type="store", transactional=True)
 async def delete_store(
     store_id: int,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    return archive_record("stores", store_id, user_id)
+    return archive_record("stores", store_id, user_id, session_token=request.cookies.get("session_token"))
 
 
 # ============ STORE TYPE MANAGEMENT ============
@@ -2657,7 +2652,7 @@ async def get_store_types(
 
 
 @app.post("/api/store-types")
-@log_endpoint(action="create_store_type", resource_type="store_type")
+@log_endpoint(action="create_store_type", resource_type="store_type", transactional=True)
 async def create_store_type(
     request_data: CreateStoreTypeRequest,
     user_id: int = Depends(get_current_user),
@@ -2665,52 +2660,53 @@ async def create_store_type(
     request: Request = None,
 ):
     """Create new store type (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if user is admin
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        # Check if user is admin
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if type_code already exists
-    cursor.execute(
-        "SELECT id FROM store_types WHERE type_code = ?", (request_data.type_code,)
-    )
-    if cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Store type code already exists")
-
-    try:
+        # Check if type_code already exists
         cursor.execute(
-            """
-            INSERT INTO store_types (type_code, type_name, description, display_order)
-            VALUES (?, ?, ?, ?)
-        """,
-            (
-                request_data.type_code,
-                request_data.type_name,
-                request_data.description,
-                request_data.display_order,
-            ),
+            "SELECT id FROM store_types WHERE type_code = ?", (request_data.type_code,)
         )
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Store type code already exists")
 
-        store_type_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO store_types (type_code, type_name, description, display_order)
+                VALUES (?, ?, ?, ?)
+            """,
+                (
+                    request_data.type_code,
+                    request_data.type_name,
+                    request_data.description,
+                    request_data.display_order,
+                ),
+            )
 
-        return {
-            "success": True,
-            "id": store_type_id,
-            "message": f"Store type '{request_data.type_name}' created successfully",
-            "type_code": request_data.type_code,
-            "type_name": request_data.type_name,
-        }
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
+            store_type_id = cursor.lastrowid
+
+            _result = {
+                "success": True,
+                "id": store_type_id,
+                "message": f"Store type '{request_data.type_name}' created successfully",
+                "type_code": request_data.type_code,
+                "type_name": request_data.type_name,
+            }
+
+            _record_mutation_activity(conn, user_id, 'create_store_type', 'store_type', _result, request)
+            return _result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.put("/api/store-types/{type_id}")
-@log_endpoint(action="update_store_type", resource_type="store_type")
+@log_endpoint(action="update_store_type", resource_type="store_type", transactional=True)
 async def update_store_type(
     type_id: int,
     request_data: UpdateStoreTypeRequest,
@@ -2719,61 +2715,63 @@ async def update_store_type(
     request: Request = None,
 ):
     """Update store type (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if store type exists
-    cursor.execute(
-        "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
-    )
-    store_type = cursor.fetchone()
-    if not store_type:
-        raise HTTPException(status_code=404, detail="Store type not found")
+        # Check if store type exists
+        cursor.execute(
+            "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
+        )
+        store_type = cursor.fetchone()
+        if not store_type:
+            raise HTTPException(status_code=404, detail="Store type not found")
 
-    # Build update query
-    updates = []
-    values = []
+        # Build update query
+        updates = []
+        values = []
 
-    if request_data.type_name is not None:
-        updates.append("type_name = ?")
-        values.append(request_data.type_name)
+        if request_data.type_name is not None:
+            updates.append("type_name = ?")
+            values.append(request_data.type_name)
 
-    if request_data.description is not None:
-        updates.append("description = ?")
-        values.append(request_data.description)
+        if request_data.description is not None:
+            updates.append("description = ?")
+            values.append(request_data.description)
 
-    if request_data.is_active is not None:
-        updates.append("is_active = ?")
-        values.append(1 if request_data.is_active else 0)
+        if request_data.is_active is not None:
+            updates.append("is_active = ?")
+            values.append(1 if request_data.is_active else 0)
 
-    if request_data.display_order is not None:
-        updates.append("display_order = ?")
-        values.append(request_data.display_order)
+        if request_data.display_order is not None:
+            updates.append("display_order = ?")
+            values.append(request_data.display_order)
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No updates provided")
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
 
-    updates.append("updated_at = CURRENT_TIMESTAMP")
-    values.append(type_id)
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        values.append(type_id)
 
-    cursor.execute(f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?", values)
+        cursor.execute(f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?", values)
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": "Store type updated successfully",
-        "id": type_id,
-        "type_code": store_type["type_code"],
-    }
+        _result = {
+            "success": True,
+            "message": "Store type updated successfully",
+            "id": type_id,
+            "type_code": store_type["type_code"],
+        }
+
+        _record_mutation_activity(conn, user_id, 'update_store_type', 'store_type', _result, request)
+        return _result
+
 
 
 @app.delete("/api/store-types/{type_id}")
-@log_endpoint(action="delete_store_type", resource_type="store_type")
+@log_endpoint(action="delete_store_type", resource_type="store_type", transactional=True)
 async def delete_store_type(
     type_id: int,
     user_id: int = Depends(get_current_user),
@@ -2781,63 +2779,66 @@ async def delete_store_type(
     request: Request = None,
 ):
     """Delete/deactivate store type (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if store type exists
-    cursor.execute(
-        "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
-    )
-    store_type = cursor.fetchone()
-    if not store_type:
-        raise HTTPException(status_code=404, detail="Store type not found")
+        # Check if store type exists
+        cursor.execute(
+            "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
+        )
+        store_type = cursor.fetchone()
+        if not store_type:
+            raise HTTPException(status_code=404, detail="Store type not found")
 
-    # Check if any stores are using this type
-    cursor.execute(
-        """
-        SELECT COUNT(*) as count 
-        FROM stores 
-        WHERE type = ?
-    """,
-        (store_type["type_code"],),
-    )
-    store_count = cursor.fetchone()["count"]
-
-    if store_count > 0:
-        # Soft delete - just deactivate
+        # Check if any stores are using this type
         cursor.execute(
             """
-            UPDATE store_types 
-            SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SELECT COUNT(*) as count
+            FROM stores
+            WHERE type = ?
         """,
-            (type_id,),
+            (store_type["type_code"],),
         )
+        store_count = cursor.fetchone()["count"]
 
-        conn.commit()
-        conn.close()
+        if store_count > 0:
+            # Soft delete - just deactivate
+            cursor.execute(
+                """
+                UPDATE store_types
+                SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """,
+                (type_id,),
+            )
 
-        return {
-            "success": True,
-            "message": f"Store type '{store_type['type_name']}' deactivated (in use by {store_count} stores)",
-            "deactivated": True,
-            "stores_affected": store_count,
-        }
-    else:
-        # Hard delete - no stores using it
-        cursor.execute("DELETE FROM store_types WHERE id = ?", (type_id,))
 
-        conn.commit()
-        conn.close()
+            _result = {
+                "success": True,
+                "message": f"Store type '{store_type['type_name']}' deactivated (in use by {store_count} stores)",
+                "deactivated": True,
+                "stores_affected": store_count,
+            }
 
-        return {
-            "success": True,
-            "message": f"Store type '{store_type['type_name']}' deleted successfully",
-            "deactivated": False,
-        }
+            _record_mutation_activity(conn, user_id, 'delete_store_type', 'store_type', _result, request)
+            return _result
+        else:
+            # Hard delete - no stores using it
+            cursor.execute("DELETE FROM store_types WHERE id = ?", (type_id,))
+
+
+            _result = {
+                "success": True,
+                "message": f"Store type '{store_type['type_name']}' deleted successfully",
+                "deactivated": False,
+            }
+
+            _record_mutation_activity(conn, user_id, 'delete_store_type', 'store_type', _result, request)
+            return _result
+
 
 
 @app.get("/api/store-types/validate/{type_code}")
@@ -2872,7 +2873,7 @@ async def validate_store_type(
 
 # Parts Management
 @app.post("/api/parts")
-@log_endpoint(action="create_part", resource_type="part")
+@log_endpoint(action="create_part", resource_type="part", transactional=True)
 async def create_part(
     request_data: CreatePartRequest,
     user_id: int = Depends(get_current_user),
@@ -2880,46 +2881,48 @@ async def create_part(
     request: Request = None,
 ):
     """Create new part (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        # Check if current user is admin
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if part number already exists
-    cursor.execute(
-        "SELECT id FROM parts WHERE part_number = ?", (request_data.part_number,)
-    )
-    if cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Part number already exists")
+        # Check if part number already exists
+        cursor.execute(
+            "SELECT id FROM parts WHERE part_number = ?", (request_data.part_number,)
+        )
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Part number already exists")
 
-    # Create part
-    cursor.execute(
-        """
-        INSERT INTO parts (part_number, description, category, unit_cost)
-        VALUES (?, ?, ?, ?)
-    """,
-        (
-            request_data.part_number,
-            request_data.description,
-            request_data.category,
-            request_data.unit_cost,
-        ),
-    )
+        # Create part
+        cursor.execute(
+            """
+            INSERT INTO parts (part_number, description, category, unit_cost)
+            VALUES (?, ?, ?, ?)
+        """,
+            (
+                request_data.part_number,
+                request_data.description,
+                request_data.category,
+                request_data.unit_cost,
+            ),
+        )
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": f"Part {request_data.part_number} created successfully",
-    }
+        _result = {
+            "success": True,
+            "message": f"Part {request_data.part_number} created successfully",
+        }
+
+        _record_mutation_activity(conn, user_id, 'create_part', 'part', _result, request)
+        return _result
+
 
 
 # bulk part import from CSV (admin only)
 @app.post("/api/parts/bulk-import")
-@log_endpoint(action="bulk_import_parts", resource_type="part")
+@log_endpoint(action="bulk_import_parts", resource_type="part", transactional=True)
 async def bulk_import_parts(
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
@@ -2927,15 +2930,7 @@ async def bulk_import_parts(
     request: Request = None,
 ):
     """Bulk import parts from a CSV file (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check if current user is admin
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     content = await file.read()
-
     # Try UTF-8 first, then fall back to other encodings
     try:
         text = content.decode("utf-8")
@@ -2951,56 +2946,66 @@ async def bulk_import_parts(
                     detail="Unable to decode CSV file. Please ensure it's UTF-8 encoded.",
                 )
 
-    reader = csv.DictReader(io.StringIO(text))
+    reader = list(csv.DictReader(io.StringIO(text)))
 
-    added, skipped = 0, 0
-    skipped_details = []  # keep track of skipped parts with reasons
-    # these should be moved from hardcoded to a db table in future and mapped to dropdown in frontend as well as validation on backend
-    for row in reader:
-        try:
-            # Validate required fields
-            if not row.get("part_number") or not row.get("description"):
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
+
+        # Check if current user is admin
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+
+        added, skipped = 0, 0
+        skipped_details = []  # keep track of skipped parts with reasons
+        # these should be moved from hardcoded to a db table in future and mapped to dropdown in frontend as well as validation on backend
+        for row in reader:
+            try:
+                # Validate required fields
+                if not row.get("part_number") or not row.get("description"):
+                    skipped += 1
+                    skipped_details.append(f"Row missing required fields: {row}")
+                    continue
+
+                # Check if part_number already exists
+                cursor.execute(
+                    "SELECT id FROM parts WHERE part_number = ?", (row["part_number"],)
+                )
+                if cursor.fetchone():
+                    skipped += 1
+                    skipped_details.append(f"Part {row['part_number']} already exists")
+                    continue
+
+                cursor.execute(
+                    "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
+                    (
+                        row["part_number"],
+                        row["description"],
+                        row.get("category", ""),
+                        float(row.get("unit_cost", 0)),
+                    ),
+                )
+                added += 1
+            except Exception as e:
                 skipped += 1
-                skipped_details.append(f"Row missing required fields: {row}")
+                skipped_details.append(
+                    f"Error with {row.get('part_number', 'unknown')}: {str(e)}"
+                )
                 continue
+        _result = {
+            "success": True,
+            "added": added,
+            "skipped": skipped,
+            "skipped_details": skipped_details,
+        }
 
-            # Check if part_number already exists
-            cursor.execute(
-                "SELECT id FROM parts WHERE part_number = ?", (row["part_number"],)
-            )
-            if cursor.fetchone():
-                skipped += 1
-                skipped_details.append(f"Part {row['part_number']} already exists")
-                continue
+        _record_mutation_activity(conn, user_id, 'bulk_import_parts', 'part', _result, request)
+        return _result
 
-            cursor.execute(
-                "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
-                (
-                    row["part_number"],
-                    row["description"],
-                    row.get("category", ""),
-                    float(row.get("unit_cost", 0)),
-                ),
-            )
-            added += 1
-        except Exception as e:
-            skipped += 1
-            skipped_details.append(
-                f"Error with {row.get('part_number', 'unknown')}: {str(e)}"
-            )
-            continue
-    conn.commit()
-    conn.close()
-    return {
-        "success": True,
-        "added": added,
-        "skipped": skipped,
-        "skipped_details": skipped_details,
-    }
 
 
 @app.put("/api/parts/{part_id}")
-@log_endpoint(action="update_part", resource_type="part")
+@log_endpoint(action="update_part", resource_type="part", transactional=True)
 async def update_part(
     part_id: int,
     request_data: UpdatePartRequest,
@@ -3009,70 +3014,72 @@ async def update_part(
     request: Request = None,
 ):
     """Update part (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if current user is admin
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
+        # Check if current user is admin
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Check if part exists
-    cursor.execute("SELECT id FROM parts WHERE id = ?", (part_id,))
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="Part not found")
+        # Check if part exists
+        cursor.execute("SELECT id FROM parts WHERE id = ?", (part_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Part not found")
 
-    # Build update query dynamically
-    updates = []
-    values = []
+        # Build update query dynamically
+        updates = []
+        values = []
 
-    if request_data.part_number is not None:
-        # Check if new part number already exists
-        cursor.execute(
-            "SELECT id FROM parts WHERE part_number = ? AND id != ?",
-            (request_data.part_number, part_id),
-        )
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Part number already exists")
-        updates.append("part_number = ?")
-        values.append(request_data.part_number)
+        if request_data.part_number is not None:
+            # Check if new part number already exists
+            cursor.execute(
+                "SELECT id FROM parts WHERE part_number = ? AND id != ?",
+                (request_data.part_number, part_id),
+            )
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Part number already exists")
+            updates.append("part_number = ?")
+            values.append(request_data.part_number)
 
-    if request_data.description is not None:
-        updates.append("description = ?")
-        values.append(request_data.description)
+        if request_data.description is not None:
+            updates.append("description = ?")
+            values.append(request_data.description)
 
-    if request_data.category is not None:
-        updates.append("category = ?")
-        values.append(request_data.category)
+        if request_data.category is not None:
+            updates.append("category = ?")
+            values.append(request_data.category)
 
-    if request_data.unit_cost is not None:
-        updates.append("unit_cost = ?")
-        values.append(request_data.unit_cost)
+        if request_data.unit_cost is not None:
+            updates.append("unit_cost = ?")
+            values.append(request_data.unit_cost)
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No updates provided")
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
 
-    values.append(part_id)
+        values.append(part_id)
 
-    cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE id = ?", values)
+        cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE id = ?", values)
 
-    conn.commit()
-    conn.close()
 
-    return {"success": True, "message": "Part updated successfully"}
+        _result = {"success": True, "message": "Part updated successfully"}
+
+        _record_mutation_activity(conn, user_id, 'update_part', 'part', _result, request)
+        return _result
+
 
 
 @app.delete("/api/parts/{part_id}")
-@log_endpoint(action="archive_part", resource_type="part")
+@log_endpoint(action="archive_part", resource_type="part", transactional=True)
 async def delete_part(
     part_id: int,
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    return archive_record("parts", part_id, user_id)
+    return archive_record("parts", part_id, user_id, session_token=request.cookies.get("session_token"))
 
 
 # Movement History
@@ -3345,39 +3352,36 @@ async def cleanup_old_logs(
     request: Request = None,
 ):
     """Delete activity logs older than specified days (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Check if user is admin
-    cursor.execute("SELECT role,name FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
+        # Check if user is admin
+        cursor.execute("SELECT role,name FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    if not user or user["role"] != "admin":
-        conn.close()
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Delete old logs
-    cursor.execute(
-        f"""
-        DELETE FROM activity_logs 
-        WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', '-' || ? || ' days')
-    """,
-        (days,),
-    )
+        # Delete old logs
+        cursor.execute(
+            f"""
+            DELETE FROM activity_logs
+            WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', '-' || ? || ' days')
+        """,
+            (days,),
+        )
 
-    deleted_count = cursor.rowcount
+        deleted_count = cursor.rowcount
 
-    conn.commit()
-    conn.close()
 
-    log_activity(
-        user_id=user_id,
-        username=user["name"],
-        action="cleanup_logs",
-        details={"days": days, "deleted_count": deleted_count},
-    )
+        log_activity(
+            user_id=user_id,
+            username=user["name"],
+            action="cleanup_logs",
+            details={"days": days, "deleted_count": deleted_count}, conn=conn)
 
-    return {"success": True, "deleted_count": deleted_count, "days": days}
+        return {"success": True, "deleted_count": deleted_count, "days": days}
+
 
 
 # equipment management routes
@@ -3517,7 +3521,7 @@ async def get_equipment(
 
 
 @app.post("/api/equipment")
-@log_endpoint(action="create_equipment", resource_type="equipment")
+@log_endpoint(action="create_equipment", resource_type="equipment", transactional=True)
 async def create_equipment(
     request_data: CreateEquipmentRequest,
     user_id: int = Depends(get_current_user),
@@ -3525,14 +3529,14 @@ async def create_equipment(
     request: Request = None,
 ):
     """Create new equipment (admin only)"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
         cursor = conn.cursor()
 
         if request_data.assigned_user_id is not None:
             require_active_record(conn,"users",request_data.assigned_user_id)
 
         # Check if user is admin
-        if not check_admin(user_id):
+        if not check_admin(user_id, conn):
             raise HTTPException(status_code=403, detail="Admin access required")
 
         # Check if serial number already exists
@@ -3577,14 +3581,18 @@ async def create_equipment(
         )
 
 
-        return {
+        _result = {
             "success": True,
             "id": equipment_id,
             "message": "Equipment created successfully",
         }
 
+        _record_mutation_activity(conn, user_id, 'create_equipment', 'equipment', _result, request)
+        return _result
+
+
 @app.put("/api/equipment/{equipment_id}")
-@log_endpoint(action="update_equipment", resource_type="equipment")
+@log_endpoint(action="update_equipment", resource_type="equipment", transactional=True)
 async def update_equipment(
     equipment_id: int,
     request_data: UpdateEquipmentRequest,
@@ -3593,10 +3601,10 @@ async def update_equipment(
     request: Request = None,
 ):
     """Update equipment (admin only)"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
         cursor = conn.cursor()
 
-        if not check_admin(user_id):
+        if not check_admin(user_id, conn):
             raise HTTPException(status_code=403, detail="Admin access required")
 
         if request_data.assigned_user_id is not None:
@@ -3643,10 +3651,14 @@ async def update_equipment(
             )
 
 
-        return {"success": True, "message": "Equipment updated successfully"}
+        _result = {"success": True, "message": "Equipment updated successfully"}
+
+        _record_mutation_activity(conn, user_id, 'update_equipment', 'equipment', _result, request)
+        return _result
+
 
 @app.post("/api/equipment/{equipment_id}/transfer")
-@log_endpoint(action="transfer_equipment", resource_type="equipment")
+@log_endpoint(action="transfer_equipment", resource_type="equipment", transactional=True)
 async def transfer_equipment(
     equipment_id: int,
     request_data: TransferEquipmentRequest,
@@ -3655,7 +3667,7 @@ async def transfer_equipment(
     request: Request = None,
 ):
     """Transfer equipment to another user"""
-    with stock_write_transaction() as conn:
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
         cursor = conn.cursor()
 
         require_active_record(conn,"users",request_data.to_user_id)
@@ -3667,7 +3679,7 @@ async def transfer_equipment(
             raise HTTPException(status_code=404, detail="Equipment not found")
 
         # Check permissions
-        if not check_admin(user_id) and equipment["assigned_user_id"] != user_id:
+        if not check_admin(user_id, conn) and equipment["assigned_user_id"] != user_id:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         # Update equipment
@@ -3696,10 +3708,14 @@ async def transfer_equipment(
         )
 
 
-        return {"success": True, "message": "Equipment transferred successfully"}
+        _result = {"success": True, "message": "Equipment transferred successfully"}
+
+        _record_mutation_activity(conn, user_id, 'transfer_equipment', 'equipment', _result, request)
+        return _result
+
 
 @app.post("/api/equipment/{equipment_id}/calibrate")
-@log_endpoint(action="calibrate_equipment", resource_type="equipment")
+@log_endpoint(action="calibrate_equipment", resource_type="equipment", transactional=True)
 async def update_calibration(
     equipment_id: int,
     request_data: UpdateCalibrationRequest,
@@ -3708,57 +3724,59 @@ async def update_calibration(
     request: Request = None,
 ):
     """Update equipment calibration"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    # Get equipment
-    cursor.execute("SELECT * FROM equipment WHERE id = ?", (equipment_id,))
-    equipment = cursor.fetchone()
-    if not equipment:
-        raise HTTPException(status_code=404, detail="Equipment not found")
+        # Get equipment
+        cursor.execute("SELECT * FROM equipment WHERE id = ?", (equipment_id,))
+        equipment = cursor.fetchone()
+        if not equipment:
+            raise HTTPException(status_code=404, detail="Equipment not found")
 
-    # Check permissions - admin or assigned user
-    if not check_admin(user_id) and equipment["assigned_user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Permission denied")
+        # Check permissions - admin or assigned user
+        if not check_admin(user_id, conn) and equipment["assigned_user_id"] != user_id:
+            raise HTTPException(status_code=403, detail="Permission denied")
 
-    # Update calibration
-    cursor.execute(
-        """
-        UPDATE equipment 
-        SET calibration_cert_number = ?,
-            calibration_authority = ?,
-            calibration_date = ?,
-            next_calibration_date = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    """,
-        (
-            request_data.calibration_cert_number,
-            request_data.calibration_authority,
-            request_data.calibration_date,
-            request_data.next_calibration_date,
-            equipment_id,
-        ),
-    )
+        # Update calibration
+        cursor.execute(
+            """
+            UPDATE equipment
+            SET calibration_cert_number = ?,
+                calibration_authority = ?,
+                calibration_date = ?,
+                next_calibration_date = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """,
+            (
+                request_data.calibration_cert_number,
+                request_data.calibration_authority,
+                request_data.calibration_date,
+                request_data.next_calibration_date,
+                equipment_id,
+            ),
+        )
 
-    # Log history
-    cursor.execute(
-        """
-        INSERT INTO equipment_history (
-            equipment_id, action, calibration_date, notes, created_by
-        ) VALUES (?, 'calibrated', ?, ?, ?)
-    """,
-        (equipment_id, request_data.calibration_date, request_data.notes, user_id),
-    )
+        # Log history
+        cursor.execute(
+            """
+            INSERT INTO equipment_history (
+                equipment_id, action, calibration_date, notes, created_by
+            ) VALUES (?, 'calibrated', ?, ?, ?)
+        """,
+            (equipment_id, request_data.calibration_date, request_data.notes, user_id),
+        )
 
-    conn.commit()
-    conn.close()
 
-    return {"success": True, "message": "Calibration updated successfully"}
+        _result = {"success": True, "message": "Calibration updated successfully"}
+
+        _record_mutation_activity(conn, user_id, 'calibrate_equipment', 'equipment', _result, request)
+        return _result
+
 
 
 @app.delete("/api/equipment/{equipment_id}")
-@log_endpoint(action="delete_equipment", resource_type="equipment")
+@log_endpoint(action="delete_equipment", resource_type="equipment", transactional=True)
 async def delete_equipment(
     equipment_id: int,
     user_id: int = Depends(get_current_user),
@@ -3766,44 +3784,46 @@ async def delete_equipment(
     request: Request = None,
 ):
     """Delete/deactivate equipment (admin only)"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        cursor = conn.cursor()
 
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Get equipment
-    cursor.execute("SELECT equipment_name FROM equipment WHERE id = ?", (equipment_id,))
-    equipment = cursor.fetchone()
-    if not equipment:
-        raise HTTPException(status_code=404, detail="Equipment not found")
+        # Get equipment
+        cursor.execute("SELECT equipment_name FROM equipment WHERE id = ?", (equipment_id,))
+        equipment = cursor.fetchone()
+        if not equipment:
+            raise HTTPException(status_code=404, detail="Equipment not found")
 
-    # Soft delete
-    cursor.execute(
-        """
-        UPDATE equipment 
-        SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    """,
-        (equipment_id,),
-    )
+        # Soft delete
+        cursor.execute(
+            """
+            UPDATE equipment
+            SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """,
+            (equipment_id,),
+        )
 
-    # Log history
-    cursor.execute(
-        """
-        INSERT INTO equipment_history (equipment_id, action, created_by)
-        VALUES (?, 'deleted', ?)
-    """,
-        (equipment_id, user_id),
-    )
+        # Log history
+        cursor.execute(
+            """
+            INSERT INTO equipment_history (equipment_id, action, created_by)
+            VALUES (?, 'deleted', ?)
+        """,
+            (equipment_id, user_id),
+        )
 
-    conn.commit()
-    conn.close()
 
-    return {
-        "success": True,
-        "message": f"Equipment {equipment['equipment_name']} deleted successfully",
-    }
+        _result = {
+            "success": True,
+            "message": f"Equipment {equipment['equipment_name']} deleted successfully",
+        }
+
+        _record_mutation_activity(conn, user_id, 'delete_equipment', 'equipment', _result, request)
+        return _result
+
 
 
 @app.get("/api/equipment/{equipment_id}/history")
@@ -3859,7 +3879,7 @@ async def get_calibration_reminder_days(
 
 
 @app.put("/api/settings/calibration-reminder-days")
-@log_endpoint(action="update_calibration_settings", resource_type="settings")
+@log_endpoint(action="update_calibration_settings", resource_type="settings", transactional=True)
 async def update_calibration_reminder_days(
     days: int,
     user_id: int = Depends(get_current_user),
@@ -3867,28 +3887,30 @@ async def update_calibration_reminder_days(
     request: Request = None,
 ):
     """Update calibration reminder days setting (admin only)"""
-    if days < 1 or days > 365:
-        raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        if days < 1 or days > 365:
+            raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+        cursor = conn.cursor()
 
-    if not check_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if not check_admin(user_id, conn):
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    cursor.execute(
-        """
-        UPDATE system_settings 
-        SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE setting_key = 'calibration_reminder_days'
-    """,
-        (str(days), user_id),
-    )
+        cursor.execute(
+            """
+            UPDATE system_settings
+            SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE setting_key = 'calibration_reminder_days'
+        """,
+            (str(days), user_id),
+        )
 
-    conn.commit()
-    conn.close()
 
-    return {"success": True, "message": f"Calibration reminder set to {days} days"}
+        _result = {"success": True, "message": f"Calibration reminder set to {days} days"}
+
+        _record_mutation_activity(conn, user_id, 'update_calibration_settings', 'settings', _result, request)
+        return _result
+
 
 
 @app.get("/")
@@ -3913,10 +3935,13 @@ def require_superadmin(user_id: int, conn=None):
     if close:
         conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    row = cur.fetchone()
-    if close:
-        conn.close()
+    cur.row_factory = sqlite3.Row
+    try:
+        row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+    finally:
+        cur.close()
+        if close:
+            conn.close()
     if not row or row["role"] != "superadmin":
         raise HTTPException(status_code=403, detail="Superadmin access required")
 
@@ -3964,37 +3989,35 @@ async def superadmin_reset_password(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
 
-    if len(body.new_password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        if len(body.new_password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+        cursor = conn.cursor()
 
-    cursor.execute("SELECT name, email FROM users WHERE id = ?", (target_id,))
-    target = cursor.fetchone()
-    if not target:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
+        cursor.execute("SELECT name, email FROM users WHERE id = ?", (target_id,))
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    cursor.execute(
-        "UPDATE users SET password_hash = ? WHERE id = ?",
-        (hash_password(body.new_password), target_id),
-    )
-    # Force logout all their sessions so new password takes effect immediately
-    cursor.execute(
-        "UPDATE sessions SET is_active = 0 WHERE user_id = ?",
-        (target_id,),
-    )
-    conn.commit()
-    conn.close()
+        cursor.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(body.new_password), target_id),
+        )
+        # Force logout all their sessions so new password takes effect immediately
+        cursor.execute(
+            "UPDATE sessions SET is_active = 0 WHERE user_id = ?",
+            (target_id,),
+        )
 
-    log_activity(user_id, "superadmin", "reset_user_password",
-                 resource_type="user", resource_id=target_id,
-                 details={"target_email": target["email"]})
+        log_activity(user_id, "superadmin", "reset_user_password",
+                     resource_type="user", resource_id=target_id,
+                     details={"target_email": target["email"]}, conn=conn)
 
-    return {"success": True, "message": f"Password reset for {target['email']}"}
+        return {"success": True, "message": f"Password reset for {target['email']}"}
+
 
 
 # ── 1. Dashboard overview ────────────────────────────────────────────────────
@@ -4100,28 +4123,26 @@ async def unlock_account(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
-    target = cur.fetchone()
-    if not target:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        cur = conn.cursor()
+        cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    cur.execute("""
-        UPDATE users
-        SET account_locked_until = NULL,
-            failed_login_attempts = 0
-        WHERE id = ?
-    """, (body.user_id,))
-    conn.commit()
-    conn.close()
+        cur.execute("""
+            UPDATE users
+            SET account_locked_until = NULL,
+                failed_login_attempts = 0
+            WHERE id = ?
+        """, (body.user_id,))
 
-    log_activity(user_id, "superadmin", "unlock_account",
-                 resource_type="user", resource_id=body.user_id,
-                 details={"target_email": target["email"]})
-    return {"success": True, "message": f"Account {target['email']} unlocked"}
+        log_activity(user_id, "superadmin", "unlock_account",
+                     resource_type="user", resource_id=body.user_id,
+                     details={"target_email": target["email"]}, conn=conn)
+        return {"success": True, "message": f"Account {target['email']} unlocked"}
+
 
 
 @superadmin_router.post("/unlock-accounts/bulk")
@@ -4131,25 +4152,24 @@ async def bulk_unlock_accounts(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    if not body.user_ids:
-        raise HTTPException(status_code=400, detail="No user IDs provided")
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        if not body.user_ids:
+            raise HTTPException(status_code=400, detail="No user IDs provided")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-    placeholders = ",".join("?" * len(body.user_ids))
-    cur.execute(f"""
-        UPDATE users
-        SET account_locked_until = NULL, failed_login_attempts = 0
-        WHERE id IN ({placeholders})
-    """, body.user_ids)
-    unlocked = cur.rowcount
-    conn.commit()
-    conn.close()
+        cur = conn.cursor()
+        placeholders = ",".join("?" * len(body.user_ids))
+        cur.execute(f"""
+            UPDATE users
+            SET account_locked_until = NULL, failed_login_attempts = 0
+            WHERE id IN ({placeholders})
+        """, body.user_ids)
+        unlocked = cur.rowcount
 
-    log_activity(user_id, "superadmin", "bulk_unlock_accounts",
-                 details={"user_ids": body.user_ids, "unlocked": unlocked})
-    return {"success": True, "unlocked_count": unlocked}
+        log_activity(user_id, "superadmin", "bulk_unlock_accounts",
+                     details={"user_ids": body.user_ids, "unlocked": unlocked}, conn=conn)
+        return {"success": True, "unlocked_count": unlocked}
+
 
 
 # ── 3. Active sessions ───────────────────────────────────────────────────────
@@ -4183,27 +4203,25 @@ async def force_logout_user(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
-    target = cur.fetchone()
-    if not target:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        cur = conn.cursor()
+        cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    cur.execute("""
-        UPDATE sessions SET is_active = 0
-        WHERE user_id = ? AND is_active = 1
-    """, (body.user_id,))
-    killed = cur.rowcount
-    conn.commit()
-    conn.close()
+        cur.execute("""
+            UPDATE sessions SET is_active = 0
+            WHERE user_id = ? AND is_active = 1
+        """, (body.user_id,))
+        killed = cur.rowcount
 
-    log_activity(user_id, "superadmin", "force_logout",
-                 resource_type="user", resource_id=body.user_id,
-                 details={"target_email": target["email"], "sessions_killed": killed})
-    return {"success": True, "sessions_terminated": killed}
+        log_activity(user_id, "superadmin", "force_logout",
+                     resource_type="user", resource_id=body.user_id,
+                     details={"target_email": target["email"], "sessions_killed": killed}, conn=conn)
+        return {"success": True, "sessions_terminated": killed}
+
 
 
 @superadmin_router.post("/sessions/force-logout-all")
@@ -4212,22 +4230,21 @@ async def force_logout_all(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    # Preserve the calling superadmin's own session
-    current_token = request.cookies.get("session_token")
-    cur.execute("""
-        UPDATE sessions SET is_active = 0
-        WHERE session_token != ? AND is_active = 1
-    """, (current_token,))
-    killed = cur.rowcount
-    conn.commit()
-    conn.close()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        cur = conn.cursor()
+        # Preserve the calling superadmin's own session
+        current_token = request.cookies.get("session_token")
+        cur.execute("""
+            UPDATE sessions SET is_active = 0
+            WHERE session_token != ? AND is_active = 1
+        """, (current_token,))
+        killed = cur.rowcount
 
-    log_activity(user_id, "superadmin", "force_logout_all",
-                 details={"sessions_killed": killed})
-    return {"success": True, "sessions_terminated": killed}
+        log_activity(user_id, "superadmin", "force_logout_all",
+                     details={"sessions_killed": killed}, conn=conn)
+        return {"success": True, "sessions_terminated": killed}
+
 
 
 # ── 4. Security configuration ────────────────────────────────────────────────
@@ -4267,38 +4284,37 @@ async def update_security_config(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
 
-    allowed_keys = {
-        "max_login_attempts", "lockout_duration_minutes",
-        "session_duration_hours", "remember_me_duration_days",
-        "calibration_reminder_days",
-    }
-    if key not in allowed_keys:
-        raise HTTPException(status_code=400, detail=f"Unknown config key: {key}")
+        allowed_keys = {
+            "max_login_attempts", "lockout_duration_minutes",
+            "session_duration_hours", "remember_me_duration_days",
+            "calibration_reminder_days",
+        }
+        if key not in allowed_keys:
+            raise HTTPException(status_code=400, detail=f"Unknown config key: {key}")
 
-    # Validate numeric
-    try:
-        val = int(body.value)
-        if val < 1:
-            raise ValueError
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Value must be a positive integer")
+        # Validate numeric
+        try:
+            val = int(body.value)
+            if val < 1:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Value must be a positive integer")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO system_settings (setting_key, setting_value, updated_by)
-        VALUES (?, ?, ?)
-        ON CONFLICT(setting_key)
-        DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-    """, (key, str(val), user_id, str(val), user_id))
-    conn.commit()
-    conn.close()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO system_settings (setting_key, setting_value, updated_by)
+            VALUES (?, ?, ?)
+            ON CONFLICT(setting_key)
+            DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        """, (key, str(val), user_id, str(val), user_id))
 
-    log_activity(user_id, "superadmin", "update_security_config",
-                 details={"key": key, "new_value": val})
-    return {"success": True, "key": key, "value": val}
+        log_activity(user_id, "superadmin", "update_security_config",
+                     details={"key": key, "new_value": val}, conn=conn)
+        return {"success": True, "key": key, "value": val}
+
 
 
 # ── 5. User role management ──────────────────────────────────────────────────
@@ -4330,28 +4346,26 @@ async def update_user_role(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    valid_roles = {"engineer", "manager", "admin", "superadmin"}
-    if body.role not in valid_roles:
-        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of {valid_roles}")
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        valid_roles = {"engineer", "manager", "admin", "superadmin"}
+        if body.role not in valid_roles:
+            raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of {valid_roles}")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT name, email, role FROM users WHERE id = ?", (target_id,))
-    target = cur.fetchone()
-    if not target:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
+        cur = conn.cursor()
+        cur.execute("SELECT name, email, role FROM users WHERE id = ?", (target_id,))
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    old_role = target["role"]
-    cur.execute("UPDATE users SET role = ? WHERE id = ?", (body.role, target_id))
-    conn.commit()
-    conn.close()
+        old_role = target["role"]
+        cur.execute("UPDATE users SET role = ? WHERE id = ?", (body.role, target_id))
 
-    log_activity(user_id, "superadmin", "change_user_role",
-                 resource_type="user", resource_id=target_id,
-                 details={"email": target["email"], "old_role": old_role, "new_role": body.role})
-    return {"success": True, "message": f"Role updated from {old_role} → {body.role}"}
+        log_activity(user_id, "superadmin", "change_user_role",
+                     resource_type="user", resource_id=target_id,
+                     details={"email": target["email"], "old_role": old_role, "new_role": body.role}, conn=conn)
+        return {"success": True, "message": f"Role updated from {old_role} → {body.role}"}
+
 
 
 # ── 6. Database administration ───────────────────────────────────────────────
@@ -4415,8 +4429,7 @@ async def run_readonly_query(
     finally:
         conn.close()
 
-    log_activity(user_id, "superadmin", "db_query",
-                 details={"sql": sql[:200]})
+    log_authenticated_activity(user_id, request.cookies.get('session_token'), username='superadmin', action='db_query', details={'sql': sql[:200]})
     return {"columns": columns, "rows": result, "count": len(result)}
 
 
@@ -4441,19 +4454,24 @@ async def download_db_backup(
     dst.close()
     src.close()
 
-    log_activity(user_id, "superadmin", "db_backup",
-                 details={"filename": backup_name})
+    log_authenticated_activity(user_id, request.cookies.get('session_token'), username='superadmin', action='db_backup', details={'filename': backup_name})
     return FileResponse(backup_path, filename=backup_name,
                         media_type="application/octet-stream")
 
 
 @superadmin_router.post("/database/restore")
 async def restore_uploaded_database(
+    request: Request,
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user),
     csrf_valid: bool = Depends(verify_csrf),
 ):
     require_superadmin(user_id)
+    session_token = request.cookies.get('session_token')
+    def validate_actor(conn):
+        require_session(conn, session_token, expected_user_id=user_id)
+        require_superadmin(user_id, conn)
+
     import tempfile
     from database_restore import restore_database
     try:
@@ -4469,7 +4487,7 @@ async def restore_uploaded_database(
             with open(path, "rb") as uploaded:
                 if uploaded.read(16) != b"SQLite format 3\x00":
                     raise HTTPException(status_code=400, detail="Upload a valid SQLite database")
-            backup_name = restore_database(path, DATABASE, user_id, defaults=database_defaults())
+            backup_name = restore_database(path, DATABASE, user_id, defaults=database_defaults(), validate_actor=validate_actor)
     except (ValueError, sqlite3.Error) as error:
         raise HTTPException(status_code=400, detail=str(error))
     except TimeoutError as error:
@@ -4494,8 +4512,7 @@ async def vacuum_database(
     conn.close()
     after = os.path.getsize(DATABASE) if os.path.exists(DATABASE) else 0
 
-    log_activity(user_id, "superadmin", "db_vacuum",
-                 details={"before_bytes": before, "after_bytes": after})
+    log_authenticated_activity(user_id, request.cookies.get('session_token'), username='superadmin', action='db_vacuum', details={'before_bytes': before, 'after_bytes': after})
     return {
         "success": True,
         "before_bytes": before,
@@ -4512,37 +4529,36 @@ async def purge_all_logs(
     request: Request = None,
 ):
     """Purge activity_logs and system_logs older than `days` days (0 = all)."""
-    require_superadmin(user_id)
-    conn = get_db_connection()
-    cur = conn.cursor()
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        cur = conn.cursor()
 
-    if days == 0:
-        cur.execute(f"DELETE FROM activity_logs WHERE action NOT IN {PROTECTED_AUDIT_SQL}")
-        act_deleted = cur.rowcount
-        cur.execute("DELETE FROM system_logs")
-        sys_deleted = cur.rowcount
-    else:
-        cur.execute(f"""
-            DELETE FROM activity_logs
-            WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', ? )
-        """, (f"-{days} days",))
-        act_deleted = cur.rowcount
-        cur.execute("""
-            DELETE FROM system_logs
-            WHERE created_at < datetime('now', ?)
-        """, (f"-{days} days",))
-        sys_deleted = cur.rowcount
+        if days == 0:
+            cur.execute(f"DELETE FROM activity_logs WHERE action NOT IN {PROTECTED_AUDIT_SQL}")
+            act_deleted = cur.rowcount
+            cur.execute("DELETE FROM system_logs")
+            sys_deleted = cur.rowcount
+        else:
+            cur.execute(f"""
+                DELETE FROM activity_logs
+                WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', ? )
+            """, (f"-{days} days",))
+            act_deleted = cur.rowcount
+            cur.execute("""
+                DELETE FROM system_logs
+                WHERE created_at < datetime('now', ?)
+            """, (f"-{days} days",))
+            sys_deleted = cur.rowcount
 
-    conn.commit()
-    conn.close()
 
-    log_activity(user_id, "superadmin", "purge_logs",
-                 details={"days": days, "activity_deleted": act_deleted, "system_deleted": sys_deleted})
-    return {
-        "success": True,
-        "activity_logs_deleted": act_deleted,
-        "system_logs_deleted": sys_deleted,
-    }
+        log_activity(user_id, "superadmin", "purge_logs",
+                     details={"days": days, "activity_deleted": act_deleted, "system_deleted": sys_deleted}, conn=conn)
+        return {
+            "success": True,
+            "activity_logs_deleted": act_deleted,
+            "system_logs_deleted": sys_deleted,
+        }
+
 
 
 # ── 7. System announcement (stored in system_settings) ──────────────────────
@@ -4554,20 +4570,19 @@ async def set_announcement(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    payload = json.dumps({"message": body.message, "level": body.level,
-                           "set_at": datetime.utcnow().isoformat()})
-    cur.execute("""
-        INSERT INTO system_settings (setting_key, setting_value, updated_by)
-        VALUES ('system_announcement', ?, ?)
-        ON CONFLICT(setting_key)
-        DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-    """, (payload, user_id, payload, user_id))
-    conn.commit()
-    conn.close()
-    return {"success": True}
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        cur = conn.cursor()
+        payload = json.dumps({"message": body.message, "level": body.level,
+                               "set_at": datetime.utcnow().isoformat()})
+        cur.execute("""
+            INSERT INTO system_settings (setting_key, setting_value, updated_by)
+            VALUES ('system_announcement', ?, ?)
+            ON CONFLICT(setting_key)
+            DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        """, (payload, user_id, payload, user_id))
+        return {"success": True}
+
 
 
 @superadmin_router.delete("/announcement")
@@ -4576,13 +4591,12 @@ async def clear_announcement(
     csrf_valid: bool = Depends(verify_csrf),
     request: Request = None,
 ):
-    require_superadmin(user_id)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM system_settings WHERE setting_key = 'system_announcement'")
-    conn.commit()
-    conn.close()
-    return {"success": True}
+    with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        require_superadmin(user_id, conn)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM system_settings WHERE setting_key = 'system_announcement'")
+        return {"success": True}
+
 
 
 @superadmin_router.get("/announcement")
@@ -4624,7 +4638,7 @@ app.include_router(superadmin_router)
 from replenishment import register_replenishment_routes, require_planned_dispatch
 
 register_replenishment_routes(
-    app, get_connection=get_db_connection, write_transaction=stock_write_transaction,
+    app, get_connection=get_db_connection, write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
     require_active=require_active_record, require_access=require_stock_access,
     current_user=get_current_user, verify_csrf=verify_csrf,
 )
@@ -4638,7 +4652,7 @@ register_stock_report_routes(
 from stock_counts import register_stock_count_routes
 
 register_stock_count_routes(
-    app, get_connection=get_db_connection, write_transaction=stock_write_transaction,
+    app, get_connection=get_db_connection, write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
     require_active=require_active_record, require_access=require_stock_access,
     current_user=get_current_user, verify_csrf=verify_csrf, secret=SECRET_KEY,
 )

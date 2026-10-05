@@ -69,7 +69,7 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
 
     @app.put('/api/inventory/minimum')
     async def minimum(data: MinimumRequest, user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
-        with write_transaction() as conn:
+        with write_transaction(user_id, request.cookies.get('session_token')) as conn:
             require_active(conn,'users',user_id)
             require_active(conn,'stores',data.store_id)
             require_active(conn,'parts',data.part_id)

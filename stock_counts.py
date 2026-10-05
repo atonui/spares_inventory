@@ -118,7 +118,7 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
         if not body.confirmed:
             raise HTTPException(400, 'Confirm that these are the physical counts before saving')
         data = read_token(body.preview_token,'preview',user_id)
-        with write_transaction() as conn:
+        with write_transaction(user_id, request.cookies.get('session_token')) as conn:
             store = permitted_store(conn,data['store_id'],user_id)
             fresh_snapshot(conn,data)
             changed = 0

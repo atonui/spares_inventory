@@ -62,7 +62,7 @@ def test_login_started_before_archive_cannot_create_a_new_active_session(api,mon
     seed(api)
     verify=main.verify_password
     def archive_during_verification(password,password_hash):
-        main.archive_record('users',3,1)
+        main.archive_record('users',3,1,session_token='fixture-session-1')
         return verify(password,password_hash)
     monkeypatch.setattr(main,'verify_password',archive_during_verification)
     response=api[0].post('/api/auth/login',json={'email':'user3@example.com','password':'test-password'})
@@ -78,8 +78,8 @@ def test_reset_started_before_archive_and_restore_cannot_use_revoked_token(api,m
         c.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3',('racing-reset',(datetime.utcnow()+timedelta(hours=1)).isoformat()))
     hash_password=main.hash_password
     def archive_during_hash(password):
-        main.archive_record('users',3,1)
-        main.archive_record('users',3,1,restore=True)
+        main.archive_record('users',3,1,session_token='fixture-session-1')
+        main.archive_record('users',3,1,restore=True,session_token='fixture-session-1')
         return hash_password(password)
     monkeypatch.setattr(main,'hash_password',archive_during_hash)
     main.app.state.limiter.reset()

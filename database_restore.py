@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def restore_database(upload, live, actor_id, *, defaults=None):
+def restore_database(upload, live, actor_id, *, defaults=None, validate_actor=None):
     live = Path(live).resolve(strict=True)
     source = sqlite3.connect(upload)
     target = sqlite3.connect(live, timeout=10)
@@ -30,6 +30,10 @@ def restore_database(upload, live, actor_id, *, defaults=None):
         # Other processes use the same SQLite lock; no process-local mutex is needed.
         target.execute('PRAGMA foreign_keys=ON')
         target.execute('BEGIN IMMEDIATE')
+        # HTTP callers must revalidate their exact live session under this lock.
+        # Omission is reserved for explicit trusted offline callers.
+        if validate_actor is not None:
+            validate_actor(target)
         live_status=check_database(target)
         if live_status.pending:
             raise ValueError('Live database must be initialized to the current migration version before restore')

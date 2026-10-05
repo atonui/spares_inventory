@@ -19,13 +19,22 @@ def api(tmp_path, monkeypatch):
     main.init_db()
     with sqlite3.connect(db) as conn:
         conn.execute('DELETE FROM users')
+        password_hash = main.hash_password('test-password')
         for uid, role in [(1, 'admin'), (2, 'superadmin'), (3, 'engineer'), (4, 'manager')]:
             conn.execute('INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)',
-                         (uid, f'user{uid}@example.com', f'User {uid}', main.hash_password('test-password'), role))
+                         (uid, f'user{uid}@example.com', f'User {uid}', password_hash, role))
+        conn.executemany('INSERT INTO sessions(user_id,session_token,expires_at) VALUES(?,?,?)',
+            [(uid,f'fixture-session-{uid}','2099-01-01') for uid in (1,2,3,4)])
     current = {'id': 1}
     main.app.dependency_overrides[main.get_current_user] = lambda: current['id']
     main.app.dependency_overrides[main.verify_csrf] = lambda: True
     with TestClient(main.app) as client:
+        def credential(request):
+            # Preserve tokens explicitly supplied by session-management tests.
+            if main.get_current_user in main.app.dependency_overrides and 'session_token=' not in request.headers.get('cookie',''):
+                prior=request.headers.get('cookie','')
+                request.headers['cookie']=(prior+'; ' if prior else '')+f"session_token=fixture-session-{current['id']}"
+        client.event_hooks['request'].append(credential)
         yield client, db, current
     main.app.dependency_overrides.clear()
 
@@ -190,6 +199,8 @@ def test_session_revocation(api, operation):
     elif operation == 'reset':
         response = client.post('/api/reset-password',json={'token':'reset-test','new_password':'new-test-password'})
     else:
+        with sqlite3.connect(db) as conn:
+            conn.execute("INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(1,'fixture-session-1','2099-01-01',1)")
         response = client.put('/api/users/3',json={'password':'new-test-password'})
     assert response.status_code == 200
     with sqlite3.connect(db) as conn:
