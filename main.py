@@ -4708,6 +4708,39 @@ async def download_db_backup(
                         media_type="application/octet-stream")
 
 
+@superadmin_router.post("/database/restore")
+async def restore_uploaded_database(
+    file: UploadFile = File(...),
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+):
+    require_superadmin(user_id)
+    import tempfile
+    from database_restore import restore_database
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "upload.db")
+            size = 0
+            with open(path, "wb") as output:
+                while chunk := await file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > 20 * 1024 * 1024:
+                        raise HTTPException(status_code=413, detail="Maximum database size is 20 MB")
+                    output.write(chunk)
+            with open(path, "rb") as uploaded:
+                if uploaded.read(16) != b"SQLite format 3\x00":
+                    raise HTTPException(status_code=400, detail="Upload a valid SQLite database")
+            backup_name = restore_database(path, DATABASE, user_id)
+    except (ValueError, sqlite3.Error) as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except TimeoutError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+    response = JSONResponse({"success": True, "backup_name": backup_name,
+                             "message": "Database restored. Please sign in again."})
+    response.delete_cookie("session_token")
+    return response
+
+
 @superadmin_router.post("/database/vacuum")
 async def vacuum_database(
     user_id: int = Depends(get_current_user),

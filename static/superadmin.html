@@ -522,6 +522,15 @@
           </div>
 
           <div class="panel" style="margin-bottom:0;">
+            <div class="panel-header"><span class="panel-title">Restore Database</span></div>
+            <div class="panel-body">
+              <p>Replace all current data with a SQLite backup. Later changes will be overwritten. Pause inventory work before restoring. A snapshot of the current database is saved first; changes made during restoration may not be in that snapshot. Everyone must sign in again.</p>
+              <input type="file" accept=".db,.sqlite,.sqlite3" @change="restoreFile = $event.target.files[0]" :disabled="loading">
+              <button class="btn btn-danger" @click="restoreDB()" :disabled="loading || !restoreFile">Upload and Restore</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:0;">
             <div class="panel-header"><span class="panel-title">🧹 Vacuum Database</span></div>
             <div class="panel-body">
               <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Reclaim unused space and defragment. The app stays online.</p>
@@ -696,6 +705,7 @@
     dbTables: {},
     sqlInput: 'SELECT * FROM users LIMIT 20',
     queryResult: null,
+    restoreFile: null,
     vacuumResult: null, purgeResult: null, purgeDays: 90,
     auditLog: [],
     announcement: null,
@@ -986,6 +996,18 @@ async submitPasswordReset() {
       a.href = `${this.apiUrl}/superadmin/database/backup`;
       a.click();
       this.toast('Backup download started', 'ok');
+    },
+
+    async restoreDB() {
+      if (!this.restoreFile || !confirm('Replace the entire live database with this file? Changes since the backup will be overwritten.')) return;
+      this.loading = true;
+      try {
+        const data = new FormData(); data.append('file', this.restoreFile);
+        const result = await this.api('/superadmin/database/restore', {method:'POST',body:data});
+        alert(result.message + '\nPrevious database saved as: ' + result.backup_name);
+        location.href = '/static/index.html';
+      } catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
     },
 
     vacuumDB() {
