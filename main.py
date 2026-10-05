@@ -953,6 +953,7 @@ class PartResponse(BaseModel):
 
 class InventoryResponse(BaseModel):
     id: int
+    store_id: int
     part_number: str
     description: str
     store_name: str
@@ -968,6 +969,17 @@ class AddStockRequest(BaseModel):
     store_id: int
     quantity: int = Field(gt=0, strict=True)
     work_order_number: Optional[str] = None
+
+
+class ImportBalanceRow(BaseModel):
+    part_number: str = Field(min_length=1, max_length=200)
+    quantity: int = Field(ge=0, le=9007199254740991, strict=True)
+    expected_quantity: Optional[int] = Field(..., ge=0, le=9007199254740991, strict=True)
+
+
+class ImportBalancesRequest(BaseModel):
+    store_id: int
+    rows: List[ImportBalanceRow] = Field(min_length=1, max_length=1000)
 
 
 class CreateStoreRequest(BaseModel):
@@ -1939,6 +1951,7 @@ async def get_inventory(
     query = """
         SELECT 
             i.id,
+            i.store_id,
             p.part_number,
             p.description,
             s.name as store_name,
@@ -2108,6 +2121,80 @@ async def get_stats(user_id: int = Depends(get_current_user), request: Request =
         "low_stock": low_stock,
         "my_parts": my_parts,
     }
+
+
+@app.post("/api/inventory/import-balances")
+@log_endpoint(action="import_stock_balances", resource_type="inventory")
+async def import_stock_balances(
+    request_data: ImportBalancesRequest,
+    user_id: int = Depends(get_current_user),
+    csrf_valid: bool = Depends(verify_csrf),
+    request: Request = None,
+):
+    """Set previewed unallocated stock balances as one transaction."""
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        store = conn.execute("SELECT type,assigned_user_id FROM stores WHERE id=?",
+                             (request_data.store_id,)).fetchone()
+        if not store:
+            raise HTTPException(status_code=404, detail="Store not found")
+        require_stock_access(conn, user_id, store["type"], store["assigned_user_id"])
+        seen, changes = set(), []
+        for row in request_data.rows:
+            number = row.part_number.strip()
+            if not number or number in seen:
+                raise HTTPException(status_code=400, detail="Resolve duplicate part numbers before importing")
+            seen.add(number)
+            part = conn.execute("SELECT id FROM parts WHERE part_number=?", (number,)).fetchone()
+            if not part:
+                raise HTTPException(status_code=400, detail=f"Part {number} not found in catalog")
+            stock = conn.execute("SELECT id,quantity FROM inventory WHERE store_id=? AND part_id=? AND work_order_id IS NULL",
+                                 (request_data.store_id, part["id"])).fetchall()
+            if len(stock) > 1:
+                raise HTTPException(status_code=409, detail=f"Existing duplicate stock for {number}; reconcile it first")
+            current = stock[0]["quantity"] if stock else None
+            if current != row.expected_quantity:
+                raise HTTPException(status_code=409, detail=f"Stock changed for {number}. Cancel and upload again to refresh the preview")
+            changes.append((row, part["id"], stock[0] if stock else None))
+        added = updated = unchanged = 0
+        for row, part_id, stock in changes:
+            old = stock["quantity"] if stock else 0
+            if stock:
+                if old == row.quantity:
+                    unchanged += 1
+                    continue
+                conn.execute("UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                             (row.quantity, stock["id"]))
+                updated += 1
+            else:
+                conn.execute("INSERT INTO inventory(store_id,part_id,quantity) VALUES(?,?,?)",
+                             (request_data.store_id, part_id, row.quantity))
+                added += 1
+            delta = row.quantity - old
+            if delta:
+                conn.execute("INSERT INTO movements(to_store_id,part_id,quantity,movement_type,created_by,notes) VALUES(?,?,?,?,?,?)",
+                             (request_data.store_id, part_id, abs(delta), "add" if delta > 0 else "remove",
+                              user_id, f"CSV balance import: {old} -> {row.quantity}"))
+        conn.commit()
+        return {"success": True, "added": added, "updated": updated, "unchanged": unchanged}
+    except HTTPException:
+        # The shared permission helper closes the connection on denial.
+        try:
+            conn.rollback()
+        except sqlite3.ProgrammingError:
+            pass
+        raise
+    except sqlite3.OperationalError as exc:
+        conn.rollback()
+        if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Database busy; no balances saved. Try again") from exc
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @app.post("/api/inventory/add")

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
     <link rel="stylesheet" href="mystyle.css">
-    <script src="script.js" defer></script>
+    <script src="script.js?v=20261005-balance-import" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -1385,12 +1385,12 @@
             </div>
 
             <!-- Duplicate Resolution Modal -->
-            <div x-show="showDuplicateResolutionModal" class="modal" @click.outside="showDuplicateResolutionModal = false">
+            <div x-show="showDuplicateResolutionModal" class="modal">
                 <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
-                    <h3>🔍 Duplicate Parts Detected</h3>
+                    <h3>Preview Stock Balance Import</h3>
                     <p style="color: #666; margin-bottom: 1.5rem;">
-                        The following parts appear multiple times or already exist in the store. 
-                        Choose how to handle each one:
+                        CSV quantities set the selected parts’ stock balances. Parts omitted from this file stay unchanged.
+                        Review all changes before saving.
                     </p>
 
                     <!-- CSV Duplicates Section -->
@@ -1418,9 +1418,10 @@
                                         <td x-text="dup.quantities.join(' + ')"></td>
                                         <td><strong x-text="dup.totalQuantity"></strong></td>
                                         <td>
-                                            <select x-model="dup.action" style="width: 100%; padding: 0.4rem;">
-                                                <option value="tally">✓ Tally (Sum all)</option>
-                                                <option value="separate">↔ Keep Separate</option>
+                                            <select x-model="dup.action" :disabled="loading" style="width: 100%; padding: 0.4rem;">
+                                                <option value="">Choose an action</option>
+                                                <option value="first">Use first row</option>
+                                                <option value="tally">Sum rows into one balance</option>
                                                 <option value="skip">✗ Skip All</option>
                                             </select>
                                         </td>
@@ -1430,48 +1431,29 @@
                         </table>
                     </div>
 
-                    <!-- Store Conflicts Section -->
-                    <div x-show="storeConflicts.length > 0" style="margin-bottom: 2rem;">
-                        <h4 style="color: #dc2626; margin-bottom: 1rem;">⚠️ Already in Store</h4>
-                        <p style="font-size: 0.9em; color: #666; margin-bottom: 1rem;">
-                            These parts already exist in the selected store.
-                        </p>
-                        
-                        <table>
-                            <thead>
+                    <p x-show="error" x-text="error" role="alert" style="color:#b91c1c;"></p>
+                    <table style="margin-bottom:1rem;">
+                        <thead><tr><th>Part Number</th><th>Current Qty</th><th>New Balance</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <template x-for="row in getImportPreview()" :key="row.partNumber">
                                 <tr>
-                                    <th>Part Number</th>
-                                    <th>Description</th>
-                                    <th>Current Qty</th>
-                                    <th>CSV Qty</th>
-                                    <th>New Total</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="conflict in storeConflicts" :key="conflict.partNumber">
-                                    <tr>
-                                        <td><strong x-text="conflict.partNumber"></strong></td>
-                                        <td x-text="conflict.description"></td>
-                                        <td x-text="conflict.currentQuantity"></td>
-                                        <td x-text="conflict.csvQuantity"></td>
-                                        <td>
-                                            <strong x-text="conflict.action === 'add' ? (conflict.currentQuantity + conflict.csvQuantity) : 
-                                                        conflict.action === 'replace' ? conflict.csvQuantity : 
-                                                        conflict.currentQuantity"></strong>
-                                        </td>
-                                        <td>
-                                            <select x-model="conflict.action" style="width: 100%; padding: 0.4rem;">
-                                                <option value="add">➕ Add to Existing</option>
-                                                <option value="replace">🔄 Replace Quantity</option>
-                                                <option value="skip">✗ Skip</option>
+                                    <td x-text="row.partNumber"></td>
+                                    <td x-text="row.currentQuantity === null ? 'New stock' : row.currentQuantity"></td>
+                                    <td x-text="row.action === 'resolve' ? 'Choose duplicate action' : row.action === 'skip' ? (row.currentQuantity ?? 'No change') : row.quantity"></td>
+                                    <td>
+                                        <span x-show="row.currentQuantity === null" x-text="row.action === 'create' ? 'Create' : row.action"></span>
+                                        <template x-if="row.currentQuantity !== null">
+                                            <select :disabled="loading" :value="storeConflicts.find(c=>c.partNumber===row.partNumber).action"
+                                                @change="storeConflicts.find(c=>c.partNumber===row.partNumber).action=$event.target.value">
+                                                <option value="replace">Set CSV balance</option>
+                                                <option value="skip">Skip</option>
                                             </select>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
+                                        </template>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
 
                     <!-- Action Summary -->
                     <div style="background: #f0f9ff; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; border-left: 4px solid #3b82f6;">
@@ -1486,18 +1468,18 @@
                     <!-- Buttons -->
                     <div style="display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;">
                         <div style="display: flex; gap: 0.5rem;">
-                            <button type="button" class="btn btn-sm" @click="setAllCsvDuplicates('tally')">
+                            <button type="button" class="btn btn-sm" @click="setAllCsvDuplicates('tally')" :disabled="loading">
                                 Tally All CSV
                             </button>
-                            <button type="button" class="btn btn-sm" @click="setAllStoreConflicts('add')">
-                                Add All to Store
+                            <button type="button" class="btn btn-sm" @click="setAllStoreConflicts('replace')" :disabled="loading">
+                                Set All Balances
                             </button>
-                            <button type="button" class="btn btn-sm" @click="setAllActions('skip')">
+                            <button type="button" class="btn btn-sm" @click="setAllActions('skip')" :disabled="loading">
                                 Skip All
                             </button>
                         </div>
                         <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" @click="cancelDuplicateResolution()">
+                            <button type="button" class="btn" @click="cancelDuplicateResolution()" :disabled="loading">
                                 Cancel Import
                             </button>
                             <button type="button" class="btn btn-success" @click="processDuplicateResolution()" :disabled="loading">
