@@ -978,8 +978,8 @@ label.btn {
 .audit-panel :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
 @media(max-width:768px) { .audit-panel input, .audit-panel select, .audit-panel button, .audit-panel summary { min-height: 44px; } }
 /* Read-only consumption reports */
-.report-filters fieldset { border:0; padding:0; margin:1rem 0; display:flex; flex-wrap:wrap; align-items:end; gap:1rem; }
-.report-filters label { display:flex; flex-direction:column; gap:.35rem; max-width:100%; }
+.report-filters fieldset { border:0; padding:0; margin:1rem 0; display:grid; grid-template-columns:minmax(0,1fr); align-items:end; gap:1.25rem; }
+.report-filters label { display:flex; flex-direction:column; gap:.35rem; max-width:100%; margin:0; }
 .report-filters input:not([type="checkbox"]),.report-filters select { max-width:100%; min-height:2.5rem; }
 .report-table-wrap { overflow-x:auto; margin:.75rem 0 1.5rem; }
 .report-table-wrap table { width:100%; border-collapse:collapse; }
@@ -989,7 +989,11 @@ label.btn {
 .report-summary { margin:1.25rem 0; }
 .report-error { color:#991b1b; }
 .report-pagination { display:flex; flex-wrap:wrap; align-items:center; gap:1rem; }
-@media(max-width:600px) { .report-filters label { width:100%; } .report-table-wrap table { min-width:560px; } }
+@media(max-width:600px) { .report-table-wrap table { min-width:560px; } }
+@media(min-width:601px) { .report-filters fieldset { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(min-width:1100px) { .report-filters fieldset { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+.report-filters .report-all-dates { grid-column:1 / -1; }
+.report-filters button[type="submit"] { justify-self:start; max-width:100%; }
 
 .report-filters .report-all-dates { flex-direction:row; align-items:center; gap:.5rem; min-height:44px; margin-bottom:0; cursor:pointer; }
 .report-filters input[type="checkbox"] { width:18px; height:18px; min-height:0; padding:0; margin:0; flex:0 0 18px; accent-color:#1d4ed8; }
@@ -1002,6 +1006,6 @@ label.btn {
 .report-filters input:not([type="checkbox"]),.report-filters select { width:100%; min-width:0; }
 
 /* Native date editors must also fit within their flex-column labels. */
-.report-filters input[type="date"] { display:block; inline-size:100%; min-inline-size:0; max-inline-size:100%; align-self:stretch; padding:.5rem; }
+.report-filters input[type="date"] { -webkit-appearance:none; appearance:none; box-sizing:border-box; display:block; width:100%; inline-size:100%; min-inline-size:0; max-inline-size:100%; align-self:stretch; padding:.5rem; }
 .report-filters input[type="date"]::-webkit-datetime-edit { min-width:0; padding:0; }
 .report-filters input[type="date"]::-webkit-date-and-time-value { min-width:0; text-align:left; }
