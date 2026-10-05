@@ -1058,6 +1058,8 @@ class PartResponse(BaseModel):
 
 
 class InventoryResponse(BaseModel):
+    part_id: int
+    is_allocated: bool
     id: int
     store_id: int
     part_number: str
@@ -1142,6 +1144,7 @@ class TransferConfirmationRequest(BaseModel):
 
 
 class TransferStockRequest(BaseModel):
+    replenishment: bool = Field(default=False, strict=True)
     inventory_id: int
     to_store_id: int
     quantity: int = Field(gt=0, strict=True)
@@ -2065,6 +2068,8 @@ async def get_inventory(
         SELECT 
             i.id,
             i.store_id,
+            i.part_id,
+            (i.work_order_id IS NOT NULL) AS is_allocated,
             p.part_number,
             p.description,
             s.name as store_name,
@@ -2154,7 +2159,7 @@ async def consume_stock(
         # Update inventory
         new_quantity = item["quantity"] - request_data.quantity
 
-        if new_quantity == 0:
+        if new_quantity == 0 and not item["min_threshold"]:
             cursor.execute(
                 "DELETE FROM inventory WHERE id = ?", (request_data.inventory_id,)
             )
@@ -2209,7 +2214,7 @@ async def get_stats(user_id: int = Depends(get_current_user), request: Request =
     total_stores = cursor.fetchone()[0]
 
     # Low stock items
-    cursor.execute("SELECT COUNT(*) FROM inventory i JOIN parts p ON p.id=i.part_id JOIN stores s ON s.id=i.store_id WHERE i.quantity <= i.min_threshold AND p.archived_at IS NULL AND s.archived_at IS NULL")
+    cursor.execute("SELECT COUNT(*) FROM inventory i JOIN parts p ON p.id=i.part_id JOIN stores s ON s.id=i.store_id WHERE i.min_threshold > 0 AND i.quantity < i.min_threshold AND i.work_order_id IS NULL AND p.archived_at IS NULL AND s.archived_at IS NULL")
     low_stock = cursor.fetchone()[0]
 
     # User's parts (stores they own)
@@ -2479,8 +2484,10 @@ async def transfer_stock(
         require_active_record(conn,'stores',request_data.to_store_id)
         require_active_record(conn,'stores',item['store_id'])
         require_active_record(conn,'parts',item['part_id'])
+        if request_data.replenishment:
+            require_planned_dispatch(conn,user_id,item['id'],request_data.to_store_id,request_data.quantity)
         remaining=item['quantity']-request_data.quantity
-        if remaining:
+        if remaining or item['min_threshold']:
             conn.execute('UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(remaining,item['id']))
         else:
             conn.execute('DELETE FROM inventory WHERE id=?',(item['id'],))
@@ -5004,6 +5011,14 @@ async def get_superadmin_audit(
     return rows
 
 app.include_router(superadmin_router)
+
+from replenishment import register_replenishment_routes, require_planned_dispatch
+
+register_replenishment_routes(
+    app, get_connection=get_db_connection, write_transaction=stock_write_transaction,
+    require_active=require_active_record, require_access=require_stock_access,
+    current_user=get_current_user, verify_csrf=verify_csrf,
+)
 
 from stock_counts import register_stock_count_routes
 
