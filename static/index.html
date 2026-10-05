@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261005-stock-reports">
+    <link rel="stylesheet" href="mystyle.css?v=20261005-report-checkbox">
     <style>[x-cloak] { display: none !important; }</style>
     <script src="audit.js?v=20261005-stock-reports" defer></script>
     <script src="script.js?v=20261005-stock-reports" defer></script>
@@ -1683,7 +1683,7 @@
                 <p>Dates use Africa/Nairobi. Archived parts and stores remain in history.</p>
                 <form @submit.prevent="loadConsumptionReport()" class="report-filters">
                     <fieldset :disabled="reportBusy || reportExportBusy">
-                        <label><input type="checkbox" x-model="reportForm.allDates" @change="markReportDirty()"> All dates</label>
+                        <label class="report-all-dates"><input type="checkbox" x-model="reportForm.allDates" @change="markReportDirty()"> All dates</label>
                         <label>From <input type="date" x-model="reportForm.start_date" :disabled="reportForm.allDates" @change="markReportDirty()"></label>
                         <label>Through <input type="date" x-model="reportForm.end_date" :disabled="reportForm.allDates" @change="markReportDirty()"></label>
                         <label>Part <select x-model="reportForm.part_id" @change="markReportDirty()"><option value="">All parts</option><template x-for="p in reportOptions.parts" :key="p.id"><option :value="p.id" x-text="p.part_number+' — '+p.description"></option></template></select></label>
