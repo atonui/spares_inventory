@@ -3565,7 +3565,7 @@ async def get_activity_logs(
     params = []
 
     # Non-admins can only see their own logs
-    if check_admin(user_id):
+    if not check_admin(user_id):
         query += " AND user_id = ?"
         params.append(user_id)
     else:
@@ -5004,6 +5004,14 @@ async def get_superadmin_audit(
     return rows
 
 app.include_router(superadmin_router)
+
+from stock_counts import register_stock_count_routes
+
+register_stock_count_routes(
+    app, get_connection=get_db_connection, write_transaction=stock_write_transaction,
+    require_active=require_active_record, require_access=require_stock_access,
+    current_user=get_current_user, verify_csrf=verify_csrf, secret=SECRET_KEY,
+)
 
 if __name__ == "__main__":
     import uvicorn

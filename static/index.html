@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
     <link rel="stylesheet" href="mystyle.css">
-    <script src="script.js?v=20261005-archive-integrity" defer></script>
+    <style>[x-cloak] { display: none !important; }</style>
+    <script src="script.js?v=20261005-stock-counts" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -436,6 +437,8 @@
                     <button class="btn btn-sm" @click="exportStoreInventoryCSV(selectedStore?.name)">
                         Export CSV
                     </button>
+                    <button class="btn btn-sm" @click="startStockCount(selectedStore, $event.currentTarget)" :disabled="stockCountBusy"
+                            x-show="editableStores.some(store=>store.id===selectedStore?.id)">Count Stock</button>
                     <button class="btn btn-sm" @click="closeAllPanels()">Close</button>
             </div>
             </div>
@@ -937,6 +940,63 @@
             </div>
 
             <!-- MODALS -->
+
+            <div x-show="stockCount" x-cloak class="modal" role="dialog" x-ref="stockCountDialog" tabindex="-1" aria-modal="true" aria-labelledby="stock-count-title"
+                 @keydown.escape.stop.prevent="cancelStockCount()" @keydown.tab="trapStockCountFocus($event, $el)">
+                <template x-if="stockCount">
+                    <div class="modal-content" tabindex="-1" x-init="$nextTick(() => $el.focus())" style="max-width: 1000px; width: 95%; max-height: 90vh; overflow-y: auto;">
+                        <h3 id="stock-count-title" x-text="'Physical stock count — ' + stockCount.store_name"></h3>
+                        <p>Count only stock physically in this store. Count work-order allocations separately; do not count the same units twice. Stock in transit is excluded.</p>
+                        <p>Blank entries stay unchanged. Enter 0 only when you have verified that allocation is empty.</p>
+                        <div x-show="error" role="alert" style="color: #b71c1c; margin: 1rem 0;" x-text="error"></div>
+                        <form x-show="!stockCountPreview" @submit.prevent="previewStockCount()">
+                            <div style="overflow-x: auto;">
+                                <table>
+                                    <thead><tr><th>Part</th><th>Allocation</th><th>Recorded</th><th>Physical count</th><th>Correction reason</th></tr></thead>
+                                    <tbody><template x-for="row in stockCount.rows" :key="row.inventory_id">
+                                        <tr>
+                                            <td><strong x-text="row.part_number"></strong><br><span x-text="row.description"></span></td>
+                                            <td x-text="row.work_order || 'Unallocated'"></td>
+                                            <td x-text="row.quantity"></td>
+                                            <td><input type="number" min="0" max="2147483647" step="1" x-model="row.counted_quantity" :disabled="stockCountBusy"
+                                                       :aria-label="'Physical count for ' + row.part_number + ', ' + (row.work_order || 'unallocated')" placeholder="Not counted" style="min-width: 110px;"></td>
+                                            <td><input type="text" maxlength="1000" x-model="row.reason" :disabled="stockCountBusy"
+                                                       :required="String(row.counted_quantity).trim() !== '' && Number(row.counted_quantity) !== row.quantity"
+                                                       :aria-label="'Correction reason for ' + row.part_number + ', ' + (row.work_order || 'unallocated')" placeholder="Required if different" style="min-width: 180px;"></td>
+                                        </tr>
+                                    </template></tbody>
+                                </table>
+                            </div>
+                            <p x-show="stockCount.rows.length === 0">This store has no stock rows to count.</p>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                                <button type="button" class="btn" @click="cancelStockCount()" :disabled="stockCountBusy">Cancel</button>
+                                <button type="button" class="btn" @click="restartStockCount()" :disabled="stockCountBusy">Restart with fresh balances</button>
+                                <button type="submit" class="btn btn-success" :disabled="stockCountBusy || !stockCount.rows.length">Preview count</button>
+                            </div>
+                        </form>
+                        <template x-if="stockCountPreview">
+                            <div>
+                                <h4>Review before saving</h4>
+                                <div style="overflow-x: auto;"><table>
+                                    <thead><tr><th>Part</th><th>Allocation</th><th>Before</th><th>Counted</th><th>Difference</th><th>Reason</th></tr></thead>
+                                    <tbody><template x-for="row in stockCountPreview.rows" :key="row.inventory_id">
+                                        <tr><td x-text="row.part_number"></td><td x-text="row.work_order || 'Unallocated'"></td>
+                                            <td x-text="row.before_quantity"></td><td x-text="row.counted_quantity"></td>
+                                            <td x-text="row.difference > 0 ? '+' + row.difference : row.difference"></td><td x-text="row.reason || 'Verified unchanged'"></td></tr>
+                                    </template></tbody>
+                                </table></div>
+                                <p>Only the entries above will be saved. Your account and the confirmation time will be recorded with this count.</p>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end;">
+                                    <button type="button" class="btn" @click="cancelStockCount()" :disabled="stockCountBusy">Cancel</button>
+                                    <button type="button" class="btn" @click="editStockCount()" :disabled="stockCountBusy">Back to counts</button>
+                                    <button type="button" class="btn" @click="restartStockCount()" :disabled="stockCountBusy">Restart with fresh balances</button>
+                                    <button type="button" class="btn btn-success" @click="confirmStockCount()" :disabled="stockCountBusy" x-text="stockCountBusy ? 'Saving…' : 'Confirm physical count'"></button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
 
             <!-- Activity Stats Modal -->
             <div x-show="showStatsModal" class="modal" @click.outside="showStatsModal = false">
