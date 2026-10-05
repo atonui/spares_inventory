@@ -1000,3 +1000,8 @@ label.btn {
 .report-filters fieldset { min-inline-size:0; width:100%; }
 .report-filters label { min-width:0; }
 .report-filters input:not([type="checkbox"]),.report-filters select { width:100%; min-width:0; }
+
+/* Native date editors must also fit within their flex-column labels. */
+.report-filters input[type="date"] { display:block; inline-size:100%; min-inline-size:0; max-inline-size:100%; align-self:stretch; padding:.5rem; }
+.report-filters input[type="date"]::-webkit-datetime-edit { min-width:0; padding:0; }
+.report-filters input[type="date"]::-webkit-date-and-time-value { min-width:0; text-align:left; }
