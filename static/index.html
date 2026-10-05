@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
     <link rel="stylesheet" href="mystyle.css">
-    <script src="script.js?v=20261005-transfer-receipts" defer></script>
+    <script src="script.js?v=20261005-archive-integrity" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -193,13 +193,14 @@
                     </div>
 
                     <!-- <button class="btn" @click="exportCSV()">Export Inventory</button> -->
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showUsersPanel')">
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()">Archived records</button>
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel')">
                         <span>Manage Users</span>
                     </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()">
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()">
                         <span>Manage Stores</span>
                     </button>
-                    <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showPartsPanel')">
+                    <button x-show="['admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')">
                         <span>Manage Parts</span>
                     </button>
                     <button x-show="currentUser?.role === 'admin'" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()">
@@ -248,8 +249,25 @@
                 </table>
             </div>
 
+            <section x-show="showArchivedPanel && ['admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom:1.5rem;">
+                <div style="padding:1rem; display:flex; justify-content:space-between; gap:1rem;">
+                    <div><h3>Archived records</h3><p>History is preserved. Restore a record before using it again.</p></div>
+                    <div><button class="btn btn-sm" @click="loadArchivedRecords()" :disabled="loading">Refresh</button>
+                    <button class="btn btn-sm" @click="closeAllPanels()">Close</button></div>
+                </div>
+                <p x-show="archivedRecords.length === 0" style="padding:1rem;">No archived records.</p>
+                <div style="overflow-x:auto;" x-show="archivedRecords.length > 0">
+                    <table><thead><tr><th>Type</th><th>Record</th><th>Archived</th><th>Action</th></tr></thead>
+                    <tbody><template x-for="record in archivedRecords" :key="record.kind + '-' + record.id">
+                        <tr><td x-text="record.kind"></td><td x-text="record.label"></td>
+                        <td x-text="new Date(record.archived_at).toLocaleString()"></td>
+                        <td><button class="btn btn-sm" @click="restoreArchivedRecord(record)" :disabled="loading">Restore</button></td></tr>
+                    </template></tbody></table>
+                </div>
+            </section>
+
             <!-- Parts Management Panel (Admin Only) -->
-            <div x-show="!loading && showPartsPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <div x-show="!loading && showPartsPanel && ['admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Parts Management</h3>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -289,7 +307,7 @@
                                     <button class="btn btn-sm" 
                                             style="background: #dc3545; color: white;"
                                             @click="deletePart(part.id, part.part_number)">
-                                            Delete
+                                            Archive
                                     </button>
                                 </td>
                             </tr>
@@ -299,7 +317,7 @@
             </div>
 
             <!-- Store Management Panel (Admin Only) -->
-            <div x-show="!loading && showStoresPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <div x-show="!loading && showStoresPanel && ['admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Store Management</h3>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -339,7 +357,7 @@
                                     <button class="btn btn-sm" @click="editStore(store)">Edit</button>
                                     <button class="btn btn-sm" 
                                             style="background: #dc3545; color: white;"
-                                            @click="deleteStore(store.id, store.name)">Delete</button>
+                                            @click="deleteStore(store.id, store.name)">Archive</button>
                                 </td>
                             </tr>
                         </template>
@@ -618,7 +636,7 @@
             </div>
 
             <!-- User Management Panel (Admin Only) -->
-            <div x-show="!loading && showUsersPanel && currentUser?.role === 'admin'" class="inventory-table" style="margin-bottom: 1.5rem;">
+            <div x-show="!loading && showUsersPanel && ['admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">User Management</h3>
                     <div style="display: flex; gap: 0.5rem;">
@@ -653,7 +671,7 @@
                                     <button class="btn btn-sm" 
                                             style="background: #dc3545; color: white;"
                                             x-show="user.id !== currentUser.id"
-                                            @click="deleteUser(user.id, user.name)">Delete</button>
+                                            @click="deleteUser(user.id, user.name)">Archive</button>
                                 </td>
                             </tr>
                         </template>
@@ -752,7 +770,7 @@
             </div>
 
             <!-- Recent Activity Feed (Home View) -->
-            <div x-show="!loading && !showUsersPanel && !showStoresPanel && !showPartsPanel && !showMovementsPanel && 
+            <div x-show="!loading && !showArchivedPanel && !showUsersPanel && !showStoresPanel && !showPartsPanel && !showMovementsPanel &&
             !showAllPartsPanel && !showAllStoresPanel && !showLowStockPanel && !showMyPartsPanel && !showStoreInventoryPanel &&
              !showEquipmentPanel && !showInventoryPanel && !showStoreTypesPanel" class="inventory-table">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
