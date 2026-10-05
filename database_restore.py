@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def restore_database(upload, live, actor_id):
+def restore_database(upload, live, actor_id, *, defaults=None):
     live = Path(live).resolve(strict=True)
     source = sqlite3.connect(upload)
     target = sqlite3.connect(live, timeout=10)
@@ -18,22 +18,19 @@ def restore_database(upload, live, actor_id):
             raise ValueError('Uploaded database failed its integrity check')
         if source.execute("SELECT 1 FROM sqlite_master WHERE type IN ('trigger','view') OR upper(sql) LIKE '%VIRTUAL TABLE%'").fetchone():
             raise ValueError('Uploaded database contains unsupported schema objects')
-        # Upgrade only the known additive transfer schema on the temporary upload.
-        if target.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_transfers'").fetchone() and not source.execute("SELECT 1 FROM sqlite_master WHERE name='stock_transfers'").fetchone():
-            from transfer_schema import ensure_transfer_schema
-            ensure_transfer_schema(source)
-        if any(row[1]=='archived_at' for row in target.execute('PRAGMA table_info(users)')):
-            from archive_schema import ensure_archive_schema
-            ensure_archive_schema(source)
+        from backend.database import bootstrap_defaults, DEFAULT_SETTINGS
+        from backend.migrations import apply_migrations, check_database
+        live_status=check_database(target)
+        if live_status.pending:
+            raise ValueError('Live database must be initialized to the current migration version before restore')
+        apply_migrations(source,bootstrap=lambda c:bootstrap_defaults(c,DEFAULT_SETTINGS if defaults is None else defaults))
+        if source.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+            raise ValueError('Upgraded upload failed its integrity check')
         if source.execute('PRAGMA foreign_key_check').fetchone():
             raise ValueError('Uploaded database contains invalid foreign references')
         # Match the running application schema before copying any data.
-        def schema(connection):
-            return {(kind, name, table, ' '.join((sql or '').split()))
-                    for kind, name, table, sql in connection.execute(
-                        "SELECT type,name,tbl_name,sql FROM sqlite_master "
-                        "WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%'")}
-        if schema(source) != schema(target):
+        from backend.migrations.validation import schema_signature
+        if schema_signature(source) != schema_signature(target):
             raise ValueError('Uploaded database schema differs from the live database')
         active_clause=' AND archived_at IS NULL' if any(row[1]=='archived_at' for row in target.execute('PRAGMA table_info(users)')) else ''
         actor = target.execute('SELECT email FROM users WHERE id=? AND role=?'+active_clause,(actor_id,'superadmin')).fetchone()

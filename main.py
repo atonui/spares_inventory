@@ -39,8 +39,6 @@ from itsdangerous import URLSafeTimedSerializer
 
 
 import shutil
-from transfer_schema import ensure_transfer_schema
-from archive_schema import ensure_archive_schema
 from stock_audit import balance_snapshot, change_after, record_stock_audit, STOCK_AUDIT_ACTIONS, PROTECTED_AUDIT_SQL
 
 # setup password hashing context
@@ -130,350 +128,20 @@ csrf_serializer = URLSafeTimedSerializer(CSRF_SECRET)
 
 
 # Database setup
+from backend.database import connect_database, initialize_database, DEFAULT_SETTINGS
+
+
+def database_defaults():
+    return {**DEFAULT_SETTINGS,
+        'max_login_attempts':str(MAX_LOGIN_ATTEMPTS),
+        'lockout_duration_minutes':str(LOCKOUT_DURATION_MINUTES),
+        'session_duration_hours':str(SESSION_DURATION_HOURS),
+        'remember_me_duration_days':str(REMEMBER_ME_DURATION_DAYS)}
+
+
 def init_db():
-    """Initialize the database with tables"""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-
-    # Users table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'engineer',
-            territory TEXT,
-            session_token TEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            session_expires TIMESTAMP NULL,
-            failed_login_attempts INTEGER DEFAULT 0,
-            account_locked_until TIMESTAMP NULL,
-            last_login TIMESTAMP NULL
-        )
-    """)
-
-    # Check and add columns to existing users table if they don't exist
-    cursor.execute("PRAGMA table_info(users)")
-    existing_columns = [column[1] for column in cursor.fetchall()]
-
-    if "session_expires" not in existing_columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN session_expires TIMESTAMP NULL")
-
-    if "failed_login_attempts" not in existing_columns:
-        cursor.execute(
-            "ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0"
-        )
-
-    if "account_locked_until" not in existing_columns:
-        cursor.execute(
-            "ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP NULL"
-        )
-
-    if "last_login" not in existing_columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL")
-
-    for column in ("reset_token", "reset_token_expires"):
-        if column not in existing_columns:
-            cursor.execute(f"ALTER TABLE users ADD COLUMN {column} TEXT")
-
-    # Stores table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS stores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            type TEXT NOT NULL,
-            location TEXT,
-            assigned_user_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (assigned_user_id) REFERENCES users (id)
-        )
-    """)
-
-    # Work Orders table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS work_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            work_order_number TEXT UNIQUE NOT NULL,
-            customer_name TEXT,
-            description TEXT,
-            status TEXT DEFAULT 'open',
-            assigned_engineer_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (assigned_engineer_id) REFERENCES users (id)
-        )
-    """)
-
-    # Parts table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS parts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            part_number TEXT UNIQUE NOT NULL,
-            description TEXT,
-            category TEXT,
-            unit_cost REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Inventory table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS inventory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            store_id INTEGER NOT NULL,
-            part_id INTEGER NOT NULL,
-            quantity INTEGER NOT NULL DEFAULT 0,
-            min_threshold INTEGER DEFAULT 0,
-            work_order_id TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (store_id) REFERENCES stores (id),
-            FOREIGN KEY (part_id) REFERENCES parts (id),
-            FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
-            UNIQUE(store_id, part_id, work_order_id)
-        )
-    """)
-
-    # Movements table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS movements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            from_store_id INTEGER,
-            to_store_id INTEGER,
-            part_id INTEGER NOT NULL,
-            quantity INTEGER NOT NULL,
-            movement_type TEXT NOT NULL,
-            work_order_id INTEGER,
-            created_by INTEGER NOT NULL,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (from_store_id) REFERENCES stores (id),
-            FOREIGN KEY (to_store_id) REFERENCES stores (id),
-            FOREIGN KEY (part_id) REFERENCES parts (id),
-            FOREIGN KEY (work_order_id) REFERENCES work_orders (id),
-            FOREIGN KEY (created_by) REFERENCES users (id)
-        )
-    """)
-
-    # Check and add notes column if it doesn't exist
-    cursor.execute("PRAGMA table_info(movements)")
-    movement_columns = [column[1] for column in cursor.fetchall()]
-
-    if "notes" not in movement_columns:
-        cursor.execute("ALTER TABLE movements ADD COLUMN notes TEXT")
-    ensure_transfer_schema(conn)
-    # Activity Logs table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS activity_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            action TEXT NOT NULL,
-            resource_type TEXT,
-            resource_id INTEGER,
-            details TEXT,
-            ip_address TEXT,
-            user_agent TEXT,
-            status TEXT DEFAULT 'success',
-            error_message TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    """)
-
-    # Create indexes for better query performance
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_user
-        ON activity_logs(user_id)
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_action
-        ON activity_logs(action)
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_created
-        ON activity_logs(created_at)
-    """)
-
-    # System Logs table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS system_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            level TEXT NOT NULL,
-            component TEXT,
-            message TEXT NOT NULL,
-            details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Store Types table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS store_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type_code TEXT UNIQUE NOT NULL,
-            type_name TEXT NOT NULL,
-            description TEXT,
-            is_active INTEGER DEFAULT 1,
-            display_order INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Insert default store types if table is empty
-    cursor.execute("SELECT COUNT(*) FROM store_types")
-    if cursor.fetchone()[0] == 0:
-        default_types = [
-            (
-                "office",
-                "Office/Warehouse",
-                "Main office or warehouse location",
-                1,
-                1,
-            ),
-            (
-                "customer_site",
-                "Customer Site",
-                "Equipment at customer location",
-                1,
-                2,
-            ),
-            (
-                "engineer",
-                "Engineer Personal",
-                "Parts assigned to field engineer",
-                1,
-                3,
-            ),
-            (
-                "fe_consignment",
-                "FE Consignment",
-                "Field engineer consignment stock",
-                1,
-                4,
-            ),
-            ("admin", "Administration", "Administrative storage", 1, 5),
-            ("warehouse", "Warehouse", "General warehouse storage", 1, 6),
-        ]
-
-        cursor.executemany(
-            """
-            INSERT INTO store_types (type_code, type_name, description, is_active, display_order)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            default_types,
-        )
-
-    # Sessions table for better session management
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            session_token TEXT UNIQUE NOT NULL,
-            expires_at TIMESTAMP NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            ip_address TEXT,
-            user_agent TEXT,
-            is_active INTEGER DEFAULT 1,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_sessions_token
-        ON sessions(session_token)
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_sessions_user
-        ON sessions(user_id, is_active)
-    """)
-
-    # Equipment table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS equipment (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            equipment_name TEXT NOT NULL,
-            make TEXT NOT NULL,
-            model TEXT NOT NULL,
-            serial_number TEXT UNIQUE NOT NULL,
-            assigned_user_id INTEGER,
-            calibration_cert_number TEXT,
-            calibration_authority TEXT,
-            calibration_date TEXT,
-            next_calibration_date TEXT,
-            status TEXT DEFAULT 'active',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (assigned_user_id) REFERENCES users (id)
-        )
-    """)
-
-    # Equipment History table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS equipment_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            equipment_id INTEGER NOT NULL,
-            action TEXT NOT NULL,
-            from_user_id INTEGER,
-            to_user_id INTEGER,
-            calibration_date TEXT,
-            notes TEXT,
-            created_by INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (equipment_id) REFERENCES equipment (id),
-            FOREIGN KEY (from_user_id) REFERENCES users (id),
-            FOREIGN KEY (to_user_id) REFERENCES users (id),
-            FOREIGN KEY (created_by) REFERENCES users (id)
-        )
-    """)
-
-    # System Settings table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS system_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            setting_key TEXT UNIQUE NOT NULL,
-            setting_value TEXT NOT NULL,
-            description TEXT,
-            updated_by INTEGER,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (updated_by) REFERENCES users (id)
-        )
-    """)
-
-    # Insert default system settings
-    cursor.execute(
-        "SELECT COUNT(*) FROM system_settings WHERE setting_key = 'calibration_reminder_days'"
-    )
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("""
-            INSERT INTO system_settings (setting_key, setting_value, description)
-            VALUES ('calibration_reminder_days', '30', 'Days before calibration due to send reminders')
-        """)
-
-    cursor.executemany(
-        "INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description) VALUES (?, ?, ?)",
-        [
-            ("max_login_attempts",        str(MAX_LOGIN_ATTEMPTS),        "Max failed logins before lockout"),
-            ("lockout_duration_minutes",  str(LOCKOUT_DURATION_MINUTES),  "Minutes account stays locked"),
-            ("session_duration_hours",    str(SESSION_DURATION_HOURS),    "Session lifetime in hours"),
-            ("remember_me_duration_days", str(REMEMBER_ME_DURATION_DAYS), "Remember-me lifetime in days"),
-        ],
-)
-
-
-    try:
-        ensure_archive_schema(conn)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    """Apply explicit migrations and preserve configured bootstrap defaults."""
+    initialize_database(DATABASE,defaults=database_defaults())
 
 
 # ============ CSRF UTILITIES ============
@@ -511,11 +179,8 @@ def create_access_token(data: dict):
 
 
 def get_db_connection():
-    """Get database connection"""
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    """Open a configured connection using the application database path."""
+    return connect_database(DATABASE)
 
 
 def check_admin(user_id: int) -> bool:
@@ -933,9 +598,8 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting up...")
     logger.info("Application starting up")
-    log_system_event("INFO", "startup", "Application initialized")
-
     init_db()
+    log_system_event("INFO", "startup", "Application initialized")
     print("✅ Database initialized")
     logger.info("Database initialized successfully")
     yield
@@ -4879,7 +4543,7 @@ async def restore_uploaded_database(
             with open(path, "rb") as uploaded:
                 if uploaded.read(16) != b"SQLite format 3\x00":
                     raise HTTPException(status_code=400, detail="Upload a valid SQLite database")
-            backup_name = restore_database(path, DATABASE, user_id)
+            backup_name = restore_database(path, DATABASE, user_id, defaults=database_defaults())
     except (ValueError, sqlite3.Error) as error:
         raise HTTPException(status_code=400, detail=str(error))
     except TimeoutError as error:

@@ -145,7 +145,10 @@ def test_pre_receipt_backup_restores_with_empty_transfer_lifecycle(api,tmp_path)
     seed(api)
     upload=tmp_path/'old-backup.db'
     shutil.copyfile(api[1],upload)
-    with sqlite3.connect(upload) as c:c.execute('DROP TABLE stock_transfers')
+    # A pre-receipt backup predates both the lifecycle table and migration ledger.
+    with sqlite3.connect(upload) as c:
+        c.execute('DROP TABLE stock_transfers')
+        c.execute('DROP TABLE schema_migrations')
     restore_database(upload,api[1],2)
     with sqlite3.connect(api[1]) as c:
         assert c.execute('SELECT COUNT(*) FROM stock_transfers').fetchone()[0]==0

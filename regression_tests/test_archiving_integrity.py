@@ -179,7 +179,9 @@ def test_receipt_reuses_noncanonical_text_work_order_identity(api,text_work_orde
 
 
 def test_legacy_anonymous_audit_log_keeps_text_and_migration_is_repeatable(api):
-    with sqlite3.connect(api[1]) as c:c.execute("INSERT INTO activity_logs(user_id,username,action,details) VALUES(0,'anonymous','failed_login','keep me')")
+    with sqlite3.connect(api[1]) as c:
+        c.execute('DROP TABLE schema_migrations')  # Simulate an unversioned legacy backup.
+        c.execute("INSERT INTO activity_logs(user_id,username,action,details) VALUES(0,'anonymous','failed_login','keep me')")
     main.init_db();main.init_db()
     with sqlite3.connect(api[1]) as c:
         assert c.execute("SELECT user_id,username,details FROM activity_logs WHERE details='keep me'").fetchone()==(None,'anonymous','keep me')
