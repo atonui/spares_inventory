@@ -68,20 +68,25 @@ csrf_serializer = csrf_helpers.serializer
 
 
 # Database setup
-from backend.database import connect_database, initialize_database, DEFAULT_SETTINGS
+from backend.app_database import (
+    initialize_application_database,
+    make_database_defaults,
+    open_application_database,
+)
 
 
 def database_defaults():
-    return {**DEFAULT_SETTINGS,
-        'max_login_attempts':str(MAX_LOGIN_ATTEMPTS),
-        'lockout_duration_minutes':str(LOCKOUT_DURATION_MINUTES),
-        'session_duration_hours':str(SESSION_DURATION_HOURS),
-        'remember_me_duration_days':str(REMEMBER_ME_DURATION_DAYS)}
+    return make_database_defaults(
+        max_login_attempts=MAX_LOGIN_ATTEMPTS,
+        lockout_duration_minutes=LOCKOUT_DURATION_MINUTES,
+        session_duration_hours=SESSION_DURATION_HOURS,
+        remember_me_duration_days=REMEMBER_ME_DURATION_DAYS,
+    )
 
 
 def init_db():
     """Apply explicit migrations and preserve configured bootstrap defaults."""
-    initialize_database(DATABASE,defaults=database_defaults())
+    initialize_application_database(DATABASE, defaults=database_defaults())
 
 
 # ============ CSRF UTILITIES ============
@@ -117,7 +122,7 @@ def create_access_token(data: dict):
 
 def get_db_connection():
     """Open a configured connection using the application database path."""
-    return connect_database(DATABASE)
+    return open_application_database(DATABASE)
 
 
 def check_admin(user_id: int, conn=None) -> bool:
