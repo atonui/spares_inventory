@@ -221,7 +221,7 @@ def test_superadmin_routes_owned_once_by_extracted_router():
     get = next(r for r in routes if r.path == PREFIX + '/security-config')
     put = next(r for r in routes if r.path == PREFIX + '/security-config/{key}')
     assert get.endpoint is put.endpoint
-    assert next(r for r in main.app.routes if getattr(r, 'path', '') == '/api/users' and 'POST' in getattr(r, 'methods', set())).endpoint.__module__ == 'main'
+    assert next(r for r in main.app.routes if getattr(r, 'path', '') == '/api/stores' and 'POST' in getattr(r, 'methods', set())).endpoint.__module__ == 'main'
 
 
 def test_superadmin_dependency_override_identity(super_api):
