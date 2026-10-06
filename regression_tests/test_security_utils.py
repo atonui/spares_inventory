@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 from jose import jwt
+import pytest
+from fastapi import HTTPException
 
 
 def test_security_helpers_hash_passwords_and_create_signed_tokens():
@@ -41,3 +43,31 @@ def test_main_csrf_wrappers_use_the_current_serializer(monkeypatch):
 
     assert serializer.loads(token, max_age=3600)
     assert main.verify_csrf_token(token) is True
+
+
+@pytest.mark.parametrize("token,detail", [(None, "CSRF token missing"), ("", "CSRF token missing"), ("bad", "Invalid CSRF token")])
+def test_csrf_request_validation_preserves_errors(token, detail):
+    from backend.security import require_csrf_token
+
+    with pytest.raises(HTTPException) as error:
+        require_csrf_token(token, lambda value: False)
+    assert error.value.status_code == 403
+    assert error.value.detail == detail
+
+
+def test_csrf_request_validation_accepts_valid_token():
+    from backend.security import create_csrf_helpers, require_csrf_token
+
+    csrf = create_csrf_helpers("request-secret")
+    assert require_csrf_token(csrf.generate_csrf_token(), csrf.verify_csrf_token) is True
+
+
+def test_main_csrf_dependency_uses_current_verifier(monkeypatch):
+    import asyncio
+    import main
+
+    monkeypatch.setattr(main, "verify_csrf_token", lambda token: token == "current-token")
+    assert asyncio.run(main.verify_csrf("current-token")) is True
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(main.verify_csrf("other-token"))
+    assert error.value.detail == "Invalid CSRF token"

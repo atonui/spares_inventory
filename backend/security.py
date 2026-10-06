@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import secrets
+from typing import Callable
 
+from fastapi import HTTPException
 from itsdangerous import URLSafeTimedSerializer
 from jose import jwt
 from passlib.context import CryptContext
@@ -49,3 +51,12 @@ class CsrfHelpers:
 
 def create_csrf_helpers(secret: str) -> CsrfHelpers:
     return CsrfHelpers(serializer=URLSafeTimedSerializer(secret))
+
+
+def require_csrf_token(token: str | None, verifier: Callable[[str], bool]) -> bool:
+    """Validate CSRF credentials for state-changing requests."""
+    if not token:
+        raise HTTPException(status_code=403, detail="CSRF token missing")
+    if not verifier(token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    return True
