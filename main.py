@@ -224,6 +224,7 @@ def stock_write_transaction():
         yield conn
 
 from backend.services.session_access import require_session
+from backend.services.session_authentication import authenticate_session
 from backend.services.authenticated_transactions import (
     authenticated_write_transaction as _authenticated_write_transaction,
     GENERIC_BUSY_DETAIL,
@@ -457,11 +458,12 @@ from backend.schemas.equipment import (
 # Authentication dependency
 async def get_current_user(session_token: str = Cookie(None)):
     """Validate and update activity within one short writer transaction."""
-    with write_stock_transaction(get_db_connection, busy_detail=GENERIC_BUSY_DETAIL) as conn:
-        session = require_session(conn, session_token)
-        conn.execute('UPDATE sessions SET last_activity=CURRENT_TIMESTAMP WHERE id=?',
-                     (session['session_id'],))
-        return session['user_id']
+    return authenticate_session(
+        session_token, get_db_connection,
+        session_validator=require_session,
+        transaction_factory=write_stock_transaction,
+        busy_detail=GENERIC_BUSY_DETAIL,
+    )
 
 
 # csrf middleware
