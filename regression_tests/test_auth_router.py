@@ -43,7 +43,7 @@ def test_auth_routes_owned_once_by_extracted_router():
     assert len(scoped) == 14
     assert {(m, r.path) for r in scoped for m in r.methods} == AUTH_OPERATIONS
     assert all(r.endpoint.__module__ == 'backend.routes.auth' for r in scoped)
-    assert next(r for r in routes if r.path == '/api/users' and 'POST' in r.methods).endpoint.__module__ == 'main'
+    assert next(r for r in routes if r.path == '/api/stores' and 'POST' in r.methods).endpoint.__module__ == 'main'
 
 
 def test_auth_dependencies_keep_override_identity(auth_api):
