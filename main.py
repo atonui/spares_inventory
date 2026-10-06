@@ -9,8 +9,7 @@ from fastapi import Header
 from fastapi.responses import FileResponse
 
 from contextlib import asynccontextmanager, contextmanager, closing
-from pydantic import BaseModel, EmailStr, Field, validator, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, EmailStr, Field, validator
 from passlib.context import CryptContext
 import smtplib
 from email.mime.text import MIMEText
@@ -82,27 +81,7 @@ error_logger.addHandler(error_handler)
 error_logger.setLevel(logging.ERROR)
 
 
-class Settings(BaseSettings):
-    DATABASE_URL: str
-    SECRET_KEY: str
-    SMTP_SERVER: str
-    SMTP_PORT: int
-    SMTP_USERNAME: str
-    SMTP_PASSWORD: str
-    FRONTEND_URL: str
-    CSRF_SECRET: str
-    COOKIE_SECURE: bool = True
-    CORS_ALLOWED_ORIGINS: List[str] = ["https://sparesinventory-production.up.railway.app"]
-
-    @field_validator("CORS_ALLOWED_ORIGINS")
-    @classmethod
-    def reject_wildcard_origins(cls, origins):
-        if any("*" in origin for origin in origins):
-            raise ValueError("Credentialed CORS requires exact origins; wildcards are not allowed")
-        return origins
-
-    class Config:
-        env_file = ".env"
+from backend.config import Settings
 
 
 settings = Settings()
