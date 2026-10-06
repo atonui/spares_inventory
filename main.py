@@ -225,6 +225,7 @@ def stock_write_transaction():
 
 from backend.services.session_access import require_session
 from backend.services.session_authentication import authenticate_session
+from backend.services.security_settings import load_security_settings
 from backend.services.authenticated_transactions import (
     authenticated_write_transaction as _authenticated_write_transaction,
     GENERIC_BUSY_DETAIL,
@@ -241,24 +242,12 @@ def require_stock_access(conn, user_id, store_type, store_owner):
 
 
 def get_security_config() -> dict:
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT setting_key, setting_value
-        FROM system_settings
-        WHERE setting_key IN (
-            'max_login_attempts', 'lockout_duration_minutes',
-            'session_duration_hours', 'remember_me_duration_days'
-        )
-    """)
-    rows = {r["setting_key"]: int(r["setting_value"]) for r in cursor.fetchall()}
-    conn.close()
-    return {
-        "max_login_attempts":        rows.get("max_login_attempts",        MAX_LOGIN_ATTEMPTS),
-        "lockout_duration_minutes":  rows.get("lockout_duration_minutes",  LOCKOUT_DURATION_MINUTES),
-        "session_duration_hours":    rows.get("session_duration_hours",    SESSION_DURATION_HOURS),
-        "remember_me_duration_days": rows.get("remember_me_duration_days", REMEMBER_ME_DURATION_DAYS),
-    }
+    return load_security_settings(get_db_connection, defaults={
+        "max_login_attempts": MAX_LOGIN_ATTEMPTS,
+        "lockout_duration_minutes": LOCKOUT_DURATION_MINUTES,
+        "session_duration_hours": SESSION_DURATION_HOURS,
+        "remember_me_duration_days": REMEMBER_ME_DURATION_DAYS,
+    })
 
 
 def send_reset_email(email: str, token: str):
