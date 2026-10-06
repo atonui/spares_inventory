@@ -1,6 +1,5 @@
 from fastapi import HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Request
 from fastapi import Cookie
 from fastapi import Header
 from fastapi.responses import FileResponse
@@ -19,9 +18,6 @@ import csv
 import io
 import secrets as _security_secrets
 
-import json
-from functools import wraps
-
 from jose import JWTError, jwt
 
 
@@ -36,6 +32,13 @@ from backend.security import (
     create_csrf_helpers,
     hash_password as _hash_password,
     verify_password as _verify_password,
+)
+from backend.app_activity import (
+    create_endpoint_logger,
+    log_activity as _log_activity,
+    log_authenticated_activity as _log_authenticated_activity,
+    log_system_event as _log_system_event,
+    record_mutation_activity as _record_mutation_activity_service,
 )
 
 
@@ -343,209 +346,50 @@ def log_activity(
     conn=None,
 ):
     """Log user activity to database and audit log file"""
-    if conn is not None:
-        record_activity(conn, user_id=user_id, username=username, action=action,
-            resource_type=resource_type, resource_id=resource_id, details=details,
-            status=status, error_message=error_message, ip_address=ip_address,
-            user_agent=user_agent)
-        return
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        details_json = json.dumps(details) if details else None
-
-        cursor.execute(
-            """
-            INSERT INTO activity_logs 
-            (user_id, username, action, resource_type, resource_id, details, 
-             ip_address, user_agent, status, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                user_id if user_id else None,
-                username,
-                action,
-                resource_type,
-                resource_id,
-                details_json,
-                ip_address,
-                user_agent,
-                status,
-                error_message,
-            ),
-        )
-
-        conn.commit()
-        conn.close()
-
-        # Also log to audit file
-        audit_logger.info(
-            f"USER={username}({user_id}) ACTION={action} "
-            f"RESOURCE={resource_type}/{resource_id} STATUS={status}"
-        )
-
-    except Exception as e:
-        error_logger.error(f"Failed to log activity: {str(e)}")
+    return _log_activity(
+        get_db_connection,
+        audit_logger,
+        error_logger,
+        user_id=user_id,
+        username=username,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        details=details,
+        status=status,
+        error_message=error_message,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        conn=conn,
+    )
 
 
 def log_system_event(level: str, component: str, message: str, details: dict = None):
     """Log system events to database"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        details_json = json.dumps(details) if details else None
-
-        cursor.execute(
-            """
-            INSERT INTO system_logs (level, component, message, details)
-            VALUES (?, ?, ?, ?)
-        """,
-            (level, component, message, details_json),
-        )
-
-        conn.commit()
-        conn.close()
-
-        # Also log to application log
-        log_func = getattr(logger, level.lower(), logger.info)
-        log_func(f"[{component}] {message}")
-
-    except Exception as e:
-        error_logger.error(f"Failed to log system event: {str(e)}")
-
-
-from backend.services.activity import record_activity
+    return _log_system_event(get_db_connection, logger, error_logger, level, component, message, details)
 
 
 def log_authenticated_activity(user_id: int, session_token: str | None, **activity):
     """Best-effort read/maintenance evidence; never write with a stale session."""
-    try:
-        with authenticated_write_transaction(user_id, session_token) as conn:
-            record_activity(conn, user_id=user_id, **activity)
-    except HTTPException:
-        # A completed read remains usable; expired request credentials cannot audit it.
-        return
-    except Exception:
-        error_logger.exception('Failed to record authenticated activity')
+    return _log_authenticated_activity(authenticated_write_transaction, error_logger,
+        user_id, session_token, **activity)
 
 
 def _record_mutation_activity(conn, user_id, action, resource_type, result, request):
-    actor = conn.execute('SELECT name FROM users WHERE id=?', (user_id,)).fetchone()
-    details = {k: v for k, v in result.items() if k not in {'password_hash', 'session_token', 'reset_token'}} if isinstance(result, dict) else {}
-    record_activity(conn, user_id=user_id, username=actor['name'] if actor else 'Unknown',
-        action=action, resource_type=resource_type,
-        resource_id=result.get('id') if isinstance(result, dict) else None,
-        details=details, ip_address=request.client.host if request and request.client else None,
-        user_agent=request.headers.get('user-agent', '')[:200] if request else None)
+    return _record_mutation_activity_service(conn, user_id, action, resource_type, result, request)
 
 
 # ============ LOGGING DECORATOR ============
 
 
 def log_endpoint(action: str, resource_type: str = None, *, transactional: bool = False):
-    """Decorator to automatically log API endpoint calls"""
-
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Extract parameters
-            user_id = kwargs.get("user_id")
-            request = None
-
-            # Find Request object in kwargs or args
-            for key, value in kwargs.items():
-                if isinstance(value, Request):
-                    request = value
-                    break
-
-            # Get IP and user agent if request is available
-            ip_address = None
-            user_agent = None
-            if request:
-                ip_address = request.client.host if hasattr(request, "client") else None
-                user_agent = request.headers.get("user-agent", "")[:200]
-
-            username = "Unknown"
-            resource_id = None
-            details = {}
-            status = "success"
-            error_message = None
-
-            try:
-                # Get username if user_id is available
-                if user_id:
-                    try:
-                        conn = get_db_connection()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "SELECT name FROM users WHERE id = ?", (user_id,)
-                        )
-                        user = cursor.fetchone()
-                        conn.close()
-                        if user:
-                            username = user["name"]
-                    except Exception as e:
-                        logger.error(f"Failed to get username: {e}")
-
-                # Execute the endpoint function
-                result = await func(*args, **kwargs)
-
-                # Extract resource_id from result if it's a dict
-                if isinstance(result, dict):
-                    resource_id = result.get("id")
-                    # Create a safe copy of details without sensitive data
-                    details = {
-                        k: v
-                        for k, v in result.items()
-                        if k not in ["password_hash", "session_token", "reset_token"]
-                    }
-
-                return result
-
-            except HTTPException as e:
-                status = "error"
-                error_message = e.detail
-                error_logger.error(
-                    f"HTTPException in {func.__name__}: {e.detail}",
-                    extra={"user_id": user_id, "status_code": e.status_code},
-                )
-                raise
-
-            except Exception as e:
-                status = "error"
-                error_message = str(e)
-                error_logger.exception(
-                    f"Exception in {func.__name__}: {str(e)}",
-                    extra={"user_id": user_id},
-                )
-                raise
-
-            finally:
-                # Log the activity
-                if user_id and not transactional and not (status == "success" and action in STOCK_AUDIT_ACTIONS):
-                    try:
-                        log_authenticated_activity(
-                            user_id=user_id,
-                            session_token=request.cookies.get("session_token") if request else None,
-                            username=username,
-                            action=action,
-                            resource_type=resource_type,
-                            resource_id=resource_id,
-                            details=details,
-                            status=status,
-                            error_message=error_message,
-                            ip_address=ip_address,
-                            user_agent=user_agent,
-                        )
-                    except Exception as log_error:
-                        # Don't fail the request if logging fails
-                        error_logger.error(f"Failed to log activity: {log_error}")
-
-        return wrapper
-
-    return decorator
+    return create_endpoint_logger(
+        get_connection_provider=lambda: get_db_connection,
+        authenticated_activity_provider=lambda: log_authenticated_activity,
+        logger_provider=lambda: logger,
+        error_logger_provider=lambda: error_logger,
+        stock_audit_actions_provider=lambda: STOCK_AUDIT_ACTIONS,
+    )(action, resource_type, transactional=transactional)
 
 
 # Lifespan event handler
