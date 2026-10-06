@@ -13,7 +13,6 @@ from datetime import datetime
 import os
 import csv
 import io
-import secrets as _security_secrets
 
 from jose import JWTError, jwt
 
@@ -27,6 +26,8 @@ from backend.logging_config import setup_logging
 from backend.security import (
     create_access_token as _create_access_token,
     create_csrf_helpers,
+    CsrfHelpers,
+    require_csrf_token,
     hash_password as _hash_password,
     verify_password as _verify_password,
 )
@@ -93,16 +94,12 @@ def init_db():
 # ============ CSRF UTILITIES ============
 def generate_csrf_token() -> str:
     """Generate CSRF token"""
-    return csrf_serializer.dumps(_security_secrets.token_urlsafe(32))
+    return CsrfHelpers(csrf_serializer).generate_csrf_token()
 
 
 def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
     """Verify CSRF token (valid for 1 hour by default)"""
-    try:
-        csrf_serializer.loads(token, max_age=max_age)
-        return True
-    except Exception:
-        return False
+    return CsrfHelpers(csrf_serializer).verify_csrf_token(token, max_age=max_age)
 
 
 # ============ AUTHENTICATION UTILITIES ============
@@ -470,13 +467,7 @@ async def get_current_user(session_token: str = Cookie(None)):
 # csrf middleware
 async def verify_csrf(x_csrf_token: str = Header(None)):
     """Verify CSRF token for state-changing operations"""
-    if not x_csrf_token:
-        raise HTTPException(status_code=403, detail="CSRF token missing")
-
-    if not verify_csrf_token(x_csrf_token):
-        raise HTTPException(status_code=403, detail="Invalid CSRF token")
-
-    return True
+    return require_csrf_token(x_csrf_token, verify_csrf_token)
 
 
 from backend.routes.auth import create_auth_router
