@@ -7,35 +7,36 @@ from fastapi.responses import FileResponse
 
 from contextlib import asynccontextmanager, contextmanager, closing
 from pydantic import BaseModel, EmailStr, Field, validator
-from passlib.context import CryptContext
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, List, Literal
 import sqlite3
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 import csv
 import io
-import secrets
+import secrets as _security_secrets
 
 import json
 from functools import wraps
 
 from jose import JWTError, jwt
-from itsdangerous import URLSafeTimedSerializer
 
 
 import shutil
 from stock_audit import balance_snapshot, change_after, record_stock_audit, STOCK_AUDIT_ACTIONS, PROTECTED_AUDIT_SQL
 
-# setup password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 from backend.config import Settings
 from backend.app_bootstrap import create_inventory_app, database_integrity_error
 from backend.logging_config import setup_logging
+from backend.security import (
+    create_access_token as _create_access_token,
+    create_csrf_helpers,
+    hash_password as _hash_password,
+    verify_password as _verify_password,
+)
 
 
 configured_loggers = setup_logging()
@@ -62,7 +63,8 @@ REMEMBER_ME_DURATION_DAYS = 30
 
 # csrf configuration
 # CSRF_SECRET = os.getenv("CSRF_SECRET", SECRET_KEY)
-csrf_serializer = URLSafeTimedSerializer(CSRF_SECRET)
+csrf_helpers = create_csrf_helpers(CSRF_SECRET)
+csrf_serializer = csrf_helpers.serializer
 
 
 # Database setup
@@ -85,7 +87,7 @@ def init_db():
 # ============ CSRF UTILITIES ============
 def generate_csrf_token() -> str:
     """Generate CSRF token"""
-    return csrf_serializer.dumps(secrets.token_urlsafe(32))
+    return csrf_serializer.dumps(_security_secrets.token_urlsafe(32))
 
 
 def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
@@ -93,27 +95,24 @@ def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
     try:
         csrf_serializer.loads(token, max_age=max_age)
         return True
-    except:
+    except Exception:
         return False
 
 
 # ============ AUTHENTICATION UTILITIES ============
 def hash_password(password: str) -> str:
     """Hash password for storage"""
-    return pwd_context.hash(password)
+    return _hash_password(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against bcrypt hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    return _verify_password(plain_password, hashed_password)
 
 
 def create_access_token(data: dict):
     """Create JWT token"""
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(hours=24)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
+    return _create_access_token(data, SECRET_KEY)
 
 
 def get_db_connection():
