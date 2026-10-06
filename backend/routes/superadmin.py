@@ -2,6 +2,7 @@
 import json
 import os
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -285,30 +286,25 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/security-config")
-    # async def get_security_config(
-    #     user_id: int = Depends(get_current_user),
-    #     request: Request = None,
-    # ):
-    #     require_superadmin(user_id)
-    #     conn = get_db_connection()
-    #     cur = conn.cursor()
-
-    #     keys = [
-    #         "max_login_attempts",
-    #         "lockout_duration_minutes",
-    #         "session_duration_hours",
-    #         "remember_me_duration_days",
-    #         "calibration_reminder_days",
-    #     ]
-    #     placeholders = ",".join("?" * len(keys))
-    #     cur.execute(f"""
-    #         SELECT setting_key, setting_value, description, updated_at
-    #         FROM system_settings
-    #         WHERE setting_key IN ({placeholders})
-    #     """, keys)
-    #     settings = {r["setting_key"]: dict(r) for r in cur.fetchall()}
-    #     conn.close()
-    #     return settings
+    async def get_security_config(
+        user_id: int = Depends(get_current_user),
+    ):
+        keys = [
+            "max_login_attempts",
+            "lockout_duration_minutes",
+            "session_duration_hours",
+            "remember_me_duration_days",
+            "calibration_reminder_days",
+        ]
+        with closing(get_db_connection()) as conn:
+            require_superadmin(user_id, conn)
+            placeholders = ",".join("?" * len(keys))
+            rows = conn.execute(f"""
+                SELECT setting_key, setting_value, description, updated_at
+                FROM system_settings
+                WHERE setting_key IN ({placeholders})
+            """, keys).fetchall()
+            return {row["setting_key"]: dict(row) for row in rows}
 
 
     @superadmin_router.put("/security-config/{key}")

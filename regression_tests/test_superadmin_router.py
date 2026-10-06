@@ -32,21 +32,73 @@ def super_api(session_api):
     return session_api
 
 
-@pytest.mark.parametrize('revoked', [False, True])
-def test_superadmin_security_config_get_alias(super_api, revoked):
-    client, path, control = super_api
-    assert client.get(PREFIX + '/security-config').status_code == 422
-    if revoked:
-        control['damage'] = "UPDATE sessions SET is_active=0 WHERE session_token='root-token'"
-    response = client.request('GET', PREFIX + '/security-config?key=max_login_attempts', json={'value': '7'})
-    assert response.status_code == (401 if revoked else 200), response.text
-    if revoked:
-        assert database_state(path) == control['before']
-    else:
-        assert response.json() == {'success': True, 'key': 'max_login_attempts', 'value': 7}
-        with closing(connect_database(path)) as conn:
-            assert conn.execute("SELECT setting_value FROM system_settings WHERE setting_key='max_login_attempts'").fetchone()[0] == '7'
-            assert conn.execute("SELECT COUNT(*) FROM activity_logs WHERE action='update_security_config'").fetchone()[0] == 1
+def test_superadmin_security_config_get_is_read_only(super_api):
+    client, path, _ = super_api
+    keys = [
+        'max_login_attempts', 'lockout_duration_minutes', 'session_duration_hours',
+        'remember_me_duration_days', 'calibration_reminder_days',
+    ]
+    with closing(connect_database(path)) as conn, conn:
+        for key in keys:
+            conn.execute(
+                "INSERT INTO system_settings(setting_key,setting_value,description) VALUES(?, '5', 'Config fixture') "
+                "ON CONFLICT(setting_key) DO UPDATE SET setting_value='5',description='Config fixture'",
+                (key,),
+            )
+        conn.execute("INSERT INTO system_settings(setting_key,setting_value) VALUES('unrelated_config','private')")
+        expected = {
+            row['setting_key']: dict(row)
+            for row in conn.execute(
+                "SELECT setting_key,setting_value,description,updated_at FROM system_settings "
+                "WHERE setting_key IN (" + ','.join('?' * len(keys)) + ")", keys,
+            )
+        }
+    # GET must work without a CSRF token or a request body.
+    main.app.dependency_overrides.pop(main.verify_csrf)
+    before = database_state(path)
+    response = client.get(PREFIX + '/security-config')
+    assert response.status_code == 200, response.text
+    assert response.json() == expected
+    assert database_state(path) == before
+    # The former write-shaped GET must also remain a read.
+    response = client.request(
+        'GET', PREFIX + '/security-config?key=max_login_attempts', json={'value': '7'},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == expected
+    assert database_state(path) == before
+
+
+@pytest.mark.parametrize('actor', ['admin-token', 'manager-token', 'engineer-token'])
+def test_superadmin_security_config_get_rejects_other_roles(super_api, actor):
+    client, path, _ = super_api
+    client.cookies.set('session_token', actor)
+    before = database_state(path)
+    response = client.get(PREFIX + '/security-config')
+    assert response.status_code == 403, response.text
+    assert database_state(path) == before
+
+
+@pytest.mark.parametrize('token', [None, 'unknown-token', 'root-token'])
+def test_superadmin_security_config_get_requires_active_session(super_api, token):
+    client, path, _ = super_api
+    main.app.dependency_overrides.clear()
+    client.cookies.clear()
+    if token:
+        client.cookies.set('session_token', token)
+    if token == 'root-token':
+        with closing(connect_database(path)) as conn, conn:
+            conn.execute("UPDATE sessions SET is_active=0 WHERE session_token='root-token'")
+    before = database_state(path)
+    response = client.get(PREFIX + '/security-config')
+    assert response.status_code == 401, response.text
+    assert database_state(path) == before
+
+
+def test_superadmin_security_config_get_contract():
+    operation = main.app.openapi()['paths'][PREFIX + '/security-config']['get']
+    assert 'requestBody' not in operation
+    assert not any(p['name'] == 'key' for p in operation.get('parameters', []))
 
 
 def test_superadmin_announcement_remains_public(super_api):
@@ -220,7 +272,9 @@ def test_superadmin_routes_owned_once_by_extracted_router():
     assert all(r.endpoint.__module__ == 'backend.routes.superadmin' and r.tags == ['superadmin'] for r in routes)
     get = next(r for r in routes if r.path == PREFIX + '/security-config')
     put = next(r for r in routes if r.path == PREFIX + '/security-config/{key}')
-    assert get.endpoint is put.endpoint
+    assert get.endpoint is not put.endpoint
+    assert get.endpoint.__name__ == 'get_security_config'
+    assert {d.call for d in get.dependant.dependencies} == {main.get_current_user}
     assert next(r for r in main.app.routes if getattr(r, 'path', '') == '/api/stores' and 'POST' in getattr(r, 'methods', set())).endpoint.__module__ == 'main'
 
 
