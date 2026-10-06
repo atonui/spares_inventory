@@ -1,9 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi import Request
-from fastapi.responses import JSONResponse
 from fastapi import Cookie
 from fastapi import Header
 from fastapi.responses import FileResponse
@@ -26,10 +23,6 @@ import secrets
 import json
 from functools import wraps
 
-# rate limiting imports
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from jose import JWTError, jwt
 from itsdangerous import URLSafeTimedSerializer
 
@@ -41,6 +34,7 @@ from stock_audit import balance_snapshot, change_after, record_stock_audit, STOC
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 from backend.config import Settings
+from backend.app_bootstrap import create_inventory_app, database_integrity_error
 from backend.logging_config import setup_logging
 
 
@@ -552,7 +546,7 @@ def log_endpoint(action: str, resource_type: str = None, *, transactional: bool 
 
 # Lifespan event handler
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     # Startup
     print("🚀 Starting up...")
     logger.info("Application starting up")
@@ -568,35 +562,15 @@ async def lifespan(app: FastAPI):
     log_system_event("INFO", "shutdown", "Application shut down gracefully")
 
 
-# Initialize FastAPI app with lifespan
-app = FastAPI(title="Inventory Management API", version="1.0.0", lifespan=lifespan)
-
-@app.exception_handler(sqlite3.IntegrityError)
-async def database_integrity_error(request: Request, exc):
-    if getattr(exc,'sqlite_errorcode',None) not in (sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY,sqlite3.SQLITE_CONSTRAINT_UNIQUE,sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY):
-        raise exc
-    return JSONResponse(status_code=409,content={'detail':'Invalid database reference or duplicate record; no changes saved'})
-
-
-# rate limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Initialize FastAPI app with shared bootstrap wiring
+app, limiter = create_inventory_app(
+    lifespan=lifespan,
+    cors_allowed_origins=settings.CORS_ALLOWED_ORIGINS,
+)
 
 # Security
 security = HTTPBearer()
 
-# CORS middleware for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
-)
-
-# Serve static files - frontend
-app.mount("/static", StaticFiles(directory="static"), name="static")
 # -----------------------------------------------------------
 # Pydantic models
 
