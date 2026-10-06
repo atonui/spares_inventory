@@ -23,9 +23,6 @@ import csv
 import io
 import secrets
 
-# logging imports
-import logging
-from logging.handlers import RotatingFileHandler
 import json
 from functools import wraps
 
@@ -43,46 +40,14 @@ from stock_audit import balance_snapshot, change_after, record_stock_audit, STOC
 # setup password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# setup logging files
-if not os.path.exists("logs"):
-    os.makedirs("logs")
-
-# Configure main application logger
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        RotatingFileHandler(
-            "logs/app.log",
-            maxBytes=10485760,  # 10MB
-            backupCount=10,
-        ),
-        logging.StreamHandler(),  # Also log to console
-    ],
-)
-
-logger = logging.getLogger("inventory_app")
-
-# Create separate loggers for different purposes
-audit_logger = logging.getLogger("audit")
-audit_handler = RotatingFileHandler("logs/audit.log", maxBytes=10485760, backupCount=10)
-audit_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
-audit_logger.addHandler(audit_handler)
-audit_logger.setLevel(logging.INFO)
-
-error_logger = logging.getLogger("errors")
-error_handler = RotatingFileHandler(
-    "logs/errors.log", maxBytes=10485760, backupCount=10
-)
-error_handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-)
-error_logger.addHandler(error_handler)
-error_logger.setLevel(logging.ERROR)
-
-
 from backend.config import Settings
+from backend.logging_config import setup_logging
 
+
+configured_loggers = setup_logging()
+logger = configured_loggers.logger
+audit_logger = configured_loggers.audit_logger
+error_logger = configured_loggers.error_logger
 
 settings = Settings()
 
