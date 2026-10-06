@@ -13,6 +13,7 @@ logs
 /migration/
 /__pycache__/
 /myenv/
+.venv/
 
 # Local environment files; only the placeholder template belongs in Git
 .env.*
