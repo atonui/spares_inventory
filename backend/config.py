@@ -2,7 +2,7 @@
 from typing import List
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -24,5 +24,4 @@ class Settings(BaseSettings):
             raise ValueError("Credentialed CORS requires exact origins; wildcards are not allowed")
         return origins
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")

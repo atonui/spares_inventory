@@ -1,6 +1,6 @@
 """Store and store-type HTTP schemas."""
 from typing import Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class StoreResponse(BaseModel):
@@ -25,7 +25,8 @@ class CreateStoreTypeRequest(BaseModel):
     description: Optional[str] = None
     display_order: int = Field(default=0, ge=0)
 
-    @validator("type_code")
+    @field_validator("type_code")
+    @classmethod
     def type_code_lowercase(cls, v):
         return v.lower().strip()
 
