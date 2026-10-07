@@ -1,27 +1,12 @@
-from fastapi import HTTPException, Depends, UploadFile, File
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Cookie
-from fastapi import Header
-from fastapi.responses import FileResponse
+from fastapi import Cookie, Header, HTTPException
 
-from contextlib import asynccontextmanager, contextmanager, closing
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List, Literal
-import sqlite3
-import hashlib
-from datetime import datetime
-import os
-import csv
-import io
+from contextlib import asynccontextmanager, contextmanager
+from typing import List
 
-from jose import JWTError, jwt
-
-
-import shutil
-from stock_audit import balance_snapshot, change_after, record_stock_audit, STOCK_AUDIT_ACTIONS, PROTECTED_AUDIT_SQL
+from stock_audit import balance_snapshot, change_after, record_stock_audit, STOCK_AUDIT_ACTIONS
 
 from backend.config import Settings
-from backend.app_bootstrap import create_inventory_app, database_integrity_error
+from backend.app_bootstrap import create_inventory_app
 from backend.logging_config import setup_logging
 from backend.security import (
     create_access_token as _create_access_token,
@@ -57,14 +42,13 @@ SMTP_PASSWORD = settings.SMTP_PASSWORD
 FRONTEND_URL = settings.FRONTEND_URL
 CSRF_SECRET = settings.CSRF_SECRET
 
-# authentication andlogin variables
+# Authentication defaults
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 15
 SESSION_DURATION_HOURS = 24
 REMEMBER_ME_DURATION_DAYS = 30
 
 # csrf configuration
-# CSRF_SECRET = os.getenv("CSRF_SECRET", SECRET_KEY)
 csrf_helpers = create_csrf_helpers(CSRF_SECRET)
 csrf_serializer = csrf_helpers.serializer
 
@@ -311,9 +295,6 @@ app, limiter = create_inventory_app(
     cors_allowed_origins=settings.CORS_ALLOWED_ORIGINS,
 )
 
-# Security
-security = HTTPBearer()
-
 # -----------------------------------------------------------
 # Pydantic models
 
@@ -331,12 +312,6 @@ from backend.schemas.stores import (
 )
 
 
-
-
-
-
-
-
 from backend.schemas.parts import PartResponse, CreatePartRequest, UpdatePartRequest
 
 from backend.schemas.inventory_writes import (
@@ -349,29 +324,7 @@ from backend.schemas.inventory_writes import (
 from backend.schemas.inventory_reads import InventoryResponse, StatsResponse
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from backend.schemas.history import MovementResponse, ActivityLogResponse
-
-
-
-
-
-
-
-
 
 
 from backend.schemas.users import UserRole, CreateUserRequest, UpdateUserRequest
@@ -379,26 +332,11 @@ from backend.schemas.users import UserRole, CreateUserRequest, UpdateUserRequest
 from backend.schemas.work_orders import WorkOrderResponse
 
 
-
-
-
 # calibration models
 from backend.schemas.equipment import (
     EquipmentResponse, CreateEquipmentRequest, UpdateEquipmentRequest,
     TransferEquipmentRequest, UpdateCalibrationRequest, EquipmentStatsResponse,
 )
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # -----------------------------------------------------------
@@ -536,12 +474,6 @@ app.include_router(create_work_order_router(
 ))
 
 
-
-
-
-
-
-
 # User Management (Admin only)
 from backend.routes.users import create_users_router
 
@@ -559,7 +491,6 @@ app.include_router(create_users_router(
 ))
 
 
-
 # -------------Logging Test Endpoint-------------
 from backend.routes.history import create_history_router
 
@@ -574,59 +505,25 @@ app.include_router(create_history_router(
 ))
 
 
-
-
 # Store Management
-
 
 
     # Bulk import stores from CSV (admin only)
 
 
-
-
-
-
 # ============ STORE TYPE MANAGEMENT ============
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # Parts Management
 
 
-
 # bulk part import from CSV (admin only)
-
-
-
-
-
-
 
 
 # Movement History
 
 
 # ============ LOGGING ENDPOINTS ============
-
-
-
-
-
-
-
 
 
 # equipment management routes
@@ -644,26 +541,7 @@ app.include_router(create_equipment_router(
 ))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # System Settings endpoint
-
-
-
 
 
 @app.get("/")
