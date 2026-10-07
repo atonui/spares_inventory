@@ -124,22 +124,11 @@ def get_db_connection():
 
 
 def check_admin(user_id: int, conn=None) -> bool:
-    """Check current authority, borrowing an owning mutation connection."""
-    close = conn is None
-    if close:
-        conn = get_db_connection()
-    try:
-        user = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
-        return bool(user and user['role'] in {'admin', 'superadmin'})
-    finally:
-        if close:
-            conn.close()
+    return _check_admin(user_id, conn=conn, get_connection=get_db_connection)
 
 
 def require_archive_admin(conn,user_id):
-    actor=conn.execute('SELECT role FROM users WHERE id=? AND archived_at IS NULL',(user_id,)).fetchone()
-    if not actor or actor['role'] not in ('admin','superadmin'):
-        raise HTTPException(status_code=403,detail='Admin access required')
+    return _require_archive_admin(conn, user_id)
 
 
 from backend.services.stock_access import (
@@ -191,23 +180,8 @@ def archive_record(table,identifier,user_id,restore=False, *, session_token):
 
 
 def require_user_management(user_id: int, requested_role=None, target_user_id=None, *, conn=None):
-    """Protect privileged role assignment and existing superadmin accounts."""
-    close = conn is None
-    if close:
-        conn = get_db_connection()
-    try:
-        actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
-        target = (conn.execute("SELECT role FROM users WHERE id = ?", (target_user_id,)).fetchone()
-                  if target_user_id is not None else None)
-    finally:
-        if close:
-            conn.close()
-    if not actor or actor["role"] not in {"admin", "superadmin"}:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    if actor["role"] != "superadmin" and (
-        requested_role == "superadmin" or (target and target["role"] == "superadmin")
-    ):
-        raise HTTPException(status_code=403, detail="Superadmin access required")
+    return _require_user_management(user_id, requested_role, target_user_id,
+                                    conn=conn, get_connection=get_db_connection)
 
 
 def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
@@ -226,6 +200,12 @@ def stock_write_transaction():
 from backend.services.session_access import require_session
 from backend.services.session_authentication import authenticate_session
 from backend.services.security_settings import load_security_settings
+from backend.services.authorization import (
+    check_admin as _check_admin,
+    require_archive_admin as _require_archive_admin,
+    require_user_management as _require_user_management,
+    require_superadmin as _require_superadmin,
+)
 from backend.services.transfer_helpers import (
     require_no_pending_transfer as _require_no_pending_transfer,
     transfer_permissions as _transfer_permissions,
@@ -726,20 +706,7 @@ async def root():
 # ── Re-usable guard ──────────────────────────────────────────────────────────
 
 def require_superadmin(user_id: int, conn=None):
-    """Raise 403 unless the caller has role == 'superadmin'."""
-    close = conn is None
-    if close:
-        conn = get_db_connection()
-    cur = conn.cursor()
-    cur.row_factory = sqlite3.Row
-    try:
-        row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
-    finally:
-        cur.close()
-        if close:
-            conn.close()
-    if not row or row["role"] != "superadmin":
-        raise HTTPException(status_code=403, detail="Superadmin access required")
+    return _require_superadmin(user_id, conn=conn, get_connection=get_db_connection)
 
 
 # ── Pydantic models ──────────────────────────────────────────────────────────
