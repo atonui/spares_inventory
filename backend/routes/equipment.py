@@ -256,7 +256,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             updates = []
             values = []
 
-            for field, value in request_data.dict(exclude_unset=True).items():
+            for field, value in request_data.model_dump(exclude_unset=True).items():
                 updates.append(f"{field} = ?")
                 values.append(value)
 
