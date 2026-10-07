@@ -61,7 +61,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
 
         check_date = (datetime.now() + timedelta(days=reminder_days)).strftime("%Y-%m-%d")
 
-        if user["role"] == "admin":
+        if user["role"] in ("admin", "superadmin"):
             cursor.execute(
                 """
                 SELECT COUNT(*) as count FROM equipment
@@ -88,7 +88,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         due_soon = cursor.fetchone()["count"]
 
         # Overdue equipment
-        if user["role"] == "admin":
+        if user["role"] in ("admin", "superadmin"):
             cursor.execute("""
                 SELECT COUNT(*) as count FROM equipment
                 WHERE status = 'active'
