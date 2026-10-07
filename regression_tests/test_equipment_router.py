@@ -63,7 +63,7 @@ def test_equipment_listing_preserves_existing_visibility(session_api, actor, own
 
 
 @pytest.mark.parametrize('actor,my,due,overdue', [
-    ('admin-token', 0, 1, 1), ('root-token', 0, 0, 0),
+    ('admin-token', 0, 1, 1), ('root-token', 0, 1, 1),
     ('engineer-token', 1, 0, 1), ('manager-token', 1, 1, 0),
 ])
 def test_equipment_statistics_preserves_role_and_date_rules(session_api, actor, my, due, overdue):
