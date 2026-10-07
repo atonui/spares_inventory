@@ -31,9 +31,9 @@ def test_create_inventory_app_applies_shared_fastapi_bootstrap(tmp_path):
         for middleware in app.user_middleware
         if middleware.cls is CORSMiddleware
     )
-    assert cors.options["allow_origins"] == ["https://inventory.example"]
-    assert cors.options["allow_credentials"] is True
-    assert "X-CSRF-Token" in cors.options["allow_headers"]
+    assert cors.kwargs["allow_origins"] == ["https://inventory.example"]
+    assert cors.kwargs["allow_credentials"] is True
+    assert "X-CSRF-Token" in cors.kwargs["allow_headers"]
 
     static_mount = next(route for route in app.routes if route.path == "/static")
     assert isinstance(static_mount.app, StaticFiles)
