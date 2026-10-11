@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261005-report-grid">
+    <link rel="stylesheet" href="mystyle.css?v=20261012-header-actions">
     <style>[x-cloak] { display: none !important; }</style>
     <script src="audit.js?v=20261005-stock-reports" defer></script>
     <script src="script.js?v=20261005-stock-reports" defer></script>
@@ -75,7 +75,7 @@
                         <h1>Inventory Management</h1>
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
-                    <div class="controls" style="margin-bottom: 1.5rem;">
+                    <div class="header-actions" role="group" aria-label="Account actions">
                             <button class="btn" @click="logout()">Logout</button>
                             <button class="btn" @click="$el.ownerDocument.location.href='/static/profile.html'">Profile</button>
                             <button x-show="currentUser?.role === 'superadmin'" class="btn" style="background:#dc3545;"
