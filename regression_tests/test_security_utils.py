@@ -71,3 +71,35 @@ def test_main_csrf_dependency_uses_current_verifier(monkeypatch):
     with pytest.raises(HTTPException) as error:
         asyncio.run(main.verify_csrf("other-token"))
     assert error.value.detail == "Invalid CSRF token"
+
+
+@pytest.mark.parametrize("prefix", ["2a", "2b", "2y"])
+def test_password_verification_accepts_existing_passlib_hashes(prefix):
+    from backend.security import verify_password
+
+    stored = "$2b$12$1ko/TYGtQom7PVOe9Okis.Sc060PQqpiIlbAx4ovC6vZMv1nnE0na"
+    stored = "$" + prefix + stored[3:]
+    assert verify_password("legacy password", stored)
+    assert not verify_password("different password", stored)
+
+
+def test_password_verification_preserves_legacy_utf8_truncation():
+    from backend.security import hash_password, verify_password
+
+    stored = "$2b$12$pRKYffSAPWTG7xyIm.n5JO6rHIZeCzXx7MwXdDBP.wmNw.AKZok7W"
+    assert verify_password("é" * 40, stored)
+    assert verify_password("é" * 36 + "different suffix", stored)
+    assert not verify_password("è" * 40, stored)
+    assert verify_password("é" * 40, hash_password("é" * 40))
+
+
+def test_password_hash_format_and_rejected_inputs():
+    from backend.security import hash_password, verify_password
+
+    assert hash_password("test password").startswith("$2b$12$")
+    with pytest.raises(ValueError):
+        hash_password("contains\x00nul")
+    with pytest.raises(ValueError):
+        hash_password("x" * 4097)
+    with pytest.raises(ValueError):
+        verify_password("password", "invalid hash")
