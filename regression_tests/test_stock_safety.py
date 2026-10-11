@@ -181,7 +181,7 @@ def test_engineer_can_deliver_from_own_store_to_other_engineer(api):
 
 @pytest.mark.parametrize('operation', ['logout', 'reset', 'admin_password'])
 def test_session_revocation(api, operation):
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     client, db, current = api
     with sqlite3.connect(db) as conn:
         columns = {row[1] for row in conn.execute('PRAGMA table_info(users)')}
@@ -190,8 +190,8 @@ def test_session_revocation(api, operation):
                 conn.execute(f'ALTER TABLE users ADD COLUMN {column} TEXT')
         conn.execute('DELETE FROM sessions')
         for token, uid in [('current',3),('other',3),('unrelated',4)]:
-            conn.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(?,?,?,1)', (uid,token,(datetime.utcnow()+timedelta(days=1)).isoformat()))
-        conn.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3', ('reset-test',(datetime.utcnow()+timedelta(hours=1)).isoformat()))
+            conn.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(?,?,?,1)', (uid,token,(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(days=1)).isoformat()))
+        conn.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3', ('reset-test',(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(hours=1)).isoformat()))
     if operation == 'logout':
         current['id'] = 3
         client.cookies.set('session_token','current')

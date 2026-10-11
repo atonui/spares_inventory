@@ -6,7 +6,7 @@ import os
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from fastapi.routing import APIRoute
 from regression_tests.test_stock_safety import api
@@ -31,7 +31,7 @@ def auth_api(api):
 
 
 def set_reset_token(db, token='auth-reset', expired=False):
-    expiry = datetime.utcnow() + timedelta(hours=-1 if expired else 1)
+    expiry = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=-1 if expired else 1)
     with sqlite3.connect(db) as conn:
         conn.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=1',
                      (token, expiry.isoformat()))

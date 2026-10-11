@@ -3,7 +3,7 @@ import json
 import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from stock_audit import PROTECTED_AUDIT_SQL
@@ -468,7 +468,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         if not os.path.exists(database_path()):
             raise HTTPException(status_code=404, detail="Database file not found")
 
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")
         backup_name = f"inventory_backup_{timestamp}.db"
         backup_path = f"/tmp/{backup_name}"
 
@@ -596,7 +596,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             require_superadmin(user_id, conn)
             cur = conn.cursor()
             payload = json.dumps({"message": body.message, "level": body.level,
-                                   "set_at": datetime.utcnow().isoformat()})
+                                   "set_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()})
             cur.execute("""
                 INSERT INTO system_settings (setting_key, setting_value, updated_by)
                 VALUES ('system_announcement', ?, ?)

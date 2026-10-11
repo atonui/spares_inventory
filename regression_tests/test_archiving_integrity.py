@@ -1,7 +1,7 @@
 import asyncio
 import shutil
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import main
@@ -49,7 +49,7 @@ def test_archived_parts_and_stores_reject_stock_add_and_import(api):
 def test_user_archive_revokes_sessions_and_blocks_login(api):
     seed(api)
     with sqlite3.connect(api[1]) as c:
-        c.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(3,?,?,1)',('archived-token',(datetime.utcnow()+timedelta(days=1)).isoformat()))
+        c.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(3,?,?,1)',('archived-token',(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(days=1)).isoformat()))
     assert api[0].delete('/api/users/3').status_code==200
     assert api[0].post('/api/auth/login',json={'email':'user3@example.com','password':'test-password'}).status_code==401
     with pytest.raises(main.HTTPException) as exc:asyncio.run(main.get_current_user('archived-token'))
@@ -75,7 +75,7 @@ def test_reset_started_before_archive_and_restore_cannot_use_revoked_token(api,m
     seed(api)
     with sqlite3.connect(api[1]) as c:
         previous=c.execute('SELECT password_hash FROM users WHERE id=3').fetchone()[0]
-        c.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3',('racing-reset',(datetime.utcnow()+timedelta(hours=1)).isoformat()))
+        c.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3',('racing-reset',(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(hours=1)).isoformat()))
     hash_password=main.hash_password
     def archive_during_hash(password):
         main.archive_record('users',3,1,session_token='fixture-session-1')
@@ -100,7 +100,7 @@ def test_archived_user_cannot_receive_or_verify_reset_credentials(api,monkeypatc
     assert api[0].delete('/api/users/3').status_code==200
     # A stale/external token must also be rejected, independent of archive clearing.
     with sqlite3.connect(api[1]) as c:
-        c.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3',('stale-token',(datetime.utcnow()+timedelta(hours=1)).isoformat()))
+        c.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3',('stale-token',(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(hours=1)).isoformat()))
     assert api[0].get('/api/verify-reset-token/stale-token').status_code==400
     main.app.state.limiter.reset()
     monkeypatch.setattr(main,'send_reset_email',lambda *args:None)
