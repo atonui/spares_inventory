@@ -375,3 +375,7 @@ button, select, input, textarea, a { touch-action: manipulation; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+.role-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .5rem; }
+.role-change { flex-basis: 100%; font-size: .8rem; color: #475569; }
+.action-error { color: #9f1239; font-size: .85rem; margin-top: .5rem; overflow-wrap: anywhere; }

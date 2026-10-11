@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="mystyle.css">
-<link rel="stylesheet" href="superadmin.css?v=20261012">
+<link rel="stylesheet" href="superadmin.css?v=20261012-actions">
 <script src="audit.js?v=20261005-stock-audit" defer></script>
 <script src="script.js?v=20261005-stock-audit" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -23,13 +23,14 @@
 <!-- Confirm dialog -->
 <div class="confirm-overlay" x-show="dlg.open" style="display:none" x-cloak
      role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description" tabindex="-1"
-     x-effect="syncDialog($el, dlg.open)" @keydown.tab="trapDialogFocus($event, $el)" @keydown.escape.stop="dlg.open=false">
+     x-effect="syncDialog($el, dlg.open)" @keydown.tab="trapDialogFocus($event, $el)" @keydown.escape.stop="if (!dialogBusy) dlg.open=false">
   <div class="confirm-box">
     <h3 id="confirm-title" x-text="dlg.title"></h3>
     <p id="confirm-description" x-text="dlg.msg"></p>
+    <p x-show="dialogError" class="action-error" role="alert" x-text="dialogError"></p>
     <div class="confirm-actions">
-      <button class="btn btn-outline" @click="dlg.open=false">Cancel</button>
-      <button class="btn btn-red" @click="dlg.resolve(); dlg.open=false" x-text="dlg.action||'Confirm'"></button>
+      <button class="btn btn-outline" @click="dlg.open=false" :disabled="dialogBusy">Cancel</button>
+      <button class="btn btn-red" @click="submitDialog()" :disabled="dialogBusy" x-text="dialogBusy ? 'Working…' : (dlg.action||'Confirm')"></button>
     </div>
   </div>
 </div>
@@ -198,11 +199,6 @@
                 <span class="qa-icon">📢</span>
                 <div class="qa-label">Broadcast Message</div>
                 <div class="qa-sub">System-wide banner</div>
-              </button>
-              <button class="qa-btn qa-danger" @click="confirmLogoutAll()">
-                <span class="qa-icon">🚫</span>
-                <div class="qa-label" style="color:#dc3545;">Force Logout All</div>
-                <div class="qa-sub">Terminate all sessions</div>
               </button>
             </div>
           </div>
@@ -396,12 +392,18 @@
                     <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
                     <td>
                       <select style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;background:white;"
-                              x-model="u._role" @change="changeRole(u)">
+                              x-model="u._role" :disabled="u._saving" :aria-label="'Role for ' + u.name">
                         <option value="engineer">engineer</option>
                         <option value="manager">manager</option>
                         <option value="admin">admin</option>
                         <option value="superadmin">superadmin</option>
                       </select>
+                      <div class="role-actions" x-show="u._role !== u.role || u._saving">
+                        <span class="role-change" x-text="u.role + ' → ' + u._role"></span>
+                        <button class="btn btn-sm" @click="changeRole(u)" :disabled="u._saving" x-text="u._saving ? 'Saving…' : 'Save'"></button>
+                        <button class="btn btn-sm btn-outline" @click="u._role=u.role; u._error=''" :disabled="u._saving">Cancel</button>
+                      </div>
+                      <p class="action-error" role="alert" x-show="u._error" x-text="u._error"></p>
                     </td>
                     <td style="font-size:0.8rem;" x-text="u.territory||'—'"></td>
                     <td>
@@ -694,6 +696,21 @@
 <script>
   function superPanel() {
   return {
+    dialogBusy: false,
+    dialogError: '',
+    async submitDialog() {
+      if (this.dialogBusy) return;
+      this.dialogBusy = true;
+      this.dialogError = '';
+      try {
+        await this.dlg.resolve();
+        this.dlg.open = false;
+      } catch (error) {
+        this.dialogError = error.message || 'Action failed. Please retry.';
+      } finally {
+        this.dialogBusy = false;
+      }
+    },
     dialogFocus: new WeakMap(),
     selectSection(section) {
       if (!Object.hasOwn(this.tabTitles, section)) return;
@@ -796,7 +813,6 @@ openResetModal(u) {
         confirm: '',
         error: '',
     };
-    console.log('resetModal state:', this.resetModal);
 },
 
 async submitPasswordReset() {
@@ -935,6 +951,8 @@ async submitPasswordReset() {
     },
 
     forceLogout(u) {
+      if (this.dialogBusy) return;
+      this.dialogError = '';
       this.dlg = {
         open: true,
         title: `Force logout ${u.name || u.email}?`,
@@ -947,12 +965,14 @@ async submitPasswordReset() {
             });
             this.toast(`Terminated ${r.sessions_terminated} session(s)`, 'ok');
             await this.loadSessions();
-          } catch (e) { this.toast(e.message, 'danger'); }
+          } catch (e) { throw e; }
         },
       };
     },
 
     confirmLogoutAll() {
+      if (this.dialogBusy) return;
+      this.dialogError = '';
       this.dlg = {
         open: true,
         title: 'Force logout ALL users?',
@@ -963,7 +983,7 @@ async submitPasswordReset() {
             const r = await this.api('/superadmin/sessions/force-logout-all', { method: 'POST' });
             this.toast(`Terminated ${r.sessions_terminated} session(s)`, 'ok');
             await this.loadSessions(); await this.loadDashboard();
-          } catch (e) { this.toast(e.message, 'danger'); }
+          } catch (e) { throw e; }
         },
       };
     },
@@ -995,20 +1015,24 @@ async submitPasswordReset() {
     async loadUsers() {
       this.loading = true;
       try {
-        this.allUsers = (await this.api('/superadmin/users')).map(u => ({ ...u, _role: u.role }));
+        this.allUsers = (await this.api('/superadmin/users')).map(u => ({ ...u, _role: u.role, _saving: false, _error: '' }));
       } catch (e) { this.toast(e.message, 'danger'); }
       finally { this.loading = false; }
     },
 
     async changeRole(u) {
-      if (u._role === u.role) return;
+      if (u._saving || u._role === u.role) return;
+      const requestedRole = u._role;
+      u._saving = true;
+      u._error = '';
       try {
         const r = await this.api(`/superadmin/users/${u.id}/role`, {
-          method: 'PUT', body: JSON.stringify({ role: u._role }),
+          method: 'PUT', body: JSON.stringify({ role: requestedRole }),
         });
         this.toast(r.message, 'ok');
-        u.role = u._role;
-      } catch (e) { this.toast(e.message, 'danger'); u._role = u.role; }
+        u.role = requestedRole;
+      } catch (e) { u._error = e.message; }
+      finally { u._saving = false; }
     },
 
     // ── DB Tables ──────────────────────────────────────────────
@@ -1052,6 +1076,8 @@ async submitPasswordReset() {
     },
 
     vacuumDB() {
+      if (this.dialogBusy) return;
+      this.dialogError = '';
       this.dlg = {
         open: true, title: 'Run VACUUM?',
         msg: 'This defragments the database and reclaims unused space. Takes a few seconds.',
@@ -1062,7 +1088,7 @@ async submitPasswordReset() {
             this.vacuumResult = await this.api('/superadmin/database/vacuum', { method: 'POST' });
             this.toast(`Saved ${this.fmtBytes(this.vacuumResult.saved_bytes)}`, 'ok');
             await this.loadDashboard();
-          } catch (e) { this.toast(e.message, 'danger'); }
+          } catch (e) { throw e; }
           finally { this.loading = false; }
         },
       };
@@ -1070,6 +1096,8 @@ async submitPasswordReset() {
 
     purgeLogs() {
       const days = parseInt(this.purgeDays) || 0;
+      if (this.dialogBusy) return;
+      this.dialogError = '';
       this.dlg = {
         open: true,
         title: days === 0 ? 'Purge All General Logs?' : `Purge Logs Older Than ${days} Days?`,
@@ -1088,7 +1116,7 @@ async submitPasswordReset() {
               'ok'
             );
             await this.loadDashboard();
-          } catch (e) { this.toast(e.message, 'danger'); }
+          } catch (e) { throw e; }
           finally { this.loading = false; }
         },
       };
