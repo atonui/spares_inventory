@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="mystyle.css">
-<link rel="stylesheet" href="superadmin.css?v=20261012-filters">
+<link rel="stylesheet" href="superadmin.css?v=20261012-audit">
 <script src="audit.js?v=20261005-stock-audit" defer></script>
 <script src="script.js?v=20261005-stock-audit" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -638,13 +638,23 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Superadmin Audit Log</span>
-            <button class="btn btn-sm btn-outline" @click="loadAudit()">↻ Refresh</button>
+            <button class="btn btn-sm btn-outline" @click="loadAudit()" :disabled="auditLoading">↻ Refresh</button>
           </div>
-          <div style="overflow-x:auto;">
+          <div class="list-filters audit-filters" @change="loadAudit()">
+            <label for="audit-from">From<input id="audit-from" type="date" x-model="auditFilters.start_date"></label>
+            <label for="audit-through">Through<input id="audit-through" type="date" x-model="auditFilters.end_date"></label>
+            <label for="audit-action">Action<select id="audit-action" x-model="auditFilters.action"><option value="">All actions</option><template x-for="action in auditActions" :key="action"><option :value="action" x-text="action"></option></template></select></label>
+            <label for="audit-status">Status<select id="audit-status" x-model="auditFilters.status"><option value="">All statuses</option><option value="success">Success</option><option value="error">Error</option></select></label>
+            <button class="btn btn-sm btn-outline" @click="auditFilters={start_date:'',end_date:'',action:'',status:''}; loadAudit()" :disabled="auditLoading">Clear filters</button>
+          </div>
+          <p class="list-count">Dates and times use Africa/Nairobi. Through includes the whole day.</p>
+          <p class="list-count" x-show="auditLoading" role="status">Loading audit entries…</p>
+          <div class="audit-error" x-show="auditError" role="alert"><span x-text="auditError"></span> <button class="btn btn-sm btn-outline" @click="loadAudit()">Retry</button></div>
+          <div style="overflow-x:auto;" x-show="!auditError && !auditLoading">
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Time</th>
+                  <th>Time (Nairobi)</th>
                   <th>Action</th>
                   <th>Resource</th>
                   <th>Status</th>
@@ -654,7 +664,7 @@
               <tbody>
                 <template x-for="log in auditLog" :key="log.id">
                   <tr>
-                    <td style="font-size:0.8rem;white-space:nowrap;" x-text="fmtDate(log.created_at)"></td>
+                    <td style="font-size:0.8rem;white-space:nowrap;" x-text="fmtAuditDate(log.created_at)"></td>
                     <td><span class="tag tag-blue" style="font-family:monospace;" x-text="log.action"></span></td>
                     <td style="font-size:0.8rem;"
                         x-text="(log.resource_type||'') + (log.resource_id ? ' #'+log.resource_id : '')"></td>
@@ -667,9 +677,14 @@
                 </template>
               </tbody>
             </table>
-            <div x-show="auditLog.length===0 && !loading" class="empty">No superadmin actions recorded yet</div>
+            <div x-show="auditLog.length===0 && !auditLoading && !auditError" class="empty">No audit entries match these filters.</div>
           </div>
         </div>
+          <div class="audit-pagination" x-show="!auditError">
+            <button class="btn btn-sm btn-outline" @click="loadAudit(Math.max(0,auditOffset-50))" :disabled="auditLoading || auditOffset===0">Previous</button>
+            <span role="status" x-text="auditTotal ? 'Entries ' + (auditOffset+1) + '–' + Math.min(auditOffset+50,auditTotal) + ' of ' + auditTotal : '0 matching entries'"></span>
+            <button class="btn btn-sm btn-outline" @click="loadAudit(auditOffset+50)" :disabled="auditLoading || auditOffset+50>=auditTotal">Next</button>
+          </div>
       </div><!-- /audit -->
 
     </main><!-- /content -->
@@ -805,7 +820,9 @@
     queryResult: null,
     restoreFile: null,
     vacuumResult: null, purgeResult: null, purgeDays: 90,
-    auditLog: [],
+    auditLog: [], auditTotal: 0, auditOffset: 0, auditActions: [], auditError: '', auditLoading: false,
+    auditRequest: 0,
+    auditFilters: { start_date: '', end_date: '', action: '', status: '' },
     announcement: null,
     annForm: { message: '', level: 'info' },
 
@@ -1194,11 +1211,33 @@ async submitPasswordReset() {
     },
 
     // ── Audit ──────────────────────────────────────────────────
-    async loadAudit() {
-      this.loading = true;
-      try { this.auditLog = await this.api('/superadmin/audit-log'); }
-      catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
+    async loadAudit(offset = 0) {
+      const request = ++this.auditRequest;
+      this.auditLoading = true; this.auditError = '';
+      const query = new URLSearchParams({paginated:'true', limit:'50', offset:String(offset)});
+      for (const [key,value] of Object.entries(this.auditFilters)) if (value) query.set(key,value);
+      try {
+        const result = await this.api('/superadmin/audit-log?' + query);
+        if (request !== this.auditRequest) return;
+        this.auditLog = result.rows; this.auditTotal = result.total;
+        this.auditActions = result.actions; this.auditOffset = offset;
+      } catch (error) {
+        if (request !== this.auditRequest) return;
+        this.auditLog = []; this.auditTotal = 0; this.auditOffset = 0;
+        this.auditError = error.message;
+      } finally {
+        if (request === this.auditRequest) this.auditLoading = false;
+      }
+    },
+    fmtAuditDate(value) {
+      const timestamp = this.utcTimestamp(value);
+      if (!Number.isFinite(timestamp)) return '—';
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit',
+        hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
+      }).formatToParts(new Date(timestamp));
+      const fields = Object.fromEntries(parts.map(part => [part.type,part.value]));
+      return `${fields.year}-${fields.month}-${fields.day} ${fields.hour}:${fields.minute}:${fields.second}`;
     },
 
     // ── Helpers ────────────────────────────────────────────────

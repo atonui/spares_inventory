@@ -3,8 +3,10 @@ import json
 import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Literal
+from zoneinfo import ZoneInfo
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from stock_audit import PROTECTED_AUDIT_SQL
 from backend.schemas.superadmin import (
@@ -634,22 +636,54 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
     @superadmin_router.get("/audit-log")
     async def get_superadmin_audit(
-        limit: int = 200,
+        limit: int = Query(default=200, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        start_date: date | None = None,
+        end_date: date | None = None,
+        action: str | None = Query(default=None, max_length=200),
+        status: Literal["success", "error"] | None = None,
+        paginated: bool = False,
         user_id: int = Depends(get_current_user),
         request: Request = None,
     ):
         require_superadmin(user_id)
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT * FROM activity_logs
-            WHERE username = 'superadmin'
-            ORDER BY created_at DESC
-            LIMIT ?
-        """, (limit,))
-        rows = [dict(r) for r in cur.fetchall()]
-        conn.close()
-        return rows
+        if start_date and end_date and end_date < start_date:
+            raise HTTPException(422, "Through must be on or after From")
+        conditions = ["username = 'superadmin'"]
+        params = []
+        nairobi = ZoneInfo("Africa/Nairobi")
+        try:
+            if start_date:
+                start = datetime.combine(start_date, time.min, nairobi).astimezone(timezone.utc)
+                conditions.append("julianday(created_at) >= julianday(?)")
+                params.append(start.isoformat())
+            if end_date:
+                end = datetime.combine(end_date + timedelta(days=1), time.min, nairobi).astimezone(timezone.utc)
+                conditions.append("julianday(created_at) < julianday(?)")
+                params.append(end.isoformat())
+        except (OverflowError, ValueError):
+            raise HTTPException(422, "Date range cannot be represented in UTC")
+        if action:
+            conditions.append("action = ?")
+            params.append(action)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        where = " WHERE " + " AND ".join(conditions)
+        with closing(get_db_connection()) as conn:
+            conn.execute("BEGIN")
+            rows = [dict(row) for row in conn.execute(
+                "SELECT * FROM activity_logs" + where +
+                " ORDER BY julianday(created_at) DESC, id DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            )]
+            if not paginated:
+                return rows
+            total = conn.execute("SELECT COUNT(*) FROM activity_logs" + where, params).fetchone()[0]
+            actions = [row[0] for row in conn.execute(
+                "SELECT DISTINCT action FROM activity_logs WHERE username = 'superadmin' ORDER BY action"
+            )]
+            return {"rows": rows, "total": total, "actions": actions, "limit": limit, "offset": offset}
 
 
     return superadmin_router

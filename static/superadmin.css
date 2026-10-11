@@ -385,3 +385,8 @@ button, select, input, textarea, a { touch-action: manipulation; }
 .list-filters input, .list-filters select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #cbd5e1; border-radius: 6px; padding: .5rem .65rem; background: white; font: inherit; }
 .list-count { padding: .25rem 1rem .75rem; font-size: .8rem; color: #475569; }
 @media (max-width: 480px) { .list-filters label { flex-basis: 100%; } }
+
+.audit-pagination { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; padding: .75rem 1rem; }
+.audit-pagination span { font-size: .85rem; }
+.audit-error { padding: 1rem; color: #9f1239; overflow-wrap: anywhere; }
+.audit-filters input[type="date"] { max-width: 100%; box-sizing: border-box; }
