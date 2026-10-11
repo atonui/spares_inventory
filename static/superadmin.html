@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="mystyle.css">
-<link rel="stylesheet" href="superadmin.css?v=20261012-actions">
+<link rel="stylesheet" href="superadmin.css?v=20261012-filters">
 <script src="audit.js?v=20261005-stock-audit" defer></script>
 <script src="script.js?v=20261005-stock-audit" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -276,6 +276,13 @@
             </div>
           </div>
 
+          <div class="list-filters">
+              <label for="session-search">Search<input id="session-search" type="search" x-model="sessionFilters.search" placeholder="Name, email or IP address"></label>
+              <label for="session-role">Role<select id="session-role" x-model="sessionFilters.role"><option value="">All roles</option><option value="engineer">Engineer</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select></label>
+              <label for="session-expiry">Expires<select id="session-expiry" x-model="sessionFilters.expiry"><option value="">Any expiry</option><option value="soon">Within 24 hours</option></select></label>
+              <button class="btn btn-sm btn-outline" @click="sessionFilters={ search:'', role:'', expiry:'' }">Clear filters</button>
+            </div>
+            <p class="list-count" role="status" x-text="filteredSessions.length + ' of ' + sessions.length + ' sessions'"></p>
           <div style="overflow-x:auto;">
             <table class="tbl">
               <thead>
@@ -290,7 +297,7 @@
                 </tr>
               </thead>
               <tbody>
-                <template x-for="s in sessions" :key="s.id">
+                <template x-for="s in filteredSessions" :key="s.id">
                   <tr>
                     <td>
                       <div style="font-weight:600;" x-text="s.name"></div>
@@ -306,7 +313,7 @@
                 </template>
               </tbody>
             </table>
-            <div x-show="sessions.length===0 && !loading" class="empty">No active sessions found</div>
+            <div x-show="filteredSessions.length===0 && !loading" class="empty" x-text="sessions.length ? 'No sessions match these filters.' : 'No active sessions found.'"></div>
           </div>
         </div>
       </div><!-- /sessions -->
@@ -370,6 +377,13 @@
             <span class="panel-title">All Users</span>
             <button class="btn btn-sm btn-outline" @click="loadUsers()">↻ Refresh</button>
           </div>
+          <div class="list-filters">
+              <label for="user-search">Search<input id="user-search" type="search" x-model="userFilters.search" placeholder="Name or email"></label>
+              <label for="user-role">Role<select id="user-role" x-model="userFilters.role"><option value="">All roles</option><option value="engineer">Engineer</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select></label>
+              <label for="user-status">Status<select id="user-status" x-model="userFilters.status"><option value="">All statuses</option><option value="active">Active</option><option value="locked">Locked</option></select></label>
+              <button class="btn btn-sm btn-outline" @click="userFilters={ search:'', role:'', status:'' }">Clear filters</button>
+            </div>
+            <p class="list-count" role="status" x-text="filteredUsers.length + ' of ' + allUsers.length + ' users'"></p>
           <div style="overflow-x:auto;">
             <table class="tbl">
               <thead>
@@ -386,7 +400,7 @@
                 </tr>
               </thead>
               <tbody>
-                <template x-for="u in allUsers" :key="u.id">
+                <template x-for="u in filteredUsers" :key="u.id">
                   <tr>
                     <td style="font-weight:600;" x-text="u.name"></td>
                     <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
@@ -416,16 +430,17 @@
                       <span x-show="!isLocked(u)" class="tag tag-green">Active</span>
                     </td>
                     <td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
-                      <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" title="Unlock">🔓</button>
-                      <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout">⏏</button>
+                      <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" title="Unlock">Unlock</button>
+                      <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout">Force logout</button>
                     </td>
                     <td>
-                      <button class="btn btn-sm btn-amber" @click="openResetModal(u)" title="Reset password">🔑</button>
+                      <button class="btn btn-sm btn-amber" @click="openResetModal(u)" title="Reset password">Reset password</button>
                     </td>
                   </tr>
                 </template>
               </tbody>
             </table>
+            <div x-show="filteredUsers.length===0 && !loading" class="empty" x-text="allUsers.length ? 'No users match these filters.' : 'No users found.'"></div>
           </div>
         </div>
       </div><!-- /users -->
@@ -759,6 +774,31 @@
     locked: [], selectedLocked: [],
     sessions: [],
     secConfig: {}, cfgVals: {},
+    userFilters: { search: '', role: '', status: '' },
+    sessionFilters: { search: '', role: '', expiry: '' },
+    matchesIdentity(record, search) {
+      const query = search.trim().toLowerCase();
+      return !query || [record.name, record.email, record.ip_address].some(value => String(value || '').toLowerCase().includes(query));
+    },
+    get filteredUsers() {
+      return this.allUsers.filter(user => this.matchesIdentity(user, this.userFilters.search)
+        && (!this.userFilters.role || user.role === this.userFilters.role)
+        && (!this.userFilters.status || this.isLocked(user) === (this.userFilters.status === 'locked')));
+    },
+    get filteredSessions() {
+      const now = Date.now();
+      return this.sessions.filter(session => {
+        const expiry = this.utcTimestamp(session.expires_at);
+        return this.matchesIdentity(session, this.sessionFilters.search)
+          && (!this.sessionFilters.role || session.role === this.sessionFilters.role)
+          && (!this.sessionFilters.expiry || (expiry > now && expiry <= now + 86400000));
+      });
+    },
+    utcTimestamp(value) {
+      if (!value) return NaN;
+      const timestamp = String(value).trim().replace(' ', 'T');
+      return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp) ? timestamp : timestamp + 'Z');
+    },
     allUsers: [],
     dbTables: {},
     sqlInput: 'SELECT * FROM users LIMIT 20',
@@ -939,7 +979,7 @@ async submitPasswordReset() {
     },
 
     isLocked(u) {
-      return u.account_locked_until && new Date(u.account_locked_until) > new Date();
+      return Boolean(u.account_locked_until && this.utcTimestamp(u.account_locked_until) > Date.now());
     },
 
     // ── Sessions ───────────────────────────────────────────────

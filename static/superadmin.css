@@ -379,3 +379,9 @@ button, select, input, textarea, a { touch-action: manipulation; }
 .role-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .5rem; }
 .role-change { flex-basis: 100%; font-size: .8rem; color: #475569; }
 .action-error { color: #9f1239; font-size: .85rem; margin-top: .5rem; overflow-wrap: anywhere; }
+
+.list-filters { display: flex; flex-wrap: wrap; gap: .75rem; padding: 1rem 1rem .5rem; align-items: end; }
+.list-filters label { display: grid; gap: .3rem; min-width: 0; flex: 1 1 160px; font-size: .8rem; font-weight: 600; color: #475569; }
+.list-filters input, .list-filters select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #cbd5e1; border-radius: 6px; padding: .5rem .65rem; background: white; font: inherit; }
+.list-count { padding: .25rem 1rem .75rem; font-size: .8rem; color: #475569; }
+@media (max-width: 480px) { .list-filters label { flex-basis: 100%; } }
