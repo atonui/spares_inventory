@@ -1,5 +1,5 @@
 """Authentication routes composed with explicit application dependencies."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -216,7 +216,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Generate reset token
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
 
         # Store token in users table
         cursor.execute(
@@ -280,7 +280,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Check if token expired
         expires_at = datetime.fromisoformat(user["reset_token_expires"])
-        if datetime.utcnow() > expires_at:
+        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
             log_activity(
                 user_id=user["id"],
                 username=user["name"],
@@ -313,7 +313,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Hash before taking the write lock, then reject revoked tokens atomically.
         new_hash = hash_password(request_data.new_password)
-        if datetime.utcnow() > expires_at:
+        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
             conn.close()
             raise HTTPException(status_code=400,detail='Token has expired')
         # Update password and clear token
@@ -384,7 +384,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=400, detail="Invalid token")
 
         expires_at = datetime.fromisoformat(user["reset_token_expires"])
-        if datetime.utcnow() > expires_at:
+        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
             log_activity(
                 user_id=user["id"],
                 username=user["name"],
@@ -426,9 +426,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         # Check if account is locked
         if user and user["account_locked_until"]:
             lockout_time = datetime.fromisoformat(user["account_locked_until"])
-            if datetime.utcnow() < lockout_time:
+            if datetime.now(timezone.utc).replace(tzinfo=None) < lockout_time:
                 remaining_minutes = int(
-                    (lockout_time - datetime.utcnow()).total_seconds() / 60
+                    (lockout_time - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds() / 60
                 )
                 log_activity(
                     user_id=user["id"],
@@ -453,7 +453,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
                 if failed_attempts >= max_attempts:
                     # Lock account
-                    lockout_until = datetime.utcnow() + timedelta(
+                    lockout_until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
                         minutes=lockout_minutes
                     )
                     cursor.execute(
@@ -503,10 +503,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Calculate session expiration
         if user_login.remember_me:
-            expires = datetime.utcnow() + timedelta(days=remember_me_days)
+            expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=remember_me_days)
             max_age = remember_me_days * 24 * 60 * 60
         else:
-            expires = datetime.utcnow() + timedelta(hours=session_hours)
+            expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=session_hours)
             max_age = session_hours * 60 * 60
 
         # Serialize the active-account check with session creation and archiving.
