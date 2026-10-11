@@ -1009,3 +1009,24 @@ label.btn {
 .report-filters input[type="date"] { -webkit-appearance:none; appearance:none; box-sizing:border-box; display:block; width:100%; inline-size:100%; min-inline-size:0; max-inline-size:100%; align-self:stretch; padding:.5rem; }
 .report-filters input[type="date"]::-webkit-datetime-edit { min-width:0; padding:0; }
 .report-filters input[type="date"]::-webkit-date-and-time-value { min-width:0; text-align:left; }
+
+/* Keep account actions spaced independently of inventory control panels. */
+.header-actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    max-width: 100%;
+}
+.header-actions .btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: .65rem 1rem;
+    white-space: nowrap;
+    line-height: 1.25;
+}
+@media (max-width: 768px) {
+    .header-actions { width: 100%; gap: .75rem; }
+    .header .user-info { gap: 1rem; }
+}
