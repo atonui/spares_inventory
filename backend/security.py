@@ -8,20 +8,27 @@ from typing import Callable
 from fastapi import HTTPException
 from itsdangerous import URLSafeTimedSerializer
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _bcrypt_password(password: str) -> bytes:
+    """Preserve Passlib's UTF-8 encoding and bcrypt's 72-byte limit."""
+    encoded = password.encode("utf-8")
+    if b"\x00" in encoded:
+        raise ValueError("bcrypt passwords cannot contain NUL bytes")
+    if len(password) > 4096:
+        raise ValueError("password exceeds maximum supported length")
+    return encoded[:72]
 
 
 def hash_password(password: str) -> str:
     """Hash password for storage."""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_bcrypt_password(password), bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(_bcrypt_password(plain_password), hashed_password.encode("ascii"))
 
 
 def create_access_token(data: dict, secret_key: str):
