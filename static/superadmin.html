@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
-<link rel="stylesheet" href="superadmin.css">
 <link rel="stylesheet" href="mystyle.css">
+<link rel="stylesheet" href="superadmin.css?v=20261012">
 <script src="audit.js?v=20261005-stock-audit" defer></script>
 <script src="script.js?v=20261005-stock-audit" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -14,17 +14,19 @@
 <body x-data="superPanel()" x-init="init()">
 
 <!-- Toasts -->
-<div class="toast-wrap">
+<div class="toast-wrap" role="status" aria-live="polite" aria-atomic="true">
   <template x-for="t in toasts" :key="t.id">
     <div class="toast" :class="'toast-' + t.type" x-text="t.msg"></div>
   </template>
 </div>
 
 <!-- Confirm dialog -->
-<div class="confirm-overlay" x-show="dlg.open" style="display:none" x-cloak>
+<div class="confirm-overlay" x-show="dlg.open" style="display:none" x-cloak
+     role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description" tabindex="-1"
+     x-effect="syncDialog($el, dlg.open)" @keydown.tab="trapDialogFocus($event, $el)" @keydown.escape.stop="dlg.open=false">
   <div class="confirm-box">
-    <h3 x-text="dlg.title"></h3>
-    <p x-text="dlg.msg"></p>
+    <h3 id="confirm-title" x-text="dlg.title"></h3>
+    <p id="confirm-description" x-text="dlg.msg"></p>
     <div class="confirm-actions">
       <button class="btn btn-outline" @click="dlg.open=false">Cancel</button>
       <button class="btn btn-red" @click="dlg.resolve(); dlg.open=false" x-text="dlg.action||'Confirm'"></button>
@@ -32,7 +34,7 @@
   </div>
 </div>
 
-<div class="shell">
+<div class="shell" :inert="dlg.open || resetModal.open">
 
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
@@ -41,56 +43,56 @@
       <p>Superadmin Panel</p>
     </div>
 
-    <nav>
+    <nav aria-label="Superadmin navigation">
       <div class="nav-section">
         <div class="nav-label">Overview</div>
-        <div class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'">
+        <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'" :aria-current="tab==='dashboard' ? 'page' : null">
           <span class="ni">📊</span> Dashboard
-        </div>
+        </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-label">Security</div>
-        <div class="nav-item" :class="tab==='accounts'&&'active'" @click="tab='accounts'; loadLocked()">
+        <button type="button" class="nav-item" :class="tab==='accounts'&&'active'" @click="tab='accounts'; loadLocked()" :aria-current="tab==='accounts' ? 'page' : null">
           <span class="ni">🔒</span> Locked Accounts
           <span x-show="dashboard.locked_accounts>0" class="nav-badge" x-text="dashboard.locked_accounts"></span>
-        </div>
-        <div class="nav-item" :class="tab==='sessions'&&'active'" @click="tab='sessions'; loadSessions()">
+        </button>
+        <button type="button" class="nav-item" :class="tab==='sessions'&&'active'" @click="tab='sessions'; loadSessions()" :aria-current="tab==='sessions' ? 'page' : null">
           <span class="ni">📡</span> Active Sessions
-        </div>
-        <div class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()">
+        </button>
+        <button type="button" class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()" :aria-current="tab==='config' ? 'page' : null">
           <span class="ni">⚙️</span> Security Config
-        </div>
+        </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-label">Users</div>
-        <div class="nav-item" :class="tab==='users'&&'active'" @click="tab='users'; loadUsers()">
+        <button type="button" class="nav-item" :class="tab==='users'&&'active'" @click="tab='users'; loadUsers()" :aria-current="tab==='users' ? 'page' : null">
           <span class="ni">👥</span> All Users
-        </div>
+        </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-label">Database</div>
-        <div class="nav-item" :class="tab==='tables'&&'active'" @click="tab='tables'; loadTables()">
+        <button type="button" class="nav-item" :class="tab==='tables'&&'active'" @click="tab='tables'; loadTables()" :aria-current="tab==='tables' ? 'page' : null">
           <span class="ni">🗄️</span> Tables
-        </div>
-        <div class="nav-item" :class="tab==='query'&&'active'" @click="tab='query'">
+        </button>
+        <button type="button" class="nav-item" :class="tab==='query'&&'active'" @click="tab='query'" :aria-current="tab==='query' ? 'page' : null">
           <span class="ni">💻</span> SQL Console
-        </div>
-        <div class="nav-item" :class="tab==='maintenance'&&'active'" @click="tab='maintenance'">
+        </button>
+        <button type="button" class="nav-item" :class="tab==='maintenance'&&'active'" @click="tab='maintenance'" :aria-current="tab==='maintenance' ? 'page' : null">
           <span class="ni">🔧</span> Maintenance
-        </div>
+        </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-label">System</div>
-        <div class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; loadAnnouncement()">
+        <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; loadAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
           <span class="ni">📢</span> Announcement
-        </div>
-        <div class="nav-item" :class="tab==='audit'&&'active'" @click="tab='audit'; loadAudit()">
+        </button>
+        <button type="button" class="nav-item" :class="tab==='audit'&&'active'" @click="tab='audit'; loadAudit()" :aria-current="tab==='audit' ? 'page' : null">
           <span class="ni">📋</span> Audit Log
-        </div>
+        </button>
       </div>
     </nav>
 
@@ -112,15 +114,21 @@
 
     <!-- Topbar -->
     <div class="topbar">
+      <div class="mobile-section">
+        <label for="superadmin-section">Section</label>
+        <select id="superadmin-section" aria-label="Superadmin section" x-model="tab" @change="selectSection($event.target.value)">
+          <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-text="title"></option></template>
+        </select>
+      </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
         <span x-show="loading" class="spin"></span>
         <button class="btn btn-sm btn-outline" @click="refresh()">↻ Refresh</button>
-        <a href="/static/index.html" class="btn btn-sm btn-outline">← Dashboard</a>
+        <a href="/static/index.html" class="btn btn-sm btn-outline">← Back to inventory</a>
       </div>
     </div>
 
-    <div class="content">
+    <main class="content" id="panel-content" :aria-busy="loading">
 
       <!-- ══════════ DASHBOARD ══════════ -->
       <div x-show="tab==='dashboard'">
@@ -647,27 +655,30 @@
         </div>
       </div><!-- /audit -->
 
-    </div><!-- /content -->
+    </main><!-- /content -->
   </div><!-- /main-wrap -->
 </div><!-- /shell -->
 
 <!-- Reset Password Modal -->
-<div class="confirm-overlay" x-show="resetModal.open" style="display:none" x-cloak>
+<div class="confirm-overlay" x-show="resetModal.open" style="display:none" x-cloak
+     role="dialog" aria-modal="true" aria-labelledby="reset-title" tabindex="-1"
+     x-effect="syncDialog($el, resetModal.open)" @keydown.tab="trapDialogFocus($event, $el)"
+     @keydown.escape.stop="resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''">
   <div class="confirm-box">
-    <h3>Reset Password</h3>
+    <h3 id="reset-title">Reset Password</h3>
     <p style="color:#666;font-size:0.875rem;margin-bottom:1rem;">
       Setting a new password for <strong x-text="resetModal.userName"></strong>.
       Their active sessions will be terminated.
     </p>
     <div class="form-group">
-      <label>New Password</label>
-      <input type="password" x-model="resetModal.password"
+      <label for="reset-password">New Password</label>
+      <input id="reset-password" type="password" x-model="resetModal.password"
              placeholder="Minimum 8 characters"
              style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
     </div>
     <div class="form-group">
-      <label>Confirm Password</label>
-      <input type="password" x-model="resetModal.confirm"
+      <label for="reset-confirm">Confirm Password</label>
+      <input id="reset-confirm" type="password" x-model="resetModal.confirm"
              placeholder="Repeat new password"
              style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
     </div>
@@ -683,6 +694,35 @@
 <script>
   function superPanel() {
   return {
+    dialogFocus: new WeakMap(),
+    selectSection(section) {
+      if (!Object.hasOwn(this.tabTitles, section)) return;
+      this.tab = section;
+      this.refresh();
+    },
+    syncDialog(element, open) {
+      if (open && !this.dialogFocus.has(element)) {
+        this.dialogFocus.set(element, document.activeElement);
+        this.$nextTick(() => {
+          if (this.dialogFocus.has(element))
+            (element.querySelector('button:not([disabled]), input:not([disabled])') || element).focus();
+        });
+      } else if (!open && this.dialogFocus.has(element)) {
+        const previous = this.dialogFocus.get(element);
+        this.dialogFocus.delete(element);
+        if (previous?.isConnected) previous.focus();
+      }
+    },
+    trapDialogFocus(event, element) {
+      const controls = Array.from(element.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]'));
+      if (!controls.length) { event.preventDefault(); element.focus(); return; }
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && (event.target === first || event.target === element)) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (event.target === last || event.target === element)) {
+        event.preventDefault(); first.focus();
+      }
+    },
     tab: 'dashboard',
     loading: false,
     apiUrl: '/api',

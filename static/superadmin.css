@@ -340,3 +340,38 @@ body { align-items: flex-start; padding: 0; background: #f8f9fa; }
     .content { padding: 1rem; }
     .topbar  { padding: 0.75rem 1rem; }
   }
+/* Panel overrides follow shared styles so the shell owns its layout. */
+body { display: block; padding: 0; }
+.nav-item { width: 100%; border: 0; border-left: 3px solid transparent; background: transparent; text-align: left; font: inherit; font-size: .875rem; border-radius: 0; min-height: 44px; }
+button, select, input, textarea, a { touch-action: manipulation; }
+:where(button, select, input, textarea, a, summary):focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.mobile-section { display: none; }
+.content { min-width: 0; }
+.panel-body, .panel-header, .topbar-right { min-width: 0; }
+.topbar { gap: 1rem; flex-wrap: wrap; }
+.topbar-right { flex-wrap: wrap; }
+.btn { min-height: 40px; }
+.confirm-overlay { padding: 1rem; overflow-y: auto; }
+.confirm-box { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.confirm-actions { flex-wrap: wrap; }
+.toast-wrap { max-width: calc(100vw - 2rem); }
+.toast { overflow-wrap: anywhere; }
+.cfg-ctrl { max-width: 100%; flex-wrap: wrap; }
+.sql-editor { min-width: 0; }
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .topbar { position: static; align-items: flex-start; }
+  .mobile-section { display: grid; gap: .25rem; width: 100%; }
+  .mobile-section label { font-size: .75rem; font-weight: 600; color: #475569; }
+  .mobile-section select { width: 100%; min-width: 0; min-height: 44px; padding: .65rem; border: 1px solid #cbd5e1; border-radius: 6px; background: white; font: inherit; }
+  .topbar-right { width: 100%; gap: .5rem; }
+  .stat-grid, .qa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+  .table-grid { grid-template-columns: minmax(0, 1fr); }
+  .stat-card, .qa-btn { min-width: 0; padding: .85rem; overflow-wrap: anywhere; }
+  .panel-header > div { flex-wrap: wrap; }
+  .tbl td { overflow-wrap: anywhere; }
+  .ann-bar { flex-wrap: wrap; padding: .75rem 1rem; overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
