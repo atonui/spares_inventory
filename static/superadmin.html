@@ -123,13 +123,13 @@
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
-        <span x-show="loading" class="spin"></span>
-        <button class="btn btn-sm btn-outline" @click="refresh()">↻ Refresh</button>
+        <span x-show="loading || panelLoads[tab]?.loading" class="spin"></span>
+        <button class="btn btn-sm btn-outline" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading">↻ Refresh</button>
         <a href="/static/index.html" class="btn btn-sm btn-outline">← Back to inventory</a>
       </div>
     </div>
 
-    <main class="content" id="panel-content" :aria-busy="loading">
+    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading">
 
       <!-- ══════════ DASHBOARD ══════════ -->
       <div x-show="tab==='dashboard'">
@@ -268,15 +268,23 @@
 
       <!-- ══════════ ACTIVE SESSIONS ══════════ -->
       <div x-show="tab==='sessions'">
+        <div class="action-feedback">
+          <p x-show="panelLoads.sessions.loading" role="status">Loading sessions…</p>
+          <div x-show="panelLoads.sessions.error" role="alert">
+            <p class="action-error" x-text="panelLoads.sessions.error"></p>
+            <button class="btn btn-sm btn-outline" @click="loadSessions()" :disabled="panelLoads.sessions.loading">Retry</button>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">
               Active Sessions
-              <span class="tag tag-blue" style="margin-left:6px;" x-text="sessions.length"></span>
+              <span class="tag tag-blue" style="margin-left:6px;" x-show="panelReady('sessions')" x-text="sessions.length"></span>
             </span>
             <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-red" @click="confirmLogoutAll()">🚫 Logout All</button>
-              <button class="btn btn-sm btn-outline" @click="loadSessions()">↻ Refresh</button>
+              <button class="btn btn-sm btn-red" @click="confirmLogoutAll()" :disabled="!panelReady('sessions')">🚫 Logout All</button>
+              <button class="btn btn-sm btn-outline" @click="loadSessions()" :disabled="panelLoads.sessions.loading">↻ Refresh</button>
             </div>
           </div>
 
@@ -286,8 +294,8 @@
               <label for="session-expiry">Expires<select id="session-expiry" x-model="sessionFilters.expiry"><option value="">Any expiry</option><option value="soon">Within 24 hours</option></select></label>
               <button class="btn btn-sm btn-outline" @click="sessionFilters={ search:'', role:'', expiry:'' }">Clear filters</button>
             </div>
-            <p class="list-count" role="status" x-text="filteredSessions.length + ' of ' + sessions.length + ' sessions'"></p>
-          <div style="overflow-x:auto;">
+            <p x-show="panelReady('sessions')" class="list-count" role="status" x-text="filteredSessions.length + ' of ' + sessions.length + ' sessions'"></p>
+          <div x-show="panelReady('sessions')" style="overflow-x:auto;">
             <table class="tbl">
               <thead>
                 <tr>
@@ -317,7 +325,7 @@
                 </template>
               </tbody>
             </table>
-            <div x-show="filteredSessions.length===0 && !loading" class="empty" x-text="sessions.length ? 'No sessions match these filters.' : 'No active sessions found.'"></div>
+            <div x-show="filteredSessions.length===0" class="empty" x-text="sessions.length ? 'No sessions match these filters.' : 'No active sessions found.'"></div>
           </div>
         </div>
       </div><!-- /sessions -->
@@ -325,6 +333,14 @@
 
       <!-- ══════════ SECURITY CONFIG ══════════ -->
       <div x-show="tab==='config'">
+        <div class="action-feedback">
+          <p x-show="panelLoads.config.loading" role="status">Loading security settings…</p>
+          <div x-show="panelLoads.config.error" role="alert">
+            <p class="action-error" x-text="panelLoads.config.error"></p>
+            <button class="btn btn-sm btn-outline" @click="loadConfig()" :disabled="panelLoads.config.loading">Retry</button>
+          </div>
+        </div>
+
 
         <div class="panel">
           <div class="panel-header">
@@ -340,10 +356,10 @@
                 </div>
                 <div class="cfg-ctrl">
                   <input type="number" :min="meta.min" :max="meta.max"
-                         x-model="cfgVals[key]" :disabled="actionPending['config:' + key]" :aria-label="meta.label"
+                         x-model="cfgVals[key]" :disabled="!panelReady('config') || actionPending['config:' + key]" :aria-label="meta.label"
                          @keydown.enter="saveConfig(key)">
                   <span class="cfg-unit" x-text="meta.unit"></span>
-                  <button class="btn btn-sm btn-success" @click="saveConfig(key)" :disabled="actionPending['config:' + key]" x-text="actionPending['config:' + key] ? 'Saving…' : 'Save'"></button>
+                  <button class="btn btn-sm btn-success" @click="saveConfig(key)" :disabled="!panelReady('config') || actionPending['config:' + key]" x-text="actionPending['config:' + key] ? 'Saving…' : 'Save'"></button>
                   <p class="action-error" x-show="actionErrors['config:' + key]" role="alert" x-text="actionErrors['config:' + key]"></p>
                 </div>
               </div>
@@ -354,10 +370,10 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Current Values (from database)</span>
-            <button class="btn btn-sm btn-outline" @click="loadConfig()">↻ Refresh</button>
+            <button class="btn btn-sm btn-outline" @click="loadConfig()" :disabled="panelLoads.config.loading">↻ Refresh</button>
           </div>
-          <div class="panel-body">
-            <div x-show="Object.keys(secConfig).length===0 && !loading" style="color:#aaa;font-size:0.875rem;">
+          <div class="panel-body" x-show="panelReady('config')">
+            <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:#aaa;font-size:0.875rem;">
               No values saved yet — save a parameter above to create them.
             </div>
             <template x-for="[key, row] in Object.entries(secConfig)">
@@ -377,10 +393,18 @@
 
       <!-- ══════════ USERS ══════════ -->
       <div x-show="tab==='users'">
+        <div class="action-feedback">
+          <p x-show="panelLoads.users.loading" role="status">Loading users…</p>
+          <div x-show="panelLoads.users.error" role="alert">
+            <p class="action-error" x-text="panelLoads.users.error"></p>
+            <button class="btn btn-sm btn-outline" @click="loadUsers()" :disabled="panelLoads.users.loading">Retry</button>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">All Users</span>
-            <button class="btn btn-sm btn-outline" @click="loadUsers()">↻ Refresh</button>
+            <button class="btn btn-sm btn-outline" @click="loadUsers()" :disabled="panelLoads.users.loading">↻ Refresh</button>
           </div>
           <div class="action-feedback">
             <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
@@ -392,8 +416,8 @@
               <label for="user-status">Status<select id="user-status" x-model="userFilters.status"><option value="">All statuses</option><option value="active">Active</option><option value="locked">Locked</option></select></label>
               <button class="btn btn-sm btn-outline" @click="userFilters={ search:'', role:'', status:'' }">Clear filters</button>
             </div>
-            <p class="list-count" role="status" x-text="filteredUsers.length + ' of ' + allUsers.length + ' users'"></p>
-          <div style="overflow-x:auto;">
+            <p x-show="panelReady('users')" class="list-count" role="status" x-text="filteredUsers.length + ' of ' + allUsers.length + ' users'"></p>
+          <div x-show="panelReady('users')" style="overflow-x:auto;">
             <table class="tbl">
               <thead>
                 <tr>
@@ -449,7 +473,7 @@
                 </template>
               </tbody>
             </table>
-            <div x-show="filteredUsers.length===0 && !loading" class="empty" x-text="allUsers.length ? 'No users match these filters.' : 'No users found.'"></div>
+            <div x-show="filteredUsers.length===0" class="empty" x-text="allUsers.length ? 'No users match these filters.' : 'No users found.'"></div>
           </div>
         </div>
       </div><!-- /users -->
@@ -818,6 +842,29 @@
     dashboard: {},
     locked: [], selectedLocked: [],
     sessions: [],
+    panelLoads: {
+      users: { loading: false, loaded: false, error: '' },
+      sessions: { loading: false, loaded: false, error: '' },
+      config: { loading: false, loaded: false, error: '' },
+    },
+    panelReady(section) {
+      const state = this.panelLoads[section];
+      return state.loaded && !state.loading && !state.error;
+    },
+    async loadPanel(section, operation) {
+      const state = this.panelLoads[section];
+      if (state.loading) return;
+      state.loading = true;
+      state.error = '';
+      try {
+        await operation();
+        state.loaded = true;
+      } catch (error) {
+        state.error = error.message || 'Unable to load data. Please retry.';
+      } finally {
+        state.loading = false;
+      }
+    },
     secConfig: {}, cfgVals: {},
     userFilters: { search: '', role: '', status: '' },
     sessionFilters: { search: '', role: '', expiry: '' },
@@ -1030,10 +1077,9 @@ async submitPasswordReset() {
 
     // ── Sessions ───────────────────────────────────────────────
     async loadSessions() {
-      this.loading = true;
-      try { this.sessions = await this.api('/superadmin/sessions'); }
-      catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
+      return this.loadPanel('sessions', async () => {
+        this.sessions = await this.api('/superadmin/sessions');
+      });
     },
 
     forceLogout(u) {
@@ -1076,16 +1122,15 @@ async submitPasswordReset() {
 
     // ── Security config ────────────────────────────────────────
     async loadConfig() {
-      this.loading = true;
-      try {
+      return this.loadPanel('config', async () => {
         this.secConfig = await this.api('/superadmin/security-config');
         for (const k of Object.keys(this.cfgMeta))
           this.cfgVals[k] = this.secConfig[k]?.setting_value ?? '';
-      } catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
+      });
     },
 
     async saveConfig(key) {
+      if (!this.panelReady('config')) return;
       const val = this.cfgVals[key];
       if (!val) { this.toast('Please enter a value', 'warn'); return; }
       return this.runAction('config:' + key, async () => {
@@ -1099,11 +1144,9 @@ async submitPasswordReset() {
 
     // ── Users ──────────────────────────────────────────────────
     async loadUsers() {
-      this.loading = true;
-      try {
+      return this.loadPanel('users', async () => {
         this.allUsers = (await this.api('/superadmin/users')).map(u => ({ ...u, _role: u.role, _saving: false, _error: '' }));
-      } catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
+      });
     },
 
     async changeRole(u) {
