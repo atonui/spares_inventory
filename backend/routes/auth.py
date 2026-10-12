@@ -1,5 +1,9 @@
 """Authentication routes composed with explicit application dependencies."""
-from datetime import datetime, timedelta, timezone
+from backend.temporal_contract import register_instant_comparison
+from backend.temporal_contract import instant_response
+from datetime import timedelta
+from backend.temporal import utc_now, serialize_legacy_utc
+from backend.temporal_contract import stored_instant
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -31,6 +35,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     _record_mutation_activity = mutation_activity
 
     @router.get("/api/csrf-token")
+    @instant_response
     async def get_csrf_token():
         """Get CSRF token for forms"""
         token = generate_csrf_token()
@@ -38,11 +43,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
 
     @router.get("/api/profile")
+    @instant_response
     async def get_profile(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get current user's profile"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -188,6 +195,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_agent = request.headers.get("user-agent", "")[:200]
 
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Find user by email
@@ -221,14 +229,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Generate reset token
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
+        expires_at = utc_now() + timedelta(hours=1)
 
         # Store token in users table
         cursor.execute(
             """UPDATE users 
                SET reset_token = ?, reset_token_expires = ? 
                WHERE id = ? AND archived_at IS NULL""",
-            (token, expires_at.isoformat(), user_id),
+            (token, serialize_legacy_utc(expires_at), user_id),
         )
 
         conn.commit()
@@ -257,6 +265,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_agent = request.headers.get("user-agent", "")[:200]
 
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Validate token
@@ -284,8 +293,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=400, detail="Invalid or expired token")
 
         # Check if token expired
-        expires_at = datetime.fromisoformat(user["reset_token_expires"])
-        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
+        expires_at = stored_instant(user["reset_token_expires"], "reset_token_expires")
+        if utc_now() > expires_at:
             log_activity(
                 user_id=user["id"],
                 username=user["name"],
@@ -318,7 +327,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Hash before taking the write lock, then reject revoked tokens atomically.
         new_hash = hash_password(request_data.new_password)
-        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
+        if utc_now() > expires_at:
             conn.close()
             raise HTTPException(status_code=400,detail='Token has expired')
         # Update password and clear token
@@ -361,11 +370,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
 
     @router.get("/api/verify-reset-token/{token}")
+    @instant_response
     async def verify_reset_token(token: str, request: Request = None):
         """Verify if a reset token is valid"""
         ip_address = request.client.host if hasattr(request, "client") else None
 
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -388,8 +399,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             )
             raise HTTPException(status_code=400, detail="Invalid token")
 
-        expires_at = datetime.fromisoformat(user["reset_token_expires"])
-        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
+        expires_at = stored_instant(user["reset_token_expires"], "reset_token_expires")
+        if utc_now() > expires_at:
             log_activity(
                 user_id=user["id"],
                 username=user["name"],
@@ -417,6 +428,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         remember_me_days = cfg["remember_me_duration_days"]
 
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Get user
@@ -430,10 +442,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Check if account is locked
         if user and user["account_locked_until"]:
-            lockout_time = datetime.fromisoformat(user["account_locked_until"])
-            if datetime.now(timezone.utc).replace(tzinfo=None) < lockout_time:
+            lockout_time = stored_instant(user["account_locked_until"], "account_locked_until")
+            if utc_now() < lockout_time:
                 remaining_minutes = int(
-                    (lockout_time - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds() / 60
+                    (lockout_time - utc_now()).total_seconds() / 60
                 )
                 log_activity(
                     user_id=user["id"],
@@ -458,14 +470,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
                 if failed_attempts >= max_attempts:
                     # Lock account
-                    lockout_until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+                    lockout_until = utc_now() + timedelta(
                         minutes=lockout_minutes
                     )
                     cursor.execute(
                         """UPDATE users 
                            SET failed_login_attempts = ?, account_locked_until = ? 
                            WHERE id = ?""",
-                        (failed_attempts, lockout_until.isoformat(), user["id"]),
+                        (failed_attempts, serialize_legacy_utc(lockout_until), user["id"]),
                     )
                     conn.commit()
 
@@ -508,10 +520,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Calculate session expiration
         if user_login.remember_me:
-            expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=remember_me_days)
+            expires = utc_now() + timedelta(days=remember_me_days)
             max_age = remember_me_days * 24 * 60 * 60
         else:
-            expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=session_hours)
+            expires = utc_now() + timedelta(hours=session_hours)
             max_age = session_hours * 60 * 60
 
         # Serialize the active-account check with session creation and archiving.
@@ -526,7 +538,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
                 VALUES (?, ?, ?, ?, ?)
             """,
-                (user["id"], session_token, expires.isoformat(), ip_address, user_agent),
+                (user["id"], session_token, serialize_legacy_utc(expires), ip_address, user_agent),
             )
 
             # Update user record
@@ -583,11 +595,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
 
     @router.get("/api/auth/sessions")
+    @instant_response
     async def get_active_sessions(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get user's active sessions"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -596,7 +610,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                    CASE WHEN session_token = ? THEN 1 ELSE 0 END as is_current
             FROM sessions
             WHERE user_id = ? AND is_active = 1
-            ORDER BY last_activity DESC
+            ORDER BY utc_instant(last_activity) DESC, id DESC
         """,
             (request.cookies.get("session_token"), user_id),
         )
@@ -685,11 +699,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
 
     @router.get("/api/me", response_model=UserResponse)
+    @instant_response
     async def get_current_user_info(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get current user information"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute(

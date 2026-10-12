@@ -48,7 +48,7 @@ def test_parts_listing_preserves_archive_permissions(session_api, actor, include
     client, path, _ = session_api
     client.cookies.set('session_token', actor)
     with closing(connect_database(path)) as conn, conn:
-        conn.execute("UPDATE parts SET archived_at='2000-01-01' WHERE id=2")
+        conn.execute("UPDATE parts SET archived_at='2000-01-01T00:00:00' WHERE id=2")
     response = client.get('/api/parts', params={'include_archived': include_archived})
     if include_archived and actor == 'engineer-token':
         assert response.status_code == 403

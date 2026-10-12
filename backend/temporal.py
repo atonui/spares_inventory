@@ -88,6 +88,13 @@ def _midnight(day: date, zone: ZoneInfo) -> datetime:
     return candidates.pop()
 
 
+def business_midnight(day: date, *, zone: str) -> datetime:
+    """Resolve exactly one requested local midnight, rejecting gaps and folds."""
+    if type(day) is not date:
+        raise ValueError('Provide a calendar date.')
+    return _midnight(day, validate_zone(zone))
+
+
 def business_date_bounds(start: date, through: date, *, zone: str) -> tuple[datetime, datetime]:
     if type(start) is not date or type(through) is not date or through < start:
         raise ValueError('Provide calendar dates in ascending order.')

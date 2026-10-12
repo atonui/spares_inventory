@@ -1,9 +1,13 @@
 """Privileged administration HTTP routes with explicit application dependencies."""
+from backend.temporal_contract import instant_response
 import json
 import os
 import sqlite3
 from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
+from backend.temporal_contract import date_metadata, date_predicates, register_instant_comparison
+from backend.services.timezone_policy import resolve_business_context
+from backend.temporal import utc_now, serialize_legacy_utc
 from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -71,26 +75,28 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/dashboard")
+    @instant_response
     async def superadmin_dashboard(
         user_id: int = Depends(get_current_user),
         request: Request = None,
     ):
         require_superadmin(user_id)
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
 
         # Locked accounts
         cur.execute("""
             SELECT COUNT(*) as n FROM users
             WHERE account_locked_until IS NOT NULL
-              AND account_locked_until > datetime('now')
+              AND julianday(account_locked_until) > julianday('now')
         """)
         locked_count = cur.fetchone()["n"]
 
         # Active sessions
         cur.execute("""
             SELECT COUNT(*) as n FROM sessions
-            WHERE is_active = 1 AND expires_at > datetime('now')
+            WHERE is_active = 1 AND julianday(expires_at) > julianday('now')
         """)
         active_sessions = cur.fetchone()["n"]
 
@@ -102,7 +108,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         cur.execute("""
             SELECT COUNT(*) as n FROM activity_logs
             WHERE action IN ('login_failed','account_locked')
-              AND created_at >= datetime('now','-1 day')
+              AND julianday(created_at) >= julianday('now','-1 day')
         """)
         recent_failures = cur.fetchone()["n"]
 
@@ -142,19 +148,21 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/locked-accounts")
+    @instant_response
     async def get_locked_accounts(
         user_id: int = Depends(get_current_user),
         request: Request = None,
     ):
         require_superadmin(user_id)
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
         cur.execute("""
             SELECT id, name, email, role, failed_login_attempts,
                    account_locked_until, last_login
             FROM users
             WHERE account_locked_until IS NOT NULL
-              AND account_locked_until > datetime('now')
+              AND julianday(account_locked_until) > julianday('now')
             ORDER BY account_locked_until DESC
         """)
         rows = [dict(r) for r in cur.fetchall()]
@@ -217,12 +225,14 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/sessions")
+    @instant_response
     async def get_all_sessions(
         user_id: int = Depends(get_current_user),
         request: Request = None,
     ):
         require_superadmin(user_id)
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
         cur.execute("""
             SELECT s.id, s.user_id, u.name, u.email, u.role,
@@ -230,8 +240,8 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
                    s.ip_address, s.user_agent, s.is_active
             FROM sessions s
             JOIN users u ON s.user_id = u.id
-            WHERE s.is_active = 1 AND s.expires_at > datetime('now')
-            ORDER BY s.last_activity DESC
+            WHERE s.is_active = 1 AND julianday(s.expires_at) > julianday('now')
+            ORDER BY utc_instant(s.last_activity) DESC, s.id DESC
         """)
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
@@ -288,6 +298,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/security-config")
+    @instant_response
     async def get_security_config(
         user_id: int = Depends(get_current_user),
     ):
@@ -350,18 +361,20 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/users")
+    @instant_response
     async def superadmin_get_users(
         user_id: int = Depends(get_current_user),
         request: Request = None,
     ):
         require_superadmin(user_id)
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
         cur.execute("""
             SELECT id, name, email, role, territory,
                    failed_login_attempts, account_locked_until,
                    last_login, created_at
-            FROM users ORDER BY created_at DESC
+            FROM users ORDER BY utc_instant(created_at) DESC, id DESC
         """)
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
@@ -398,12 +411,14 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/database/tables")
+    @instant_response
     async def get_db_tables(
         user_id: int = Depends(get_current_user),
         request: Request = None,
     ):
         require_superadmin(user_id)
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = [r["name"] for r in cur.fetchall()]
@@ -444,6 +459,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
                 raise HTTPException(status_code=400, detail=f"Keyword '{kw}' is not allowed")
 
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
         try:
             cur.execute(sql, body.params or [])
@@ -461,6 +477,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/database/backup")
+    @instant_response
     async def download_db_backup(
         user_id: int = Depends(get_current_user),
         request: Request = None,
@@ -470,7 +487,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         if not os.path.exists(database_path()):
             raise HTTPException(status_code=404, detail="Database file not found")
 
-        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")
+        timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"inventory_backup_{timestamp}.db"
         backup_path = f"/tmp/{backup_name}"
 
@@ -568,12 +585,12 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             else:
                 cur.execute(f"""
                     DELETE FROM activity_logs
-                    WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', ? )
+                    WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND julianday(created_at) < julianday('now', ? )
                 """, (f"-{days} days",))
                 act_deleted = cur.rowcount
                 cur.execute("""
                     DELETE FROM system_logs
-                    WHERE created_at < datetime('now', ?)
+                    WHERE julianday(created_at) < julianday('now', ?)
                 """, (f"-{days} days",))
                 sys_deleted = cur.rowcount
 
@@ -598,7 +615,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             require_superadmin(user_id, conn)
             cur = conn.cursor()
             payload = json.dumps({"message": body.message, "level": body.level,
-                                   "set_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()})
+                                   "set_at": serialize_legacy_utc(utc_now())})
             cur.execute("""
                 INSERT INTO system_settings (setting_key, setting_value, updated_by)
                 VALUES ('system_announcement', ?, ?)
@@ -622,9 +639,11 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/announcement")
+    @instant_response
     async def get_announcement(request: Request = None):
         """Public endpoint – any authenticated user can read the announcement."""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cur = conn.cursor()
         cur.execute("SELECT setting_value FROM system_settings WHERE setting_key = 'system_announcement'")
         row = cur.fetchone()
@@ -635,6 +654,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
 
 
     @superadmin_router.get("/audit-log")
+    @instant_response
     async def get_superadmin_audit(
         limit: int = Query(default=200, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
@@ -651,18 +671,6 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             raise HTTPException(422, "Through must be on or after From")
         conditions = ["username = 'superadmin'"]
         params = []
-        nairobi = ZoneInfo("Africa/Nairobi")
-        try:
-            if start_date:
-                start = datetime.combine(start_date, time.min, nairobi).astimezone(timezone.utc)
-                conditions.append("julianday(created_at) >= julianday(?)")
-                params.append(start.isoformat())
-            if end_date:
-                end = datetime.combine(end_date + timedelta(days=1), time.min, nairobi).astimezone(timezone.utc)
-                conditions.append("julianday(created_at) < julianday(?)")
-                params.append(end.isoformat())
-        except (OverflowError, ValueError):
-            raise HTTPException(422, "Date range cannot be represented in UTC")
         if action:
             conditions.append("action = ?")
             params.append(action)
@@ -672,9 +680,14 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         where = " WHERE " + " AND ".join(conditions)
         with closing(get_db_connection()) as conn:
             conn.execute("BEGIN")
+            context=resolve_business_context(conn,actor_id=user_id)
+            metadata=date_metadata(context,start_date,end_date)
+            register_instant_comparison(conn)
+            date_sql,date_params=date_predicates('created_at',metadata)
+            where+=date_sql;params.extend(date_params)
             rows = [dict(row) for row in conn.execute(
                 "SELECT * FROM activity_logs" + where +
-                " ORDER BY julianday(created_at) DESC, id DESC LIMIT ? OFFSET ?",
+                " ORDER BY utc_instant(created_at) DESC, id DESC LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )]
             if not paginated:
@@ -683,7 +696,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             actions = [row[0] for row in conn.execute(
                 "SELECT DISTINCT action FROM activity_logs WHERE username = 'superadmin' ORDER BY action"
             )]
-            return {"rows": rows, "total": total, "actions": actions, "limit": limit, "offset": offset}
+            return {**metadata, "rows": rows, "total": total, "actions": actions, "limit": limit, "offset": offset}
 
 
     return superadmin_router

@@ -26,7 +26,7 @@ def test_audit_nairobi_day_filters_and_full_totals(super_api):
     assert len(result['rows'])==1
     assert result['rows'][0]['action']=='DB_QUERY'
     second=client.get('/api/superadmin/audit-log',params={'paginated':True,'start_date':'2026-10-05','end_date':'2026-10-05','limit':1,'offset':1}).json()
-    assert second['rows'][0]['created_at']=='2026-10-04 21:00:00'
+    assert second['rows'][0]['created_at']=='2026-10-04T21:00:00.000000Z'
     assert second['total']==2
 
 

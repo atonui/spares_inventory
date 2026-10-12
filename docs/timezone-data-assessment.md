@@ -30,8 +30,12 @@ row identities private. This document includes only aggregate counts.
 ## Field inventory and code evidence
 
 The machine-readable inventory is `backend/temporal_manifest.py`. Naive instant
-policy is deliberately unset until historical provenance is verified. Current
-writer evidence is listed; it does not certify historical/imported values.
+policies now combine the owner's 12 October confirmation (app-generated timestamps
+only), initial commit b6d0531 UTC SQLite defaults, historical authentication
+75af1ae UTC expiry clocks and current writers. The unused `users.session_expires`
+column remains unverified: no historical writer was found. A non-null naive value
+in that column still blocks storage cutover. The old snapshot assessment below
+records the policies at the time it was run; it is not a current readiness result.
 
 | Fields | Meaning and writer evidence | Readers/comparisons requiring later changes |
 | --- | --- | --- |
@@ -105,15 +109,15 @@ migrations. This snapshot cannot establish current production coverage.
 
 - The manifest adds optional setting-key/JSON-key selectors to cover embedded
   announcement time and duration settings. Column-only assessment was insufficient.
-- All naive instant policies remain unverified. This deliberately blocks automatic
-  conversion despite current UTC writer evidence; confirm historical writer/import
-  provenance before setting a field's policy to UTC.
+- Reviewed app-generated fields have UTC policies for the API adapter. Unknown
+  fields and the unverified legacy session_expires column remain blockers. No
+  stored timestamp conversion has run.
 - Only the explicitly dated supplied snapshot was assessed. Obtain a fresh
   standalone application backup before production readiness or canonical cutover.
-- Later implementation must resolve equipment's business-date notion of today,
-  not merely reformat its stored calibration dates.
+- Equipment due checks now use organisation-calendar today; stored calendar dates
+  are never converted to instants.
 - No database schema, timestamp cell, live setting, token or stock quantity changed.
-  Subsequent policy/API/UI and storage changes remain separate reviewed PRs.
+  The coordinated API/UI release and storage cutover remain separate reviewed PRs.
 
 Validation: focused tests exercise immutable/read-only behaviour, missing-file
 handling, complete known schema coverage, privacy, invalid/unverified timestamps,

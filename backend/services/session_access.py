@@ -1,6 +1,7 @@
 """Validate a request's original session on a borrowed transaction connection."""
 import sqlite3
-from datetime import datetime, timezone
+from backend.temporal import utc_now
+from backend.temporal_contract import stored_instant
 from fastapi import HTTPException
 
 
@@ -22,11 +23,9 @@ def require_session(conn: sqlite3.Connection, session_token: str | None,
     if not row or (expected_user_id is not None and row['user_id'] != expected_user_id):
         raise HTTPException(status_code=401, detail='Invalid or expired session')
     try:
-        expires = datetime.fromisoformat(row['expires_at'])
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+        expires = stored_instant(row['expires_at'], 'expires_at')
     except (ValueError, TypeError):
         raise HTTPException(status_code=401, detail='Invalid or expired session') from None
-    if datetime.now(timezone.utc) >= expires:
+    if utc_now() >= expires:
         raise HTTPException(status_code=401, detail='Session expired')
     return row

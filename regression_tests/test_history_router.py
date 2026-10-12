@@ -44,12 +44,12 @@ def populate(path):
             (10, 1, 2, 1, 2, 'transfer', None, 1, '2025-01-02 23:59:59'),
             (11, 2, None, 2, 3, 'consume', 10, 3, '2025-01-03 12:00:00'),
             (12, 1, 2, 1, 4, 'transfer', None, 4, '2025-01-04 12:00:00')])
-        conn.execute("INSERT INTO stock_transfers(movement_id,status,source_min_threshold,completed_by,completed_at) VALUES(12,'received',0,3,'2025-01-05')")
+        conn.execute("INSERT INTO stock_transfers(movement_id,status,source_min_threshold,completed_by,completed_at) VALUES(12,'received',0,3,'2025-01-05T00:00:00')")
         conn.executemany("INSERT INTO activity_logs(id,user_id,username,action,status,created_at) VALUES(?,?,?,?,?,?)", [
             (10, 1, 'Admin', 'login', 'success', '2025-01-02 23:59:59'),
             (11, 3, 'Engineer', 'login', 'error', '2025-01-03 12:00:00'),
             (12, 3, 'Engineer', 'view_parts', 'success', '2025-01-04 12:00:00'),
-            (13, 4, 'Manager', 'consume_stock', 'success', '2000-01-01')])
+            (13, 4, 'Manager', 'consume_stock', 'success', '2000-01-01T00:00:00')])
 
 
 @pytest.mark.parametrize('actor', ['admin-token', 'root-token', 'engineer-token', 'manager-token'])
@@ -62,7 +62,7 @@ def test_movements_global_visibility_and_enrichment(session_api, actor):
     rows = response.json()
     assert [r['id'] for r in rows] == [12, 11, 10]
     assert rows[0]['transfer_status'] == 'received'
-    assert rows[0]['completed_at'] == '2025-01-05'
+    assert rows[0]['completed_at'] == '2025-01-05T00:00:00.000000Z'
     assert rows[0]['completed_by_name'] is not None
     assert rows[1]['work_order'] == 'HISTORY-WO'
     assert rows[1]['transfer_status'] is None
@@ -70,8 +70,8 @@ def test_movements_global_visibility_and_enrichment(session_api, actor):
 
 
 @pytest.mark.parametrize('params,ids', [
-    ({'start_date': '2025-01-03', 'end_date': '2025-01-03'}, [11]),
-    ({'end_date': '2025-01-02'}, [10]),
+    ({'start_date': '2025-01-03', 'end_date': '2025-01-03'}, [11,10]),
+    ({'end_date': '2025-01-02'}, []),
     ({'movement_type': 'transfer', 'part_id': 1, 'store_id': 1}, [12, 10]),
     ({'store_id': 2, 'limit': 1}, [12]), ({'part_id': 2}, [11])])
 def test_movement_filters(session_api, params, ids):
@@ -102,7 +102,7 @@ def test_activity_visibility_and_diagnostic(session_api, actor, ids):
     ('admin-token', {'target_user_id': 3, 'action': 'login', 'status': 'error'}, [11]),
     ('root-token', {'target_user_id': 3, 'limit': 1}, [12]),
     ('engineer-token', {'target_user_id': 1}, [12, 11]),
-    ('admin-token', {'start_date': '2025-01-02', 'end_date': '2025-01-02'}, [10])])
+    ('admin-token', {'start_date': '2025-01-02', 'end_date': '2025-01-02'}, [])])
 def test_activity_filters_and_target_scope(session_api, actor, params, ids):
     client, path, _ = session_api
     populate(path)

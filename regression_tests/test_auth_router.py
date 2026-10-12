@@ -178,7 +178,7 @@ def test_auth_profile_sessions_and_logout(auth_api):
     client, db, _ = auth_api
     assert client.get('/api/me').json()['id'] == 1
     with sqlite3.connect(db) as conn:
-        conn.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(1,'other-auth','2099-01-01')")
+        conn.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(1,'other-auth','2099-01-01T00:00:00')")
     sessions = client.get('/api/auth/sessions').json()
     assert len(sessions) == 2 and sum(s['is_current'] for s in sessions) == 1
     other = next(s['id'] for s in sessions if not s['is_current'])

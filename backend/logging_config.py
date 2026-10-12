@@ -3,7 +3,15 @@
 from dataclasses import dataclass
 import logging
 import os
+import time
 from logging.handlers import RotatingFileHandler
+
+
+class UTCFormatter(logging.Formatter):
+    converter = time.gmtime
+
+    def __init__(self, fmt):
+        super().__init__(fmt, datefmt="%Y-%m-%dT%H:%M:%SZ")
 
 
 LOG_DIR = "logs"
@@ -59,7 +67,7 @@ def setup_logging() -> ConfiguredLoggers:
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)
-    formatter = logging.Formatter(
+    formatter = UTCFormatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     _add_rotating_file_handler(root, f"{LOG_DIR}/app.log", formatter, logging.INFO)
@@ -73,7 +81,7 @@ def setup_logging() -> ConfiguredLoggers:
     _add_rotating_file_handler(
         audit_logger,
         f"{LOG_DIR}/audit.log",
-        logging.Formatter("%(asctime)s - %(message)s"),
+        UTCFormatter("%(asctime)s - %(message)s"),
     )
     audit_logger.setLevel(logging.INFO)
 
@@ -81,7 +89,7 @@ def setup_logging() -> ConfiguredLoggers:
     _add_rotating_file_handler(
         error_logger,
         f"{LOG_DIR}/errors.log",
-        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"),
+        UTCFormatter("%(asctime)s - %(levelname)s - %(message)s"),
     )
     error_logger.setLevel(logging.ERROR)
 

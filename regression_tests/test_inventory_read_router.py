@@ -41,7 +41,7 @@ def populate(path):
         conn.execute('UPDATE inventory SET quantity=0,min_threshold=2 WHERE id=1')
         conn.executemany('INSERT INTO inventory(id,store_id,part_id,quantity,min_threshold,work_order_id) VALUES(?,?,?,?,?,?)', [
             (10, 2, 1, 3, 4, None), (11, 2, 1, 1, 9, 10), (12, 3, 2, 0, 0, None)])
-        conn.execute("INSERT INTO movements(id,from_store_id,to_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(10,2,1,1,4,'transfer',3,'2025-01-02'),(11,1,2,1,8,'transfer',1,'2025-01-01')")
+        conn.execute("INSERT INTO movements(id,from_store_id,to_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(10,2,1,1,4,'transfer',3,'2025-01-02T00:00:00'),(11,1,2,1,8,'transfer',1,'2025-01-01T00:00:00')")
         conn.execute("INSERT INTO stock_transfers(movement_id,status,source_min_threshold) VALUES(10,'in_transit',0),(11,'received',0)")
 
 
@@ -70,8 +70,8 @@ def test_archived_inventory_excluded_from_listing_and_global_stats(session_api):
     client, path, _ = session_api
     populate(path)
     with closing(connect_database(path)) as conn, conn:
-        conn.execute("UPDATE stores SET archived_at='2000-01-01' WHERE id=2")
-        conn.execute("UPDATE parts SET archived_at='2000-01-01' WHERE id=2")
+        conn.execute("UPDATE stores SET archived_at='2000-01-01T00:00:00' WHERE id=2")
+        conn.execute("UPDATE parts SET archived_at='2000-01-01T00:00:00' WHERE id=2")
     client.cookies.set('session_token', 'engineer-token')
     assert [r['id'] for r in client.get('/api/inventory').json()] == [1]
     # Ownership count historically includes archived stock; preserve this extraction contract.
@@ -107,7 +107,7 @@ def test_reads_and_reports_use_current_database_configuration(session_api, monke
         source.backup(target)
     populate(alternate)
     with closing(connect_database(alternate)) as conn, conn:
-        conn.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at) VALUES(2,1,7,'consume',10,3,'2025-01-01')")
+        conn.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at) VALUES(2,1,7,'consume',10,3,'2025-01-01T00:00:00')")
     monkeypatch.setattr(main, 'DATABASE', str(alternate))
     assert len(client.get('/api/inventory').json()) == 4
     assert client.get('/api/stats').json()['in_transit_quantity'] == 4

@@ -11,7 +11,7 @@ def test_restore_saves_current_database_and_revokes_sessions(tmp_path):
     c=legacy_connection(live)
     c.execute('UPDATE inventory SET quantity=1 WHERE id=1')
     c.execute("UPDATE users SET session_token='old' WHERE id=7")
-    c.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'old','2099-01-01')")
+    c.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'old','2099-01-01T00:00:00')")
     c.commit();c.close();initialize_database(live,defaults=DEFAULT_SETTINGS)
     shutil.copyfile(live,upload)
     with sqlite3.connect(live) as c:c.execute('UPDATE inventory SET quantity=99 WHERE id=1')

@@ -21,7 +21,7 @@ def restore_validator(conn):
 
 @pytest.mark.parametrize('damage,status',[
     ('UPDATE sessions SET is_active=0 WHERE id=2',401),
-    ("UPDATE sessions SET expires_at='2000-01-01' WHERE id=2",401),
+    ("UPDATE sessions SET expires_at='2000-01-01T00:00:00' WHERE id=2",401),
     ("UPDATE users SET role='engineer' WHERE id=2",403),
 ])
 def test_restore_rechecks_original_session_under_lock(session_api,tmp_path,damage,status):
