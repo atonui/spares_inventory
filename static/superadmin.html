@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
-<link rel="stylesheet" href="mystyle.css">
+<link rel="stylesheet" href="mystyle.css?v=20261012-timezone">
 <link rel="stylesheet" href="superadmin.css?v=20261012-feedback">
-<script src="audit.js?v=20261005-stock-audit" defer></script>
-<script src="script.js?v=20261005-stock-audit" defer></script>
+<script src="temporal.js?v=20261012-timezone"></script>
+<script src="audit.js?v=20261012-timezone" defer></script>
+<script src="script.js?v=20261012-timezone" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 
@@ -106,6 +107,8 @@
 
   <!-- ── Main ── -->
   <div class="main-wrap">
+    <div class="timezone-note" style="padding: .6rem 1.5rem;" x-show="timezoneContext">Event times: <span x-text="timezoneContext?.display_timezone"></span> · <a href="/static/profile.html">Timezone settings</a></div>
+    <div class="timezone-note" style="padding: .6rem 1.5rem;" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button class="btn btn-sm btn-outline" @click="loadTimezoneContext()" :disabled="timezoneLoading">Retry timezone settings</button></div>
 
     <!-- Announcement banner (visible to all) -->
     <div x-show="announcement" class="ann-bar" :class="'ann-'+(announcement?.level||'info')">
@@ -682,14 +685,14 @@
             <label for="audit-status">Status<select id="audit-status" x-model="auditFilters.status"><option value="">All statuses</option><option value="success">Success</option><option value="error">Error</option></select></label>
             <button class="btn btn-sm btn-outline" @click="auditFilters={start_date:'',end_date:'',action:'',status:''}; loadAudit()" :disabled="auditLoading">Clear filters</button>
           </div>
-          <p class="list-count">Dates and times use Africa/Nairobi. Through includes the whole day.</p>
+          <p class="list-count">Audit dates and times use <span x-text="auditTimezone || timezoneContext?.business_timezone || 'Unknown'"></span>. Through includes the whole day.</p>
           <p class="list-count" x-show="auditLoading" role="status">Loading audit entries…</p>
           <div class="audit-error" x-show="auditError" role="alert"><span x-text="auditError"></span> <button class="btn btn-sm btn-outline" @click="loadAudit()">Retry</button></div>
           <div style="overflow-x:auto;" x-show="!auditError && !auditLoading">
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Time (Nairobi)</th>
+                  <th>Time <span x-text="auditTimezone ? '('+auditTimezone+')' : ''"></span></th>
                   <th>Action</th>
                   <th>Resource</th>
                   <th>Status</th>
@@ -887,9 +890,15 @@
       });
     },
     utcTimestamp(value) {
-      if (!value) return NaN;
-      const timestamp = String(value).trim().replace(' ', 'T');
-      return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp) ? timestamp : timestamp + 'Z');
+      return InventoryTime.parseInstant(value);
+    },
+    timezoneContext: null, timezoneError: '', timezoneLoading: false,
+    async loadTimezoneContext() {
+      if(this.timezoneLoading)return;
+      this.timezoneLoading=true;this.timezoneError='';
+      try {const data=await this.api('/timezone-context');if(!validTimezoneContext(data))throw Error('Timezone settings are unavailable.');this.timezoneContext=data;}
+      catch(error){this.timezoneContext=null;this.timezoneError=error.message;}
+      finally{this.timezoneLoading=false;}
     },
     allUsers: [],
     dbTables: {},
@@ -898,7 +907,7 @@
     restoreFile: null,
     vacuumResult: null, purgeResult: null, purgeDays: 90,
     auditLog: [], auditTotal: 0, auditOffset: 0, auditActions: [], auditError: '', auditLoading: false,
-    auditRequest: 0,
+    auditRequest: 0, auditTimezone: null,
     auditFilters: { start_date: '', end_date: '', action: '', status: '' },
     announcement: null,
     annForm: { message: '', level: 'info' },
@@ -919,6 +928,7 @@
     async init() {
       await this.getCsrf();
       await this.getMe();
+      await this.loadTimezoneContext();
       await this.loadDashboard();
       await this.loadAnnouncement();
     },
@@ -1291,6 +1301,7 @@ async submitPasswordReset() {
       try {
         const result = await this.api('/superadmin/audit-log?' + query);
         if (request !== this.auditRequest) return;
+        this.auditTimezone=result.timezone;
         this.auditLog = result.rows; this.auditTotal = result.total;
         this.auditActions = result.actions; this.auditOffset = offset;
       } catch (error) {
@@ -1302,14 +1313,7 @@ async submitPasswordReset() {
       }
     },
     fmtAuditDate(value) {
-      const timestamp = this.utcTimestamp(value);
-      if (!Number.isFinite(timestamp)) return '—';
-      const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit',
-        hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
-      }).formatToParts(new Date(timestamp));
-      const fields = Object.fromEntries(parts.map(part => [part.type,part.value]));
-      return `${fields.year}-${fields.month}-${fields.day} ${fields.hour}:${fields.minute}:${fields.second}`;
+      return InventoryTime.formatInstant(value,this.auditTimezone);
     },
 
     // ── Helpers ────────────────────────────────────────────────
@@ -1320,7 +1324,7 @@ async submitPasswordReset() {
       return (b / 1048576).toFixed(2) + ' MB';
     },
 
-    fmtDate(d) { return d ? new Date(d).toLocaleString() : '—'; },
+    fmtDate(d) { return d ? InventoryTime.formatInstant(d,this.timezoneContext?.display_timezone) : '—'; },
 
     parseUA(ua) {
       if (!ua) return '—';

@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile Management</title>
-    <link rel="stylesheet" href="mystyle.css">
+    <link rel="stylesheet" href="mystyle.css?v=20261012-timezone">
+<script src="temporal.js?v=20261012-timezone"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=20261012-timezone"></script>
 </head>
 <body>
     <div x-data="profileManager()" x-init="init()">
@@ -39,7 +40,7 @@
 
             <!-- Profile Info Tab -->
             <div x-show="activeTab === 'profile' && !loading" style="padding: 2rem;">
-                <form @submit.prevent="updateProfile()">
+                <form @submit.prevent="saveDisplayTimezone()">
                     <div class="form-group">
                         <label>Name</label>
                         <input type="text" x-model="profile.name" disabled style="background: #f8f9fa; cursor: not-allowed;">
@@ -68,7 +69,33 @@
                         <label>Territory</label>
                         <input type="text" x-model="profile.territory" disabled style="background: #f8f9fa; cursor: not-allowed;">
                     </div>
+                    <section class="timezone-settings" aria-labelledby="display-zone-title">
+                        <h3 id="display-zone-title">Display timezone</h3>
+                        <p>Choose how event times appear for your account. Report dates always follow the organisation's timezone.</p>
+                        <label for="display-zone">Your timezone</label>
+                        <select id="display-zone" x-model="displayTimezoneDraft" :disabled="timezoneLoading || timezoneSaving || !timezoneContext">
+                            <option value="">Use organisation default</option>
+                            <template x-for="zone in timezoneOptions" :key="zone"><option :value="zone" x-text="zone"></option></template>
+                        </select>
+                        <p class="timezone-note" x-show="detectedTimezone">Device suggests <span x-text="detectedTimezone"></span>. <button type="button" @click="displayTimezoneDraft=detectedTimezone" :disabled="timezoneSaving || timezoneLoading || !timezoneContext">Use device timezone</button></p>
+                        <button type="submit" class="btn btn-primary" :disabled="timezoneSaving || timezoneLoading || !timezoneContext" x-text="timezoneSaving ? 'Saving…' : 'Save display timezone'"></button>
+                    </section>
                 </form>
+                <section class="timezone-settings" x-show="['admin','superadmin'].includes(profile.role)" aria-labelledby="business-zone-title">
+                    <h3 id="business-zone-title">Organisation timezone</h3>
+                    <p>Sets the calendar day for report filters and calibration reminders. Changing it affects future report grouping, including historical reports when refreshed. Stored event times stay the same.</p>
+                    <form @submit.prevent="saveBusinessTimezone()">
+                        <label for="business-zone">Business timezone</label>
+                        <select id="business-zone" x-model="businessTimezoneDraft" :disabled="timezoneLoading || timezoneSaving || !timezoneContext">
+                            <template x-for="zone in timezoneOptions" :key="zone"><option :value="zone" x-text="zone"></option></template>
+                        </select>
+                        <p class="timezone-note">Saved timezone: <span x-text="timezoneContext?.business_timezone || 'Unavailable'"></span></p>
+                        <button type="submit" class="btn btn-primary" :disabled="timezoneSaving || timezoneLoading || !timezoneContext || timezoneConflict" x-text="timezoneSaving ? 'Saving…' : 'Save business timezone'"></button>
+                    </form>
+                </section>
+                <p x-show="timezoneLoading" role="status">Loading timezone settings…</p>
+                <p x-show="timezoneError" class="error" role="alert"><span x-text="timezoneError"></span> <button type="button" @click="loadTimezoneContext()" :disabled="timezoneSaving || timezoneLoading">Refresh saved settings</button></p>
+                <p x-show="timezoneMessage" class="success" role="status" x-text="timezoneMessage"></p>
             </div>
 
             <!-- Change Password Tab -->

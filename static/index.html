@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261012-header-actions">
+    <link rel="stylesheet" href="mystyle.css?v=20261012-timezone">
     <style>[x-cloak] { display: none !important; }</style>
-    <script src="audit.js?v=20261005-stock-reports" defer></script>
-    <script src="script.js?v=20261005-stock-reports" defer></script>
+<script src="temporal.js?v=20261012-timezone"></script>
+    <script src="audit.js?v=20261012-timezone" defer></script>
+    <script src="script.js?v=20261012-timezone" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body>
@@ -73,6 +74,8 @@
                 <div class="user-info">
                     <div>
                         <h1>Inventory Management</h1>
+                        <p class="timezone-note" x-show="timezoneContext">Event times: <span x-text="timezoneContext?.display_timezone"></span> · Date filters follow the organisation timezone.</p>
+                        <p class="timezone-note" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading">Retry timezone settings</button></p>
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
                     <div class="header-actions" role="group" aria-label="Account actions">
@@ -219,7 +222,7 @@
                         <tbody>
                             <template x-for="transfer in pendingTransfers" :key="transfer.id">
                                 <tr>
-                                    <td x-text="new Date(transfer.created_at).toLocaleString()"></td>
+                                    <td x-text="formatInstant(transfer.created_at)"></td>
                                     <td x-text="transfer.part_number"></td><td x-text="transfer.quantity"></td>
                                     <td x-text="transfer.from_store_name"></td><td x-text="transfer.to_store_name"></td>
                                     <td x-text="transfer.created_by_name"></td><td x-text="transfer.work_order || '-'"></td>
@@ -277,7 +280,7 @@
                     <table><thead><tr><th>Type</th><th>Record</th><th>Archived</th><th>Action</th></tr></thead>
                     <tbody><template x-for="record in archivedRecords" :key="record.kind + '-' + record.id">
                         <tr><td x-text="record.kind"></td><td x-text="record.label"></td>
-                        <td x-text="new Date(record.archived_at).toLocaleString()"></td>
+                        <td x-text="formatInstant(record.archived_at)"></td>
                         <td><button class="btn btn-sm" @click="restoreArchivedRecord(record)" :disabled="loading">Restore</button></td></tr>
                     </template></tbody></table>
                 </div>
@@ -518,6 +521,7 @@
             <div x-show="!loading && showMovementsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd;">
                     <h3 style="margin: 0 0 1rem 0;">Movement History</h3>
+                    <p class="timezone-note">Loaded history dates use <span x-text="movementTimeContext?.timezone || 'Unknown'"></span>.</p>
                     
                     <!-- Filters -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
@@ -582,7 +586,7 @@
                     <tbody>
                         <template x-for="movement in movements" :key="movement.id">
                             <tr>
-                                <td x-text="new Date(movement.created_at).toLocaleString()"></td>
+                                <td x-text="formatInstant(movement.created_at)"></td>
                                 <td>
                                     <span class="wo-tag" x-text="movement.movement_type"></span>
                                 </td>
@@ -594,7 +598,7 @@
                                 <td x-text="movement.created_by_name"></td>
                                 <td>
                                     <span x-text="movement.transfer_status || '-'"></span>
-                                    <span x-show="movement.completed_at" x-text="(movement.completed_by_name || '') + ' — ' + new Date(movement.completed_at).toLocaleString()"></span>
+                                    <span x-show="movement.completed_at" x-text="(movement.completed_by_name || '') + ' — ' + formatInstant(movement.completed_at)"></span>
                                 </td>
                             </tr>
                         </template>
@@ -752,8 +756,8 @@
                                 <td>
                                     <span class="wo-tag" x-text="eq.assigned_user_name || 'Unassigned'"></span>
                                 </td>
-                                <td x-text="eq.calibration_date ? new Date(eq.calibration_date).toLocaleDateString() : '-'"></td>
-                                <td x-text="eq.next_calibration_date ? new Date(eq.next_calibration_date).toLocaleDateString() : '-'"></td>
+                                <td x-text="eq.calibration_date ? formatDate(eq.calibration_date) : '-'"></td>
+                                <td x-text="eq.next_calibration_date ? formatDate(eq.next_calibration_date) : '-'"></td>
                                 <td>
                                     <span class="wo-tag" 
                                         :style="`background: ${getCalibrationStatus(eq).status === 'overdue' ? '#fee2e2' : getCalibrationStatus(eq).status === 'urgent' ? '#fed7aa' : getCalibrationStatus(eq).status === 'soon' ? '#fef3c7' : '#d1fae5'}; color: ${getCalibrationStatus(eq).status === 'overdue' ? '#991b1b' : getCalibrationStatus(eq).status === 'urgent' ? '#9a3412' : getCalibrationStatus(eq).status === 'soon' ? '#92400e' : '#065f46'};`"
@@ -819,7 +823,7 @@
                     <tbody>
                         <template x-for="activity in recentActivity" :key="activity.id">
                             <tr>
-                                <td x-text="new Date(activity.created_at).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})"></td>
+                                <td x-text="formatInstant(activity.created_at)"></td>
                                 <td>
                                     <span class="wo-tag" x-text="activity.movement_type"></span>
                                 </td>
@@ -1025,6 +1029,7 @@
             <div x-show="showStatsModal" class="modal" @click.outside="showStatsModal = false">
                 <div class="modal-content" style="max-width: 800px;">
                     <h3>Activity Statistics</h3>
+                    <p class="timezone-note">Report dates use <span x-text="activityStats.timezone || 'Unknown'"></span>.</p>
                     
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
                         <div class="stat-card">
@@ -1095,7 +1100,7 @@
                                 <template x-for="login in activityStats.recent_logins" :key="login.created_at">
                                     <tr>
                                         <td x-text="login.username"></td>
-                                        <td x-text="new Date(login.created_at).toLocaleString()"></td>
+                                        <td x-text="formatInstant(login.created_at)"></td>
                                         <td x-text="login.ip_address || '-'"></td>
                                     </tr>
                                 </template>
@@ -1288,7 +1293,7 @@
                         <tbody>
                             <template x-for="history in equipmentHistory" :key="history.id">
                                 <tr>
-                                    <td x-text="new Date(history.created_at).toLocaleString()" style="white-space: nowrap;"></td>
+                                    <td x-text="formatInstant(history.created_at)" style="white-space: nowrap;"></td>
                                     <td>
                                         <span class="wo-tag" x-text="history.action"></span>
                                     </td>
@@ -1680,7 +1685,7 @@
             <section x-show="showReportsPanel" class="controls reports-panel" aria-labelledby="reports-heading">
                 <h3 id="reports-heading">Consumption reports</h3>
                 <p x-text="['admin','superadmin'].includes(currentUser?.role) ? 'All recorded consumption. Filter by the engineer who recorded it.' : 'Your recorded consumption, including work orders assigned to other engineers.'"></p>
-                <p>Dates use Africa/Nairobi. Archived parts and stores remain in history.</p>
+                <p>Report dates use <strong x-text="consumptionReport?.timezone || timezoneContext?.business_timezone || 'Unknown'"></strong>. Archived parts and stores remain in history.</p>
                 <form @submit.prevent="loadConsumptionReport()" class="report-filters">
                     <fieldset :disabled="reportBusy || reportExportBusy">
                         <label class="report-all-dates"><input type="checkbox" x-model="reportForm.allDates" @change="markReportDirty()"> All dates</label>
@@ -1707,13 +1712,14 @@
                     <div class="report-table-wrap"><table><thead><tr><th>Work order</th><th>Quantity</th><th>Events</th></tr></thead><tbody><template x-for="w in consumptionReport?.by_work_order || []" :key="w.work_order_id ?? 'unknown'"><tr><td><button x-show="w.work_order" class="btn btn-sm" :disabled="reportDirty || reportExportBusy" @click="openWorkOrderReport(w.work_order)" x-text="w.work_order"></button><span x-show="!w.work_order">Unlinked work order</span></td><td x-text="w.quantity"></td><td x-text="w.events"></td></tr></template></tbody></table></div>
                     <h4>Consumption events</h4>
                     <p>Up to 100 events per page. CSV includes all matching events. Names reflect the current catalog.</p>
-                    <div class="report-table-wrap"><table><thead><tr><th>Time (Nairobi)</th><th>Part</th><th>Quantity</th><th>Source store</th><th>Recorded by</th><th>Work order</th><th>Notes</th></tr></thead><tbody><template x-for="r in consumptionReport?.rows || []" :key="r.movement_id"><tr><td x-text="r.recorded_at ? r.recorded_at.replace('T',' ').replace('+03:00','') : 'Unknown'"></td><td><span x-text="r.part_number || 'Unknown'"></span><br><span x-text="r.description"></span></td><td x-text="r.quantity"></td><td x-text="r.store_name || 'Unknown'"></td><td x-text="r.engineer_name || 'Unknown'"></td><td x-text="r.work_order || 'Unlinked'"></td><td x-text="r.notes || '—'"></td></tr></template></tbody></table></div>
+                    <div class="report-table-wrap"><table><thead><tr><th>Time <span x-text="consumptionReport ? '('+consumptionReport.timezone+')' : ''"></span></th><th>Part</th><th>Quantity</th><th>Source store</th><th>Recorded by</th><th>Work order</th><th>Notes</th></tr></thead><tbody><template x-for="r in consumptionReport?.rows || []" :key="r.movement_id"><tr><td x-text="formatReportInstant(r.recorded_at)"></td><td><span x-text="r.part_number || 'Unknown'"></span><br><span x-text="r.description"></span></td><td x-text="r.quantity"></td><td x-text="r.store_name || 'Unknown'"></td><td x-text="r.engineer_name || 'Unknown'"></td><td x-text="r.work_order || 'Unlinked'"></td><td x-text="r.notes || '—'"></td></tr></template></tbody></table></div>
                     <div class="report-pagination"><button class="btn" :disabled="reportDirty || reportOffset===0 || reportExportBusy" @click="loadConsumptionReport(Math.max(0,reportOffset-100))">Previous</button><span x-text="consumptionReport?.totals.events ? 'Events '+(reportOffset+1)+'–'+Math.min(reportOffset+100,consumptionReport.totals.events)+' of '+consumptionReport.totals.events : '0 events'"></span><button class="btn" :disabled="reportDirty || reportOffset+100 >= (consumptionReport?.totals.events || 0) || reportExportBusy" @click="loadConsumptionReport(reportOffset+100)">Next</button></div>
                 </div>
             </section>
 
             <section x-show="showLogsPanel" class="controls audit-panel" aria-labelledby="audit-heading">
                 <h3 id="audit-heading">Activity log</h3>
+                <p class="timezone-note">Loaded history dates use <span x-text="activityTimeContext?.timezone || 'Unknown'"></span>.</p>
                 <p>Stock changes include recorded balances and linked movements. Older entries retain their original details; missing historical balances cannot be reconstructed here.</p>
                 <form class="replenishment-toolbar" @submit.prevent="loadActivityLogs()">
                     <div><label for="audit-start">From date</label><input id="audit-start" type="date" x-model="logFilters.startDate"></div>

@@ -1,5 +1,31 @@
+function validTimezoneContext(data) {
+    return Boolean(data && InventoryTime.isValidZone(data.business_timezone) && InventoryTime.isValidZone(data.display_timezone) && Number.isSafeInteger(data.revision) && data.revision>0);
+}
+
 function inventoryApp() {
     return {
+        timezoneContext: null,
+        movementTimeContext: null,
+        activityTimeContext: null,
+        timezoneError: '',
+        timezoneLoading: false,
+        async loadTimezoneContext() {
+            if (this.timezoneLoading) return;
+            const actor=this.currentUser?.id;
+            this.timezoneLoading=true;this.timezoneError='';
+            try {
+                const data=await this.apiCall('/timezone-context');
+                if (actor!==this.currentUser?.id) return;
+                if (!validTimezoneContext(data)) throw Error('Timezone settings are unavailable.');
+                this.timezoneContext=data;
+            } catch(error) { if(actor===this.currentUser?.id) {this.timezoneContext=null;this.timezoneError=error.message;} }
+            finally {this.timezoneLoading=false;}
+        },
+        formatInstant(value) { return InventoryTime.formatInstant(value,this.timezoneContext?.display_timezone); },
+        formatReportInstant(value) { return InventoryTime.formatInstant(value,this.consumptionReport?.timezone); },
+        formatBusinessInstant(value,context) { return InventoryTime.formatInstant(value,context?.timezone); },
+        formatDate(value) { return InventoryTime.formatDate(value); },
+        businessToday() { return InventoryTime.today(this.timezoneContext?.business_timezone); },
         showReportsPanel: false,
         consumptionReport: null,
         reportOptions: {parts:[], stores:[], engineers:[]},
@@ -15,13 +41,11 @@ function inventoryApp() {
         markReportDirty() { this.reportDirty=true; },
 
         reportQuery() {
+            if (!this.timezoneContext) throw Error('Load timezone settings before running a report.');
             const f=this.reportForm;
             if(!f.start_date && !f.end_date) {
-                const pieces=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
-                const value=t=>pieces.find(p=>p.type===t).value;
-                f.end_date=`${value('year')}-${value('month')}-${value('day')}`;
-                const start=new Date(f.end_date+'T00:00:00Z');start.setUTCDate(start.getUTCDate()-29);
-                f.start_date=start.toISOString().slice(0,10);
+                f.end_date=this.businessToday();
+                f.start_date=InventoryTime.addDays(f.end_date,-29);
             }
             const q=new URLSearchParams();
             if(!f.allDates) {
@@ -65,7 +89,9 @@ function inventoryApp() {
             this.reportExportBusy=true;this.reportError='';
             const actor=this.currentUser?.id, request=this.reportRequest;
             try {
-                const response=await fetch(this.apiUrl+'/reports/consumption.csv?'+this.reportAppliedQuery,{credentials:'include',headers:this.token?{Authorization:'Bearer '+this.token}:{}});
+                const exportQuery=new URLSearchParams(this.reportAppliedQuery);
+                if(Number.isSafeInteger(this.consumptionReport.timezone_revision)) exportQuery.set('expected_timezone_revision',String(this.consumptionReport.timezone_revision));
+                const response=await fetch(this.apiUrl+'/reports/consumption.csv?'+exportQuery,{credentials:'include',headers:this.token?{Authorization:'Bearer '+this.token}:{}});
                 if(!response.ok) { if(response.status===401) this.logout();throw Error('Download failed ('+response.status+'). Refresh the report and retry.'); }
                 const blob=await response.blob();
                 if(actor!==this.currentUser?.id || request!==this.reportRequest) return;
@@ -451,6 +477,7 @@ function inventoryApp() {
         },
 
         async logout() {
+            this.timezoneContext=null;this.timezoneError='';this.movementTimeContext=null;this.activityTimeContext=null;
             try {
                 await this.apiCall('/auth/logout', { method: 'POST' });
             } catch (error) {
@@ -481,7 +508,7 @@ function inventoryApp() {
             }
         },
     
-        async apiCall(endpoint, options = {}) {
+        async apiCall(endpoint, options = {}, onTimeContext = null) {
             /**
              * Universal API call handler for both JSON and file uploads
              * Automatically handles:
@@ -607,7 +634,13 @@ function inventoryApp() {
                 }
                 
                 // Parse and return JSON response
-                return await response.json();
+                const data=await response.json();
+                if(onTimeContext) {
+                    let metadata=null;
+                    try {metadata=JSON.parse(response.headers?.get('X-Report-Time-Context') || 'null');} catch(error) {}
+                    onTimeContext(metadata && InventoryTime.isValidZone(metadata.timezone) && Number.isSafeInteger(metadata.timezone_revision) ? metadata : null);
+                }
+                return data;
                 
             } catch (error) {
                 // Don't log if it's a logout scenario
@@ -623,6 +656,7 @@ function inventoryApp() {
         async loadAllData() {
             this.loading = true;
             try {
+                await this.loadTimezoneContext();
                 const promises = [
                     this.loadStats(),
                     this.loadStores(),
@@ -792,7 +826,7 @@ function inventoryApp() {
             
             const queryString = params.toString();
             const endpoint = queryString ? `/movements?${queryString}` : '/movements';
-            this.movements = await this.apiCall(endpoint);
+            this.movements = await this.apiCall(endpoint,{},context=>this.movementTimeContext=context);
         },
 
         clearMovementFilters() {
@@ -1324,7 +1358,7 @@ function inventoryApp() {
                 const queryString = params.toString();
                 const endpoint = queryString ? `/logs/activity?${queryString}` : '/logs/activity';
                 
-                this.activityLogs = await this.apiCall(endpoint);
+                this.activityLogs = await this.apiCall(endpoint,{},context=>this.activityTimeContext=context);
                 
             } catch (error) {
                 console.error('Error loading activity logs:', error);
@@ -1423,7 +1457,7 @@ function inventoryApp() {
 
         exportActivityLogsCSV() {
             const headers = [
-                'Date/Time', 
+                `Date/Time (${this.activityTimeContext?.timezone || 'Unknown'})`,
                 'User', 
                 'Action', 
                 'Resource Type',
@@ -1435,7 +1469,7 @@ function inventoryApp() {
             ];
             
             const rows = this.activityLogs.map(log => [
-                new Date(log.created_at).toLocaleString(),
+                this.formatBusinessInstant(log.created_at,this.activityTimeContext),
                 log.username,
                 log.action,
                 log.resource_type || '-',
@@ -1505,16 +1539,16 @@ exportStoresCSV() {
 },
 
 exportMovementsCSV() {
-    const headers = ['Date/Time', 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By', 'Transfer Status', 'Confirmed By', 'Confirmed At'];
+    const headers = [`Date/Time (${this.movementTimeContext?.timezone || 'Unknown'})`, 'Type', 'Part Number', 'Quantity', 'From Store', 'To Store', 'Work Order', 'Created By', 'Transfer Status', 'Confirmed By', `Confirmed At (${this.movementTimeContext?.timezone || 'Unknown'})`];
     const rows = this.movements.map(m => [
-        new Date(m.created_at).toLocaleString(),
+        this.formatBusinessInstant(m.created_at,this.movementTimeContext),
         m.movement_type,
         m.part_number,
         m.quantity,
         m.from_store_name || '-',
         m.to_store_name || '-',
         m.work_order || '-',
-        m.created_by_name, m.transfer_status || '', m.completed_by_name || '', m.completed_at || ''
+        m.created_by_name, m.transfer_status || '', m.completed_by_name || '', m.completed_at ? this.formatBusinessInstant(m.completed_at,this.movementTimeContext) : ''
     ]);
     
     this.downloadCSV(headers, rows, `movement_history_${new Date().toISOString().split('T')[0]}.csv`);
@@ -1611,11 +1645,12 @@ downloadCSV(headers, rows, filename) {
 
 // export all data as a single comprehensive report
 exportComprehensiveReport() {
-    const timestamp = new Date().toLocaleString();
+    const reportZone=this.movementTimeContext?.timezone;
+    const timestamp = InventoryTime.formatInstant(new Date().toISOString(),reportZone);
     const date = new Date().toISOString().split('T')[0];
     
     let report = `Inventory Management System - Comprehensive Report\n`;
-    report += `Generated: ${timestamp}\n`;
+    report += `Generated (${reportZone || 'Unknown'}): ${timestamp}\n`;
     report += `Generated By: ${this.currentUser.name} (${this.currentUser.email})\n\n`;
     
     // Summary Statistics
@@ -1665,9 +1700,9 @@ exportComprehensiveReport() {
     
     // Recent Movements
     report += `\n\nRECENT MOVEMENTS (Last 50)\n`;
-    report += `Date/Time,Type,Part,Qty,From,To,Work Order,By,Transfer Status,Confirmed By,Confirmed At\n`;
+    report += `Date/Time (${reportZone || 'Unknown'}),Type,Part,Qty,From,To,Work Order,By,Transfer Status,Confirmed By,Confirmed At (${reportZone || 'Unknown'})\n`;
     this.movements.slice(0, 50).forEach(m => {
-        report += `"${new Date(m.created_at).toLocaleString()}",${m.movement_type},${m.part_number},${m.quantity},"${m.from_store_name || '-'}","${m.to_store_name || '-'}","${m.work_order || '-'}","${m.created_by_name}","${m.transfer_status || '-'}","${m.completed_by_name || '-'}","${m.completed_at || '-'}"\n`;
+        report += `"${this.formatBusinessInstant(m.created_at,this.movementTimeContext)}",${m.movement_type},${m.part_number},${m.quantity},"${m.from_store_name || '-'}","${m.to_store_name || '-'}","${m.work_order || '-'}","${m.created_by_name}","${m.transfer_status || '-'}","${m.completed_by_name || '-'}","${m.completed_at ? this.formatBusinessInstant(m.completed_at,this.movementTimeContext) : '-'}"\n`;
     });
     
     // Download the report
@@ -2112,7 +2147,7 @@ exportComprehensiveReport() {
             this.calibrationForm = {
                 calibration_cert_number: equipment.calibration_cert_number || '',
                 calibration_authority: equipment.calibration_authority || '',
-                calibration_date: new Date().toISOString().split('T')[0],
+                calibration_date: this.businessToday() === 'Unknown' ? '' : this.businessToday(),
                 next_calibration_date: equipment.next_calibration_date || '',
                 notes: ''
             };
@@ -2229,9 +2264,8 @@ exportComprehensiveReport() {
         getCalibrationStatus(equipment) {
             if (!equipment.next_calibration_date) return { status: 'none', class: '', text: 'Not set' };
             
-            const now = new Date();
-            const nextCal = new Date(equipment.next_calibration_date);
-            const daysUntil = Math.ceil((nextCal - now) / (1000 * 60 * 60 * 24));
+            const daysUntil = InventoryTime.daysBetween(this.businessToday(), equipment.next_calibration_date);
+            if (!Number.isFinite(daysUntil)) return {status:'none',class:'',text:'Unknown'};
             
             if (daysUntil < 0) {
                 return { status: 'overdue', class: 'overdue-cal', text: `Overdue by ${Math.abs(daysUntil)} days` };
@@ -2249,21 +2283,19 @@ exportComprehensiveReport() {
         },
 
         get dueSoonEquipment() {
-            const now = new Date();
+            const today=this.businessToday();
             return this.equipment.filter(eq => {
                 if (!eq.next_calibration_date) return false;
-                const nextCal = new Date(eq.next_calibration_date);
-                const daysUntil = Math.ceil((nextCal - now) / (1000 * 60 * 60 * 24));
+                const daysUntil = InventoryTime.daysBetween(today,eq.next_calibration_date);
                 return daysUntil >= 0 && daysUntil <= this.calibrationReminderDays;
             });
         },
 
         get overdueEquipment() {
-            const now = new Date();
+            const today=this.businessToday();
             return this.equipment.filter(eq => {
                 if (!eq.next_calibration_date) return false;
-                const nextCal = new Date(eq.next_calibration_date);
-                return nextCal < now;
+                return InventoryTime.daysBetween(today,eq.next_calibration_date)<0;
             });
         },
 
@@ -2931,6 +2963,61 @@ exportComprehensiveReport() {
     //------------Profile Management------------
         function profileManager() {
     return {
+        timezoneContext: null,
+        timezoneLoading: false,
+        timezoneSaving: false,
+        timezoneError: '',
+        timezoneMessage: '',
+        timezoneConflict: false,
+        displayTimezoneDraft: '',
+        businessTimezoneDraft: '',
+        get detectedTimezone() {
+            const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+            return InventoryTime.isValidZone(zone) ? zone : '';
+        },
+        get timezoneOptions() {
+            const list=typeof Intl.supportedValuesOf==='function' ? Intl.supportedValuesOf('timeZone') : ['Africa/Nairobi','Africa/Lagos','America/New_York','Europe/London','Asia/Kathmandu'];
+            return [...new Set(['UTC',...list,this.timezoneContext?.business_timezone,this.profile.display_timezone,this.detectedTimezone].filter(zone=>InventoryTime.isValidZone(zone)))].sort();
+        },
+        async loadTimezoneContext() {
+            if(this.timezoneLoading || this.timezoneSaving) return;
+            this.timezoneLoading=true;this.timezoneError='';
+            try {
+                const response=await fetch('/api/timezone-context',{credentials:'include'});
+                if(!response.ok) throw Error('Timezone settings could not be loaded. Retry.');
+                const data=await response.json();
+                if(!validTimezoneContext(data)) throw Error('Timezone settings are unavailable.');
+                this.timezoneContext=data;this.businessTimezoneDraft=data.business_timezone;
+                this.displayTimezoneDraft=this.profile.display_timezone || '';
+                this.timezoneConflict=false;
+            } catch(error) {this.timezoneError=error.message;}
+            finally {this.timezoneLoading=false;}
+        },
+        async saveDisplayTimezone() {
+            if(this.timezoneSaving || this.timezoneLoading || !this.timezoneContext) return;
+            this.timezoneSaving=true;this.timezoneError='';this.timezoneMessage='';
+            try {
+                const response=await fetch('/api/profile',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':this.csrfToken},body:JSON.stringify({display_timezone:this.displayTimezoneDraft || null})});
+                const data=await response.json();
+                if(!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Display timezone could not be saved.');
+                this.profile.display_timezone=data.display_timezone;
+                this.timezoneContext.display_timezone=data.display_timezone || this.timezoneContext.business_timezone;
+                this.timezoneMessage='Display timezone saved.';
+            } catch(error) {this.timezoneError=error.message;}
+            finally {this.timezoneSaving=false;}
+        },
+        async saveBusinessTimezone() {
+            if(this.timezoneSaving || this.timezoneLoading || this.timezoneConflict || !this.timezoneContext || !['admin','superadmin'].includes(this.profile.role)) return;
+            this.timezoneSaving=true;this.timezoneError='';this.timezoneMessage='';
+            try {
+                const response=await fetch('/api/organisation/timezone',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':this.csrfToken},body:JSON.stringify({timezone:this.businessTimezoneDraft,expected_revision:this.timezoneContext.revision})});
+                const data=await response.json();
+                if(!response.ok) {if(response.status===409)this.timezoneConflict=true;throw Error(typeof data.detail==='string' ? data.detail : 'Business timezone could not be saved.');}
+                if(!validTimezoneContext(data))throw Error('Reload settings to verify the saved timezone.');
+                this.timezoneContext=data;this.timezoneMessage='Business timezone saved. Refresh open reports to use the new grouping.';
+            } catch(error) {this.timezoneError=error.message;}
+            finally {this.timezoneSaving=false;}
+        },
         activeTab: 'profile',
         loading: true,
         saving: false,
@@ -2954,6 +3041,7 @@ exportComprehensiveReport() {
         async init() {
             await this.getCsrfToken();
             await this.loadProfile();
+            if(this.profile.role) await this.loadTimezoneContext();
         },
 
         async getCsrfToken() {
@@ -2988,7 +3076,8 @@ exportComprehensiveReport() {
                     name: data.name,
                     email: data.email,
                     role: data.role,
-                    territory: data.territory || ''
+                    territory: data.territory || '',
+                    display_timezone: data.display_timezone || null
                 };
             } catch (error) {
                 this.error = 'Failed to load profile: ' + error.message;
