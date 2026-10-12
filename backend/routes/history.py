@@ -199,9 +199,6 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             logs = cursor.fetchall()
 
             try:
-                cursor.execute(query, params)
-                logs = cursor.fetchall()
-
                 # Convert to list of dicts and ensure all fields are present
                 result = []
                 for log in logs:
