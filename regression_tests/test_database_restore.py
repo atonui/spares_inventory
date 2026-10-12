@@ -89,7 +89,7 @@ def test_restore_legacy_without_ledger(tmp_path):
     live,upload=restore_pair(tmp_path,legacy=True)
     restore_database(upload,live,7)
     with sqlite3.connect(live) as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==3
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==4
         assert c.execute('SELECT quantity FROM inventory').fetchone()[0]==19
         assert c.execute('PRAGMA foreign_key_check').fetchall()==[]
 
@@ -97,7 +97,27 @@ def test_restore_legacy_without_ledger(tmp_path):
 def test_restore_current_migrated_backup(tmp_path):
     live,upload=restore_pair(tmp_path)
     restore_database(upload,live,7)
-    with sqlite3.connect(live) as c:assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,)]
+    with sqlite3.connect(live) as c:assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,)]
+
+
+def test_restore_preserves_backup_timezone_preferences(tmp_path):
+    live,upload=restore_pair(tmp_path)
+    with sqlite3.connect(upload) as c:
+        c.execute("UPDATE organisation_settings SET business_timezone='Europe/London',revision=3,updated_by=7")
+        c.execute("UPDATE users SET display_timezone='Asia/Kathmandu' WHERE id=7")
+    restore_database(upload,live,7)
+    with sqlite3.connect(live) as c:
+        assert c.execute('SELECT business_timezone,revision,updated_by FROM organisation_settings').fetchone()==('Europe/London',3,7)
+        assert c.execute('SELECT display_timezone FROM users WHERE id=7').fetchone()[0]=='Asia/Kathmandu'
+
+
+def test_restore_older_backup_initialises_timezone_defaults(tmp_path):
+    live,upload=restore_pair(tmp_path,legacy=True)
+    with sqlite3.connect(live) as c:c.execute("UPDATE organisation_settings SET business_timezone='Europe/London'")
+    restore_database(upload,live,7)
+    with sqlite3.connect(live) as c:
+        assert c.execute('SELECT business_timezone,revision FROM organisation_settings').fetchone()==('Africa/Nairobi',1)
+        assert c.execute('SELECT display_timezone FROM users WHERE id=7').fetchone()[0] is None
 
 
 def test_restore_newer_ledger_rejected_without_live_changes(tmp_path):
