@@ -4,6 +4,37 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const html=fs.readFileSync('static/superadmin.html','utf8');
 function app(){const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},WeakMap};vm.createContext(c);vm.runInContext(html.match(/<script>\s*([\s\S]*?)<\/script>/)[1],c);return c.superPanel();}
+for(const [section,method] of [['users','loadUsers'],['sessions','loadSessions'],['config','loadConfig']]) {
+ test(`${section} distinguishes loading, failure and successful retry`,async()=>{
+  const a=app();let release,calls=0;a.toast=()=>{};
+  a.api=()=>{calls++;return new Promise(r=>release=r);};
+  const pending=a[method]();
+  assert.equal(a.panelLoads[section].loading,true);
+  assert.equal(a.panelReady(section),false);
+  await a[method]();assert.equal(calls,1);
+  release(section==='config'?{}:[]);await pending;
+  assert.equal(a.panelReady(section),true);
+  a.api=async()=>{throw Error('offline');};await a[method]();
+  assert.equal(a.panelLoads[section].loading,false);
+  assert.equal(a.panelLoads[section].error,'offline');
+  assert.equal(a.panelReady(section),false);
+  a.api=async()=>section==='config'?{}:[];await a[method]();
+  assert.equal(a.panelLoads[section].error,'');assert.equal(a.panelReady(section),true);
+ });
+}
+test('loading one panel cannot clear another panel loading state',async()=>{
+ const a=app();let release;a.api=path=>path.endsWith('/users')?new Promise(r=>release=r):Promise.resolve([]);
+ const users=a.loadUsers();await a.loadSessions();
+ assert.equal(a.panelLoads.users.loading,true);assert.equal(a.panelLoads.sessions.loading,false);
+ release([]);await users;
+});
+test('settings cannot save before a successful load or during refresh',async()=>{
+ const a=app();let writes=0,release;a.toast=()=>{};a.cfgVals.max_login_attempts='5';
+ a.api=async()=>{writes++;};await a.saveConfig('max_login_attempts');assert.equal(writes,0);
+ a.api=async()=>({});await a.loadConfig();
+ a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
+ await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
+});
 test('mobile navigation reaches every existing panel and loads its data',()=>{const a=app();for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
 test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,10);assert.match(html,/aria-current/);});
 test('dialog traps focus in both directions',()=>{const a=app();let focused;const first={focus:()=>focused='first'},last={focus:()=>focused='last'};const el={querySelectorAll:()=>[first,last]};let prevented=false;const event={target:last,shiftKey:false,preventDefault:()=>prevented=true};a.trapDialogFocus(event,el);assert.equal(focused,'first');assert.equal(prevented,true);event.target=first;event.shiftKey=true;a.trapDialogFocus(event,el);assert.equal(focused,'last');});
@@ -43,7 +74,7 @@ test('late audit response cannot overwrite a newer filter request',async()=>{con
 for (const method of ['unlock','bulkUnlock','unlockSelected','saveConfig','saveAnnouncement','clearAnnouncement','submitPasswordReset']) {
  test(method+' prevents duplicate requests and exposes errors for retry',async()=>{
   const a=app();a.toast=()=>{};a.loadLocked=a.loadDashboard=a.loadConfig=a.loadAnnouncement=async()=>{};
-  a.locked=[{id:7}];a.selectedLocked=[7];a.cfgVals.max_login_attempts='5';a.annForm={message:'Notice',level:'info'};
+  a.locked=[{id:7}];a.selectedLocked=[7];a.cfgVals.max_login_attempts='5';a.panelLoads.config.loaded=true;a.annForm={message:'Notice',level:'info'};
   a.resetModal={open:true,userId:7,password:'password123',confirm:'password123',error:''};
   let release,calls=0;a.api=async()=>{calls++;await new Promise(r=>release=r);return {message:'saved',unlocked_count:1};};
   const args=method==='unlock'?[{id:7}]:method==='saveConfig'?['max_login_attempts']:[];
