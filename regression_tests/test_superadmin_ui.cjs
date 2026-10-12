@@ -18,3 +18,20 @@ test('session filters match email or IP and exclude invalid expired dates from u
 test('audit filters query full backend history and pagination preserves applied filters',async()=>{const a=app();a.auditFilters={start_date:'2026-10-05',end_date:'2026-10-05',action:'DB_BACKUP',status:'success'};a.api=async path=>{assert.match(path,/paginated=true/);assert.match(path,/limit=50/);assert.match(path,/action=DB_BACKUP/);return {rows:[{id:1}],total:101,actions:['DB_BACKUP']};};await a.loadAudit(50);assert.equal(a.auditOffset,50);assert.equal(a.auditTotal,101);a.api=async()=>{throw Error('offline');};await a.loadAudit();assert.equal(a.auditLog.length,0);assert.equal(a.auditError,'offline');});
 test('audit dates show Nairobi independently of browser timezone',()=>{const a=app();assert.match(a.fmtAuditDate('2026-10-04 21:00:00'),/2026-10-05/);assert.match(a.fmtAuditDate('2026-10-04 21:00:00'),/00:00:00/);});
 test('late audit response cannot overwrite a newer filter request',async()=>{const a=app();let first;a.api=()=>new Promise(r=>first=r);const pending=a.loadAudit();a.api=async()=>({rows:[{id:2}],total:1,actions:[]});await a.loadAudit();first({rows:[{id:1}],total:99,actions:[]});await pending;assert.equal(a.auditLog[0].id,2);assert.equal(a.auditTotal,1);});
+for (const method of ['unlock','bulkUnlock','unlockSelected','saveConfig','saveAnnouncement','clearAnnouncement','submitPasswordReset']) {
+ test(method+' prevents duplicate requests and exposes errors for retry',async()=>{
+  const a=app();a.toast=()=>{};a.loadLocked=a.loadDashboard=a.loadConfig=a.loadAnnouncement=async()=>{};
+  a.locked=[{id:7}];a.selectedLocked=[7];a.cfgVals.max_login_attempts='5';a.annForm={message:'Notice',level:'info'};
+  a.resetModal={open:true,userId:7,password:'password123',confirm:'password123',error:''};
+  let release,calls=0;a.api=async()=>{calls++;await new Promise(r=>release=r);return {message:'saved',unlocked_count:1};};
+  const args=method==='unlock'?[{id:7}]:method==='saveConfig'?['max_login_attempts']:[];
+  const pending=a[method](...args);
+  assert.ok(Object.values(a.actionPending).some(Boolean));
+  await a[method](...args);assert.equal(calls,1);release();await pending;
+  assert.equal(Object.values(a.actionPending).some(Boolean),false);
+  a.resetModal={open:true,userId:7,password:'password123',confirm:'password123',error:''};a.annForm.message='Notice';a.api=async()=>{throw Error('offline');};
+  await a[method](...args);assert.ok(Object.values(a.actionErrors).includes('offline'));
+ });
+}
+test('announcement removal cannot race a pending broadcast',async()=>{const a=app();a.toast=()=>{};a.loadAnnouncement=async()=>{};a.annForm.message='Notice';let release,calls=0;a.api=async()=>{calls++;await new Promise(r=>release=r);};const pending=a.saveAnnouncement();await a.clearAnnouncement();assert.equal(calls,1);release();await pending;});
+test('reset validation makes no request and failed reset retains values for retry',async()=>{const a=app();let calls=0;a.api=async()=>{calls++;throw Error('offline');};a.resetModal={open:true,userId:7,password:'short',confirm:'short',error:''};await a.submitPasswordReset();assert.equal(calls,0);assert.match(a.resetModal.error,/8 characters/);a.resetModal.password=a.resetModal.confirm='password123';await a.submitPasswordReset();assert.equal(a.resetModal.open,true);assert.equal(a.resetModal.password,'password123');assert.equal(a.actionErrors.reset,'offline');});
