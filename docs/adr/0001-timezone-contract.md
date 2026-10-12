@@ -2,7 +2,7 @@
 
 Date: 2026-10-12
 
-Status: Proposed; implementation awaits review of the accompanying design.
+Status: Accepted architecture decision following PR #90 review; implementation pending.
 
 ## Context
 
