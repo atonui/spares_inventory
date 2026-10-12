@@ -28,7 +28,7 @@ def test_valid_session_borrows_connection(tmp_path,row_factory):
     ('UPDATE sessions SET is_active=0 WHERE id=1','admin-token',1,'Invalid or expired session'),
     ("UPDATE users SET archived_at='2020-01-01' WHERE id=1",'admin-token',1,'Invalid or expired session'),
     ('','engineer-token',1,'Invalid or expired session'),
-    ("UPDATE sessions SET expires_at='2000-01-01' WHERE id=1",'admin-token',1,'Session expired'),
+    ("UPDATE sessions SET expires_at='2000-01-01T00:00:00' WHERE id=1",'admin-token',1,'Session expired'),
     ("UPDATE sessions SET expires_at='broken' WHERE id=1",'admin-token',1,'Invalid or expired session'),
     ("UPDATE sessions SET session_token='replacement' WHERE id=1",'admin-token',1,'Invalid or expired session'),
 ])

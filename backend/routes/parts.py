@@ -1,4 +1,5 @@
 """Parts administration routes with explicit application dependencies."""
+from backend.temporal_contract import instant_response
 import csv
 import io
 from contextlib import closing
@@ -23,6 +24,7 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
     _record_mutation_activity = mutation_activity
 
     @router.get("/api/parts", response_model=List[PartResponse])
+    @instant_response
     @log_endpoint(action="view_parts", resource_type="parts")
     async def get_parts(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
         with closing(get_db_connection()) as conn:

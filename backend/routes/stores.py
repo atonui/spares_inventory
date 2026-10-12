@@ -1,4 +1,5 @@
 """Store administration routes composed with application dependencies."""
+from backend.temporal_contract import instant_response
 import csv
 import io
 from contextlib import closing
@@ -28,6 +29,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
     _record_mutation_activity = mutation_activity
 
     @router.get("/api/stores", response_model=List[StoreResponse])
+    @instant_response
     async def get_stores(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
         with closing(get_db_connection()) as conn:
             if include_archived or 'stores' == 'users':
@@ -258,6 +260,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
 
     @router.get("/api/store-types", response_model=List[StoreTypeResponse])
+    @instant_response
     async def get_store_types(
         include_inactive: bool = False,
         user_id: int = Depends(get_current_user),
@@ -475,6 +478,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
 
     @router.get("/api/store-types/validate/{type_code}")
+    @instant_response
     async def validate_store_type(
         type_code: str, user_id: int = Depends(get_current_user), request: Request = None
     ):

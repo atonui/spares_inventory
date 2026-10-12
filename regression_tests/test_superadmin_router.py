@@ -58,14 +58,16 @@ def test_superadmin_security_config_get_is_read_only(super_api):
     before = database_state(path)
     response = client.get(PREFIX + '/security-config')
     assert response.status_code == 200, response.text
-    assert response.json() == expected
+    from backend.temporal_contract import wire_instants
+    assert response.json() == wire_instants(expected)
     assert database_state(path) == before
     # The former write-shaped GET must also remain a read.
     response = client.request(
         'GET', PREFIX + '/security-config?key=max_login_attempts', json={'value': '7'},
     )
     assert response.status_code == 200, response.text
-    assert response.json() == expected
+    from backend.temporal_contract import wire_instants
+    assert response.json() == wire_instants(expected)
     assert database_state(path) == before
 
 
@@ -106,7 +108,7 @@ def test_superadmin_announcement_remains_public(super_api):
     main.app.dependency_overrides.clear()
     client.cookies.clear()
     assert client.get(PREFIX + '/announcement').json() == {'announcement': None}
-    payload = {'message': 'Public notice', 'level': 'info', 'created_at': '2026-01-01'}
+    payload = {'message': 'Public notice', 'level': 'info', 'set_at': '2026-01-01T00:00:00.000000Z'}
     with closing(connect_database(path)) as conn, conn:
         conn.execute("INSERT INTO system_settings(setting_key,setting_value) VALUES('system_announcement',?)", (json.dumps(payload),))
     response = client.get(PREFIX + '/announcement')
@@ -120,7 +122,7 @@ def test_superadmin_read_routes_preserved(super_api, endpoint, actor):
     client, path, _ = super_api
     client.cookies.set('session_token', actor)
     with closing(connect_database(path)) as conn, conn:
-        conn.execute("UPDATE users SET account_locked_until='2099-01-01',failed_login_attempts=2 WHERE id=1")
+        conn.execute("UPDATE users SET account_locked_until='2099-01-01T00:00:00',failed_login_attempts=2 WHERE id=1")
         conn.execute("INSERT INTO activity_logs(user_id,username,action) VALUES(2,'superadmin','read-fixture')")
     response = client.get(PREFIX + endpoint)
     if actor == 'engineer-token':

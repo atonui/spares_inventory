@@ -57,7 +57,7 @@ def test_users_list_preserves_archive_visibility_and_permissions(session_api, ac
     client, path, _ = session_api
     client.cookies.set('session_token', actor)
     with closing(connect_database(path)) as conn, conn:
-        conn.execute("INSERT INTO users(id,email,name,password_hash,role,archived_at) VALUES(5,'archived@example.test','Archived','unused','engineer','2000-01-01')")
+        conn.execute("INSERT INTO users(id,email,name,password_hash,role,archived_at) VALUES(5,'archived@example.test','Archived','unused','engineer','2000-01-01T00:00:00')")
     response = client.get('/api/users', params={'include_archived': include_archived})
     if actor in ('manager-token', 'engineer-token'):
         assert response.status_code == 403, response.text

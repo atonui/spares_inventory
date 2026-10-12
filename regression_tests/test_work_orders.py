@@ -10,8 +10,8 @@ KEYS={'id','work_order_number','customer_name','description','status','assigned_
 
 def seed_orders(conn):
     conn.executemany('INSERT INTO work_orders(id,work_order_number,assigned_engineer_id,created_at) VALUES(?,?,?,?)',[
-        (101,'WO-101',3,'2026-10-02'),(102,'WO-102',4,'2026-10-03'),
-        (103,'WO-103',None,'2026-10-04'),(104,'WO-104',2,'2026-10-01')])
+        (101,'WO-101',3,'2026-10-02T00:00:00'),(102,'WO-102',4,'2026-10-03T00:00:00'),
+        (103,'WO-103',None,'2026-10-04T00:00:00'),(104,'WO-104',2,'2026-10-01T00:00:00')])
 
 def seed(api):
     with sqlite3.connect(api[1]) as c:seed_orders(c)

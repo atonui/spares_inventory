@@ -10,7 +10,7 @@ def session_database(path):
         conn.executemany('INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)',
             [(1,'admin@example.test','Admin','unused','admin'),(2,'root@example.test','Root','unused','superadmin'),(3,'engineer@example.test','Engineer','unused','engineer')])
         conn.executemany('INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(?,?,?,?)',
-            [(1,1,'admin-token','2099-01-01'),(2,2,'root-token','2099-01-01'),(3,3,'engineer-token','2099-01-01')])
+            [(1,1,'admin-token','2099-01-01T00:00:00'),(2,2,'root-token','2099-01-01T00:00:00'),(3,3,'engineer-token','2099-01-01T00:00:00')])
         conn.execute("INSERT INTO stores(id,name,type) VALUES(1,'Warehouse','central')")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(1,'PART','Test part','test',0)")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(1,1,1,10)')

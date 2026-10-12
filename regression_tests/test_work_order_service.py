@@ -23,7 +23,7 @@ def test_query_service_empty_result(conn):
 
 def test_query_service_preserves_borrowed_transaction(conn):
     conn.execute('BEGIN')
-    conn.execute("INSERT INTO work_orders(id,work_order_number,assigned_engineer_id,created_at) VALUES(105,'TEMP',3,'2026-10-05')")
+    conn.execute("INSERT INTO work_orders(id,work_order_number,assigned_engineer_id,created_at) VALUES(105,'TEMP',3,'2026-10-05T00:00:00')")
     assert [r['id'] for r in list_work_orders(conn,3)]==[105,101]
     assert conn.in_transaction
     assert conn.execute('SELECT 1').fetchone()[0]==1

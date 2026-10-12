@@ -1,5 +1,11 @@
 """Equipment administration routes with explicit application dependencies."""
+from backend.temporal_contract import register_instant_comparison
+from contextlib import closing
+from backend.temporal_contract import instant_response
 from typing import List
+from datetime import timedelta
+from backend.temporal import utc_now, validate_zone
+from backend.services.timezone_policy import resolve_business_context
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.schemas.equipment import (
     EquipmentResponse, CreateEquipmentRequest, UpdateEquipmentRequest,
@@ -22,104 +28,107 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
     _record_mutation_activity = mutation_activity
 
     @router.get("/api/equipment/statistics", response_model=EquipmentStatsResponse)
+    @instant_response
     @log_endpoint(action="view_equipment_stats", resource_type="equipment")
     async def get_equipment_stats(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get equipment statistics"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with closing(get_db_connection()) as conn:
+            conn.execute('BEGIN')
+            context=resolve_business_context(conn,actor_id=user_id)
+            today=utc_now().astimezone(validate_zone(context.timezone)).date().isoformat()
+            cursor = conn.cursor()
 
-        # Get user role
-        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
+            # Get user role
+            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+            user = cursor.fetchone()
 
-        # Total equipment
-        cursor.execute("SELECT COUNT(*) as count FROM equipment WHERE status = 'active'")
-        total_equipment = cursor.fetchone()["count"]
+            # Total equipment
+            cursor.execute("SELECT COUNT(*) as count FROM equipment WHERE status = 'active'")
+            total_equipment = cursor.fetchone()["count"]
 
-        # My equipment
-        cursor.execute(
-            """
-            SELECT COUNT(*) as count FROM equipment
-            WHERE status = 'active' AND assigned_user_id = ?
-        """,
-            (user_id,),
-        )
-        my_equipment = cursor.fetchone()["count"]
-
-        # Get calibration reminder days
-        cursor.execute("""
-            SELECT setting_value FROM system_settings
-            WHERE setting_key = 'calibration_reminder_days'
-        """)
-        reminder_setting = cursor.fetchone()
-        reminder_days = int(reminder_setting["setting_value"]) if reminder_setting else 30
-
-        # Equipment due soon
-        from datetime import datetime, timedelta
-
-        check_date = (datetime.now() + timedelta(days=reminder_days)).strftime("%Y-%m-%d")
-
-        if user["role"] in ("admin", "superadmin"):
+            # My equipment
             cursor.execute(
                 """
                 SELECT COUNT(*) as count FROM equipment
-                WHERE status = 'active'
-                AND next_calibration_date IS NOT NULL
-                AND next_calibration_date <= ?
-                AND next_calibration_date >= date('now')
-            """,
-                (check_date,),
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT COUNT(*) as count FROM equipment
-                WHERE status = 'active'
-                AND assigned_user_id = ?
-                AND next_calibration_date IS NOT NULL
-                AND next_calibration_date <= ?
-                AND next_calibration_date >= date('now')
-            """,
-                (user_id, check_date),
-            )
-
-        due_soon = cursor.fetchone()["count"]
-
-        # Overdue equipment
-        if user["role"] in ("admin", "superadmin"):
-            cursor.execute("""
-                SELECT COUNT(*) as count FROM equipment
-                WHERE status = 'active'
-                AND next_calibration_date IS NOT NULL
-                AND next_calibration_date < date('now')
-            """)
-        else:
-            cursor.execute(
-                """
-                SELECT COUNT(*) as count FROM equipment
-                WHERE status = 'active'
-                AND assigned_user_id = ?
-                AND next_calibration_date IS NOT NULL
-                AND next_calibration_date < date('now')
+                WHERE status = 'active' AND assigned_user_id = ?
             """,
                 (user_id,),
             )
+            my_equipment = cursor.fetchone()["count"]
 
-        overdue = cursor.fetchone()["count"]
+            # Get calibration reminder days
+            cursor.execute("""
+                SELECT setting_value FROM system_settings
+                WHERE setting_key = 'calibration_reminder_days'
+            """)
+            reminder_setting = cursor.fetchone()
+            reminder_days = int(reminder_setting["setting_value"]) if reminder_setting else 30
 
-        conn.close()
+            # Equipment due soon
+            from datetime import date
+            check_date = (date.fromisoformat(today) + timedelta(days=reminder_days)).isoformat()
 
-        return {
-            "total_equipment": total_equipment,
-            "my_equipment": my_equipment,
-            "due_soon": due_soon,
-            "overdue": overdue,
-        }
+            if user["role"] in ("admin", "superadmin"):
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) as count FROM equipment
+                    WHERE status = 'active'
+                    AND next_calibration_date IS NOT NULL
+                    AND next_calibration_date <= ?
+                    AND next_calibration_date >= ?
+                """,
+                    (check_date,today),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) as count FROM equipment
+                    WHERE status = 'active'
+                    AND assigned_user_id = ?
+                    AND next_calibration_date IS NOT NULL
+                    AND next_calibration_date <= ?
+                    AND next_calibration_date >= ?
+                """,
+                    (user_id, check_date,today),
+                )
+
+            due_soon = cursor.fetchone()["count"]
+
+            # Overdue equipment
+            if user["role"] in ("admin", "superadmin"):
+                cursor.execute("""
+                    SELECT COUNT(*) as count FROM equipment
+                    WHERE status = 'active'
+                    AND next_calibration_date IS NOT NULL
+                    AND next_calibration_date < ?
+                """, (today,))
+            else:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) as count FROM equipment
+                    WHERE status = 'active'
+                    AND assigned_user_id = ?
+                    AND next_calibration_date IS NOT NULL
+                    AND next_calibration_date < ?
+                """,
+                    (user_id,today),
+                )
+
+            overdue = cursor.fetchone()["count"]
+
+
+            return {
+                "total_equipment": total_equipment,
+                "my_equipment": my_equipment,
+                "due_soon": due_soon,
+                "overdue": overdue,
+            }
 
 
     @router.get("/api/equipment", response_model=List[EquipmentResponse])
+    @instant_response
     @log_endpoint(action="view_equipment", resource_type="equipment")
     async def get_equipment(
         user_id: int = Depends(get_current_user),
@@ -127,33 +136,35 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Get equipment list"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with closing(get_db_connection()) as conn:
+            conn.execute('BEGIN')
+            context=resolve_business_context(conn,actor_id=user_id)
+            today=utc_now().astimezone(validate_zone(context.timezone)).date().isoformat()
+            cursor = conn.cursor()
 
-        # Get user role
-        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
+            # Get user role
+            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+            user = cursor.fetchone()
 
-        query = """
-            SELECT
-                e.*,
-                u.name as assigned_user_name,
-                CAST(julianday(e.next_calibration_date) - julianday('now') AS INTEGER) as days_until_calibration
-            FROM equipment e
-            LEFT JOIN users u ON e.assigned_user_id = u.id
-            WHERE e.status = 'active'
-        """
+            query = """
+                SELECT
+                    e.*,
+                    u.name as assigned_user_name,
+                    CAST(julianday(e.next_calibration_date) - julianday(?) AS INTEGER) as days_until_calibration
+                FROM equipment e
+                LEFT JOIN users u ON e.assigned_user_id = u.id
+                WHERE e.status = 'active'
+            """
 
-        if not show_all and user["role"] != "admin":
-            query += " AND e.assigned_user_id = ?"
-            cursor.execute(query + " ORDER BY e.next_calibration_date", (user_id,))
-        else:
-            cursor.execute(query + " ORDER BY e.next_calibration_date")
+            if not show_all and user["role"] != "admin":
+                query += " AND e.assigned_user_id = ?"
+                cursor.execute(query + " ORDER BY e.next_calibration_date", (today,user_id))
+            else:
+                cursor.execute(query + " ORDER BY e.next_calibration_date",(today,))
 
-        equipment = cursor.fetchall()
-        conn.close()
+            equipment = cursor.fetchall()
 
-        return [dict(eq) for eq in equipment]
+            return [dict(eq) for eq in equipment]
 
 
     @router.post("/api/equipment")
@@ -461,12 +472,14 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
 
 
     @router.get("/api/equipment/{equipment_id}/history")
+    @instant_response
     @log_endpoint(action="view_equipment_history", resource_type="equipment")
     async def get_equipment_history(
         equipment_id: int, user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get equipment history"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -481,7 +494,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             LEFT JOIN users u2 ON eh.to_user_id = u2.id
             LEFT JOIN users u3 ON eh.created_by = u3.id
             WHERE eh.equipment_id = ?
-            ORDER BY eh.created_at DESC
+            ORDER BY utc_instant(eh.created_at) DESC, eh.id DESC
         """,
             (equipment_id,),
         )
@@ -493,12 +506,14 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
 
 
     @router.get("/api/settings/calibration-reminder-days")
+    @instant_response
     @log_endpoint(action="view_calibration_settings", resource_type="settings")
     async def get_calibration_reminder_days(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get calibration reminder days setting"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute("""

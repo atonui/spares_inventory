@@ -1030,3 +1030,10 @@ label.btn {
     .header-actions { width: 100%; gap: .75rem; }
     .header .user-info { gap: 1rem; }
 }
+
+/* Timezone preferences stay within the profile card on narrow screens. */
+.timezone-settings { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd; min-width: 0; }
+.timezone-settings p, .timezone-note { font-size: .85rem; line-height: 1.5; overflow-wrap: anywhere; }
+.timezone-settings label { display: block; margin: .75rem 0 .35rem; }
+.timezone-settings select { display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; margin-bottom: 1rem; padding: .7rem; }
+.timezone-settings button { max-width: 100%; white-space: normal; }

@@ -1,6 +1,11 @@
 """History routes with explicit application dependencies."""
+from contextlib import closing
+from backend.temporal_contract import instant_response
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from backend.temporal_contract import date_metadata, date_predicates, register_instant_comparison
+from backend.services.timezone_policy import resolve_business_context
+import json
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from backend.schemas.history import MovementResponse, ActivityLogResponse
 from stock_audit import PROTECTED_AUDIT_SQL
 
@@ -17,6 +22,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
     log_activity = activity_log
 
     @router.get("/api/logs/test")
+    @instant_response
     async def test_logging(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
@@ -57,6 +63,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             return {"status": "error", "error": str(e)}
 
     @router.get("/api/movements", response_model=List[MovementResponse])
+    @instant_response
     async def get_movements(
         user_id: int = Depends(get_current_user),
         limit: int = 100,
@@ -65,79 +72,80 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         movement_type: Optional[str] = None,
         part_id: Optional[int] = None,
         store_id: Optional[int] = None,
+        response: Response = None,
         request: Request = None,
     ):
         """Get movement history with advanced filtering"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with closing(get_db_connection()) as conn:
+            conn.execute('BEGIN')
+            context=resolve_business_context(conn,actor_id=user_id)
+            metadata=date_metadata(context,start_date,end_date)
+            if response is not None:
+                response.headers['X-Report-Time-Context']=json.dumps(metadata,separators=(',',':'))
+            register_instant_comparison(conn)
+            cursor = conn.cursor()
 
-        query = """
-            SELECT
-                m.id,
-                s1.name as from_store_name,
-                s2.name as to_store_name,
-                p.part_number,
-                m.quantity,
-                m.movement_type,
-                wo.work_order_number as work_order,
-                u.name as created_by_name,
-                m.created_at,
-                CASE WHEN m.movement_type='transfer' THEN COALESCE(t.status,'completed') END AS transfer_status,
-                u2.name AS completed_by_name,t.completed_at
-            FROM movements m
-            LEFT JOIN stock_transfers t ON t.movement_id=m.id
-            LEFT JOIN users u2 ON u2.id=t.completed_by
-            LEFT JOIN stores s1 ON m.from_store_id = s1.id
-            LEFT JOIN stores s2 ON m.to_store_id = s2.id
-            JOIN parts p ON m.part_id = p.id
-            LEFT JOIN work_orders wo ON m.work_order_id = wo.id
-            JOIN users u ON m.created_by = u.id
-            WHERE 1=1
-        """
+            query = """
+                SELECT
+                    m.id,
+                    s1.name as from_store_name,
+                    s2.name as to_store_name,
+                    p.part_number,
+                    m.quantity,
+                    m.movement_type,
+                    wo.work_order_number as work_order,
+                    u.name as created_by_name,
+                    m.created_at,
+                    CASE WHEN m.movement_type='transfer' THEN COALESCE(t.status,'completed') END AS transfer_status,
+                    u2.name AS completed_by_name,t.completed_at
+                FROM movements m
+                LEFT JOIN stock_transfers t ON t.movement_id=m.id
+                LEFT JOIN users u2 ON u2.id=t.completed_by
+                LEFT JOIN stores s1 ON m.from_store_id = s1.id
+                LEFT JOIN stores s2 ON m.to_store_id = s2.id
+                JOIN parts p ON m.part_id = p.id
+                LEFT JOIN work_orders wo ON m.work_order_id = wo.id
+                JOIN users u ON m.created_by = u.id
+                WHERE 1=1
+            """
 
-        params = []
+            params = []
 
-        # query += """
-        #     AND (m.created_by = ?
-        #     OR s1.assigned_user_id = ?
-        #     OR s2.assigned_user_id = ?)
-        #     """
-        # params.extend([user_id, user_id, user_id])
+            # query += """
+            #     AND (m.created_by = ?
+            #     OR s1.assigned_user_id = ?
+            #     OR s2.assigned_user_id = ?)
+            #     """
+            # params.extend([user_id, user_id, user_id])
 
-        # Date range filtering
-        if start_date:
-            query += " AND m.created_at >= ?"
-            params.append(start_date)
+            date_sql,date_params=date_predicates('m.created_at',metadata)
+            query+=date_sql;params.extend(date_params)
 
-        if end_date:
-            query += " AND m.created_at <= ?"
-            params.append(end_date + " 23:59:59")
+            # Movement type filtering
+            if movement_type:
+                query += " AND m.movement_type = ?"
+                params.append(movement_type)
 
-        # Movement type filtering
-        if movement_type:
-            query += " AND m.movement_type = ?"
-            params.append(movement_type)
+            # Part filtering
+            if part_id:
+                query += " AND m.part_id = ?"
+                params.append(part_id)
 
-        # Part filtering
-        if part_id:
-            query += " AND m.part_id = ?"
-            params.append(part_id)
+            # Store filtering (from or to)
+            if store_id:
+                query += " AND (m.from_store_id = ? OR m.to_store_id = ?)"
+                params.extend([store_id, store_id])
 
-        # Store filtering (from or to)
-        if store_id:
-            query += " AND (m.from_store_id = ? OR m.to_store_id = ?)"
-            params.extend([store_id, store_id])
+            query += " ORDER BY utc_instant(m.created_at) DESC, m.id DESC LIMIT ?"
+            params.append(limit)
 
-        query += " ORDER BY m.created_at DESC LIMIT ?"
-        params.append(limit)
+            cursor.execute(query, params)
+            movements = cursor.fetchall()
 
-        cursor.execute(query, params)
-        movements = cursor.fetchall()
-        conn.close()
-
-        return [dict(movement) for movement in movements]
+            return [dict(movement) for movement in movements]
 
     @router.get("/api/logs/activity", response_model=List[ActivityLogResponse])
+    @instant_response
     async def get_activity_logs(
         user_id: int = Depends(get_current_user),
         limit: int = 100,
@@ -146,74 +154,74 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         status: Optional[str] = None,
+        response: Response = None,
         request: Request = None,
     ):
         """Get activity logs (admin only for all logs, users can see their own)"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with closing(get_db_connection()) as conn:
+            conn.execute('BEGIN')
+            context=resolve_business_context(conn,actor_id=user_id)
+            metadata=date_metadata(context,start_date,end_date)
+            if response is not None:
+                response.headers['X-Report-Time-Context']=json.dumps(metadata,separators=(',',':'))
+            register_instant_comparison(conn)
+            cursor = conn.cursor()
 
-        query = "SELECT * FROM activity_logs WHERE 1=1"
-        params = []
+            query = "SELECT * FROM activity_logs WHERE 1=1"
+            params = []
 
-        # Non-admins can only see their own logs
-        if not check_admin(user_id):
-            query += " AND user_id = ?"
-            params.append(user_id)
-        else:
-            # Admins can filter by specific user
-            if target_user_id:
+            # Non-admins can only see their own logs
+            if not check_admin(user_id):
                 query += " AND user_id = ?"
-                params.append(target_user_id)
+                params.append(user_id)
+            else:
+                # Admins can filter by specific user
+                if target_user_id:
+                    query += " AND user_id = ?"
+                    params.append(target_user_id)
 
-        # Apply filters
-        if action:
-            query += " AND action = ?"
-            params.append(action)
+            # Apply filters
+            if action:
+                query += " AND action = ?"
+                params.append(action)
 
-        if start_date:
-            query += " AND created_at >= ?"
-            params.append(start_date)
+            date_sql,date_params=date_predicates('created_at',metadata)
+            query+=date_sql;params.extend(date_params)
 
-        if end_date:
-            query += " AND created_at <= ?"
-            params.append(end_date + " 23:59:59")
+            if status:
+                query += " AND status = ?"
+                params.append(status)
 
-        if status:
-            query += " AND status = ?"
-            params.append(status)
+            query += " ORDER BY utc_instant(created_at) DESC, id DESC LIMIT ?"
+            params.append(limit)
 
-        query += " ORDER BY created_at DESC LIMIT ?"
-        params.append(limit)
-
-        cursor.execute(query, params)
-        logs = cursor.fetchall()
-        # conn.close()
-
-        try:
             cursor.execute(query, params)
             logs = cursor.fetchall()
-            conn.close()
 
-            # Convert to list of dicts and ensure all fields are present
-            result = []
-            for log in logs:
-                log_dict = dict(log)
-                # Ensure all expected fields exist with defaults
-                log_dict.setdefault("details", None)
-                log_dict.setdefault("ip_address", None)
-                log_dict.setdefault("user_agent", None)
-                log_dict.setdefault("error_message", None)
-                result.append(log_dict)
+            try:
+                cursor.execute(query, params)
+                logs = cursor.fetchall()
 
-            return result
-        except Exception as e:
-            error_log(f"Failed to get activity logs: {e}")
-            conn.close()
-            raise HTTPException(
-                status_code=500, detail=f"Failed to retrieve logs: {str(e)}"
-            )
+                # Convert to list of dicts and ensure all fields are present
+                result = []
+                for log in logs:
+                    log_dict = dict(log)
+                    # Ensure all expected fields exist with defaults
+                    log_dict.setdefault("details", None)
+                    log_dict.setdefault("ip_address", None)
+                    log_dict.setdefault("user_agent", None)
+                    log_dict.setdefault("error_message", None)
+                    result.append(log_dict)
+
+                return result
+            except Exception as e:
+                error_log(f"Failed to get activity logs: {e}")
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to retrieve logs: {str(e)}"
+                )
 
     @router.get("/api/logs/activity/stats")
+    @instant_response
     async def get_activity_stats(
         user_id: int = Depends(get_current_user),
         start_date: Optional[str] = None,
@@ -221,95 +229,91 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Get activity statistics (admin only)"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with closing(get_db_connection()) as conn:
+            conn.execute('BEGIN')
+            context=resolve_business_context(conn,actor_id=user_id)
+            metadata=date_metadata(context,start_date,end_date)
+            register_instant_comparison(conn)
+            cursor = conn.cursor()
 
-        # Check if user is admin
-        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
+            # Check if user is admin
+            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+            user = cursor.fetchone()
 
-        if user["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Admin access required")
+            if user["role"] != "admin":
+                raise HTTPException(status_code=403, detail="Admin access required")
 
-        # Date filter
-        date_filter = ""
-        params = []
-        if start_date:
-            date_filter += " AND created_at >= ?"
-            params.append(start_date)
-        if end_date:
-            date_filter += " AND created_at <= ?"
-            params.append(end_date + " 23:59:59")
+            date_filter,params=date_predicates('created_at',metadata)
 
-        # Total activities
-        cursor.execute(
-            f"SELECT COUNT(*) as total FROM activity_logs WHERE 1=1 {date_filter}", params
-        )
-        total_activities = cursor.fetchone()["total"]
+            # Total activities
+            cursor.execute(
+                f"SELECT COUNT(*) as total FROM activity_logs WHERE 1=1 {date_filter}", params
+            )
+            total_activities = cursor.fetchone()["total"]
 
-        # Activities by action
-        cursor.execute(
-            f"""
-            SELECT action, COUNT(*) as count
-            FROM activity_logs
-            WHERE 1=1 {date_filter}
-            GROUP BY action
-            ORDER BY count DESC
-            LIMIT 10
-        """,
-            params,
-        )
-        by_action = [dict(row) for row in cursor.fetchall()]
+            # Activities by action
+            cursor.execute(
+                f"""
+                SELECT action, COUNT(*) as count
+                FROM activity_logs
+                WHERE 1=1 {date_filter}
+                GROUP BY action
+                ORDER BY count DESC
+                LIMIT 10
+            """,
+                params,
+            )
+            by_action = [dict(row) for row in cursor.fetchall()]
 
-        # Activities by user (top 10)
-        cursor.execute(
-            f"""
-            SELECT username, COUNT(*) as count
-            FROM activity_logs
-            WHERE 1=1 {date_filter}
-            GROUP BY username
-            ORDER BY count DESC
-            LIMIT 10
-        """,
-            params,
-        )
-        by_user = [dict(row) for row in cursor.fetchall()]
+            # Activities by user (top 10)
+            cursor.execute(
+                f"""
+                SELECT username, COUNT(*) as count
+                FROM activity_logs
+                WHERE 1=1 {date_filter}
+                GROUP BY username
+                ORDER BY count DESC
+                LIMIT 10
+            """,
+                params,
+            )
+            by_user = [dict(row) for row in cursor.fetchall()]
 
-        # Error rate
-        cursor.execute(
-            f"""
-            SELECT
-                COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
-                COUNT(CASE WHEN status = 'success' THEN 1 END) as successes
-            FROM activity_logs
-            WHERE 1=1 {date_filter}
-        """,
-            params,
-        )
-        error_stats = dict(cursor.fetchone())
+            # Error rate
+            cursor.execute(
+                f"""
+                SELECT
+                    COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
+                    COUNT(CASE WHEN status = 'success' THEN 1 END) as successes
+                FROM activity_logs
+                WHERE 1=1 {date_filter}
+            """,
+                params,
+            )
+            error_stats = dict(cursor.fetchone())
 
-        # Recent logins
-        cursor.execute(
-            f"""
-            SELECT username, created_at, ip_address
-            FROM activity_logs
-            WHERE action = 'login' {date_filter}
-            ORDER BY created_at DESC
-            LIMIT 10
-        """,
-            params,
-        )
-        recent_logins = [dict(row) for row in cursor.fetchall()]
+            # Recent logins
+            cursor.execute(
+                f"""
+                SELECT username, created_at, ip_address
+                FROM activity_logs
+                WHERE action = 'login' {date_filter}
+                ORDER BY utc_instant(created_at) DESC, id DESC
+                LIMIT 10
+            """,
+                params,
+            )
+            recent_logins = [dict(row) for row in cursor.fetchall()]
 
-        conn.close()
 
-        return {
-            "total_activities": total_activities,
-            "by_action": by_action,
-            "by_user": by_user,
-            "error_rate": error_stats,
-            "recent_logins": recent_logins,
-        }
+            return {
+                **metadata,
+                "total_activities": total_activities,
+                "by_action": by_action,
+                "by_user": by_user,
+                "error_rate": error_stats,
+                "recent_logins": recent_logins,
+            }
 
     @router.delete("/api/logs/activity/cleanup")
     async def cleanup_old_logs(
@@ -333,7 +337,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             cursor.execute(
                 f"""
                 DELETE FROM activity_logs
-                WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND created_at < datetime('now', '-' || ? || ' days')
+                WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND julianday(created_at) < julianday('now', '-' || ? || ' days')
             """,
                 (days,),
             )

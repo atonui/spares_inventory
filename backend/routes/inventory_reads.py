@@ -1,4 +1,6 @@
 """Read-only inventory routes with explicit application dependencies."""
+from backend.temporal_contract import register_instant_comparison
+from backend.temporal_contract import instant_response
 from typing import List
 from fastapi import APIRouter, Depends, Request
 from backend.schemas.inventory_reads import InventoryResponse, StatsResponse
@@ -13,11 +15,13 @@ def create_inventory_read_router(*, get_connection, current_user,
     transfer_permissions = transfer_permission
 
     @router.get("/api/inventory", response_model=List[InventoryResponse])
+    @instant_response
     async def get_inventory(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get inventory with full visibility for engineers"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         query = """
@@ -49,9 +53,11 @@ def create_inventory_read_router(*, get_connection, current_user,
         return [dict(item) for item in inventory]
 
     @router.get("/api/stats", response_model=StatsResponse)
+    @instant_response
     async def get_stats(user_id: int = Depends(get_current_user), request: Request = None):
         """Get dashboard statistics"""
         conn = get_db_connection()
+        register_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Total unique parts
@@ -90,8 +96,10 @@ def create_inventory_read_router(*, get_connection, current_user,
         }
 
     @router.get('/api/inventory/transfers')
+    @instant_response
     async def pending_transfers(user_id: int = Depends(get_current_user)):
         conn=get_db_connection()
+        register_instant_comparison(conn)
         try:
             actor=conn.execute('SELECT role FROM users WHERE id=?',(user_id,)).fetchone()
             rows=conn.execute("""SELECT m.id,m.quantity,m.created_at,m.created_by,m.from_store_id,m.to_store_id,
@@ -102,7 +110,7 @@ def create_inventory_read_router(*, get_connection, current_user,
                 JOIN parts p ON p.id=m.part_id JOIN stores s1 ON s1.id=m.from_store_id
                 JOIN stores s2 ON s2.id=m.to_store_id JOIN users u ON u.id=m.created_by
                 LEFT JOIN work_orders wo ON wo.id=m.work_order_id
-                WHERE t.status='in_transit' ORDER BY m.created_at,m.id""").fetchall()
+                WHERE t.status='in_transit' ORDER BY utc_instant(m.created_at),m.id""").fetchall()
             result=[]
             for row in rows:
                 item=dict(row)

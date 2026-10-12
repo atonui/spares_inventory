@@ -1,7 +1,8 @@
 """Password, JWT, and CSRF helpers."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+from backend.temporal import utc_now
 import secrets
 from typing import Callable
 
@@ -34,7 +35,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, secret_key: str):
     """Create JWT token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    expire = utc_now() + timedelta(hours=24)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, secret_key, algorithm="HS256")
 

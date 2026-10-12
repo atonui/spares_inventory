@@ -28,7 +28,7 @@ def test_nairobi_day_is_inclusive_at_start_and_exclusive_at_next_midnight(api):
     assert result['totals']['quantity']==7
     assert result['totals']['events']==2
     assert [r['quantity'] for r in result['rows']]==[4,3]
-    assert result['rows'][0]['recorded_at'].startswith('2026-10-05T23:59:59+03:00')
+    assert result['rows'][0]['recorded_at']=='2026-10-05T20:59:59.000000Z'
 
 
 @pytest.mark.parametrize('actor,quantity',[(3,10),(4,4),(1,14),(2,14)])

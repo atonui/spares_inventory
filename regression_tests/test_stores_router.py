@@ -55,7 +55,7 @@ def test_store_listing_archive_visibility(session_api, actor, include_archived):
     client, path, _ = session_api
     client.cookies.set('session_token', actor)
     with closing(connect_database(path)) as conn, conn:
-        conn.execute("UPDATE stores SET archived_at='2000-01-01' WHERE id=3")
+        conn.execute("UPDATE stores SET archived_at='2000-01-01T00:00:00' WHERE id=3")
     response = client.get('/api/stores', params={'include_archived': include_archived})
     if include_archived and actor == 'engineer-token':
         assert response.status_code == 403, response.text
@@ -83,7 +83,7 @@ def test_store_import_preserves_existing_type_and_row_skipping_rules(session_api
     client, path, _ = session_api
     with closing(connect_database(path)) as conn, conn:
         conn.execute("INSERT INTO store_types(type_code,type_name) VALUES('custom_type','Custom')")
-        conn.execute("UPDATE users SET archived_at='2000-01-01' WHERE id=3")
+        conn.execute("UPDATE users SET archived_at='2000-01-01T00:00:00' WHERE id=3")
     data = ('name,type,location,assigned_user_id\n'
             'Accepted,office,Office,\n'
             'Custom,custom_type,Office,\n'

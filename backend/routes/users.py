@@ -1,4 +1,5 @@
 """User administration routes with explicit application dependencies."""
+from backend.temporal_contract import instant_response
 from contextlib import closing
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -29,6 +30,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
 
 
     @router.get("/api/users", response_model=List[UserResponse])
+    @instant_response
     @log_endpoint(action="view_users", resource_type="user")
     async def get_users(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
         with closing(get_db_connection()) as conn:

@@ -24,7 +24,7 @@ def session_api(tmp_path,monkeypatch):
     path=session_database(tmp_path/'http.db');monkeypatch.setattr(main,'DATABASE',str(path))
     with closing(connect_database(path)) as conn,conn:
         conn.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES(4,'manager@example.test','Manager','unused','manager')")
-        conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(4,4,'manager-token','2099-01-01')")
+        conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(4,4,'manager-token','2099-01-01T00:00:00')")
         conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(2,'Car','engineer',3),(3,'Empty','central',NULL)")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(2,'EMPTY','Empty part','test',0)")
         conn.execute("INSERT INTO store_types(type_code,type_name) VALUES('unused','Unused')")
@@ -208,7 +208,7 @@ def prepare_account(path,preparation):
     if preparation:
         with closing(connect_database(path)) as conn,conn:
             if preparation=='password':conn.execute('UPDATE users SET password_hash=? WHERE id=1',(main.hash_password('test-password'),))
-            elif preparation=='extra_session':conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(5,1,'other-admin','2099-01-01')")
+            elif preparation=='extra_session':conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(5,1,'other-admin','2099-01-01T00:00:00')")
 
 
 @pytest.mark.parametrize('case',ADMIN_CASES,ids=lambda c:c[0])

@@ -49,7 +49,10 @@ def test_manifest_covers_schema_temporal_fields(database):
     assert all(field.provenance for field in TEMPORAL_FIELDS)
 
 
-def test_unknown_naive_and_invalid_values_block_conversion(database):
+def test_unknown_naive_and_invalid_values_block_conversion(database, monkeypatch):
+    import scripts.assess_timestamps as assessment
+    from dataclasses import replace
+    monkeypatch.setattr(assessment,'TEMPORAL_FIELDS',tuple(replace(f,naive_policy=None) if f.table=='system_logs' else f for f in TEMPORAL_FIELDS))
     secret = 'DO-NOT-EXPOSE-password-token-or-email'
     with sqlite3.connect(database) as conn:
         for identifier, value in enumerate(['2026-10-12 09:00:00', secret, '2026-10-12T09:00:00Z'], 1):
@@ -95,7 +98,7 @@ def test_embedded_announcement_and_duration_settings_are_assessed(database):
     result = assess_database(database)
     embedded = next(f for f in result['fields'] if f.get('json_key') == 'set_at')
     duration = next(f for f in result['fields'] if f.get('setting_key') == 'session_duration_hours')
-    assert embedded['counts']['naive_unverified'] == 1
+    assert embedded['counts']['naive_verified_utc'] == 1
     assert duration['counts']['duration'] == 1
     assert 'private' not in json.dumps(result)
 
