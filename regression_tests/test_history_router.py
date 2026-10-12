@@ -173,3 +173,31 @@ def test_history_imports_are_inert(tmp_path):
         cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize('actor,params,expected_ids', [
+    ('admin-token', {'action': 'login', 'start_date': '2025-01-03', 'end_date': '2025-01-03'}, [11, 10]),
+    ('engineer-token', {'action': 'login'}, [11]),
+])
+def test_activity_history_executes_one_query(session_api, monkeypatch, actor, params, expected_ids):
+    """One request must not scan and normalise the same history rows twice."""
+    client, path, _ = session_api
+    populate(path)
+    client.cookies.set('session_token', actor)
+    statements = []
+    original_connection = main.get_db_connection
+
+    def traced_connection():
+        conn = original_connection()
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(main, 'get_db_connection', traced_connection)
+    response = client.get('/api/logs/activity', params=params)
+    assert response.status_code == 200, response.text
+    assert [row['id'] for row in response.json()] == expected_ids
+    assert all(row['created_at'].endswith('Z') for row in response.json())
+    assert json.loads(response.headers['X-Report-Time-Context'])['timezone'] == 'Africa/Nairobi'
+    history_reads = [statement for statement in statements
+                     if statement.startswith('SELECT * FROM activity_logs WHERE 1=1')]
+    assert len(history_reads) == 1
