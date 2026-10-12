@@ -15,3 +15,5 @@ itsdangerous==2.2.0
 bcrypt==4.0.1
 # Starlette 0.52.1 uses an alias deprecated in AnyIO 4.15.
 anyio==4.14.2
+# IANA data fallback for hosts without a system timezone database.
+tzdata==2026.5
