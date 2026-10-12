@@ -9,6 +9,7 @@ The app still uses SQLite and Railway's existing database volume/path. Startup a
 | 1 | core_schema | Existing core tables/indexes and known optional authentication/reset/movement-note columns; historical equipment/store-type indexes retained and standardised |
 | 2 | transfer_lifecycle | Transfer status table/index; old transfer movements remain completed history |
 | 3 | archiving_integrity | Archive columns, stock identity indexes, documented legacy anonymous audit-user repair |
+| 4 | timezone_preferences | Singleton organisation business timezone/revision/audit metadata and nullable personal display timezone; existing timestamp values are unchanged |
 
 `schema_migrations` records each version, stable name, source checksum and UTC application time. Shipped migration files must remain immutable; future fixes use another numbered migration. Unknown/newer versions, missing history, changed checksums, conflicting schemas and invalid foreign references stop startup. Duplicate stock keys are rejected rather than consolidated.
 
@@ -41,3 +42,12 @@ Restore first validates the live database without changing it, then upgrades onl
 The deployment performs an additive adoption of existing databases. Confirm deployment/startup logs show successful initialization. A migration failure means the service is not ready; the existing database's schema/data/ledger remain unchanged. Never manually stamp a version to bypass a failure.
 
 There is no automatic downgrade. Reverting application code may be incompatible with a recorded newer schema. Use compatible code or deliberately restore a compatible snapshot through the existing safeguards. Backend route extraction follows in separate PRs after migrations are stable.
+
+Version 4 seeds `Africa/Nairobi` only when organisation settings are missing during
+upgrade. Existing zones/preferences are preserved. Invalid saved zones, revisions
+or settings timestamps fail validation rather than falling back. An already
+versioned database missing its singleton settings row is rejected; startup does
+not silently reset it. Older backups are upgraded through the restore runner;
+their absent business/display settings receive Nairobi/null defaults. Current
+backups preserve settings and personal preferences. Code predating version 4 is
+not a supported rollback against the new migration ledger/schema.

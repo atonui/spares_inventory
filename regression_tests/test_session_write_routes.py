@@ -183,6 +183,7 @@ def test_mutation_audit_rolls_back_with_record(session_api):
     assert database_state(path)==before
 
 ADMIN_CASES=[
+ ('business_timezone','PUT','/api/organisation/timezone',{'timezone':'Europe/London','expected_revision':1},None,1),
  ('profile_update','PUT','/api/profile',{'email':'updated@example.com'},None,1),
  ('profile_password','POST','/api/profile/change-password',{'current_password':'test-password','new_password':'new-password'},'password',1),
  ('session_revoke_others','POST','/api/auth/revoke-other-sessions',None,'extra_session',1),
@@ -307,7 +308,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
     protected.add(('POST','/api/superadmin/database/restore'))
     exempt={('POST',p) for p in ['/api/auth/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==50
+    assert len(protected)==51
     assert registered==protected|exempt
 
 

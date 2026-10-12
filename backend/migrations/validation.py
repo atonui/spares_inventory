@@ -37,13 +37,13 @@ def schema_signature(conn):
 
 @lru_cache(maxsize=1)
 def reference():
-    from . import v0001_core_schema as core,v0002_transfer_lifecycle as transfers,v0003_archiving_integrity as archives
+    from . import v0001_core_schema as core,v0002_transfer_lifecycle as transfers,v0003_archiving_integrity as archives,v0004_timezone_preferences as timezones
     with sqlite3.connect(':memory:') as c:
-        for module in (core,transfers,archives):module.upgrade(c)
+        for module in (core,transfers,archives,timezones):module.upgrade(c)
         tables={n:(columns(c,n),foreign_keys(c,n),unique_columns(c,n)) for n,o in objects(c).items() if o[0]=='table'}
         return tables,objects(c)
 
-def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False):
+def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False):
     from .v0001_core_schema import OPTIONAL_COLUMNS
     expected,expected_objects=reference();actual_objects=objects(conn)
     actual_tables={n for n,o in actual_objects.items() if o[0]=='table' and n!='schema_migrations'}
@@ -51,6 +51,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
         if actual_objects:raise MigrationError('Unsupported nonempty database objects')
         return
     required=set(expected) if not legacy else {'users','stores','parts','inventory','movements','work_orders'}
+    if not require_timezone:required.discard('organisation_settings')
     if not include_transfer:required.discard('stock_transfers')
     missing=required-actual_tables
     if missing:raise MigrationError('Missing required tables: '+', '.join(sorted(missing)))
@@ -65,6 +66,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
         if table_options(actual_objects[table][2])!=table_options(expected_objects[table][2]):
             raise MigrationError('Incompatible table constraints in '+table)
         if legacy:allowed_missing.update(OPTIONAL_COLUMNS.get(table,{}))
+        if not require_timezone:allowed_missing.add('display_timezone')
         if legacy or allow_archive:allowed_missing.add('archived_at')
         if set(cols)-set(actual)-allowed_missing or set(actual)-set(cols):raise MigrationError('Incompatible columns in '+table)
         for name,definition in actual.items():
@@ -72,7 +74,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
         if foreign_keys(conn,table)!=fks or unique_columns(conn,table)!=unique:
             raise MigrationError('Incompatible key constraints in '+table)
         # Preserve the transfer status CHECK constraint, which PRAGMA columns does not expose.
-        if table=='stock_transfers' and normalized(actual_objects[table][2])!=normalized(expected_objects[table][2]):
+        if table in ('stock_transfers','organisation_settings') and normalized(actual_objects[table][2])!=normalized(expected_objects[table][2]):
             raise MigrationError('Incompatible transfer lifecycle definition')
     if not legacy:
         for name,(kind,table,sql) in expected_objects.items():
@@ -92,6 +94,12 @@ def validate_integrity(conn, *, allow_legacy_sentinel=False):
 def validate_legacy(conn):
     validate_tables(conn,legacy=True)
 
-def validate_current(conn):
+def validate_current(conn, *, require_timezone=None):
+    if require_timezone is None:
+        require_timezone=('schema_migrations' in objects(conn) and
+                          conn.execute('SELECT 1 FROM schema_migrations WHERE version=4').fetchone() is not None)
     validate_integrity(conn)
-    validate_tables(conn)
+    validate_tables(conn,require_timezone=require_timezone)
+    if require_timezone or 'organisation_settings' in objects(conn):
+        from .v0004_timezone_preferences import validate_settings
+        validate_settings(conn)

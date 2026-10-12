@@ -4,7 +4,7 @@ import pytest
 from regression_tests.migration_fixtures import legacy_connection,snapshot,schema_snapshot
 
 def modules():
-    return [importlib.import_module('backend.migrations.v000'+str(i)+'_'+n) for i,n in [(1,'core_schema'),(2,'transfer_lifecycle'),(3,'archiving_integrity')]]
+    return [importlib.import_module('backend.migrations.v000'+str(i)+'_'+n) for i,n in [(1,'core_schema'),(2,'transfer_lifecycle'),(3,'archiving_integrity'),(4,'timezone_preferences')]]
 
 def upgrade(conn):
     for m in modules():m.upgrade(conn);m.validate(conn)
@@ -73,15 +73,20 @@ def test_historical_transfers_stay_completed(tmp_path):
 def runner():
     return importlib.import_module('backend.migrations.runner')
 
-def test_fresh_database_records_versions_1_2_3(tmp_path):
+def test_fresh_database_records_current_versions(tmp_path):
     c=sqlite3.connect(tmp_path/'fresh.db');s=runner().apply_migrations(c)
-    assert s.current_version==3 and s.pending==()
-    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,)]
+    assert s.current_version==4 and s.pending==()
+    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,)]
 
 def test_adoption_records_only_validated_versions(tmp_path):
-    c=legacy_connection(tmp_path/'live.db',current=True);before=snapshot(c);runner().apply_migrations(c)
-    assert snapshot(c,ledger=False)==before
-    assert runner().migration_status(c).applied==(1,2,3)
+    c=legacy_connection(tmp_path/'live.db',current=True);before=snapshot(c)
+    original_columns={table:[r[1] for r in c.execute(f'PRAGMA table_info("{table}")')] for table in before}
+    runner().apply_migrations(c)
+    for table,rows in before.items():
+        projection=','.join('"'+name+'"' for name in original_columns[table])
+        assert [tuple(r) for r in c.execute(f'SELECT {projection} FROM "{table}" ORDER BY rowid')]==rows
+    assert c.execute('SELECT business_timezone FROM organisation_settings').fetchone()[0]=='Africa/Nairobi'
+    assert runner().migration_status(c).applied==(1,2,3,4)
 
 def test_repeat_upgrade_preserves_rows_and_applied_at(tmp_path):
     c=legacy_connection(tmp_path/'live.db');runner().apply_migrations(c);before=snapshot(c);schema=schema_snapshot(c)
@@ -124,8 +129,8 @@ def test_two_workers_apply_once(tmp_path):
     p=tmp_path/'live.db';legacy_connection(p).close()
     def run():
         with sqlite3.connect(p,timeout=10) as c:return runner().apply_migrations(c).current_version
-    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[3,3]
-    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==3
+    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[4,4]
+    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==4
 
 def test_write_lock_timeout_leaves_database_unchanged(tmp_path):
     from backend.migrations.validation import MigrationError
@@ -139,7 +144,7 @@ def test_main_wrappers_respect_database_override(tmp_path,monkeypatch):
     import main
     p=tmp_path/'override.db';monkeypatch.setattr(main,'DATABASE',str(p));assert main.init_db() is None
     with main.get_db_connection() as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==3
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==4
         assert c.execute('PRAGMA foreign_keys').fetchone()[0]==1
 
 

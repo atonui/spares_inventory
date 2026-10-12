@@ -46,7 +46,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, email, name, role, territory, created_at FROM users WHERE id = ?",
+            "SELECT id, email, name, role, territory, created_at, display_timezone FROM users WHERE id = ?",
             (user_id,),
         )
         user = cursor.fetchone()
@@ -88,11 +88,16 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 )
 
 
+            if 'display_timezone' in profile_update.model_fields_set:
+                cursor.execute('UPDATE users SET display_timezone=? WHERE id=?',
+                               (profile_update.display_timezone,user_id))
+
             # Get updated user info
-            cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT email,display_timezone FROM users WHERE id = ?", (user_id,))
             user = cursor.fetchone()
 
-            return {"message": "Profile updated successfully", "email": user["email"]}
+            return {"message": "Profile updated successfully", "email": user["email"],
+                    "display_timezone":user['display_timezone']}
 
 
     @router.post("/api/profile/change-password")

@@ -45,6 +45,8 @@ TEMPORAL_FIELDS = tuple(
                   'backend/routes/auth.py: naive UTC clock plus one hour; historical rows unverified.'),
     TemporalField('schema_migrations', 'applied_at', 'instant', None,
                   'backend/migrations/runner.py: datetime.now(timezone.utc).isoformat; explicit-offset writer.'),
+    TemporalField('organisation_settings', 'updated_at', 'instant', None,
+                  'Migration 4 and timezone settings route use serialize_instant(utc_now()); explicit UTC Z writer.'),
     TemporalField('equipment', 'calibration_date', 'date', None,
                   'backend/routes/equipment.py and backend/schemas/equipment.py: request calendar date.'),
     TemporalField('equipment', 'next_calibration_date', 'date', None,
