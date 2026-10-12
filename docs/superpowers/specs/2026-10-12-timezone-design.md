@@ -2,7 +2,7 @@
 
 Date: 2026-10-12
 
-Status: Proposed for user review; no runtime implementation is authorised by this document alone.
+Status: Approved design following PR #90 review; implementation plan review pending.
 
 ## Purpose and scope
 
