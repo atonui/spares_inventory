@@ -784,7 +784,10 @@
       } else if (!open && this.dialogFocus.has(element)) {
         const previous = this.dialogFocus.get(element);
         this.dialogFocus.delete(element);
-        if (previous?.isConnected) previous.focus();
+        // Wait for Alpine to remove the shell's inert binding before focusing it.
+        this.$nextTick(() => {
+          if (!this.dialogFocus.has(element) && previous?.isConnected) previous.focus();
+        });
       }
     },
     trapDialogFocus(event, element) {

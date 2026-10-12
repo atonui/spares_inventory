@@ -9,6 +9,28 @@ test('mobile menu and desktop buttons expose section names',()=>{assert.match(ht
 test('dialog traps focus in both directions',()=>{const a=app();let focused;const first={focus:()=>focused='first'},last={focus:()=>focused='last'};const el={querySelectorAll:()=>[first,last]};let prevented=false;const event={target:last,shiftKey:false,preventDefault:()=>prevented=true};a.trapDialogFocus(event,el);assert.equal(focused,'first');assert.equal(prevented,true);event.target=first;event.shiftKey=true;a.trapDialogFocus(event,el);assert.equal(focused,'last');});
 
 test('dialog focuses a control once and restores the opener on close',()=>{const a=app();let focused=0,restored=0;const opener={isConnected:true,focus:()=>restored++};const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:opener},WeakMap};vm.createContext(c);vm.runInContext(html.match(/<script>\s*([\s\S]*?)<\/script>/)[1],c);const panel=c.superPanel();panel.$nextTick=fn=>fn();const el={querySelector:()=>({focus:()=>focused++})};panel.syncDialog(el,true);panel.syncDialog(el,true);assert.equal(focused,1);panel.syncDialog(el,false);assert.equal(restored,1);});
+test('shared dialog lifecycle restores focus after the background stops being inert',()=>{
+  let inert=false;
+  const document={activeElement:null};
+  const opener={isConnected:true,focus(){if(!inert)document.activeElement=this;}};
+  document.activeElement=opener;
+  const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document,WeakMap};
+  vm.createContext(c);vm.runInContext(html.match(/<script>\s*([\s\S]*?)<\/script>/)[1],c);
+  const panel=c.superPanel(),ticks=[];
+  panel.$nextTick=fn=>ticks.push(fn);
+  const control={focus(){document.activeElement=this;}};
+  const element={querySelector:()=>control};
+  panel.syncDialog(element,true);
+  inert=true;
+  ticks.splice(0).forEach(fn=>fn());
+  assert.equal(document.activeElement,control);
+  panel.syncDialog(element,false);
+  // Alpine clears the shell's inert binding after the dialog effect runs.
+  inert=false;
+  if(document.activeElement===control)document.activeElement=null;
+  ticks.splice(0).forEach(fn=>fn());
+  assert.equal(document.activeElement,opener);
+});
 test('role save has one request, preserves draft on failure, and clears busy state',async()=>{const a=app();const u={id:7,role:'engineer',_role:'manager'};let release,calls=0;a.toast=()=>{};a.api=async()=>{calls++;await new Promise(r=>release=r);return {message:'saved'};};const pending=a.changeRole(u);assert.equal(u._saving,true);await a.changeRole(u);assert.equal(calls,1);assert.equal(u.role,'engineer');release();await pending;assert.equal(u.role,'manager');assert.equal(u._saving,false);u._role='admin';a.api=async()=>{throw Error('offline');};await a.changeRole(u);assert.equal(u.role,'manager');assert.equal(u._role,'admin');assert.equal(u._error,'offline');});
 test('confirmed action stays open while saving and preserves errors for retry',async()=>{const a=app();let calls=0,release;a.dlg={open:true,resolve:async()=>{calls++;await new Promise(r=>release=r);}};const pending=a.submitDialog();await a.submitDialog();assert.equal(calls,1);assert.equal(a.dlg.open,true);release();await pending;assert.equal(a.dlg.open,false);assert.equal(a.dialogBusy,false);a.dlg={open:true,resolve:async()=>{throw Error('offline');}};await a.submitDialog();assert.equal(a.dlg.open,true);assert.equal(a.dialogError,'offline');});
 test('role selection waits for explicit Save and bulk logout stays in sessions',()=>{assert.doesNotMatch(html,/@change="changeRole\(u\)"/);assert.match(html,/@click="changeRole\(u\)"/);assert.doesNotMatch(html.split('<!-- /dashboard -->')[0],/@click="confirmLogoutAll\(\)"/);assert.match(html,/@click="confirmLogoutAll\(\)"/);});
