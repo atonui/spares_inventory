@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="mystyle.css">
-<link rel="stylesheet" href="superadmin.css?v=20261012-audit">
+<link rel="stylesheet" href="superadmin.css?v=20261012-feedback">
 <script src="audit.js?v=20261005-stock-audit" defer></script>
 <script src="script.js?v=20261005-stock-audit" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -216,18 +216,22 @@
               <span x-show="locked.length>0" class="tag tag-red" style="margin-left:6px;" x-text="locked.length"></span>
             </span>
             <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0">Unlock All</button>
+              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0 || actionPending.unlock">Unlock All</button>
               <button class="btn btn-sm btn-outline" @click="loadLocked()">↻ Refresh</button>
             </div>
           </div>
 
+          <div class="action-feedback">
+            <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
+            <p class="action-error" x-show="actionErrors.unlock" role="alert" x-text="actionErrors.unlock"></p>
+          </div>
           <div x-show="locked.length===0 && !loading" class="empty">✅ No accounts are currently locked</div>
 
           <div x-show="locked.length>0" style="overflow-x:auto;">
             <table class="tbl">
               <thead>
                 <tr>
-                  <th><input type="checkbox" @change="toggleAll($event)" style="cursor:pointer;"></th>
+                  <th><input type="checkbox" @change="toggleAll($event)" :disabled="actionPending.unlock" style="cursor:pointer;"></th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
@@ -239,13 +243,13 @@
               <tbody>
                 <template x-for="u in locked" :key="u.id">
                   <tr>
-                    <td><input type="checkbox" :value="u.id" x-model="selectedLocked" style="cursor:pointer;"></td>
+                    <td><input type="checkbox" :value="u.id" x-model="selectedLocked" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
                     <td style="font-weight:600;" x-text="u.name"></td>
                     <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
                     <td><span class="tag tag-grey" x-text="u.role"></span></td>
                     <td><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
                     <td style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
-                    <td><button class="btn btn-sm btn-green" @click="unlock(u)">🔓 Unlock</button></td>
+                    <td><button class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock">🔓 Unlock</button></td>
                   </tr>
                 </template>
               </tbody>
@@ -256,7 +260,7 @@
           <div x-show="selectedLocked.length>0"
                style="padding:0.75rem 1rem;border-top:1px solid #eee;display:flex;align-items:center;gap:0.75rem;background:#f8f9fa;">
             <span style="font-size:0.8rem;color:#666;" x-text="selectedLocked.length + ' selected'"></span>
-            <button class="btn btn-sm btn-green" @click="unlockSelected()">Unlock Selected</button>
+            <button class="btn btn-sm btn-green" @click="unlockSelected()" :disabled="actionPending.unlock">Unlock Selected</button>
           </div>
         </div>
       </div><!-- /accounts -->
@@ -336,10 +340,11 @@
                 </div>
                 <div class="cfg-ctrl">
                   <input type="number" :min="meta.min" :max="meta.max"
-                         x-model="cfgVals[key]"
+                         x-model="cfgVals[key]" :disabled="actionPending['config:' + key]" :aria-label="meta.label"
                          @keydown.enter="saveConfig(key)">
                   <span class="cfg-unit" x-text="meta.unit"></span>
-                  <button class="btn btn-sm btn-success" @click="saveConfig(key)">Save</button>
+                  <button class="btn btn-sm btn-success" @click="saveConfig(key)" :disabled="actionPending['config:' + key]" x-text="actionPending['config:' + key] ? 'Saving…' : 'Save'"></button>
+                  <p class="action-error" x-show="actionErrors['config:' + key]" role="alert" x-text="actionErrors['config:' + key]"></p>
                 </div>
               </div>
             </template>
@@ -376,6 +381,10 @@
           <div class="panel-header">
             <span class="panel-title">All Users</span>
             <button class="btn btn-sm btn-outline" @click="loadUsers()">↻ Refresh</button>
+          </div>
+          <div class="action-feedback">
+            <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
+            <p class="action-error" x-show="actionErrors.unlock" role="alert" x-text="actionErrors.unlock"></p>
           </div>
           <div class="list-filters">
               <label for="user-search">Search<input id="user-search" type="search" x-model="userFilters.search" placeholder="Name or email"></label>
@@ -430,7 +439,7 @@
                       <span x-show="!isLocked(u)" class="tag tag-green">Active</span>
                     </td>
                     <td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
-                      <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" title="Unlock">Unlock</button>
+                      <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock" title="Unlock">Unlock</button>
                       <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout">Force logout</button>
                     </td>
                     <td>
@@ -607,27 +616,29 @@
                    style="border-radius:6px;border:1px solid #ddd;">
                 <span x-text="announcement?.message"></span>
                 <button class="btn btn-sm btn-outline" style="margin-left:auto;flex-shrink:0;"
-                        @click="clearAnnouncement()">✕ Remove</button>
+                        @click="clearAnnouncement()" :disabled="actionPending.announcement">✕ Remove</button>
               </div>
             </div>
 
             <div class="form-group">
               <label>Message</label>
               <textarea style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
-                        x-model="annForm.message"
+                        x-model="annForm.message" :disabled="actionPending.announcement"
                         placeholder="e.g. Scheduled maintenance tonight at 22:00 UTC…"></textarea>
             </div>
             <div class="form-group">
               <label>Level</label>
-              <select x-model="annForm.level">
+              <select x-model="annForm.level" :disabled="actionPending.announcement">
                 <option value="info">Info (blue)</option>
                 <option value="warning">Warning (yellow)</option>
                 <option value="danger">Danger (red)</option>
               </select>
             </div>
-            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message">
+            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message || actionPending.announcement">
               📢 Broadcast
             </button>
+            <p x-show="actionPending.announcement" role="status">Updating announcement…</p>
+            <p class="action-error" x-show="actionErrors.announcement" role="alert" x-text="actionErrors.announcement"></p>
           </div>
         </div>
       </div><!-- /announcement -->
@@ -695,7 +706,7 @@
 <div class="confirm-overlay" x-show="resetModal.open" style="display:none" x-cloak
      role="dialog" aria-modal="true" aria-labelledby="reset-title" tabindex="-1"
      x-effect="syncDialog($el, resetModal.open)" @keydown.tab="trapDialogFocus($event, $el)"
-     @keydown.escape.stop="resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''">
+     @keydown.escape.stop="if (!actionPending.reset) { resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''; }">
   <div class="confirm-box">
     <h3 id="reset-title">Reset Password</h3>
     <p style="color:#666;font-size:0.875rem;margin-bottom:1rem;">
@@ -704,28 +715,44 @@
     </p>
     <div class="form-group">
       <label for="reset-password">New Password</label>
-      <input id="reset-password" type="password" x-model="resetModal.password"
+      <input id="reset-password" type="password" x-model="resetModal.password" :disabled="actionPending.reset"
              placeholder="Minimum 8 characters"
              style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
     </div>
     <div class="form-group">
       <label for="reset-confirm">Confirm Password</label>
-      <input id="reset-confirm" type="password" x-model="resetModal.confirm"
+      <input id="reset-confirm" type="password" x-model="resetModal.confirm" :disabled="actionPending.reset"
              placeholder="Repeat new password"
              style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
     </div>
-    <div x-show="resetModal.error"
+    <div x-show="resetModal.error || actionErrors.reset" role="alert"
          style="background:#f8d7da;color:#721c24;padding:.5rem .75rem;border-radius:4px;font-size:.85rem;margin-bottom:.75rem;"
-         x-text="resetModal.error"></div>
+         x-text="resetModal.error || actionErrors.reset"></div>
     <div class="confirm-actions">
-      <button class="btn btn-outline" @click="resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''">Cancel</button>
-      <button class="btn btn-red" @click="submitPasswordReset()" :disabled="loading">Reset Password</button>
+      <button class="btn btn-outline" @click="resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''" :disabled="actionPending.reset">Cancel</button>
+      <button class="btn btn-red" @click="submitPasswordReset()" :disabled="actionPending.reset" x-text="actionPending.reset ? 'Resetting…' : 'Reset Password'">Reset Password</button>
     </div>
   </div>
 </div>
 <script>
   function superPanel() {
   return {
+    actionPending: {},
+    actionErrors: {},
+    async runAction(key, operation) {
+      if (this.actionPending[key]) return false;
+      this.actionPending[key] = true;
+      this.actionErrors[key] = '';
+      try {
+        await operation();
+        return true;
+      } catch (error) {
+        this.actionErrors[key] = error.message || 'Action failed. Please retry.';
+        return false;
+      } finally {
+        this.actionPending[key] = false;
+      }
+    },
     dialogBusy: false,
     dialogError: '',
     async submitDialog() {
@@ -862,6 +889,8 @@
     
     // add these two methods alongside your other methods:
 openResetModal(u) {
+    if (this.actionPending.reset) return;
+    this.actionErrors.reset = '';
     this.resetModal = {
         open: true,
         userId: u.id,
@@ -873,7 +902,9 @@ openResetModal(u) {
 },
 
 async submitPasswordReset() {
+    if (this.actionPending.reset) return;
     this.resetModal.error = '';
+    this.actionErrors.reset = '';
 
     if (this.resetModal.password.length < 8) {
         this.resetModal.error = 'Password must be at least 8 characters.';
@@ -884,8 +915,7 @@ async submitPasswordReset() {
         return;
     }
 
-    this.loading = true;
-    try {
+    return this.runAction('reset', async () => {
         const r = await this.api(`/superadmin/users/${this.resetModal.userId}/reset-password`, {
             method: 'POST',
             body: JSON.stringify({
@@ -897,11 +927,7 @@ async submitPasswordReset() {
         this.resetModal.open = false;
         this.resetModal.password = '';
         this.resetModal.confirm = '';
-    } catch (e) {
-        this.resetModal.error = e.message;
-    } finally {
-        this.loading = false;
-    }
+    });
 },
 
     // ── Auth helpers ──────────────────────────────────────────
@@ -960,35 +986,35 @@ async submitPasswordReset() {
     },
 
     async unlock(u) {
-      try {
+      return this.runAction('unlock', async () => {
         const r = await this.api('/superadmin/unlock-account', {
           method: 'POST', body: JSON.stringify({ user_id: u.id }),
         });
         this.toast(r.message, 'ok');
         await this.loadLocked(); await this.loadDashboard();
-      } catch (e) { this.toast(e.message, 'danger'); }
+      });
     },
 
     async bulkUnlock() {
       if (!this.locked.length) return;
-      try {
+      return this.runAction('unlock', async () => {
         const r = await this.api('/superadmin/unlock-accounts/bulk', {
           method: 'POST', body: JSON.stringify({ user_ids: this.locked.map(u => u.id) }),
         });
         this.toast(`Unlocked ${r.unlocked_count} account(s)`, 'ok');
         await this.loadLocked(); await this.loadDashboard();
-      } catch (e) { this.toast(e.message, 'danger'); }
+      });
     },
 
     async unlockSelected() {
       if (!this.selectedLocked.length) return;
-      try {
+      return this.runAction('unlock', async () => {
         const r = await this.api('/superadmin/unlock-accounts/bulk', {
           method: 'POST', body: JSON.stringify({ user_ids: this.selectedLocked }),
         });
         this.toast(`Unlocked ${r.unlocked_count} account(s)`, 'ok');
         await this.loadLocked(); await this.loadDashboard();
-      } catch (e) { this.toast(e.message, 'danger'); }
+      });
     },
 
     toggleAll(e) {
@@ -1059,13 +1085,13 @@ async submitPasswordReset() {
     async saveConfig(key) {
       const val = this.cfgVals[key];
       if (!val) { this.toast('Please enter a value', 'warn'); return; }
-      try {
+      return this.runAction('config:' + key, async () => {
         await this.api(`/superadmin/security-config/${key}`, {
           method: 'PUT', body: JSON.stringify({ value: String(val) }),
         });
         this.toast(`${key} updated to ${val}`, 'ok');
         await this.loadConfig();
-      } catch (e) { this.toast(e.message, 'danger'); }
+      });
     },
 
     // ── Users ──────────────────────────────────────────────────
@@ -1192,22 +1218,22 @@ async submitPasswordReset() {
     },
 
     async saveAnnouncement() {
-      try {
+      return this.runAction('announcement', async () => {
         await this.api('/superadmin/announcement', {
           method: 'POST', body: JSON.stringify(this.annForm),
         });
         this.toast('Announcement broadcast!', 'ok');
         await this.loadAnnouncement();
-      } catch (e) { this.toast(e.message, 'danger'); }
+      });
     },
 
     async clearAnnouncement() {
-      try {
+      return this.runAction('announcement', async () => {
         await this.api('/superadmin/announcement', { method: 'DELETE' });
         this.announcement = null;
         this.annForm = { message: '', level: 'info' };
         this.toast('Announcement cleared', 'ok');
-      } catch (e) { this.toast(e.message, 'danger'); }
+      });
     },
 
     // ── Audit ──────────────────────────────────────────────────

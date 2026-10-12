@@ -390,3 +390,6 @@ button, select, input, textarea, a { touch-action: manipulation; }
 .audit-pagination span { font-size: .85rem; }
 .audit-error { padding: 1rem; color: #9f1239; overflow-wrap: anywhere; }
 .audit-filters input[type="date"] { max-width: 100%; box-sizing: border-box; }
+
+.action-feedback { padding: .5rem 1rem; font-size: .85rem; }
+.cfg-ctrl .action-error { flex-basis: 100%; }
