@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const {pageScripts, loadPageScripts} = require('./helpers/frontend.cjs');
 const root = path.resolve(__dirname, '..');
 const expected = {
-    'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/inventory/reports.js','js/pages/inventory-v2.js'],
+    'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/inventory/reports.js','js/inventory/replenishment.js','js/pages/inventory-v3.js'],
     'profile.html': ['temporal.js','js/shared/time-context.js','js/pages/profile.js'],
     'forgot_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
     'reset_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
@@ -24,7 +24,7 @@ function legacy() {
 for (const [page,files] of Object.entries(expected)) {
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
         const scripts=pageScripts(page);
-        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (page==='index.html' ? '20261013-frontend-2' : '20261013-frontend-1')));
+        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (page==='index.html' ? '20261013-frontend-3' : '20261013-frontend-1')));
         assert.equal(scripts.length,files.length+1);
         assert.equal(scripts.at(-1).src,'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js');
         assert.ok(scripts.every(s=>s.defer));
@@ -90,7 +90,7 @@ test('page loader refuses inline, asynchronous and escaping local scripts',t=>{
 test('controller regressions cannot silently exercise the frozen legacy script',()=>{
     for(const file of fs.readdirSync(__dirname).filter(f=>/\.(?:py|cjs|js)$/.test(f) && f!=='test_frontend_entrypoints.cjs')) {
         const source=fs.readFileSync(path.join(__dirname,file),'utf8');
-        assert.equal(/(?:['"]script\.js['"]|static\/script\.js|['"](?:static\/)?js\/pages\/inventory\.js['"])/.test(source),false,file+' must use the shipped-page loader');
+        assert.equal(/(?:['"]script\.js['"]|static\/script\.js|['"](?:static\/)?js\/pages\/inventory(?:-v2)?\.js['"])/.test(source),false,file+' must use the shipped-page loader');
     }
 });
 
@@ -106,5 +106,20 @@ test('only the inventory page loads report composition and feature factories',()
         const c=loadPageScripts(page,context());
         assert.equal(typeof c.composeInventoryFeatures,page==='index.html'?'function':'undefined');
         assert.equal(typeof c.consumptionReportsFeature,page==='index.html'?'function':'undefined');
+        assert.equal(typeof c.replenishmentFeature,page==='index.html'?'function':'undefined');
     }
+});
+
+test('cached PR102 controller retains reports and replenishment without new dependencies',()=>{
+    const c=context();
+    for(const file of ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/inventory/reports.js','js/pages/inventory-v2.js']) {
+        vm.runInContext(fs.readFileSync(path.join(root,'static',file),'utf8'),c,{filename:file});
+    }
+    const content=fs.readFileSync(path.join(root,'static/js/pages/inventory-v2.js'));
+    assert.equal(crypto.createHash('sha1').update('blob '+content.length+'\0').update(content).digest('hex'),'63f39d96fbcd2e7d2be946bc784d42f5a9c5e948');
+    assert.equal(typeof c.replenishmentFeature,'undefined');
+    const a=c.inventoryApp();a.replenishmentPlan={rows:[{store_id:1},{store_id:2}]};a.replenishmentStoreFilter='2';
+    assert.equal(a.replenishmentRows.length,1);assert.equal(a.replenishmentRows[0].store_id,2);
+    a.reportForm.start_date='2026-10-01';a.reportForm.end_date='2026-10-13';a.timezoneContext={business_timezone:'Africa/Nairobi'};
+    assert.equal(a.reportQuery().get('start_date'),'2026-10-01');
 });

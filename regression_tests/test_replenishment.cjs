@@ -14,3 +14,39 @@ test('real inventory refresh followed by failed plan refresh never opens dispatc
 test('review using real inventory refresh fetches the plan once without writes',async()=>{const a=app();a.showLowStockPanel=true;const calls=[];a.apiCall=async(p,o)=>{assert.equal(o,undefined);calls.push(p);return p==='/inventory'?[{id:30,quantity:10}]:{rows:[row]};};await a.reviewReplenishmentTransfer(row,row.suggestions[0]);assert.equal(a.showTransferModal,true);assert.deepEqual(calls,['/inventory','/inventory/replenishment']);});
 test('low stock labels exclude disabled, fulfilled and allocated targets',()=>{const a=app();assert.equal(a.isLowStock({quantity:0,min_threshold:0,is_allocated:false}),false);assert.equal(a.isLowStock({quantity:5,min_threshold:5,is_allocated:false}),false);assert.equal(a.isLowStock({quantity:1,min_threshold:5,is_allocated:true}),false);assert.equal(a.isLowStock({quantity:1,min_threshold:5,is_allocated:false}),true);});
 test('saving a minimum refreshes the dashboard low stock count',async()=>{const a=app();a.minimumForm={store_id:10,part_id:20,min_threshold:5,expected_minimum:0};a.apiCall=async()=>({});a.loadInventory=async()=>{};a.loadReplenishment=async()=>true;let refreshes=0;a.loadStats=async()=>{refreshes++;};await a.saveMinimum();assert.equal(refreshes,1);});
+
+test('core navigation opens the composed replenishment feature', async () => {
+    const a = app();
+    a.apiCall = async path => {
+        assert.equal(path, '/inventory/replenishment');
+        return {rows:[row]};
+    };
+    const original = a.loadReplenishment;
+    let pending;
+    a.loadReplenishment = function(...args) {pending = original.apply(this, args); return pending;};
+    a.openPanel('showLowStockPanel');
+    await pending;
+    assert.equal(a.showLowStockPanel, true);
+    assert.equal(a.replenishmentRows[0].part_id, 20);
+});
+
+test('real inventory refresh honors automatic and suppressed plan refresh', async () => {
+    const a = app(), calls = [];
+    a.showLowStockPanel = true;
+    a.apiCall = async path => {
+        calls.push(path);
+        return path === '/inventory' ? [] : {rows:[row]};
+    };
+    await a.loadInventory();
+    assert.deepEqual(calls, ['/inventory','/inventory/replenishment']);
+    calls.length = 0;
+    await a.loadInventory({refreshReplenishment:false});
+    assert.deepEqual(calls, ['/inventory']);
+});
+
+test('composed applications own separate minimum forms and panel flags', () => {
+    const a = app(), b = app();
+    a.minimumForm.store_id = '10'; a.showLowStockPanel = true;
+    assert.equal(b.minimumForm.store_id, '');
+    assert.equal(b.showLowStockPanel, false);
+});
