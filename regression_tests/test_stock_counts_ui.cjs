@@ -97,3 +97,68 @@ test('preview and edit refocus the dialog after rendering and saved counts refoc
     await a.confirmStockCount();assert.equal(openerFocus,0);
     ticks.splice(0).forEach(fn=>fn());assert.equal(openerFocus,1);
 });
+
+test('saved count refreshes selected store by ID before restoring focus', async () => {
+    const a = app(), order = [], ticks = [];
+    a.stockCount = {rows:[]}; a.stockCountPreview = {preview_token:'preview'};
+    a.selectedStore = {id:7, name:'Same name'};
+    a.$nextTick = callback => ticks.push(callback);
+    a.stockCountTrigger = {focus(){assert.equal(a.stockCountBusy,false);order.push('focus');}};
+    a.apiCall = async () => {order.push('confirm'); return {changed:1,unchanged:0};};
+    a.loadInventory = async () => {order.push('inventory');a.inventory=[{id:1,store_id:7,store_name:'Same name'},{id:2,store_id:8,store_name:'Same name'}];};
+    a.loadStats = async () => {order.push('stats');};
+    await a.confirmStockCount();
+    assert.deepEqual(order,['confirm','inventory','stats']);
+    assert.equal(a.storeInventory.length,1); assert.equal(a.storeInventory[0].id,1);
+    ticks.splice(0).forEach(fn=>fn());assert.deepEqual(order,['confirm','inventory','stats','focus']);
+});
+
+test('failed count write retains preview and refocuses the dialog without refreshing', async () => {
+    const a = app(), ticks = []; let focus = 0, refreshes = 0;
+    const sheet = {rows:[]}, preview = {preview_token:'preview'};
+    a.stockCount = sheet; a.stockCountPreview = preview;
+    a.$nextTick = callback => ticks.push(callback); a.$refs = {stockCountDialog:{focus(){focus++;}}};
+    a.apiCall = async () => {throw Error('stale preview');};
+    a.loadInventory = async () => {refreshes++;};
+    await a.confirmStockCount();
+    assert.equal(a.stockCount,sheet); assert.equal(a.stockCountPreview,preview);
+    assert.equal(refreshes,0);assert.match(a.error,/Count not saved: stale preview/);
+    ticks.splice(0).forEach(fn=>fn());assert.equal(focus,1);assert.equal(a.stockCountBusy,false);
+});
+
+test('refresh failure after a saved count closes the count and restores the opener', async () => {
+    const a = app(), ticks = []; let focus = 0;
+    a.stockCount = {rows:[]}; a.stockCountPreview = {preview_token:'preview'};
+    a.$nextTick = callback => ticks.push(callback);a.stockCountTrigger = {focus(){assert.equal(a.stockCountBusy,false);focus++;}};
+    a.apiCall = async () => ({changed:1,unchanged:0});
+    a.loadInventory = async () => {throw Error('offline');};
+    await a.confirmStockCount();
+    assert.equal(a.stockCount,null);assert.equal(a.stockCountPreview,null);
+    assert.match(a.error,/Stock count saved, but refresh failed.*offline/);
+    ticks.splice(0).forEach(fn=>fn());assert.equal(focus,1);
+});
+
+test('composed count state and opener references belong to each application', () => {
+    const a = app(), b = app();
+    a.stockCount = {rows:[]};a.stockCountPreview = {preview_token:'fixture'};
+    a.stockCountBusy = true;a.stockCountTrigger = {focus(){}};
+    assert.equal(b.stockCount,null);assert.equal(b.stockCountPreview,null);
+    assert.equal(b.stockCountBusy,false);assert.equal(b.stockCountTrigger,null);
+});
+
+test('declined physical count confirmation makes no write and retains preview', async () => {
+    const c = {console, setTimeout:()=>{}, confirm:()=>false};
+    vm.createContext(c);loadPageScripts('index.html',c);
+    const a = c.inventoryApp(), preview = {preview_token:'preview'};
+    a.stockCountPreview = preview;let writes = 0;
+    a.apiCall = async () => {writes++;};
+    await a.confirmStockCount();
+    assert.equal(writes,0);assert.equal(a.stockCountPreview,preview);assert.equal(a.stockCountBusy,false);
+});
+
+test('empty count focus trap prevents default and focuses the dialog', () => {
+    const a = app();let focused = 0, prevented = 0;
+    const dialog = {querySelectorAll:()=>[], focus(){focused++;}};
+    a.trapStockCountFocus({preventDefault(){prevented++;}},dialog);
+    assert.equal(prevented,1);assert.equal(focused,1);
+});
