@@ -19,7 +19,7 @@ class MovementResponse(BaseModel):
 
 class ActivityLogResponse(BaseModel):
     id: int
-    user_id: int
+    user_id: Optional[int]
     username: str
     action: str
     resource_type: Optional[str]

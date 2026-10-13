@@ -201,3 +201,39 @@ def test_activity_history_executes_one_query(session_api, monkeypatch, actor, pa
     history_reads = [statement for statement in statements
                      if statement.startswith('SELECT * FROM activity_logs WHERE 1=1')]
     assert len(history_reads) == 1
+
+
+@pytest.mark.parametrize('actor,expected_ids', [
+    ('admin-token', [14, 12, 11, 10, 13]),
+    ('root-token', [14, 12, 11, 10, 13]),
+    ('engineer-token', [12, 11]),
+    ('manager-token', [13]),
+])
+def test_activity_logs_allow_unidentified_actors_without_expanding_visibility(session_api, actor, expected_ids):
+    """Authentication failures legitimately have no matching user account."""
+    from backend.services.activity import record_activity
+    client, path, _ = session_api
+    populate(path)
+    with closing(connect_database(path)) as conn, conn:
+        record_activity(conn, user_id=0, username='unknown', action='login_failed',
+                        status='error', error_message='Invalid credentials',
+                        details={'reason': 'unknown-account'})
+        assert conn.execute('SELECT user_id FROM activity_logs WHERE id=14').fetchone()[0] is None
+    client.cookies.set('session_token', actor)
+    response = client.get('/api/logs/activity', params={'limit': 200})
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert [row['id'] for row in rows] == expected_ids
+    if actor in ('admin-token', 'root-token'):
+        event = rows[0]
+        assert event['user_id'] is None
+        assert event['username'] == 'unknown'
+        assert event['action'] == 'login_failed'
+        assert event['status'] == 'error'
+        assert event['error_message'] == 'Invalid credentials'
+        assert json.loads(event['details']) == {'reason': 'unknown-account'}
+        assert event['created_at'].endswith('Z')
+        targeted = client.get('/api/logs/activity', params={'target_user_id': 3})
+        assert targeted.status_code == 200, targeted.text
+        assert [row['id'] for row in targeted.json()] == [12, 11]
+    assert all(row['user_id'] is not None for row in rows if row['id'] != 14)
