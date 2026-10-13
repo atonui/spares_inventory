@@ -15,7 +15,8 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/inventory/replenishment.js` | Replenishment planning, minimum editing and suggested-transfer review |
 | `static/js/inventory/stock-counts.js` | Physical count entry/preview/confirmation and dialog focus |
 | `static/js/inventory/stock-imports.js` | Stock-balance CSV parsing, preview and duplicate resolution |
-| `static/js/pages/inventory-v5.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts and imports |
+| `static/js/inventory/transfer-receipts.js` | Pending stock transfers and physical receipt/return confirmation |
+| `static/js/pages/inventory-v6.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports and receipts |
 | `static/js/pages/profile.js` | `profileManager()`; account, personal/organisation timezone and password settings |
 | `static/js/pages/password-recovery.js` | `forgotPassword()` and `resetPassword()` |
 | `static/js/pages/superadmin.js` | `superPanel()`; platform administration |
@@ -28,7 +29,7 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 | Page | Local scripts |
 | --- | --- |
-| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → inventory-v5 controller |
+| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → inventory-v6 controller |
 | Profile | temporal → time-context → profile controller |
 | Forgot/reset password | csrf → password-recovery controller |
 | Superadmin | temporal → audit → csrf → time-context → superadmin controller |
@@ -37,7 +38,7 @@ The profile controller retains its explicit security-token retry interface. Othe
 
 ## Frozen legacy entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js` and PR104 `static/js/pages/inventory-v4.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v5 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js` and PR105 `static/js/pages/inventory-v5.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v6 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
 
 These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
 
@@ -56,7 +57,7 @@ git diff --check
 
 Existing controller regressions use shipped page entrypoints. Only dedicated legacy tests load the frozen entrypoints directly.
 
-Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts and stock import preview/resolution are also separate; transfer receipts are the next boundary. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
+Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts, stock import preview/resolution and transfer receipts are also separate. Dispatch and administration remain in core for later boundaries. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
 
 ## Consumption report ownership
 
@@ -73,3 +74,7 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 ## Stock CSV import ownership
 
 `stockImportsFeature()` owns four state fields and nine parsing/preview/resolution/template methods. Core supplies shared loading and feedback, catalog/inventory data, selected-store state, API calls and refresh providers through the composed receiver. Each feature instance allocates fresh duplicate/conflict arrays. CSV validation, explicit duplicate decisions, store-ID matching, expected-quantity payloads and the single batch write retain their existing behaviour. Saving closes the preview before inventory/statistics refresh; write failures retain it. The current post-save refresh error wording is preserved, not corrected by this extraction. Browser File, Blob, URL and anchor download APIs remain external dependencies. Catalog and store administration CSV imports remain in core for later extraction.
+
+## Transfer receipt ownership
+
+`transferReceiptsFeature()` owns the pending-transfer array and its loader, explicit refresh and physical receipt/return confirmation methods. Core provides shared loading/feedback, API access, inventory/movement/statistics refresh and selected-store state through the composed receiver. Browser confirmation remains the external dependency. Permissions, prompts, acknowledgment payloads, refresh ordering and error wording are preserved. Core startup and stock dispatch call the composed pending-transfer loader; dispatch forms and equipment transfers remain in core. Core inventory refresh retains its existing loading and swallowed-error semantics. Each application allocates an independent pending-transfer array.
