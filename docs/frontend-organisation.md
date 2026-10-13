@@ -14,7 +14,8 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/inventory/reports.js` | Consumption report state, methods and logout reset |
 | `static/js/inventory/replenishment.js` | Replenishment planning, minimum editing and suggested-transfer review |
 | `static/js/inventory/stock-counts.js` | Physical count entry/preview/confirmation and dialog focus |
-| `static/js/pages/inventory-v4.js` | `inventoryApp()`; core workflows composed with reports, replenishment and counts |
+| `static/js/inventory/stock-imports.js` | Stock-balance CSV parsing, preview and duplicate resolution |
+| `static/js/pages/inventory-v5.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts and imports |
 | `static/js/pages/profile.js` | `profileManager()`; account, personal/organisation timezone and password settings |
 | `static/js/pages/password-recovery.js` | `forgotPassword()` and `resetPassword()` |
 | `static/js/pages/superadmin.js` | `superPanel()`; platform administration |
@@ -27,7 +28,7 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 | Page | Local scripts |
 | --- | --- |
-| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → inventory-v4 controller |
+| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → inventory-v5 controller |
 | Profile | temporal → time-context → profile controller |
 | Forgot/reset password | csrf → password-recovery controller |
 | Superadmin | temporal → audit → csrf → time-context → superadmin controller |
@@ -36,7 +37,7 @@ The profile controller retains its explicit security-token retry interface. Othe
 
 ## Frozen legacy entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js` and PR103 `static/js/pages/inventory-v3.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v4 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js` and PR104 `static/js/pages/inventory-v4.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v5 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
 
 These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
 
@@ -55,7 +56,7 @@ git diff --check
 
 Existing controller regressions use shipped page entrypoints. Only dedicated legacy tests load the frozen entrypoints directly.
 
-Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts are also separate; import preview/resolution and transfer receipts are the next boundaries. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
+Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts and stock import preview/resolution are also separate; transfer receipts are the next boundary. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
 
 ## Consumption report ownership
 
@@ -67,4 +68,8 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 
 ## Physical stock count ownership
 
-`stockCountsFeature()` owns four state fields and nine lifecycle/focus methods. Core supplies API, shared feedback, inventory/statistics refresh and selected-store state. Alpine supplies `$nextTick` and `$refs.stockCountDialog` through the composed receiver. Opener DOM references stay in the instance and are neither cloned nor serialized. Existing signed preview tokens, explicit confirmation, busy guards, row validation and focus ordering are preserved. Imports and transfer execution remain core responsibilities.
+`stockCountsFeature()` owns four state fields and nine lifecycle/focus methods. Core supplies API, shared feedback, inventory/statistics refresh and selected-store state. Alpine supplies `$nextTick` and `$refs.stockCountDialog` through the composed receiver. Opener DOM references stay in the instance and are neither cloned nor serialized. Existing signed preview tokens, explicit confirmation, busy guards, row validation and focus ordering are preserved. Transfer execution remains a core responsibility.
+
+## Stock CSV import ownership
+
+`stockImportsFeature()` owns four state fields and nine parsing/preview/resolution/template methods. Core supplies shared loading and feedback, catalog/inventory data, selected-store state, API calls and refresh providers through the composed receiver. Each feature instance allocates fresh duplicate/conflict arrays. CSV validation, explicit duplicate decisions, store-ID matching, expected-quantity payloads and the single batch write retain their existing behaviour. Saving closes the preview before inventory/statistics refresh; write failures retain it. The current post-save refresh error wording is preserved, not corrected by this extraction. Browser File, Blob, URL and anchor download APIs remain external dependencies. Catalog and store administration CSV imports remain in core for later extraction.
