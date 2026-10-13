@@ -1,11 +1,11 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
 function setup(fetch){
  const c={console,Intl,Date,URLSearchParams,Headers,FormData,WeakMap,fetch,setTimeout:()=>{},localStorage:{removeItem(){}},window:{location:{href:''}},location:{href:''}};
- vm.createContext(c);vm.runInContext(fs.readFileSync('static/temporal.js','utf8'),c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
- vm.runInContext(fs.readFileSync('static/superadmin.html','utf8').match(/<script>\s*([\s\S]*?)<\/script>/)[1],c);
+ vm.createContext(c);loadPageScripts('index.html',c);
+ loadPageScripts('superadmin.html',c);loadPageScripts('forgot_password.html',c);
  return c;
 }
 const response=(status,data)=>({status,ok:status>=200&&status<300,json:async()=>data,clone:()=>response(status,data)});

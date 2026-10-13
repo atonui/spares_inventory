@@ -1,11 +1,11 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
 function setup(fetch){
  const timers=[];
  const c={console,Intl,Date,URLSearchParams,fetch,setTimeout:(fn)=>timers.push(fn),window:{location:{href:''}}};
- vm.createContext(c);vm.runInContext(fs.readFileSync('static/temporal.js','utf8'),c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
+ vm.createContext(c);loadPageScripts('profile.html',c);
  return {p:c.profileManager(),c,timers};
 }
 const context={business_timezone:'Africa/Nairobi',display_timezone:'Africa/Nairobi',revision:1};

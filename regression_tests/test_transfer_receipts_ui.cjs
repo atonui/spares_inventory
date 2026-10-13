@@ -1,11 +1,11 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
 function app(confirmResult=true) {
     const context={console,setTimeout:()=>{},confirm:()=>confirmResult};
     vm.createContext(context);
-    vm.runInContext(fs.readFileSync('static/script.js','utf8'),context);
+    loadPageScripts('index.html',context);
     const a=context.inventoryApp();
     for(const method of ['loadInventory','loadStats','loadMovements','loadPendingTransfers']) a[method]=async()=>{};
     return a;

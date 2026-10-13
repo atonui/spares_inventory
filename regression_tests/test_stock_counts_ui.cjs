@@ -1,10 +1,10 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
 function app() {
     const c={console,setTimeout:()=>{},confirm:()=>true};
-    vm.createContext(c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
+    vm.createContext(c);loadPageScripts('index.html',c);
     const a=c.inventoryApp();a.currentUser={id:3,role:'engineer'};
     return a;
 }
@@ -57,7 +57,7 @@ test('failed confirmation retains count entries and displays server error',async
     assert.match(a.error,/Stock changed/);assert.equal(a.stockCount.rows[0].counted_quantity,'8');
 });
 test('restart asks before replacing entered counts with fresh balances',async()=>{
-    const c={console,setTimeout:()=>{},confirm:()=>false};vm.createContext(c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
+    const c={console,setTimeout:()=>{},confirm:()=>false};vm.createContext(c);loadPageScripts('index.html',c);
     const a=c.inventoryApp();a.stockCount={store_id:975,rows:[{counted_quantity:'8'}]};let reads=0;
     a.apiCall=async()=>{reads++;return {rows:[],sheet_token:'fresh'};};
     await a.restartStockCount();assert.equal(reads,0);assert.equal(a.stockCount.rows[0].counted_quantity,'8');
