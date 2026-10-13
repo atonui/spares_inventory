@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const {pageScripts, loadPageScripts} = require('./helpers/frontend.cjs');
 const root = path.resolve(__dirname, '..');
 const expected = {
-    'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/inventory/reports.js','js/inventory/replenishment.js','js/inventory/stock-counts.js','js/inventory/stock-imports.js','js/inventory/transfer-receipts.js','js/inventory/stock-dispatch.js','js/inventory/stock-entry.js','js/pages/inventory-v8.js'],
+    'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/inventory/reports.js','js/inventory/replenishment.js','js/inventory/stock-counts.js','js/inventory/stock-imports.js','js/inventory/transfer-receipts.js','js/inventory/stock-dispatch.js','js/inventory/stock-entry.js','js/inventory/stock-consumption.js','js/pages/inventory-v9.js'],
     'profile.html': ['temporal.js','js/shared/time-context.js','js/pages/profile.js'],
     'forgot_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
     'reset_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
@@ -24,7 +24,7 @@ function legacy() {
 for (const [page,files] of Object.entries(expected)) {
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
         const scripts=pageScripts(page);
-        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (page==='index.html' ? '20261013-frontend-8' : '20261013-frontend-1')));
+        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (page==='index.html' ? '20261013-frontend-9' : '20261013-frontend-1')));
         assert.equal(scripts.length,files.length+1);
         assert.equal(scripts.at(-1).src,'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js');
         assert.ok(scripts.every(s=>s.defer));
@@ -90,7 +90,7 @@ test('page loader refuses inline, asynchronous and escaping local scripts',t=>{
 test('controller regressions cannot silently exercise the frozen legacy script',()=>{
     for(const file of fs.readdirSync(__dirname).filter(f=>/\.(?:py|cjs|js)$/.test(f) && f!=='test_frontend_entrypoints.cjs')) {
         const source=fs.readFileSync(path.join(__dirname,file),'utf8');
-        assert.equal(/(?:['"]script\.js['"]|static\/script\.js|['"](?:static\/)?js\/pages\/inventory(?:-v[234567])?\.js['"])/.test(source),false,file+' must use the shipped-page loader');
+        assert.equal(/(?:['"]script\.js['"]|static\/script\.js|['"](?:static\/)?js\/pages\/inventory(?:-v[2345678])?\.js['"])/.test(source),false,file+' must use the shipped-page loader');
     }
 });
 
@@ -112,6 +112,7 @@ test('only the inventory page loads report composition and feature factories',()
         assert.equal(typeof c.transferReceiptsFeature,page==='index.html'?'function':'undefined');
         assert.equal(typeof c.stockDispatchFeature,page==='index.html'?'function':'undefined');
         assert.equal(typeof c.stockEntryFeature,page==='index.html'?'function':'undefined');
+        assert.equal(typeof c.stockConsumptionFeature,page==='index.html'?'function':'undefined');
     }
 });
 
@@ -258,4 +259,33 @@ test('cached PR108 controller retains stock entry and matches the active applica
     await prior.editItem({id: 42, quantity: 0});
     assert.equal(prior.editForm.new_quantity, 0);
     assert.equal(prior.showEditModal, true);
+});
+
+
+test('cached PR109 controller retains consumption and matches the active application contract', () => {
+    const cached = context();
+    for (const file of ['temporal.js', 'audit.js', 'js/shared/csrf.js', 'js/shared/time-context.js',
+        'js/shared/features.js', 'js/inventory/reports.js', 'js/inventory/replenishment.js',
+        'js/inventory/stock-counts.js', 'js/inventory/stock-imports.js', 'js/inventory/transfer-receipts.js',
+        'js/inventory/stock-dispatch.js', 'js/inventory/stock-entry.js', 'js/pages/inventory-v8.js']) {
+        vm.runInContext(fs.readFileSync(path.join(root, 'static', file), 'utf8'), cached, {filename: file});
+    }
+    const content = fs.readFileSync(path.join(root, 'static/js/pages/inventory-v8.js'));
+    assert.equal(crypto.createHash('sha1').update('blob ' + content.length + '\0').update(content).digest('hex'),
+        '469bebef2d610aca63fb36050b90d1e1941003c4');
+    assert.equal(typeof cached.stockConsumptionFeature, 'undefined');
+    const prior = cached.inventoryApp();
+    const current = loadPageScripts('index.html', context()).inventoryApp();
+    const describe = app => Object.entries(Object.getOwnPropertyDescriptors(app)).map(([key, descriptor]) => [
+        key, descriptor.enumerable, descriptor.configurable, descriptor.writable,
+        descriptor.get?.toString(), descriptor.set?.toString(),
+        typeof descriptor.value === 'function' ? descriptor.value.toString() : JSON.stringify(descriptor.value),
+    ]).sort(([a], [b]) => a.localeCompare(b));
+    assert.equal(Object.keys(current).length, 265);
+    assert.deepEqual(describe(current), describe(prior));
+    prior.consumeItem({id: 42, part_number: 'P-A', description: 'Cached part', store_name: 'Target', quantity: 3});
+    assert.equal(prior.consumeForm.inventory_id, 42);
+    assert.equal(prior.consumeForm.quantity, 1);
+    assert.equal(prior.consumeForm.available_quantity, 3);
+    assert.equal(prior.showConsumeModal, true);
 });
