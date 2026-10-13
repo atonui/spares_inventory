@@ -274,7 +274,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             if not updates:
                 raise HTTPException(status_code=400, detail="No updates provided")
 
-            updates.append("updated_at = CURRENT_TIMESTAMP")
+            updates.append("updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')")
             values.append(equipment_id)
 
             cursor.execute(f"UPDATE equipment SET {', '.join(updates)} WHERE id = ?", values)
@@ -333,7 +333,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             cursor.execute(
                 """
                 UPDATE equipment
-                SET assigned_user_id = ?, updated_at = CURRENT_TIMESTAMP
+                SET assigned_user_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                 WHERE id = ?
             """,
                 (request_data.to_user_id, equipment_id),
@@ -392,7 +392,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                     calibration_authority = ?,
                     calibration_date = ?,
                     next_calibration_date = ?,
-                    updated_at = CURRENT_TIMESTAMP
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                 WHERE id = ?
             """,
                 (
@@ -446,7 +446,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             cursor.execute(
                 """
                 UPDATE equipment
-                SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+                SET status = 'deleted', updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                 WHERE id = ?
             """,
                 (equipment_id,),
@@ -547,7 +547,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             cursor.execute(
                 """
                 UPDATE system_settings
-                SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                 WHERE setting_key = 'calibration_reminder_days'
             """,
                 (str(days), user_id),

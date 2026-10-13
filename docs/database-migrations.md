@@ -39,7 +39,7 @@ Default settings match the existing application (calibration reminder 30 days; m
 
 Restore first validates the live database without changing it, then upgrades only the temporary upload through the same runner. Integrity, schema compatibility, the requesting superadmin's identity, and forbidden schema-object checks still apply. Compatible columns may appear in a different order after an older upgrade; types/defaults/nullability, keys, constraints and index definitions must remain compatible. Newer/incompatible backups fail before live stock or sessions change. Successful restore acquires a SQLite write lock before validating the live state and taking its pre-restore snapshot, then replaces records in one transaction while retaining the validated live schema. The lock spans the snapshot and final commit, preventing other writers from committing in that gap. Session/reset-token revocation, restore evidence, migration history and autoincrement counters are preserved. A failure rolls back every live record change. Lock contention returns HTTP 409 with a retry message; reads may continue, and other writes wait or receive SQLite’s normal busy response.
 
-The deployment performs an additive adoption of existing databases. Confirm deployment/startup logs show successful initialization. A migration failure means the service is not ready; the existing database's schema/data/ledger remain unchanged. Never manually stamp a version to bypass a failure.
+Startup adopts supported existing databases and applies the numbered changes above. Confirm deployment/startup logs show successful initialization. A migration failure means the service is not ready; the existing database's schema/data/ledger remain unchanged. Never manually stamp a version to bypass a failure.
 
 There is no automatic downgrade. Reverting application code may be incompatible with a recorded newer schema. Use compatible code or deliberately restore a compatible snapshot through the existing safeguards. Backend route extraction follows in separate PRs after migrations are stable.
 
@@ -51,3 +51,56 @@ not silently reset it. Older backups are upgraded through the restore runner;
 their absent business/display settings receive Nairobi/null defaults. Current
 backups preserve settings and personal preferences. Code predating version 4 is
 not a supported rollback against the new migration ledger/schema.
+
+## Version 5: canonical UTC storage
+
+Version 5 (`canonical_instants`) normalises every manifest instant to
+`YYYY-MM-DDTHH:MM:SS.ffffffZ`. Verified naive UTC and explicit-offset values retain
+the same instant. Nulls, calendar dates, numeric settings, stock quantities,
+identities, allocation relationships and autoincrement counters are preserved.
+Announcement JSON changes only its `set_at` value; other fields remain intact.
+Unknown naive `users.session_expires` values and malformed instants block startup
+with a field-only diagnostic. No provenance policy is weakened.
+
+The migration rebuilds tables whose defaults used `CURRENT_TIMESTAMP`, retaining
+columns, keys, constraints and indexes. SQLite defaults and explicit SQL updates
+use `strftime('%Y-%m-%dT%H:%M:%f000Z','now')`; SQLite supplies milliseconds and the
+remaining zeros are padding. Python writes preserve their actual microseconds.
+Migration 5 freezes its reviewed field inventory, provenance policies and JSON
+selectors for conversion and intermediate validation; future manifest additions
+cannot change this historical migration. Final current-schema validation still
+uses the application manifest. Migrations 1–4 and their checksums remain
+unchanged. Both legacy and canonical
+schema references are validated against their applicable version.
+
+For this rebuild only, the runner disables foreign-key enforcement **before**
+`BEGIN IMMEDIATE`, as required by SQLite's generalised table rebuild procedure.
+It checks all foreign references before commit and restores enforcement in
+`finally` on success or failure. The write lock covers conversion, rebuild,
+validation, ledger and bootstrap. Session rows cannot be lost through cascade
+side effects. Readers see committed states; concurrent writers wait or receive
+normal busy errors. Current v5 backups must contain canonical values; older
+supported backups are upgraded on their temporary upload before restore.
+
+Before deployment, retain a fresh independent application Backup DB export and
+verify it is restorable. Schedule a brief service interruption and ensure the old
+application has stopped before migration 5 starts: old explicit SQL writers can
+still produce naive timestamps after the cutover if allowed to overlap. For the
+current single service with its persistent volume, Railway prevents simultaneous
+active deployments on that volume; confirm the volume is still attached before
+merging. Its normal volume deployment sequence supplies the required interruption
+([Railway volume caveats](https://docs.railway.com/volumes/reference#caveats)).
+Other hosting arrangements must stop old writers explicitly; a write lock alone
+does not stop them from resuming after migration commit. The 2026-10-12 supplied snapshot was verified, but take a
+new export if production has changed since it was downloaded. Startup should
+reach schema version 5; use the read-only `check` command and smoke checks after
+deployment. A conversion failure rolls back the entire pending batch; investigate
+the identified field rather than stamping the ledger or running ad hoc SQL.
+
+Code at schema version 4 rejects the newer ledger even though its readers can
+parse canonical timestamps. Therefore reverting the deployment to v4 alone is
+**not** a supported rollback. Retain v5-compatible code for an application fix,
+or deliberately recover the independent pre-cutover snapshot with the matching
+v4 application. Pause writes and agree the recovery point first: recovery loses
+all stock, users, settings and audit changes made after that snapshot. There is
+no automatic downgrade and no dependency on paid Railway backups.

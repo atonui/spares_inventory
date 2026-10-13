@@ -7,7 +7,7 @@ from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 from backend.temporal_contract import date_metadata, date_predicates, register_instant_comparison
 from backend.services.timezone_policy import resolve_business_context
-from backend.temporal import utc_now, serialize_legacy_utc
+from backend.temporal import utc_now, serialize_instant
 from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -89,15 +89,15 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         cur.execute("""
             SELECT COUNT(*) as n FROM users
             WHERE account_locked_until IS NOT NULL
-              AND julianday(account_locked_until) > julianday('now')
-        """)
+              AND utc_instant(account_locked_until) > ?
+        """, (serialize_instant(utc_now()),))
         locked_count = cur.fetchone()["n"]
 
         # Active sessions
         cur.execute("""
             SELECT COUNT(*) as n FROM sessions
-            WHERE is_active = 1 AND julianday(expires_at) > julianday('now')
-        """)
+            WHERE is_active = 1 AND utc_instant(expires_at) > ?
+        """, (serialize_instant(utc_now()),))
         active_sessions = cur.fetchone()["n"]
 
         # Total users by role
@@ -162,9 +162,9 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
                    account_locked_until, last_login
             FROM users
             WHERE account_locked_until IS NOT NULL
-              AND julianday(account_locked_until) > julianday('now')
-            ORDER BY account_locked_until DESC
-        """)
+              AND utc_instant(account_locked_until) > ?
+            ORDER BY utc_instant(account_locked_until) DESC, id DESC
+        """, (serialize_instant(utc_now()),))
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
         return rows
@@ -240,9 +240,9 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
                    s.ip_address, s.user_agent, s.is_active
             FROM sessions s
             JOIN users u ON s.user_id = u.id
-            WHERE s.is_active = 1 AND julianday(s.expires_at) > julianday('now')
+            WHERE s.is_active = 1 AND utc_instant(s.expires_at) > ?
             ORDER BY utc_instant(s.last_activity) DESC, s.id DESC
-        """)
+        """, (serialize_instant(utc_now()),))
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
         return rows
@@ -352,7 +352,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
                 INSERT INTO system_settings (setting_key, setting_value, updated_by)
                 VALUES (?, ?, ?)
                 ON CONFLICT(setting_key)
-                DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
             """, (key, str(val), user_id, str(val), user_id))
 
             log_activity(user_id, "superadmin", "update_security_config",
@@ -615,12 +615,12 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             require_superadmin(user_id, conn)
             cur = conn.cursor()
             payload = json.dumps({"message": body.message, "level": body.level,
-                                   "set_at": serialize_legacy_utc(utc_now())})
+                                   "set_at": serialize_instant(utc_now())})
             cur.execute("""
                 INSERT INTO system_settings (setting_key, setting_value, updated_by)
                 VALUES ('system_announcement', ?, ?)
                 ON CONFLICT(setting_key)
-                DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
             """, (payload, user_id, payload, user_id))
             return {"success": True}
 

@@ -20,7 +20,7 @@ def test_status_and_check_are_readonly(tmp_path,command):
     p=tmp_path/'db with spaces.db';legacy_connection(p).close();initialize_database(p,defaults=DEFAULT_SETTINGS);before=digest(p)
     result=run(command,p)
     assert result.returncode==0,result.stderr
-    assert 'Current version: 4; target version: 4' in result.stdout
+    assert 'Current version: 5; target version: 5' in result.stdout
     assert digest(p)==before
 
 @pytest.mark.parametrize('command',['status','check'])
@@ -38,7 +38,7 @@ def test_upgrade_requires_create_for_missing_path(tmp_path):
     assert run('upgrade',p).returncode==1 and not p.exists()
     result=run('upgrade',p,'--create');assert result.returncode==0,result.stderr
     with sqlite3.connect(p) as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==4
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==5
         assert c.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0
 
 @pytest.mark.parametrize('command',['status','check','upgrade'])

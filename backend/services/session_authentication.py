@@ -11,6 +11,6 @@ def authenticate_session(session_token, get_connection, *,
                          busy_detail=GENERIC_BUSY_DETAIL):
     with transaction_factory(get_connection, busy_detail=busy_detail) as conn:
         session = session_validator(conn, session_token)
-        conn.execute('UPDATE sessions SET last_activity=CURRENT_TIMESTAMP WHERE id=?',
+        conn.execute("UPDATE sessions SET last_activity=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?",
                      (session['session_id'],))
         return session['user_id']

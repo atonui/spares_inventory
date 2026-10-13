@@ -36,7 +36,7 @@ def archive_record(table,identifier,user_id,restore=False, *, session_token,
         if table=='users' and restore:
             conn.execute('UPDATE sessions SET is_active=0 WHERE user_id=?',(identifier,))
             conn.execute('UPDATE users SET session_token=NULL,session_expires=NULL,reset_token=NULL,reset_token_expires=NULL WHERE id=?',(identifier,))
-        conn.execute(f'UPDATE {table} SET archived_at='+('NULL' if restore else 'CURRENT_TIMESTAMP')+' WHERE id=?',(identifier,))
+        conn.execute(f'UPDATE {table} SET archived_at='+('NULL' if restore else "strftime('%Y-%m-%dT%H:%M:%f000Z','now')")+' WHERE id=?',(identifier,))
         action='restore' if restore else 'archive'
         conn.execute('INSERT INTO activity_logs(user_id,username,action,resource_type,resource_id) SELECT id,name,?,?,? FROM users WHERE id=?',
                      (action,table,identifier,user_id))

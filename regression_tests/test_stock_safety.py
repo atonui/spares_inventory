@@ -24,7 +24,7 @@ def api(tmp_path, monkeypatch):
             conn.execute('INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)',
                          (uid, f'user{uid}@example.com', f'User {uid}', password_hash, role))
         conn.executemany('INSERT INTO sessions(user_id,session_token,expires_at) VALUES(?,?,?)',
-            [(uid,f'fixture-session-{uid}','2099-01-01T00:00:00') for uid in (1,2,3,4)])
+            [(uid,f'fixture-session-{uid}','2099-01-01T00:00:00.000000Z') for uid in (1,2,3,4)])
     current = {'id': 1}
     main.app.dependency_overrides[main.get_current_user] = lambda: current['id']
     main.app.dependency_overrides[main.verify_csrf] = lambda: True
@@ -200,7 +200,7 @@ def test_session_revocation(api, operation):
         response = client.post('/api/reset-password',json={'token':'reset-test','new_password':'new-test-password'})
     else:
         with sqlite3.connect(db) as conn:
-            conn.execute("INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(1,'fixture-session-1','2099-01-01T00:00:00',1)")
+            conn.execute("INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(1,'fixture-session-1','2099-01-01T00:00:00.000000Z',1)")
         response = client.put('/api/users/3',json={'password':'new-test-password'})
     assert response.status_code == 200
     with sqlite3.connect(db) as conn:

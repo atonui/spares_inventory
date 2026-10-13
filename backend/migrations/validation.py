@@ -35,17 +35,26 @@ def schema_signature(conn):
         else:result.append((kind,name,table,normalized(sql)))
     return tuple(result)
 
-@lru_cache(maxsize=1)
-def reference():
+@lru_cache(maxsize=2)
+def reference(canonical=False):
     from . import v0001_core_schema as core,v0002_transfer_lifecycle as transfers,v0003_archiving_integrity as archives,v0004_timezone_preferences as timezones
     with sqlite3.connect(':memory:') as c:
         for module in (core,transfers,archives,timezones):module.upgrade(c)
+        if canonical:
+            from .v0005_canonical_instants import canonical_schema
+            # Empty reference tables have no child rows or CASCADE side effects.
+            for name, obj in list(objects(c).items()):
+                if obj[0]=='table' and 'DEFAULT CURRENT_TIMESTAMP' in obj[2]:
+                    indexes=[o[2] for o in objects(c).values() if o[0]=='index' and o[1]==name]
+                    c.execute(f'DROP TABLE "{name}"')
+                    c.execute(canonical_schema(obj[2]))
+                    for sql in indexes:c.execute(sql)
         tables={n:(columns(c,n),foreign_keys(c,n),unique_columns(c,n)) for n,o in objects(c).items() if o[0]=='table'}
         return tables,objects(c)
 
-def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False):
+def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False):
     from .v0001_core_schema import OPTIONAL_COLUMNS
-    expected,expected_objects=reference();actual_objects=objects(conn)
+    expected,expected_objects=reference(require_canonical);actual_objects=objects(conn)
     actual_tables={n for n,o in actual_objects.items() if o[0]=='table' and n!='schema_migrations'}
     if legacy and not actual_tables:
         if actual_objects:raise MigrationError('Unsupported nonempty database objects')
@@ -94,12 +103,39 @@ def validate_integrity(conn, *, allow_legacy_sentinel=False):
 def validate_legacy(conn):
     validate_tables(conn,legacy=True)
 
-def validate_current(conn, *, require_timezone=None):
+def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None):
     if require_timezone is None:
         require_timezone=('schema_migrations' in objects(conn) and
                           conn.execute('SELECT 1 FROM schema_migrations WHERE version=4').fetchone() is not None)
+    if require_canonical is None:
+        require_canonical=('schema_migrations' in objects(conn) and
+                           conn.execute('SELECT 1 FROM schema_migrations WHERE version=5').fetchone() is not None)
     validate_integrity(conn)
-    validate_tables(conn,require_timezone=require_timezone)
+    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical)
+    if require_canonical:validate_canonical_instants(conn,fields=canonical_fields)
     if require_timezone or 'organisation_settings' in objects(conn):
         from .v0004_timezone_preferences import validate_settings
         validate_settings(conn)
+
+
+def validate_canonical_instants(conn, *, fields=None):
+    """A v5 database must never claim canonical storage while containing legacy text."""
+    import json
+    from backend.temporal import parse_api_instant,serialize_instant
+    if fields is None:
+        from backend.temporal_manifest import TEMPORAL_FIELDS
+        fields=TEMPORAL_FIELDS
+    for field in fields:
+        if field.kind!='instant':continue
+        query=f'SELECT "{field.column}" FROM "{field.table}"'
+        parameters=()
+        if field.setting_key:
+            query+=' WHERE setting_key=?'
+            parameters=(field.setting_key,)
+        for (value,) in conn.execute(query,parameters):
+            try:
+                if field.json_key:value=json.loads(value)[field.json_key]
+                if value is not None and value!=serialize_instant(parse_api_instant(value)):
+                    raise ValueError
+            except (ValueError,TypeError,KeyError):
+                raise MigrationError(f'Noncanonical instant in {field.table}.{field.column}') from None

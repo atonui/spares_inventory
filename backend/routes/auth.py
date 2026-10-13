@@ -2,7 +2,7 @@
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from datetime import timedelta
-from backend.temporal import utc_now, serialize_legacy_utc
+from backend.temporal import utc_now, serialize_instant
 from backend.temporal_contract import stored_instant
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -236,7 +236,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             """UPDATE users 
                SET reset_token = ?, reset_token_expires = ? 
                WHERE id = ? AND archived_at IS NULL""",
-            (token, serialize_legacy_utc(expires_at), user_id),
+            (token, serialize_instant(expires_at), user_id),
         )
 
         conn.commit()
@@ -477,7 +477,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                         """UPDATE users 
                            SET failed_login_attempts = ?, account_locked_until = ? 
                            WHERE id = ?""",
-                        (failed_attempts, serialize_legacy_utc(lockout_until), user["id"]),
+                        (failed_attempts, serialize_instant(lockout_until), user["id"]),
                     )
                     conn.commit()
 
@@ -538,7 +538,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
                 VALUES (?, ?, ?, ?, ?)
             """,
-                (user["id"], session_token, serialize_legacy_utc(expires), ip_address, user_agent),
+                (user["id"], session_token, serialize_instant(expires), ip_address, user_agent),
             )
 
             # Update user record
@@ -547,7 +547,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 UPDATE users
                 SET failed_login_attempts = 0,
                     account_locked_until = NULL,
-                    last_login = CURRENT_TIMESTAMP
+                    last_login = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                 WHERE id = ?
             """,
                 (user["id"],),
