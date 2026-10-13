@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="superadmin.css?v=20261012-feedback">
 <script src="temporal.js?v=20261012-timezone"></script>
 <script src="audit.js?v=20261012-timezone" defer></script>
-<script src="script.js?v=20261012-timezone" defer></script>
+<script src="script.js?v=20261013-csrf" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 
@@ -992,10 +992,8 @@ async submitPasswordReset() {
 
     // ── Auth helpers ──────────────────────────────────────────
     async getCsrf() {
-      try {
-        const r = await fetch(`${this.apiUrl}/csrf-token`, { credentials: 'include' });
-        this.csrfToken = (await r.json()).csrf_token;
-      } catch {}
+      try { await InventoryCsrf.token(this, this.apiUrl); }
+      catch (e) { this.toast(e.message, 'danger'); }
     },
 
     async getMe() {
@@ -1013,9 +1011,7 @@ async submitPasswordReset() {
     async api(path, opts = {}) {
       const headers = { ...opts.headers };
       if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-      if (['POST','PUT','DELETE'].includes((opts.method || 'GET').toUpperCase()))
-        headers['X-CSRF-Token'] = this.csrfToken;
-      const r = await fetch(`${this.apiUrl}${path}`, { ...opts, credentials: 'include', headers });
+      const r = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, { ...opts, headers }, this.apiUrl);
       if (r.status === 401) { location.href = '/static/index.html'; throw new Error('Unauthenticated'); }
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`); }
       if (r.status === 204) return null;

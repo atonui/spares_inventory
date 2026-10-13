@@ -1,3 +1,54 @@
+// One token acquisition per component; only explicit CSRF rejection permits a replay.
+const InventoryCsrf = (() => {
+    const pending = new WeakMap();
+    const isWrite = method => !['GET', 'HEAD', 'OPTIONS'].includes((method || 'GET').toUpperCase());
+    const rejected = (response, data) => response.status === 403 &&
+        ['Invalid CSRF token', 'CSRF token missing'].includes(data?.detail);
+
+    async function token(owner, base = '/api') {
+        if (owner.csrfToken) return owner.csrfToken;
+        if (pending.has(owner)) return pending.get(owner);
+        const request = (async () => {
+            try {
+                const response = await fetch(`${base}/csrf-token`, {credentials: 'include', cache: 'no-store'});
+                if (!response.ok) throw new Error('Security token unavailable');
+                const data = await response.json();
+                if (typeof data.csrf_token !== 'string' || !data.csrf_token.trim()) throw new Error('Security token unavailable');
+                owner.csrfToken = data.csrf_token;
+                return owner.csrfToken;
+            } catch (_) {
+                owner.csrfToken = '';
+                throw new Error('Unable to load the security token. Please retry.');
+            }
+        })();
+        pending.set(owner, request);
+        try {return await request;} finally {pending.delete(owner);}
+    }
+
+    async function request(owner, url, options = {}, base = '/api') {
+        const headers = new Headers(options.headers);
+        const config = {...options, credentials: 'include', headers};
+        if (!isWrite(options.method)) return fetch(url, config);
+        const used = await token(owner, base);
+        headers.set('X-CSRF-Token', used);
+        let response = await fetch(url, config);
+        if (response.status !== 403) return response;
+        // Clone so normal error handling can still consume the response body.
+        const data = await response.clone().json().catch(() => ({}));
+        if (!rejected(response, data)) return response;
+        if (owner.csrfToken === used) owner.csrfToken = '';
+        const fresh = await token(owner, base);
+        headers.set('X-CSRF-Token', fresh);
+        response = await fetch(url, config);
+        if (response.status === 403) {
+            const retryData = await response.clone().json().catch(() => ({}));
+            if (rejected(response, retryData) && owner.csrfToken === fresh) owner.csrfToken = '';
+        }
+        return response;
+    }
+    return {token, request};
+})();
+
 function validTimezoneContext(data) {
     return Boolean(data && InventoryTime.isValidZone(data.business_timezone) && InventoryTime.isValidZone(data.display_timezone) && Number.isSafeInteger(data.revision) && data.revision>0);
 }
@@ -414,8 +465,9 @@ function inventoryApp() {
                 try {
                     this.currentUser = JSON.parse(userStr);
                     await this.getCurrentUser();
-                    await this.getCsrfToken(); // Get CSRF token
                     this.isAuthenticated = true;
+                    try { await this.getCsrfToken(); }
+                    catch (error) { this.error = error.message; }
                     await this.loadAllData();
                 } catch (error) {
                     localStorage.removeItem('currentUser');
@@ -431,7 +483,7 @@ function inventoryApp() {
             this.error = '';
             
             try {
-                const response = await fetch(`${this.apiUrl}/auth/login`, {
+                const response = await InventoryCsrf.request(this, `${this.apiUrl}/auth/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -476,10 +528,10 @@ function inventoryApp() {
             this.currentUser = await response.json();
         },
 
-        async logout() {
+        async logout({localOnly = false} = {}) {
             this.timezoneContext=null;this.timezoneError='';this.movementTimeContext=null;this.activityTimeContext=null;
             try {
-                await this.apiCall('/auth/logout', { method: 'POST' });
+                if (!localOnly) await this.apiCall('/auth/logout', { method: 'POST' });
             } catch (error) {
                 console.error('Logout error:', error);
             }
@@ -495,19 +547,10 @@ function inventoryApp() {
             window.location.href = '/static/index.html';
         },
 
-        // function to get CSRF token
         async getCsrfToken() {
-            try {
-                const response = await fetch(`${this.apiUrl}/csrf-token`, {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                this.csrfToken = data.csrf_token;
-            } catch (error) {
-                console.error('Failed to get CSRF token:', error);
-            }
+            return InventoryCsrf.token(this, this.apiUrl);
         },
-    
+
         async apiCall(endpoint, options = {}, onTimeContext = null) {
             /**
              * Universal API call handler for both JSON and file uploads
@@ -528,19 +571,6 @@ function inventoryApp() {
                 defaultHeaders['Content-Type'] = 'application/json';
             }
             
-            // Add CSRF token for state-changing operations
-            if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method.toUpperCase())) {
-                if (this.csrfToken) {
-                    defaultHeaders['X-CSRF-Token'] = this.csrfToken;
-                } else {
-                    console.warn('CSRF token not available, fetching...');
-                    await this.getCsrfToken();
-                    if (this.csrfToken) {
-                        defaultHeaders['X-CSRF-Token'] = this.csrfToken;
-                    }
-                }
-            }
-            
             const config = {
                 ...options,
                 credentials: 'include', // Always include cookies
@@ -551,53 +581,20 @@ function inventoryApp() {
             };
             
             try {
-                const response = await fetch(`${this.apiUrl}${endpoint}`, config);
+                const response = await InventoryCsrf.request(this, `${this.apiUrl}${endpoint}`, config, this.apiUrl);
                 
                 // Handle 401 - Authentication failed
                 if (response.status === 401) {
-                    this.logout();
+                    await this.logout({localOnly: true});
                     this.error = "Session expired. Please login again.";
                     return null;
                 }
                 
-                // Handle 403 - CSRF token might be expired
                 if (response.status === 403) {
                     const errorData = await response.json().catch(() => ({}));
-                    
-                    // If it's a CSRF error, try to refresh the token and retry ONCE
-                    if (errorData.detail && errorData.detail.toLowerCase().includes('csrf')) {
-                        console.log('CSRF token expired, refreshing and retrying...');
-                        await this.getCsrfToken();
-                        
-                        // Retry the request once with new token
-                        if (this.csrfToken) {
-                            config.headers = {
-                                ...defaultHeaders,
-                                'X-CSRF-Token': this.csrfToken,
-                                ...options.headers
-                            };
-                            
-                            const retryResponse = await fetch(`${this.apiUrl}${endpoint}`, config);
-                            
-                            if (retryResponse.status === 401) {
-                                this.logout();
-                                this.error = "Session expired. Please login again.";
-                                return null;
-                            }
-                            
-                            if (!retryResponse.ok) {
-                                const retryError = await retryResponse.json().catch(() => ({}));
-                                throw new Error(retryError.detail || `Request failed: ${retryResponse.status}`);
-                            }
-                            
-                            if (retryResponse.status === 204) return null;
-                            return await retryResponse.json();
-                        }
-                    }
-                    
                     throw new Error(errorData.detail || 'Access forbidden');
                 }
-                
+
                 // Handle 422 - Validation error
                 if (response.status === 422) {
                     const errorData = await response.json().catch(() => ({}));
@@ -2721,20 +2718,9 @@ exportComprehensiveReport() {
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                const response = await fetch(`${this.apiUrl}/stores/bulk-import`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`
-                    },
-                    body: formData
+                const result = await this.apiCall('/stores/bulk-import', {
+                    method: 'POST', body: formData
                 });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Import failed');
-                }
-                
-                const result = await response.json();
                 this.successMessage = result.message;
                 if (result.errors && result.errors.length > 0) {
                     this.error = 'Some errors occurred:\n' + result.errors.join('\n');
@@ -2799,6 +2785,7 @@ exportComprehensiveReport() {
         function forgotPassword() {
             return {
                 email: '',
+                csrfToken: '',
                 loading: false,
                 submitted: false,
                 message: { text: '', type: '' },
@@ -2808,7 +2795,7 @@ exportComprehensiveReport() {
                     this.message = { text: '', type: '' };
 
                     try {
-                        const response = await fetch('/api/forgot-password', {
+                        const response = await InventoryCsrf.request(this, '/api/forgot-password', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -2830,7 +2817,7 @@ exportComprehensiveReport() {
                         }
                     } catch (error) {
                         this.message = { 
-                            text: 'Unable to connect to the server', 
+                            text: error.message || 'Unable to connect to the server',
                             type: 'error' 
                         };
                     } finally {
@@ -2844,6 +2831,7 @@ exportComprehensiveReport() {
         function resetPassword() {
             return {
                 token: '',
+                csrfToken: '',
                 newPassword: '',
                 confirmPassword: '',
                 loading: false,
@@ -2909,7 +2897,7 @@ exportComprehensiveReport() {
                     this.message = { text: '', type: '' };
 
                     try {
-                        const response = await fetch('/api/reset-password', {
+                        const response = await InventoryCsrf.request(this, '/api/reset-password', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -2932,7 +2920,7 @@ exportComprehensiveReport() {
                         }
                     } catch (error) {
                         this.message = { 
-                            text: 'Unable to connect to the server', 
+                            text: error.message || 'Unable to connect to the server',
                             type: 'error' 
                         };
                     } finally {
@@ -3063,7 +3051,7 @@ function profileManager() {
         clearDisplayTimezoneFeedback() {this.displayTimezoneError='';this.displayTimezoneMessage='';},
         clearBusinessTimezoneFeedback() {if (!this.timezoneConflict) this.businessTimezoneError='';this.businessTimezoneMessage='';},
         handleSecurityRejection(response, data) {
-            if (response.status === 403 && data.detail === 'Invalid CSRF token') {
+            if (response.status === 403 && ['Invalid CSRF token', 'CSRF token missing'].includes(data.detail)) {
                 this.csrfToken = '';
                 this.csrfError = 'Saving is unavailable. Retry to reload the security token.';
             }
