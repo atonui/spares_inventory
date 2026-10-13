@@ -116,11 +116,11 @@ def test_valid_stock_workflow(api):
 def test_add_stock_form_sends_numeric_quantity():
     import subprocess
     from pathlib import Path
-    script = Path(main.__file__).parent / 'static' / 'script.js'
+    helper = Path(main.__file__).parent / 'regression_tests' / 'helpers' / 'frontend.cjs'
     code = """
-const fs = require('fs'); const vm = require('vm');
-const context = { console }; vm.createContext(context);
-vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+const {loadPageScripts} = require(process.argv[1]); const vm = require('vm');
+const context = { console, setTimeout:()=>{} }; vm.createContext(context);
+loadPageScripts('index.html', context);
 const app = context.inventoryApp(); let sent;
 app.addForm = {part_id: '1', store_id: '1', quantity: '2', work_order_number: ''};
 app.apiCall = async (path, options) => { sent = JSON.parse(options.body); };
@@ -129,7 +129,7 @@ app.loadInventory = async () => {}; app.loadStats = async () => {};
 if (sent.quantity !== 2) throw new Error('Stock form must send quantity as a number');
 })();
 """
-    result = subprocess.run(['node', '-e', code, str(script)], capture_output=True, text=True)
+    result = subprocess.run(['node', '-e', code, str(helper)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
 @pytest.mark.parametrize('role', [3, 4])

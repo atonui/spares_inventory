@@ -1,9 +1,9 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
 function app() {
-    const c={console,setTimeout:()=>{}};vm.createContext(c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
+    const c={console,setTimeout:()=>{}};vm.createContext(c);loadPageScripts('index.html',c);
     const a=c.inventoryApp();a.currentUser={id:3,role:'engineer'};
     a.stores=[{id:90,name:'Same Name'},{id:91,name:'Same Name'}];
     a.inventory=[

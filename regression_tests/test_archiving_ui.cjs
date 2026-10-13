@@ -1,11 +1,11 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
 function app() {
     const prompts=[];
     const c={console,setTimeout:()=>{},confirm:message=>{prompts.push(message);return true;}};
-    vm.createContext(c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
+    vm.createContext(c);loadPageScripts('index.html',c);
     const a=c.inventoryApp();a.currentUser={id:1,role:'admin'};
     for(const method of ['loadParts','loadStores','loadUsers','loadStats','loadInventory','loadArchivedRecords'])a[method]=async()=>{};
     return {a,prompts};
@@ -27,7 +27,7 @@ test('restore uses the selected record type and refreshes active lists',async()=
 });
 test('superadmin initially receives the active user management list',async()=>{
     const c={console,setTimeout:()=>{}};
-    vm.createContext(c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);
+    vm.createContext(c);loadPageScripts('index.html',c);
     const a=c.inventoryApp();a.currentUser={id:2,role:'superadmin'};
     a.apiCall=async path=>path==='/users'?[{id:3,name:'Engineer'}]:[];
     await a.loadAllData();

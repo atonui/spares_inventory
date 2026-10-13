@@ -1,12 +1,12 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const vm = require('node:vm');
 
 function app() {
     const context = {console, setTimeout:()=>{}, Number, Map, Set};
     vm.createContext(context);
-    vm.runInContext(fs.readFileSync('static/script.js','utf8'),context);
+    loadPageScripts('index.html',context);
     const a=context.inventoryApp();
     a.parts=[{id:900,part_number:'CSV-A',description:'A'}];
     a.inventory=[];

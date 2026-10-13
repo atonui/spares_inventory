@@ -1,8 +1,8 @@
+const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const vm=require('node:vm');
-function app(){const c={console,setTimeout:()=>{}};vm.createContext(c);vm.runInContext(fs.readFileSync('static/script.js','utf8'),c);const a=c.inventoryApp();a.currentUser={id:3,role:'engineer'};return a;}
+function app(){const c={console,setTimeout:()=>{}};vm.createContext(c);loadPageScripts('index.html',c);const a=c.inventoryApp();a.currentUser={id:3,role:'engineer'};return a;}
 const row={store_id:10,part_id:20,store_name:'Need',part_number:'P',quantity:1,min_threshold:5,incoming_quantity:1,internal_quantity:2,purchase_quantity:1,suggestions:[{inventory_id:30,store_name:'Central',quantity:2,can_dispatch:true}]};
 test('plan filtering never recomputes or double assigns server allocations',()=>{const a=app();a.replenishmentPlan={rows:[row,{...row,store_id:11}]};a.replenishmentStoreFilter='10';assert.equal(a.replenishmentRows.length,1);assert.equal(a.replenishmentRows[0].internal_quantity,2);});
 test('minimum selection excludes allocated rows and saves expected minimum',async()=>{const a=app();a.inventory=[{store_id:10,part_id:20,is_allocated:true,min_threshold:99},{store_id:10,part_id:20,is_allocated:false,min_threshold:5}];a.minimumForm.store_id='10';a.minimumForm.part_id='20';a.selectMinimum();assert.equal(a.minimumForm.min_threshold,5);let body;a.apiCall=async(path,opt)=>{if(path==='/inventory/minimum')body=JSON.parse(opt.body);return {rows:[]};};a.loadInventory=async()=>{};await a.saveMinimum();assert.deepEqual(body,{store_id:10,part_id:20,min_threshold:5,expected_minimum:5});});
