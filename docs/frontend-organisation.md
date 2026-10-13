@@ -17,7 +17,8 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/inventory/stock-imports.js` | Stock-balance CSV parsing, preview and duplicate resolution |
 | `static/js/inventory/transfer-receipts.js` | Pending stock transfers and physical receipt/return confirmation |
 | `static/js/inventory/stock-dispatch.js` | Stock-dispatch form, modal opening and submission |
-| `static/js/pages/inventory-v7.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts and dispatch |
+| `static/js/inventory/stock-entry.js` | Add/edit stock forms, quantity saves and add-stock part picker |
+| `static/js/pages/inventory-v8.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts, dispatch and stock entry |
 | `static/js/pages/profile.js` | `profileManager()`; account, personal/organisation timezone and password settings |
 | `static/js/pages/password-recovery.js` | `forgotPassword()` and `resetPassword()` |
 | `static/js/pages/superadmin.js` | `superPanel()`; platform administration |
@@ -30,7 +31,7 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 | Page | Local scripts |
 | --- | --- |
-| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → inventory-v7 controller |
+| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → inventory-v8 controller |
 | Profile | temporal → time-context → profile controller |
 | Forgot/reset password | csrf → password-recovery controller |
 | Superadmin | temporal → audit → csrf → time-context → superadmin controller |
@@ -39,7 +40,7 @@ The profile controller retains its explicit security-token retry interface. Othe
 
 ## Frozen legacy entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js` and PR106 `static/js/pages/inventory-v6.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v7 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js` and PR108 `static/js/pages/inventory-v7.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v8 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
 
 These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
 
@@ -58,7 +59,7 @@ git diff --check
 
 Existing controller regressions use shipped page entrypoints. Only dedicated legacy tests load the frozen entrypoints directly.
 
-Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts, stock import preview/resolution, transfer receipts and dispatch are also separate. Other stock forms and administration remain in core for later boundaries. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
+Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts, stock import preview/resolution, transfer receipts, dispatch and stock entry/adjustment are also separate. Consumption and administration remain in core for later boundaries. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
 
 ## Consumption report ownership
 
@@ -83,3 +84,7 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 ## Stock dispatch ownership
 
 `stockDispatchFeature()` owns the transfer form, modal flag, manual opener and submission method. Core supplies shared loading/feedback, API calls and inventory/statistics refresh; the receipt feature supplies the pending-transfer loader. Replenishment invokes the composed opener, then fills the shared dispatch form. Core navigation still closes its modal, and existing HTML remains unchanged. Each application allocates a fresh form. Integer parsing, optional replenishment payload, success/reset timing, refresh order, timer delay and failure behavior are preserved. Existing method-level duplicate-submit and core inventory-refresh semantics remain unchanged.
+
+## Stock entry and adjustment ownership
+
+`stockEntryFeature()` owns seven state fields and six methods for add/edit forms and the add-stock part picker. Core supplies catalog data, shared loading/feedback, API access, inventory/statistics/equipment-statistics refresh and selected-store browsing. The picker allocates a fresh initial array, then deliberately aliases the full catalog when opening or clearing search. Navigation and existing HTML continue to write form/modal state through the composed application. Addition retains its separate `addingStock` flag, Number quantity conversion, optional work-order payload and selected-store reopening; adjustment retains shared loading and parseInt conversion. Form resets, search clearing, refresh order, timer delay and existing failure semantics are preserved. Each application allocates fresh forms. Local Alpine suggestion visibility remains in markup.
