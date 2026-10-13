@@ -131,3 +131,33 @@ both; the checker now validates offset ranges and rejects noninteger identities
 with a sanitised error. Deferred test expansion: malformed/missing announcement
 JSON, more than 100 diagnostic issues, and declared SQL types in the manifest
 coverage test (runtime discovery already includes those types).
+
+## Canonical cutover rehearsal — 2026-10-12
+
+The supplied standalone `inventory_backup.db` has SHA256
+`1efcbe545e6b339eb13fac5b95e32bc152829053c9b7366d6244a964aaa018da`.
+It was schema version 4, with integrity `ok`, zero foreign-reference violations,
+zero timestamp blockers, 3,373 verified naive UTC and five aware instants.
+All nine legacy `users.session_expires` values were null; no unverified value
+required interpretation. The original file remains byte-identical.
+
+Migration 5 was rehearsed on a private disposable copy. Every prior row was
+compared semantically, canonicalising only manifest instants for comparison.
+All 3,378 prior instants preserve their UTC value; non-temporal fields, calendar
+dates, durations, IDs and autoincrement counters are unchanged. The additional
+v5 ledger entry is expected. Post-migration integrity and foreign-reference
+checks pass; the read-only timestamp assessment has zero blockers.
+
+Stock remains 314 parts, 11 stores, 487 entries and 1,220 units. Nairobi
+consumption remains 10 events / 19 units / 9 parts for all history, and 2 events /
+2 units / 2 parts for 2026-09-13 through 2026-10-12. Both the original v4 upload
+and migrated v5 backup were restored through the actual restore service into
+disposable v5 targets with deliberately altered stock. Every retained row was
+compared, excluding only intentional session/reset-token revocation and the new
+restore audit event. Stock, reports, counters and calibration dates matched;
+the pre-restore recovery files passed integrity checks.
+
+These are offline migration/restore results, not production cutover or mobile
+verification. Production and the uploaded original were not changed. Retain a
+fresh independent application export immediately before deployment and complete
+the read-only post-deployment checks described in `database-migrations.md`.

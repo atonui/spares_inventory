@@ -129,7 +129,7 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
                     audit_changes.append(change_after(conn,before))
                     continue
                 changed += 1
-                conn.execute('UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (row['counted_quantity'],row['inventory_id']))
+                conn.execute("UPDATE inventory SET quantity=?,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?", (row['counted_quantity'],row['inventory_id']))
                 conn.execute('''INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
                                 VALUES(?,?,?,?,?,?,?)''',
                              (data['store_id'],row['part_id'],abs(row['difference']),

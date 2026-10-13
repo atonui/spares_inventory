@@ -390,7 +390,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
             if not updates:
                 raise HTTPException(status_code=400, detail="No updates provided")
 
-            updates.append("updated_at = CURRENT_TIMESTAMP")
+            updates.append("updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')")
             values.append(type_id)
 
             cursor.execute(f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?", values)
@@ -446,7 +446,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 cursor.execute(
                     """
                     UPDATE store_types
-                    SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+                    SET is_active = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                     WHERE id = ?
                 """,
                     (type_id,),

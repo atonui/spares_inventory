@@ -144,11 +144,17 @@ def test_pre_receipt_backup_restores_with_empty_transfer_lifecycle(api,tmp_path)
     from database_restore import restore_database
     seed(api)
     upload=tmp_path/'old-backup.db'
-    shutil.copyfile(api[1],upload)
-    # A pre-receipt backup predates both the lifecycle table and migration ledger.
-    with sqlite3.connect(upload) as c:
-        c.execute('DROP TABLE stock_transfers')
-        c.execute('DROP TABLE schema_migrations')
+    # Use an actual legacy schema; deleting a v5 ledger does not undo v5 defaults.
+    from regression_tests.migration_fixtures import legacy_connection
+    with sqlite3.connect(api[1]) as source, legacy_connection(upload) as target:
+        tables=[r[0] for r in target.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+        for table in tables:
+            target.execute(f'DELETE FROM "{table}"')
+            cols=[r[1] for r in target.execute(f'PRAGMA table_info("{table}")')]
+            projection=','.join('"'+v+'"' for v in cols)
+            rows=source.execute(f'SELECT {projection} FROM "{table}"').fetchall()
+            placeholders=','.join('?' for _ in cols)
+            target.executemany(f'INSERT INTO "{table}"({projection}) VALUES({placeholders})',rows)
     restore_database(upload,api[1],2)
     with sqlite3.connect(api[1]) as c:
         assert c.execute('SELECT COUNT(*) FROM stock_transfers').fetchone()[0]==0

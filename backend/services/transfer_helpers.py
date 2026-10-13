@@ -49,7 +49,7 @@ def complete_transfer(transfer_id, data, user_id, action, request=None, *, sessi
             # Retain any nonzero threshold configured since dispatch.
             conn.execute('UPDATE inventory SET min_threshold=? WHERE id=? AND min_threshold=0',
                          (row['source_min_threshold'],inventory_id))
-        conn.execute('UPDATE stock_transfers SET status=?,completed_by=?,completed_at=CURRENT_TIMESTAMP,completion_note=? WHERE movement_id=?',
+        conn.execute("UPDATE stock_transfers SET status=?,completed_by=?,completed_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now'),completion_note=? WHERE movement_id=?",
                      (action,user_id,data.notes,transfer_id))
         if action=='returned':
             conn.execute("INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes) VALUES(?,?,?,'return',?,?,?)",

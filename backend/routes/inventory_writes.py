@@ -107,7 +107,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                 cursor.execute(
                     """
                     UPDATE inventory
-                    SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+                    SET quantity = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                     WHERE id = ?
                 """,
                     (new_quantity, request_data.inventory_id),
@@ -182,7 +182,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                     if old == row.quantity:
                         unchanged += 1
                         continue
-                    conn.execute("UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    conn.execute("UPDATE inventory SET quantity=?,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?",
                                  (row.quantity, stock["id"]))
                     updated += 1
                 else:
@@ -315,7 +315,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             cursor.execute(
                 """
                 UPDATE inventory
-                SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+                SET quantity = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
                 WHERE id = ?
             """,
                 (request_data.new_quantity, request_data.inventory_id),
@@ -374,7 +374,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             before=balance_snapshot(conn,item['store_id'],item['part_id'],item['work_order_id'])
             remaining=item['quantity']-request_data.quantity
             if remaining or item['min_threshold']:
-                conn.execute('UPDATE inventory SET quantity=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(remaining,item['id']))
+                conn.execute("UPDATE inventory SET quantity=?,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?",(remaining,item['id']))
             else:
                 conn.execute('DELETE FROM inventory WHERE id=?',(item['id'],))
             mid=conn.execute("INSERT INTO movements(from_store_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes) VALUES(?,?,?,?,'transfer',?,?,?)",

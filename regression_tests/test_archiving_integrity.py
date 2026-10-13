@@ -178,12 +178,15 @@ def test_receipt_reuses_noncanonical_text_work_order_identity(api,text_work_orde
         assert c.execute('SELECT quantity FROM inventory WHERE part_id=970').fetchall()==[(4,)]
 
 
-def test_legacy_anonymous_audit_log_keeps_text_and_migration_is_repeatable(api):
-    with sqlite3.connect(api[1]) as c:
-        c.execute('DROP TABLE schema_migrations')  # Simulate an unversioned legacy backup.
+def test_legacy_anonymous_audit_log_keeps_text_and_migration_is_repeatable(tmp_path,monkeypatch):
+    from regression_tests.migration_fixtures import legacy_connection
+    path=tmp_path/'legacy.db'
+    legacy_connection(path).close()
+    monkeypatch.setattr(main,'DATABASE',str(path))
+    with sqlite3.connect(path) as c:
         c.execute("INSERT INTO activity_logs(user_id,username,action,details) VALUES(0,'anonymous','failed_login','keep me')")
     main.init_db();main.init_db()
-    with sqlite3.connect(api[1]) as c:
+    with sqlite3.connect(path) as c:
         assert c.execute("SELECT user_id,username,details FROM activity_logs WHERE details='keep me'").fetchone()==(None,'anonymous','keep me')
         assert c.execute('PRAGMA foreign_key_check').fetchall()==[]
 
@@ -200,7 +203,7 @@ def test_restore_rejects_orphan_reference_without_live_changes(api,tmp_path):
 def test_restore_cannot_archive_the_requesting_superadmin(api,tmp_path):
     from database_restore import restore_database
     upload=tmp_path/'archived-admin.db';shutil.copyfile(api[1],upload)
-    with sqlite3.connect(upload) as c:c.execute("UPDATE users SET archived_at=CURRENT_TIMESTAMP WHERE id=2")
+    with sqlite3.connect(upload) as c:c.execute("UPDATE users SET archived_at='2026-01-01T00:00:00.000000Z' WHERE id=2")
     before=api[1].read_bytes()
     with pytest.raises(ValueError,match='superadmin'):restore_database(upload,api[1],2)
     assert api[1].read_bytes()==before

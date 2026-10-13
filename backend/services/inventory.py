@@ -15,7 +15,7 @@ def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
     ).fetchone()
     if row:
         conn.execute(
-            "UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE inventory SET quantity = quantity + ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id = ?",
             (quantity, row["id"]),
         )
         return row["id"]

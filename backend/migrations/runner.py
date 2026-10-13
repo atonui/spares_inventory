@@ -1,7 +1,7 @@
 """All pending schema changes and their ledger entries commit together."""
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime,timezone
+from backend.temporal import utc_now,serialize_instant
 from . import registry
 from .validation import MigrationError,validate_current,validate_legacy,objects,columns,normalized,validate_integrity
 
@@ -51,6 +51,10 @@ def apply_migrations(conn, *, bootstrap=None):
     if conn.in_transaction:raise MigrationError('Migration runner requires a connection without an active transaction')
     conn.execute('PRAGMA foreign_keys=ON')
     if conn.execute('PRAGMA foreign_keys').fetchone()[0]!=1:raise MigrationError('Foreign-key enforcement could not be enabled')
+    # SQLite requires FK enforcement disabled outside the rebuild transaction.
+    # Re-read status under the write lock; another worker may finish first.
+    rebuild = 5 in migration_status(conn).pending
+    if rebuild:conn.execute('PRAGMA foreign_keys=OFF')
     step='startup validation'
     try:
         conn.execute('BEGIN IMMEDIATE')
@@ -64,7 +68,7 @@ def apply_migrations(conn, *, bootstrap=None):
             migration.upgrade(conn)
             migration.validate(conn)
             conn.execute('INSERT INTO schema_migrations(version,name,checksum,applied_at) VALUES(?,?,?,?)',
-                         (migration.version,migration.name,migration.checksum,datetime.now(timezone.utc).isoformat()))
+                         (migration.version,migration.name,migration.checksum,serialize_instant(utc_now())))
         step='bootstrap defaults'
         if bootstrap:bootstrap(conn)
         step='final schema validation'
@@ -76,3 +80,6 @@ def apply_migrations(conn, *, bootstrap=None):
         conn.rollback()
         if isinstance(error,MigrationError):raise
         raise MigrationError(f'{step} failed: {error}') from error
+
+    finally:
+        conn.execute('PRAGMA foreign_keys=ON')

@@ -51,10 +51,10 @@ def test_inactive_or_missing_actor_cannot_resolve_context(conn):
 
 
 def test_optional_preferences_and_existing_expiry_are_preserved(conn):
-    conn.execute("UPDATE users SET display_timezone='Asia/Kathmandu',session_expires='2099-01-01T00:00:00' WHERE id=1")
+    conn.execute("UPDATE users SET display_timezone='Asia/Kathmandu',session_expires='2099-01-01T00:00:00.000000Z' WHERE id=1")
     conn.commit()
     apply_migrations(conn)
-    assert tuple(conn.execute('SELECT display_timezone,session_expires FROM users WHERE id=1').fetchone()) == ('Asia/Kathmandu', '2099-01-01T00:00:00')
+    assert tuple(conn.execute('SELECT display_timezone,session_expires FROM users WHERE id=1').fetchone()) == ('Asia/Kathmandu', '2099-01-01T00:00:00.000000Z')
 
 
 def test_versioned_v3_upgrade_preserves_existing_expiry(tmp_path, monkeypatch):
@@ -64,10 +64,10 @@ def test_versioned_v3_upgrade_preserves_existing_expiry(tmp_path, monkeypatch):
         with monkeypatch.context() as patch:
             patch.setattr(registry,'MIGRATIONS',registry.MIGRATIONS[:3])
             apply_migrations(c)
-        c.execute("INSERT INTO users(id,email,name,password_hash,session_expires) VALUES(1,'test@example.com','Test','hash','2099-01-01T00:00:00')")
+        c.execute("INSERT INTO users(id,email,name,password_hash,session_expires) VALUES(1,'test@example.com','Test','hash','2099-01-01T00:00:00.000000Z')")
         c.commit()
-        assert apply_migrations(c).applied==(1,2,3,4)
-        assert c.execute('SELECT session_expires,display_timezone FROM users').fetchone()==('2099-01-01T00:00:00',None)
+        assert apply_migrations(c).applied==(1,2,3,4,5)
+        assert c.execute('SELECT session_expires,display_timezone FROM users').fetchone()==('2099-01-01T00:00:00.000000Z',None)
         assert c.execute('SELECT business_timezone FROM organisation_settings').fetchone()[0]=='Africa/Nairobi'
 
 

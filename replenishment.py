@@ -82,7 +82,7 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
                 raise HTTPException(409,'Minimum stock changed; reload before saving')
             if item:
                 identifier = item['id']
-                conn.execute('UPDATE inventory SET min_threshold=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(data.min_threshold,identifier))
+                conn.execute("UPDATE inventory SET min_threshold=?,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?",(data.min_threshold,identifier))
             elif data.min_threshold:
                 identifier = conn.execute('INSERT INTO inventory(store_id,part_id,quantity,min_threshold) VALUES(?,?,0,?)',(data.store_id,data.part_id,data.min_threshold)).lastrowid
             else:
