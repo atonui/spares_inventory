@@ -39,7 +39,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     async def get_csrf_token():
         """Get CSRF token for forms"""
         token = generate_csrf_token()
-        return {"csrf_token": token}
+        return JSONResponse(content={"csrf_token": token}, headers={"Cache-Control": "no-store"})
 
 
     @router.get("/api/profile")
@@ -416,7 +416,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
     @router.post("/api/auth/login")
     @limiter.limit("5/minute")  # 5 attempts per minute
-    async def login(user_login: UserLogin, request: Request):
+    async def login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_csrf)):
         """Enhanced user login with security features"""
         ip_address = request.client.host if hasattr(request, "client") else None
         user_agent = request.headers.get("user-agent", "")[:200]
@@ -678,7 +678,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
     @router.post("/api/auth/logout")
     @log_endpoint(action="logout", transactional=True)
-    async def logout(user_id: int = Depends(get_current_user), request: Request = None):
+    async def logout(user_id: int = Depends(get_current_user), request: Request = None, csrf_valid: bool = Depends(verify_csrf)):
         """Logout and clear session cookie"""
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
             cursor = conn.cursor()

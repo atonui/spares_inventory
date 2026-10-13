@@ -51,3 +51,6 @@ test('expired security token on a write disables writes and offers token retry',
  const {p}=setup(async()=>({ok:false,status:403,json:async()=>({detail:'Invalid CSRF token'})}));ready(p);p.displayTimezoneDraft='UTC';
  await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);assert.match(p.displayTimezoneError,/CSRF/);
 });
+test('missing-token rejection exposes security recovery on the profile page',async()=>{
+ const {p}=setup(async()=>({ok:false,status:403,json:async()=>({detail:'CSRF token missing'})}));ready(p);p.displayTimezoneDraft='UTC';await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);
+});
