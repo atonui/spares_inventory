@@ -6,3 +6,9 @@ body.with-site-announcement { flex-direction: column; }
 .site-announcement-danger { background: #fef2f2; border-color: #fca5a5; color: #7f1d1d; }
 .site-announcement-error { font-size: .85rem; color: #78350f; }
 .site-announcement button { margin-left: .5rem; }
+
+.announcement-controls { margin: 1rem 0; padding: 1rem; border: 1px solid #cbd5e1; border-radius: .4rem; min-width: 0; }
+.announcement-controls > label, .announcement-controls > div > label { display: block; margin-top: .7rem; }
+.announcement-controls select, .announcement-controls input[type="datetime-local"] { max-width: 100%; padding: .5rem; }
+.announcement-roles { display: flex; flex-wrap: wrap; gap: .8rem; margin: .7rem 0; }
+.announcement-controls p { margin-top: .7rem; font-size: .9rem; }

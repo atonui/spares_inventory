@@ -32,5 +32,5 @@ def test_announcement_roundtrip_and_clear(super_api,level):
     notice=client.get('/api/superadmin/announcement').json()['announcement']
     assert notice['message']=='<b>Notice</b>' and notice['level']==level
     client.cookies.set('session_token','root-token')
-    assert client.delete('/api/superadmin/announcement').status_code==200
-    assert client.get('/api/superadmin/announcement').json()=={'announcement':None}
+    assert client.delete('/api/superadmin/announcement',params={'expected_revision':notice['revision']}).status_code==200
+    assert client.get('/api/superadmin/announcement').json()['announcement'] is None

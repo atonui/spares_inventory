@@ -124,9 +124,9 @@ def assess_database(path: Path) -> dict:
                     if field.json_key:
                         try:
                             payload = json.loads(value)
-                            if not isinstance(payload, dict) or field.json_key not in payload:
+                            if not isinstance(payload, dict) or (field.json_key not in payload and not getattr(field,'optional',False)):
                                 raise ValueError
-                            value = payload[field.json_key]
+                            value = payload.get(field.json_key)
                         except (ValueError, TypeError):
                             value = object()  # Count malformed JSON without exposing it.
                     category = _classify(value, field)

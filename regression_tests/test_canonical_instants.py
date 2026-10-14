@@ -107,7 +107,8 @@ def test_announcement_writes_canonical_json_and_update_clock(super_api):
     import json
     client,path,_=super_api
     for message in ('first','second'):
-        response=client.post('/api/superadmin/announcement',json={'message':message,'level':'info'})
+        existing=client.get('/api/superadmin/announcement/manage').json()['announcement']
+        response=client.post('/api/superadmin/announcement',json={'message':message,'level':'info','expected_revision':existing['revision'] if existing else None})
         assert response.status_code==200,response.text
     with sqlite3.connect(path) as c:
         payload,updated=c.execute("SELECT setting_value,updated_at FROM system_settings WHERE setting_key='system_announcement'").fetchone()

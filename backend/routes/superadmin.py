@@ -8,6 +8,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from backend.temporal_contract import date_metadata, date_predicates, register_instant_comparison
 from backend.services.timezone_policy import resolve_business_context
 from backend.temporal import utc_now, serialize_instant
+from backend.services import announcements as notices
 from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -16,7 +17,7 @@ from stock_audit import PROTECTED_AUDIT_SQL
 from backend.schemas.superadmin import (
     SystemSettingUpdate, AccountUnlockRequest, BulkUnlockRequest, SecurityConfigUpdate,
     DatabaseQueryRequest, UserRoleUpdate, ForceLogoutRequest, SystemAnnouncementRequest,
-    SuperadminPasswordReset,
+    SuperadminPasswordReset, AnnouncementDismissRequest,
 )
 
 
@@ -616,49 +617,82 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
     ):
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
             require_superadmin(user_id, conn)
-            cur = conn.cursor()
             message = body.message.strip()
             if not message or len(message) > 2000:
-                raise HTTPException(status_code=400, detail="Message must contain 1 to 2000 characters")
+                raise HTTPException(400, "Message must contain 1 to 2000 characters")
             if body.level not in {"info", "warning", "danger"}:
-                raise HTTPException(status_code=400, detail="Level must be info, warning or danger")
-            payload = json.dumps({"message": message, "level": body.level,
-                                   "set_at": serialize_instant(utc_now())})
-            cur.execute("""
-                INSERT INTO system_settings (setting_key, setting_value, updated_by)
-                VALUES ('system_announcement', ?, ?)
-                ON CONFLICT(setting_key)
-                DO UPDATE SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
-            """, (payload, user_id, payload, user_id))
-            return {"success": True}
-
+                raise HTTPException(400, "Level must be info, warning or danger")
+            if body.audience not in {'everyone','authenticated','roles'} or any(role not in notices.ROLES for role in body.roles) or (body.audience=='roles' and not body.roles):
+                raise HTTPException(400, 'Select a valid audience and at least one valid role for role targeting')
+            context = resolve_business_context(conn, actor_id=user_id)
+            if body.timezone_revision != context.revision:
+                raise HTTPException(409, 'Organisation timezone changed. Reload before saving.')
+            start = notices.resolve_local_instant(body.starts_local, zone=context.timezone)
+            end = notices.resolve_local_instant(body.expires_local, zone=context.timezone)
+            now = notices.utc_now()
+            if end is not None and end <= (start or now):
+                raise HTTPException(400, 'Expiry must follow the effective start and be in the future')
+            if end is not None and end <= now:
+                raise HTTPException(400, 'Expiry must be in the future')
+            saved = notices.save_notice(conn, {
+                'message':message,'level':body.level,'audience':body.audience,
+                'roles':sorted(set(body.roles)) if body.audience=='roles' else [],
+                'starts_at':serialize_instant(start) if start else None,
+                'expires_at':serialize_instant(end) if end else None,'dismissible':body.dismissible,
+            }, actor_id=user_id, expected_revision=body.expected_revision)
+            log_activity(user_id, 'superadmin', 'save_announcement', details={'revision':saved['revision'],'audience':saved['audience']}, conn=conn)
+            return {'success':True,'revision':saved['revision']}
 
     @superadmin_router.delete("/announcement")
     async def clear_announcement(
+        expected_revision: str | None = None,
         user_id: int = Depends(get_current_user),
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
             require_superadmin(user_id, conn)
-            cur = conn.cursor()
-            cur.execute("DELETE FROM system_settings WHERE setting_key = 'system_announcement'")
-            return {"success": True}
+            notices.remove_notice(conn, expected_revision=expected_revision)
+            log_activity(user_id,'superadmin','remove_announcement',details={'revision':expected_revision},conn=conn)
+            return {'success':True}
 
+    @superadmin_router.get("/announcement/manage")
+    @instant_response
+    async def manage_announcement(user_id: int = Depends(get_current_user)):
+        with closing(get_db_connection()) as conn:
+            require_superadmin(user_id,conn)
+            context=resolve_business_context(conn,actor_id=user_id)
+            notice=notices.load_notice(conn)
+            return {'announcement':notice,'status':notices.notice_status(notice,now=notices.utc_now()) if notice else 'none',
+                    'business_timezone':context.timezone,'timezone_revision':context.revision}
 
     @superadmin_router.get("/announcement")
     @instant_response
-    async def get_announcement(request: Request = None):
-        """Public endpoint – any authenticated user can read the announcement."""
-        conn = get_db_connection()
-        register_instant_comparison(conn)
-        cur = conn.cursor()
-        cur.execute("SELECT setting_value FROM system_settings WHERE setting_key = 'system_announcement'")
-        row = cur.fetchone()
-        conn.close()
-        if not row:
-            return {"announcement": None}
-        return {"announcement": json.loads(row["setting_value"])}
+    async def get_announcement(request: Request):
+        with closing(get_db_connection()) as conn:
+            conn.execute('BEGIN')
+            viewer=None
+            token=request.cookies.get('session_token')
+            if token:
+                try:viewer=session_validator(conn,token)
+                except HTTPException as error:
+                    if error.status_code!=401:raise
+            notice=notices.eligible_notice(conn,notices.load_notice(conn),viewer=viewer,now=notices.utc_now())
+            return {'announcement':notice,'dismissal_mode':'account' if viewer else 'browser','viewer_key':'user:'+str(viewer['user_id']) if viewer else 'anonymous'}
+
+    @superadmin_router.post("/announcement/dismiss")
+    async def dismiss_announcement(body: AnnouncementDismissRequest, request: Request,
+                                   user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf)):
+        with authenticated_write_transaction(user_id,request.cookies.get('session_token')) as conn:
+            viewer=session_validator(conn,request.cookies.get('session_token'),expected_user_id=user_id)
+            if body.viewer_key is not None and body.viewer_key!='user:'+str(user_id):raise HTTPException(409,'Account changed. Refresh before dismissing.')
+            notice=notices.load_notice(conn)
+            if not notice or notice['revision']!=body.revision:raise HTTPException(409,'Announcement changed. Refresh before dismissing it.')
+            # Eligibility ignores this user's existing dismissal for idempotent retries.
+            if not notice['dismissible'] or notices.notice_status(notice,now=notices.utc_now())!='active' or (notice['audience']=='roles' and viewer['role'] not in notice['roles']):
+                raise HTTPException(403,'This announcement cannot be dismissed')
+            notices.dismiss_notice(conn,user_id=user_id,revision=body.revision,now=notices.utc_now())
+            return {'success':True}
 
 
     @superadmin_router.get("/audit-log")

@@ -31,6 +31,17 @@ class ForceLogoutRequest(BaseModel):
 class SystemAnnouncementRequest(BaseModel):
     message: str
     level: str = "info"         # info | warning | danger
+    audience: str = "everyone"
+    roles: List[str] = []
+    starts_local: Optional[str] = None
+    expires_local: Optional[str] = None
+    timezone_revision: int = 1
+    dismissible: bool = False
+    expected_revision: Optional[str] = None
+
+class AnnouncementDismissRequest(BaseModel):
+    revision: str
+    viewer_key: Optional[str] = None
 
 class SuperadminPasswordReset(BaseModel):
     user_id: int

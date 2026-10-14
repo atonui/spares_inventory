@@ -161,3 +161,15 @@ active controllers. Older saved pages must refresh from the server; tests now
 enforce absence of retired files instead of promising cached-page compatibility. Do not claim that an
 arbitrary waiting period proves all old clients have refreshed. Git history
 preserves retired sources for rollback.
+
+## Announcement controls
+
+All five pages load `js/shared/announcements.js` and its banner styles. The profile
+page also loads shared CSRF for account dismissal; its password/security-token
+workflow remains unchanged. Superadmin loads `js/shared/announcement-time.js`
+before its controller to format organisation-local scheduling inputs. Banner
+eligibility, account dismissal and schedule enforcement belong to the server;
+its independent Alpine component handles polling, browser dismissal, expiry and
+request generations. Login/logout notify identity changes; no additional inventory
+application descriptors are introduced. See `docs/site-announcements.md` for
+migration, audience, conflict and rollback behaviour.

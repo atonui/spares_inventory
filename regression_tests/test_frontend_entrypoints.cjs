@@ -7,10 +7,10 @@ const {pageScripts, loadPageScripts} = require('./helpers/frontend.cjs');
 const root = path.resolve(__dirname, '..');
 const expected = {
     'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/inventory/application-core.js','js/inventory/reports.js','js/inventory/replenishment.js','js/inventory/stock-counts.js','js/inventory/stock-imports.js','js/inventory/transfer-receipts.js','js/inventory/stock-dispatch.js','js/inventory/stock-entry.js','js/inventory/stock-consumption.js','js/inventory/parts-admin.js','js/inventory/stores-admin.js','js/inventory/users-admin.js','js/inventory/store-types-admin.js','js/inventory/equipment.js','js/inventory/activity-logs.js','js/inventory/movement-history.js','js/inventory/exports.js','js/inventory/browsing.js','js/inventory/archived-records.js','js/inventory/navigation.js','js/pages/inventory-v21.js'],
-    'profile.html': ['temporal.js','js/shared/time-context.js','js/pages/profile.js'],
+    'profile.html': ['temporal.js','js/shared/csrf.js','js/shared/time-context.js','js/pages/profile.js'],
     'forgot_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
     'reset_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
-    'superadmin.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/pages/superadmin.js'],
+    'superadmin.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/announcement-time.js','js/pages/superadmin.js'],
 };
 const factories = ['inventoryApp','profileManager','forgotPassword','resetPassword','superPanel'];
 const owned = {'index.html':['inventoryApp'],'profile.html':['profileManager'],'forgot_password.html':['forgotPassword','resetPassword'],'reset_password.html':['forgotPassword','resetPassword'],'superadmin.html':['superPanel']};
@@ -19,7 +19,7 @@ for (const [page,files] of Object.entries(expected)) {
     files.push('js/shared/announcements.js');
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
         const scripts=pageScripts(page);
-        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/shared/announcements.js' || f==='js/pages/superadmin.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
+        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/pages/superadmin.js' || f==='js/shared/announcement-time.js' || f==='js/shared/announcements.js' || f==='js/inventory/application-core.js' || (page==='profile.html' && f==='js/shared/csrf.js') ? '20261014-announcement-controls' : f==='js/shared/announcements.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
         assert.equal(scripts.length,files.length+1);
         assert.equal(scripts.at(-1).src,'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js');
         assert.ok(scripts.every(s=>s.defer));

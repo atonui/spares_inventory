@@ -106,6 +106,7 @@ function inventoryCoreFeature() {
 
                 // Store user info (but not token)
                 localStorage.setItem('currentUser', JSON.stringify(data.user));
+                if(typeof notifyAnnouncementIdentityChange==='function')notifyAnnouncementIdentityChange();
 
                 await this.loadAllData();
 
@@ -143,6 +144,7 @@ function inventoryCoreFeature() {
             this.currentUser = null;
             this.isAuthenticated = false;
             localStorage.removeItem('currentUser');
+            if(typeof notifyAnnouncementIdentityChange==='function')notifyAnnouncementIdentityChange();
 
             // Redirect to login
             window.location.href = '/static/index.html';

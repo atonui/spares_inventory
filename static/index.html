@@ -11,7 +11,7 @@
 <script src="js/shared/csrf.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/time-context.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/features.js?v=20261014-frontend-21" defer></script>
-<script src="js/inventory/application-core.js?v=20261014-frontend-21" defer></script>
+<script src="js/inventory/application-core.js?v=20261014-announcement-controls" defer></script>
 <script src="js/inventory/reports.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/replenishment.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/stock-counts.js?v=20261014-frontend-21" defer></script>
@@ -32,13 +32,15 @@
 <script src="js/inventory/archived-records.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/navigation.js?v=20261014-frontend-21" defer></script>
 <script src="js/pages/inventory-v21.js?v=20261014-frontend-21" defer></script>
-<link rel="stylesheet" href="announcements.css?v=20261014-broadcasts">
-<script src="js/shared/announcements.js?v=20261014-broadcasts" defer></script>
+<link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
+<script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body class="with-site-announcement">
 <section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
+  <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
+  <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
   <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading">Retry</button></p>
 </section>
 
