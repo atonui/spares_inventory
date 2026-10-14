@@ -119,7 +119,6 @@
 
   <!-- ── Main ── -->
   <div class="main-wrap">
-    <div class="timezone-note" style="padding: .6rem 1.5rem;" x-show="timezoneContext">Event times: <span x-text="timezoneContext?.display_timezone"></span> · <a href="/static/profile.html">Timezone settings</a></div>
     <div class="timezone-note" style="padding: .6rem 1.5rem;" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button class="btn btn-sm btn-outline" @click="loadTimezoneContext()" :disabled="timezoneLoading">Retry timezone settings</button></div>
 
     <!-- Announcement banner (visible to all) -->
@@ -668,7 +667,7 @@
               <label>Message</label>
               <textarea style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
                         maxlength="2000" x-model="annForm.message" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"
-                        placeholder="e.g. Scheduled maintenance tonight at 22:00 UTC…"></textarea>
+                        placeholder="e.g. Scheduled maintenance this evening…"></textarea>
             </div>
             <div class="form-group">
               <label>Level</label>
@@ -688,11 +687,11 @@
                 <label><input type="checkbox" value="admin" x-model="annForm.roles"> Admin</label>
                 <label><input type="checkbox" value="superadmin" x-model="annForm.roles"> Superadmin</label>
               </div>
-              <p>Schedule timezone: <strong x-text="announcementTimezone"></strong></p>
+              <p>Uses organisation time.</p>
               <label><input type="checkbox" x-model="announcementPublishNow"> Publish immediately</label>
-              <div x-show="!announcementPublishNow"><label for="announcement-start">Start time (organisation timezone)</label><input id="announcement-start" type="datetime-local" step="1" x-model="annForm.starts_local"></div>
+              <div x-show="!announcementPublishNow"><label for="announcement-start">Start time</label><input id="announcement-start" type="datetime-local" step="1" x-model="annForm.starts_local"></div>
               <label><input type="checkbox" x-model="announcementHasExpiry"> Set an expiry</label>
-              <div x-show="announcementHasExpiry"><label for="announcement-expiry">Expiry time (organisation timezone)</label><input id="announcement-expiry" type="datetime-local" step="1" x-model="annForm.expires_local"></div>
+              <div x-show="announcementHasExpiry"><label for="announcement-expiry">Expiry time</label><input id="announcement-expiry" type="datetime-local" step="1" x-model="annForm.expires_local"></div>
               <label><input type="checkbox" x-model="annForm.dismissible"> Allow users to dismiss this notice</label>
               <p>Saving republishes this notice and resets previous dismissals. Public notices are visible without signing in.</p>
             </fieldset>
@@ -720,14 +719,14 @@
             <label for="audit-status">Status<select id="audit-status" x-model="auditFilters.status"><option value="">All statuses</option><option value="success">Success</option><option value="error">Error</option></select></label>
             <button class="btn btn-sm btn-outline" @click="auditFilters={start_date:'',end_date:'',action:'',status:''}; loadAudit()" :disabled="auditLoading">Clear filters</button>
           </div>
-          <p class="list-count">Audit dates and times use <span x-text="auditTimezone || timezoneContext?.business_timezone || 'Unknown'"></span>. Through includes the whole day.</p>
+          <p class="list-count">Through includes the whole day.</p>
           <p class="list-count" x-show="auditLoading" role="status">Loading audit entries…</p>
           <div class="audit-error" x-show="auditError" role="alert"><span x-text="auditError"></span> <button class="btn btn-sm btn-outline" @click="loadAudit()">Retry</button></div>
           <div style="overflow-x:auto;" x-show="!auditError && !auditLoading">
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Time <span x-text="auditTimezone ? '('+auditTimezone+')' : ''"></span></th>
+                  <th>Time</th>
                   <th>Action</th>
                   <th>Resource</th>
                   <th>Status</th>
