@@ -51,11 +51,19 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 The profile controller retains its explicit security-token retry interface. Other controllers use the shared CSRF helper. Do not change those behaviours as part of file organisation.
 
-## Frozen legacy entrypoints
+## Retired historical entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js`, PR112 `static/js/pages/inventory-v11.js`, PR113 `static/js/pages/inventory-v12.js`, PR114 `static/js/pages/inventory-v13.js`, PR115 `static/js/pages/inventory-v14.js`, PR116 `static/js/pages/inventory-v15.js`, PR117 `static/js/pages/inventory-v16.js`, PR118 `static/js/pages/inventory-v17.js`, PR119 `static/js/pages/inventory-v18.js`, PR120 `static/js/pages/inventory-v19.js` and PR121 `static/js/pages/inventory-v20.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v21 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+The migration buffers `static/script.js`, `static/js/pages/inventory.js` and
+`static/js/pages/inventory-v2.js` through `inventory-v20.js` are retired. Current
+HTML loads v21 and the feature modules; these active files remain unchanged.
+Historical sources and their migration verification remain in Git history.
 
-These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
+Older cached or saved HTML referencing retired URLs is no longer supported and
+must reload the current page from the server. HTML revalidation was deployed and
+verified before this cleanup. This is an explicit compatibility cutoff, not a
+claim that every client has refreshed. Already loaded code usually continues in
+memory; restored/offline pages may need a refresh. No redirect or compatibility
+shim serves a dependency-incompatible controller at an old URL.
 
 ## Tests and later extraction
 
@@ -70,7 +78,7 @@ find static/js -name '*.js' -exec node --check {} \;
 git diff --check
 ```
 
-Existing controller regressions use shipped page entrypoints. Only dedicated legacy tests load the frozen entrypoints directly.
+Controller regressions use shipped page entrypoints. Retirement tests reject historical files and references; active getter, receiver, factory and fresh-state checks remain. Cached-version equivalence tests were migration evidence and are retired with their source files.
 
 The inventory entrypoint explicitly composes shared application lifecycle and feature owners. New changes must map state and cross-feature calls before introducing a boundary; preserve descriptors/getters, receivers, fresh instance state and duplicate-owner rejection.
 
@@ -136,7 +144,7 @@ The inventory entrypoint explicitly composes shared application lifecycle and fe
 
 ## Implementation and acceptance status
 
-The structural frontend refactor is implemented on this final branch, pending owner merge. Automated dependency/behavior tests and fresh review provide local evidence; deployed public script references/assets and signed-in desktop/mobile smoke acceptance remain pending until actually checked. The recorded credential-session restriction still applies. Frozen legacy retirement remains a separate cache-policy decision.
+The structural frontend refactor is merged through PR122; the deployed v21 page and all 26 local JavaScript assets were verified against the tested source. Signed-in desktop checks confirmed inventory/search, stores, consumption reports, movement history and activity logs. Further account-page and mobile checks remain incomplete because browser credential protection blocked continued observation. PR123 deployed HTML revalidation; GET, HEAD and conditional 304 headers were verified on all five pages. This cleanup retires the historical scripts under the explicit refresh policy above; production removal still requires merge and deployment verification.
 
 ### HTML cache policy and historical-script retirement
 
@@ -147,10 +155,9 @@ responses retain their existing cache behaviour. The root endpoint returns API
 metadata rather than HTML and is outside this policy.
 
 This policy does not retroactively invalidate previously cached HTML or guarantee
-that suspended tabs, offline copies or saved pages disappear. Historical scripts
-remain available in this release. Before removing them in a separate PR, verify
-the deployed HTML cache headers and current manifests, document the supported
-upgrade behaviour (older saved pages must refresh from the server), and update
-legacy compatibility tests together with the removals. Do not claim that an
+that suspended tabs, offline copies or saved pages disappear. Historical scripts are now retired after production GET, HEAD and conditional
+304 responses were verified on all five HTML pages. Current manifests load only
+active controllers. Older saved pages must refresh from the server; tests now
+enforce absence of retired files instead of promising cached-page compatibility. Do not claim that an
 arbitrary waiting period proves all old clients have refreshed. Git history
 preserves retired sources for rollback.
