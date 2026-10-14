@@ -1,3 +1,5 @@
+const inventoryAuthRequests = new WeakMap();
+
 function inventoryCoreFeature() {
     return {
         timezoneContext: null,
@@ -61,26 +63,35 @@ function inventoryCoreFeature() {
 
         // Initialize
         async checkAuth() {
-            // Check if user info exists in localStorage
-            const userStr = localStorage.getItem('currentUser');
-            if (userStr) {
-                try {
-                    this.currentUser = JSON.parse(userStr);
-                    await this.getCurrentUser();
-                    this.isAuthenticated = true;
-                    try { await this.getCsrfToken(); }
-                    catch (error) { this.error = error.message; }
-                    await this.loadAllData();
-                } catch (error) {
-                    localStorage.removeItem('currentUser');
-                    this.currentUser = null;
-                    this.isAuthenticated = false;
-                }
+            const request = Symbol();
+            inventoryAuthRequests.set(this, request);
+            this.error = '';
+            // The HTTPOnly session cookie is authoritative; user storage is only a cache.
+            try {
+                const user = await this.getCurrentUser();
+                if (inventoryAuthRequests.get(this) !== request) return;
+                this.currentUser = user;
+                this.isAuthenticated = true;
+                try { localStorage.setItem('currentUser', JSON.stringify(this.currentUser)); }
+                catch (_) { /* Storage availability must not invalidate a session. */ }
+            } catch (error) {
+                if (inventoryAuthRequests.get(this) !== request) return;
+                this.currentUser = null;
+                this.isAuthenticated = false;
+                try { localStorage.removeItem('currentUser'); } catch (_) {}
+                if (error.status !== 401) this.error = 'Unable to check your session. Retry or reload the page.';
+                return;
             }
+            try { await this.getCsrfToken(); }
+            catch (error) { this.error = error.message; }
+            if (inventoryAuthRequests.get(this) !== request) return;
+            try { await this.loadAllData(); }
+            catch (error) { this.error = error.message; }
         },
 
         // Authentication
         async login() {
+            inventoryAuthRequests.delete(this);
             this.loading = true;
             this.error = '';
 
@@ -105,7 +116,7 @@ function inventoryCoreFeature() {
                 this.isAuthenticated = true;
 
                 // Store user info (but not token)
-                localStorage.setItem('currentUser', JSON.stringify(data.user));
+                try { localStorage.setItem('currentUser', JSON.stringify(data.user)); } catch (_) {}
                 if(typeof notifyAnnouncementIdentityChange==='function')notifyAnnouncementIdentityChange();
 
                 await this.loadAllData();
@@ -119,31 +130,35 @@ function inventoryCoreFeature() {
 
         async getCurrentUser() {
             const response = await fetch(`${this.apiUrl}/me`, {
-                headers: {
-                    'Authorization': `Bearer ${this.token}`
-                }
+                credentials: 'include',
+                cache: 'no-store'
             });
 
             if (!response.ok) {
-                throw new Error('Authentication failed');
+                const error = new Error('Authentication failed');
+                error.status = response.status;
+                throw error;
             }
 
-            this.currentUser = await response.json();
+            return response.json();
         },
 
         async logout({localOnly = false} = {}) {
-            this.timezoneContext=null;this.timezoneError='';this.movementTimeContext=null;this.activityTimeContext=null;
+            inventoryAuthRequests.delete(this);
             try {
                 if (!localOnly) await this.apiCall('/auth/logout', { method: 'POST' });
             } catch (error) {
                 console.error('Logout error:', error);
+                this.error = 'Logout failed. You are still signed in. Please retry: ' + error.message;
+                return;
             }
 
+            this.timezoneContext=null;this.timezoneError='';this.movementTimeContext=null;this.activityTimeContext=null;
             resetConsumptionReports(this);
             // Clear local state
             this.currentUser = null;
             this.isAuthenticated = false;
-            localStorage.removeItem('currentUser');
+            try { localStorage.removeItem('currentUser'); } catch (_) {}
             if(typeof notifyAnnouncementIdentityChange==='function')notifyAnnouncementIdentityChange();
 
             // Redirect to login
