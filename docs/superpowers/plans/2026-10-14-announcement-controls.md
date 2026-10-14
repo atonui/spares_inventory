@@ -130,7 +130,7 @@ Keep a monotonic request generation to reject stale completions.
 - [x] Document one-notice semantics, exact-role targeting, public information limits, expiry/polling latency, account/browser dismissal, republishing/reset and migration rollback constraints. A schema rollback requires a compatible backup; do not claim git revert removes v6 safely.
 - [x] Run `python -m pytest -q`, `node --test regression_tests/*.cjs`, all active JS syntax checks and `git diff --check`. Record fresh results; investigate every failure. Confirm v1–v5 migration bytes unchanged and unrelated stock/auth workflows remain covered.
 - [x] Request one fresh independent whole-branch review, emphasizing audience leaks, session transitions, DST/clock boundaries, concurrent edits and restore validation. Fix Critical/Important findings and rerun affected/full checks as warranted.
-- [ ] Publish the branch and PR automatically as previously authorized. Verify remote base and exact published/tested tree equality; do not merge the PR.
+- [x] Publish the branch and PR automatically as previously authorized. Verify remote base and exact published/tested tree equality; do not merge the PR.
 - [ ] After owner merge, confirm migration/deployment state and public asset/anonymous endpoint behavior without production mutations. Report signed-in desktop/mobile verification separately while browser protection remains blocked.
 
 ## Execution handoff
@@ -140,3 +140,5 @@ The owner reviews this written plan before implementation. No production code ha
 been changed for announcement controls at the planning stage.
 
 Final verification: 896 Python tests and 697 JavaScript tests pass. Active JS syntax checks and whitespace checks pass; published v1–v5 migrations remain unchanged. Fresh review completed and both Important findings fixed with regression tests. Publication follows under standing authorization; post-merge/live signed-in gates remain pending.
+
+Published PR: https://github.com/atonui/spares_inventory/pull/126. GitHub implementation tree equals tested local tree 104aa282a0692e7de87e1f4dd254bf022136bac8. This publication record is a documentation-only follow-up.
