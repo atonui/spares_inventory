@@ -23,7 +23,8 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/inventory/stores-admin.js` | Store create/edit/archive, CSV import and template download |
 | `static/js/inventory/users-admin.js` | User create/edit/archive form state and mutations |
 | `static/js/inventory/store-types-admin.js` | Store-type create/edit/delete-or-deactivate form state and mutations |
-| `static/js/pages/inventory-v13.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts, dispatch, stock entry, consumption, parts, store, user and store-type administration |
+| `static/js/inventory/equipment.js` | Equipment data, CRUD, calibration, transfers, history, derived views and downloads |
+| `static/js/pages/inventory-v14.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts, dispatch, stock entry, consumption, parts, store, user, store-type and equipment administration |
 | `static/js/pages/profile.js` | `profileManager()`; account, personal/organisation timezone and password settings |
 | `static/js/pages/password-recovery.js` | `forgotPassword()` and `resetPassword()` |
 | `static/js/pages/superadmin.js` | `superPanel()`; platform administration |
@@ -36,7 +37,7 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 | Page | Local scripts |
 | --- | --- |
-| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → stock-consumption → parts-admin → stores-admin → users-admin → store-types-admin → inventory-v13 controller |
+| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → stock-consumption → parts-admin → stores-admin → users-admin → store-types-admin → equipment → inventory-v14 controller |
 | Profile | temporal → time-context → profile controller |
 | Forgot/reset password | csrf → password-recovery controller |
 | Superadmin | temporal → audit → csrf → time-context → superadmin controller |
@@ -45,7 +46,7 @@ The profile controller retains its explicit security-token retry interface. Othe
 
 ## Frozen legacy entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js` PR112 `static/js/pages/inventory-v11.js`, and PR113 `static/js/pages/inventory-v12.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v13 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js`, PR112 `static/js/pages/inventory-v11.js`, PR113 `static/js/pages/inventory-v12.js` and PR114 `static/js/pages/inventory-v13.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v14 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
 
 These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
 
@@ -64,7 +65,7 @@ git diff --check
 
 Existing controller regressions use shipped page entrypoints. Only dedicated legacy tests load the frozen entrypoints directly.
 
-Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts, stock import preview/resolution, transfer receipts, dispatch, stock entry/adjustment and consumption are also separate. Parts, store and user administration are also separate; equipment administration remains in core for later boundaries. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
+Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts, stock import preview/resolution, transfer receipts, dispatch, stock entry/adjustment and consumption are also separate. Parts, store and user administration are also separate; equipment administration is now separate too. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
 
 ## Consumption report ownership
 
@@ -84,7 +85,7 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 
 ## Transfer receipt ownership
 
-`transferReceiptsFeature()` owns the pending-transfer array and its loader, explicit refresh and physical receipt/return confirmation methods. Core provides shared loading/feedback, API access, inventory/movement/statistics refresh and selected-store state through the composed receiver. Browser confirmation remains the external dependency. Permissions, prompts, acknowledgment payloads, refresh ordering and error wording are preserved. Core startup and the stock-dispatch feature call the composed pending-transfer loader; equipment transfers remain in core. Core inventory refresh retains its existing loading and swallowed-error semantics. Each application allocates an independent pending-transfer array.
+`transferReceiptsFeature()` owns the pending-transfer array and its loader, explicit refresh and physical receipt/return confirmation methods. Core provides shared loading/feedback, API access, inventory/movement/statistics refresh and selected-store state through the composed receiver. Browser confirmation remains the external dependency. Permissions, prompts, acknowledgment payloads, refresh ordering and error wording are preserved. Core startup and the stock-dispatch feature call the composed pending-transfer loader; equipment transfers belong to equipmentFeature. Core inventory refresh retains its existing loading and swallowed-error semantics. Each application allocates an independent pending-transfer array.
 
 ## Stock dispatch ownership
 
@@ -107,3 +108,5 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 `usersAdminFeature()` owns the user form, editing ID, modal flag and four create/edit/archive methods. Core supplies shared loading/feedback, API calls and users/inventory/archive refresh providers through the composed receiver. Authentication/current-user state and role-aware user loading remain core. Creation sends the full raw form; update omits email, converts blank territory to null and includes only truthy passwords. The initial/create-button role is engineer; successful saves reset role to blank. Archive retains users → inventory → optional archived-record refresh and existing swallowed refresh errors. Fresh forms and original 3,000 ms feedback timers are preserved.
 
 `storeTypesAdminFeature()` owns the store-type form, editing ID, modal flag and four create/edit/delete-or-deactivate methods. Core supplies API calls, shared loading/feedback and store-type/store refresh providers. Create includes type_code and omits is_active; update omits type_code and includes is_active. Both retain parseInt(order) or zero and raw description. The initial/add form includes is_active true; save resets omit it. Update refreshes types then stores; delete/deactivate refreshes types only and preserves server feedback. Existing swallowed loader errors, fresh forms and 3,000 ms feedback timers remain unchanged.
+
+`equipmentFeature()` owns 34 properties: equipment data/forms/selection/reminder state, six modal/panel flags, sixteen methods and three live getters. Calibration, transfer and history share its selectedEquipment. Core supplies API calls, feedback/loading, currentUser, businessToday and generic downloadCSV; core startup/dashboard calls moved loaders and navigation writes owned flags through the composed application. Equipment CRUD, calibration, transfer, history, reminder settings, derived views and downloads preserve existing behavior, including swallowed loader errors, raw dates/optional nulls, reset-before-refresh, fixed status versus configurable due-soon thresholds, zero-day export fallback and template URL lifecycle. All forms/arrays are fresh.
