@@ -1,0 +1,22 @@
+function inventoryApp() {
+    return composeInventoryFeatures(inventoryCoreFeature(),
+        consumptionReportsFeature(),
+        replenishmentFeature(),
+        stockCountsFeature(),
+        stockImportsFeature(),
+        transferReceiptsFeature(),
+        stockDispatchFeature(),
+        stockEntryFeature(),
+        stockConsumptionFeature(),
+        partsAdminFeature(),
+        storesAdminFeature(),
+        usersAdminFeature(),
+        storeTypesAdminFeature(),
+        equipmentFeature(),
+        activityLogsFeature(),
+        movementHistoryFeature(),
+        inventoryExportsFeature(),
+        inventoryBrowsingFeature(),
+        archivedRecordsFeature(),
+        navigationFeature());
+}
