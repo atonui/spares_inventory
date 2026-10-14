@@ -49,10 +49,12 @@ def reference(canonical=False):
                     c.execute(f'DROP TABLE "{name}"')
                     c.execute(canonical_schema(obj[2]))
                     for sql in indexes:c.execute(sql)
+        from . import v0006_announcement_dismissals
+        v0006_announcement_dismissals.upgrade(c)
         tables={n:(columns(c,n),foreign_keys(c,n),unique_columns(c,n)) for n,o in objects(c).items() if o[0]=='table'}
         return tables,objects(c)
 
-def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False):
+def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False, require_announcements=False):
     from .v0001_core_schema import OPTIONAL_COLUMNS
     expected,expected_objects=reference(require_canonical);actual_objects=objects(conn)
     actual_tables={n for n,o in actual_objects.items() if o[0]=='table' and n!='schema_migrations'}
@@ -60,6 +62,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
         if actual_objects:raise MigrationError('Unsupported nonempty database objects')
         return
     required=set(expected) if not legacy else {'users','stores','parts','inventory','movements','work_orders'}
+    if not require_announcements:required.discard('announcement_dismissals')
     if not require_timezone:required.discard('organisation_settings')
     if not include_transfer:required.discard('stock_transfers')
     missing=required-actual_tables
@@ -103,15 +106,25 @@ def validate_integrity(conn, *, allow_legacy_sentinel=False):
 def validate_legacy(conn):
     validate_tables(conn,legacy=True)
 
-def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None):
+def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None):
     if require_timezone is None:
         require_timezone=('schema_migrations' in objects(conn) and
                           conn.execute('SELECT 1 FROM schema_migrations WHERE version=4').fetchone() is not None)
     if require_canonical is None:
         require_canonical=('schema_migrations' in objects(conn) and
                            conn.execute('SELECT 1 FROM schema_migrations WHERE version=5').fetchone() is not None)
+    if require_announcements is None:
+        require_announcements=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=6').fetchone() is not None)
     validate_integrity(conn)
-    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical)
+    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical,require_announcements=require_announcements)
+    if require_announcements:
+        from backend.services.announcements import load_notice
+        from backend.temporal import parse_api_instant,serialize_instant
+        notice=load_notice(conn)
+        for key in ('starts_at','expires_at'):
+            if notice and notice[key] is not None and serialize_instant(parse_api_instant(notice[key]))!=notice[key]:raise MigrationError('Noncanonical announcement schedule')
+        for (value,) in conn.execute('SELECT dismissed_at FROM announcement_dismissals'):
+            if serialize_instant(parse_api_instant(value))!=value:raise MigrationError('Noncanonical dismissal timestamp')
     if require_canonical:validate_canonical_instants(conn,fields=canonical_fields)
     if require_timezone or 'organisation_settings' in objects(conn):
         from .v0004_timezone_preferences import validate_settings
@@ -127,6 +140,7 @@ def validate_canonical_instants(conn, *, fields=None):
         fields=TEMPORAL_FIELDS
     for field in fields:
         if field.kind!='instant':continue
+        if getattr(field,'optional',False) and field.table not in objects(conn):continue
         query=f'SELECT "{field.column}" FROM "{field.table}"'
         parameters=()
         if field.setting_key:
@@ -134,7 +148,9 @@ def validate_canonical_instants(conn, *, fields=None):
             parameters=(field.setting_key,)
         for (value,) in conn.execute(query,parameters):
             try:
-                if field.json_key:value=json.loads(value)[field.json_key]
+                if field.json_key:
+                    payload=json.loads(value)
+                    value=payload.get(field.json_key) if getattr(field,'optional',False) else payload[field.json_key]
                 if value is not None and value!=serialize_instant(parse_api_instant(value)):
                     raise ValueError
             except (ValueError,TypeError,KeyError):

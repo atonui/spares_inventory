@@ -42,7 +42,8 @@ def migration_status(conn):
 def check_database(conn):
     status=migration_status(conn)
     if status.pending:
-        validate_legacy(conn)
+        if 5 in status.applied:validate_current(conn)
+        else:validate_legacy(conn)
         if objects(conn):validate_integrity(conn,allow_legacy_sentinel=status.legacy)
     else:validate_current(conn)
     return status
@@ -59,7 +60,9 @@ def apply_migrations(conn, *, bootstrap=None):
     try:
         conn.execute('BEGIN IMMEDIATE')
         status=migration_status(conn)
-        if status.pending:validate_legacy(conn)
+        if status.pending:
+            if 5 in status.applied:validate_current(conn)
+            else:validate_legacy(conn)
         else:validate_current(conn)
         if status.legacy:conn.execute(LEDGER_SQL)
         for migration in registry.MIGRATIONS:

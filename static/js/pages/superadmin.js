@@ -146,7 +146,10 @@ function superPanel() {
     auditRequest: 0, auditTimezone: null,
     auditFilters: { start_date: '', end_date: '', action: '', status: '' },
     announcement: null, announcementLoading: false, announcementError: '',
-    annForm: { message: '', level: 'info' },
+    savedAnnouncement: null, announcementReady: false, announcementConflict: false,
+    announcementStatus: 'none', announcementTimezone: '', announcementTimezoneRevision: null,
+    annForm: {message:'',level:'info',audience:'everyone',roles:[],starts_local:'',expires_local:'',dismissible:false},
+    announcementPublishNow: true, announcementHasExpiry: false,
 
     toasts: [],
     dlg: { open: false, title: '', msg: '', action: '', resolve: () => {} },
@@ -178,7 +181,7 @@ function superPanel() {
         users:     () => this.loadUsers(),
         tables:    () => this.loadTables(),
         audit:     () => this.loadAudit(),
-        announcement: () => this.loadAnnouncement(),
+        announcement: () => this.openAnnouncement(),
       };
       (loaders[this.tab] || (() => this.loadDashboard()))();
     },
@@ -249,7 +252,7 @@ async submitPasswordReset() {
       if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
       const r = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, { ...opts, headers }, this.apiUrl);
       if (r.status === 401) { location.href = '/static/index.html'; throw new Error('Unauthenticated'); }
-      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+      if (!r.ok) { const e = await r.json().catch(() => ({})); const error = new Error(e.detail || `HTTP ${r.status}`); error.status=r.status; throw error; }
       if (r.status === 204) return null;
       return r.json();
     },
@@ -494,39 +497,53 @@ async submitPasswordReset() {
     },
 
     // ── Announcement ───────────────────────────────────────────
+    announcementFormFor(notice) {
+      return {message:notice?.message || '',level:notice?.level || 'info',audience:notice?.audience || 'everyone',roles:[...(notice?.roles || [])],
+        starts_local:InventoryAnnouncementTime.localInput(notice?.starts_at,this.announcementTimezone),
+        expires_local:InventoryAnnouncementTime.localInput(notice?.expires_at,this.announcementTimezone),dismissible:notice?.dismissible || false};
+    },
+    openAnnouncement() {
+      if (!this.announcementReady && !this.announcementConflict) return this.loadAnnouncement();
+    },
     async loadAnnouncement(afterWrite = false) {
       if (this.announcementLoading || (this.actionPending.announcement && !afterWrite)) return;
-      this.announcementLoading = true; this.announcementError = '';
+      this.announcementLoading = true; this.announcementError = ''; this.announcementReady=false;
       try {
-        const r = await this.api('/superadmin/announcement');
-        this.announcement = r.announcement;
-        if (this.announcement) {
-          this.annForm.message = this.announcement.message;
-          this.annForm.level   = this.announcement.level;
-        }
+        const r = await this.api('/superadmin/announcement/manage');
+        if (!InventoryTime.isValidZone(r.business_timezone) || !Number.isInteger(r.timezone_revision) || r.timezone_revision<1) throw Error('Announcement timezone metadata unavailable');
+        this.announcementTimezone=r.business_timezone;this.announcementTimezoneRevision=r.timezone_revision;
+        this.savedAnnouncement=r.announcement;this.announcement=r.announcement;
+        this.announcementStatus=r.status;this.annForm=this.announcementFormFor(r.announcement);
+        this.announcementPublishNow=!r.announcement?.starts_at;this.announcementHasExpiry=!!r.announcement?.expires_at;
+        this.announcementConflict=false;this.announcementReady=true;this.actionErrors.announcement='';
       } catch (error) { this.announcementError = error.message; }
       finally { this.announcementLoading = false; }
     },
-
     async saveAnnouncement() {
-      if (this.announcementLoading) return;
+      if (this.announcementLoading || !this.announcementReady || this.announcementConflict) return;
       return this.runAction('announcement', async () => {
-        await this.api('/superadmin/announcement', {
-          method: 'POST', body: JSON.stringify(this.annForm),
-        });
-        this.toast('Announcement saved. Open pages refresh within 60 seconds.', 'ok');
+        if (this.annForm.audience==='roles' && !this.annForm.roles.length) throw Error('Select at least one role');
+        if (!this.announcementPublishNow && !this.annForm.starts_local) throw Error('Select a start time');
+        if (this.announcementHasExpiry && !this.annForm.expires_local) throw Error('Select an expiry time');
+        try {
+          await this.api('/superadmin/announcement', {method:'POST',body:JSON.stringify({...this.annForm,
+            starts_local:this.announcementPublishNow?null:this.annForm.starts_local,
+            expires_local:this.announcementHasExpiry?this.annForm.expires_local:null,
+            timezone_revision:this.announcementTimezoneRevision,expected_revision:this.savedAnnouncement?.revision || null})});
+        } catch(error) {if(error.status===409)this.announcementConflict=true;throw error;}
+        this.toast('Announcement saved. Saving resets previous dismissals.', 'ok');
         await this.loadAnnouncement(true);
       });
     },
-
     async clearAnnouncement() {
-      if (this.announcementLoading) return;
+      if (this.announcementLoading || !this.announcementReady || this.announcementConflict) return;
       return this.runAction('announcement', async () => {
-        await this.api('/superadmin/announcement', { method: 'DELETE' });
-        this.announcement = null;
-        this.announcementError = '';
-        this.annForm = { message: '', level: 'info' };
-        this.toast('Announcement cleared', 'ok');
+        const query=this.savedAnnouncement?.revision?'?expected_revision='+encodeURIComponent(this.savedAnnouncement.revision):'';
+        try {await this.api('/superadmin/announcement'+query,{method:'DELETE'});}
+        catch(error) {if(error.status===409)this.announcementConflict=true;throw error;}
+        this.announcement=null;this.savedAnnouncement=null;this.announcementStatus='none';this.announcementError='';
+        this.annForm=this.announcementFormFor(null);this.announcementPublishNow=true;this.announcementHasExpiry=false;
+        this.toast('Announcement removed', 'ok');
       });
     },
 

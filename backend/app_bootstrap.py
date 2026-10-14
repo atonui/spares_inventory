@@ -60,6 +60,19 @@ def create_inventory_app(
         allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
     )
+    @app.middleware("http")
+    async def prevent_announcement_caching(request, call_next):
+        try:
+            response = await call_next(request)
+        except Exception:
+            if not request.url.path.startswith('/api/superadmin/announcement'):raise
+            import logging
+            logging.getLogger(__name__).exception('Announcement request failed')
+            response = JSONResponse(status_code=503,content={'detail':'Announcements are temporarily unavailable'})
+        if request.url.path.startswith('/api/superadmin/announcement'):
+            response.headers['Cache-Control'] = 'no-store'
+        return response
+
     app.mount("/static", RevalidatingHtmlStaticFiles(directory=static_directory), name="static")
 
     return app, limiter

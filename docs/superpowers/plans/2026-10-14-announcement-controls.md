@@ -58,11 +58,11 @@ expectations and asset versions in the same commit as each new dependency.
 - `remove_notice(conn, *, expected_revision: str) -> None`: revision-aware delete/cleanup.
 - `dismiss_notice(conn, *, user_id: int, revision: str, now) -> None`: idempotent current-revision dismissal; caller owns authentication/eligibility checks and transaction.
 
-- [ ] Write service/migration tests: `test_legacy_notice_defaults_are_stable` asserts public/immediate/no-expiry/non-dismissible and a stable revision; `test_save_revision_resets_dismissals` asserts new revision and no stale rows; `test_migration_v6_idempotent` asserts unique `(user_id, revision)` and user FK; `test_old_backup_upgrades_without_changing_notice` asserts existing payload/stock rows survive.
-- [ ] Run `python -m pytest regression_tests/test_announcement_service.py regression_tests/test_database_migrations.py regression_tests/test_database_restore.py -q`; observe failures for missing v6/service.
-- [ ] Implement the table `(user_id INTEGER NOT NULL REFERENCES users(id), revision TEXT NOT NULL, dismissed_at TEXT NOT NULL, PRIMARY KEY(user_id,revision))` and v6 validation. Extend schema reference/unknown-object checks with version awareness so earlier migration validation accepts the additive table while v6 requires it. Register dismissal timestamps and optional schedule JSON instants for current temporal validation without changing v5 checksums.
-- [ ] Implement normalization and borrowed-connection service functions; retain missing-record behavior and reject corrupt saved restricted metadata rather than defaulting it to public.
-- [ ] Rerun focused tests; update exact latest-version assertions from 5 to 6 where appropriate, preserving legacy migration evidence. Commit the storage/model boundary.
+- [x] Write service/migration tests: `test_legacy_notice_defaults_are_stable` asserts public/immediate/no-expiry/non-dismissible and a stable revision; `test_save_revision_resets_dismissals` asserts new revision and no stale rows; `test_migration_v6_idempotent` asserts unique `(user_id, revision)` and user FK; `test_old_backup_upgrades_without_changing_notice` asserts existing payload/stock rows survive.
+- [x] Run `python -m pytest regression_tests/test_announcement_service.py regression_tests/test_database_migrations.py regression_tests/test_database_restore.py -q`; observe failures for missing v6/service.
+- [x] Implement the table `(user_id INTEGER NOT NULL REFERENCES users(id), revision TEXT NOT NULL, dismissed_at TEXT NOT NULL, PRIMARY KEY(user_id,revision))` and v6 validation. Extend schema reference/unknown-object checks with version awareness so earlier migration validation accepts the additive table while v6 requires it. Register dismissal timestamps and optional schedule JSON instants for current temporal validation without changing v5 checksums.
+- [x] Implement normalization and borrowed-connection service functions; retain missing-record behavior and reject corrupt saved restricted metadata rather than defaulting it to public.
+- [x] Rerun focused tests; update exact latest-version assertions from 5 to 6 where appropriate, preserving legacy migration evidence. Commit the storage/model boundary.
 
 ### Task 2: Audience filtering, schedule conversion and protected dismissal API
 
@@ -80,12 +80,12 @@ expectations and asset versions in the same commit as each new dependency.
 - `DELETE /api/superadmin/announcement?expected_revision=...`: protected revision-aware removal.
 - `POST /api/superadmin/announcement/dismiss` body `{revision}`: authenticated CSRF write, eligibility/dismissibility/revision checked under the writer lock.
 
-- [ ] Write table-driven HTTP tests for anonymous plus all four roles against every audience, role changes, expired/revoked/archived accounts, public fallback only for authentication 401, no restricted text in denied responses and no-store headers. Add stale revision 409, CSRF, revoked-after-initial-auth and cross-account dismissal tests.
-- [ ] Write schedule tests for exact start/expiry, blank start, no expiry, invalid expiry ordering/already-expired save, timezone revision 409, Nairobi conversion, New York gap `2026-03-08T02:30` and fold `2026-11-01T01:30` rejection.
-- [ ] Run `python -m pytest regression_tests/test_announcement_api.py regression_tests/test_announcement_schedule.py -q`; observe missing-interface/behavior failures.
-- [ ] Implement optional banner-session resolution using the existing session validator on a borrowed transaction and current DB role; catch only authentication 401 for anonymous fallback. Propagate DB/infrastructure errors. Add protected management read; save resolves the organisation context and canonical UTC times; reject malformed audiences/roles and stale expected revisions.
-- [ ] Implement dismissal under authenticated transaction; non-dismissible/ineligible requests fail 403, stale revisions fail 409 and repeats succeed. Reads omit dismissed notices; management read ignores dismissal.
-- [ ] Rerun API/service/session/CSRF tests and update intentional old OpenAPI/schema/public-read expectations. Commit the server boundary.
+- [x] Write table-driven HTTP tests for anonymous plus all four roles against every audience, role changes, expired/revoked/archived accounts, public fallback only for authentication 401, no restricted text in denied responses and no-store headers. Add stale revision 409, CSRF, revoked-after-initial-auth and cross-account dismissal tests.
+- [x] Write schedule tests for exact start/expiry, blank start, no expiry, invalid expiry ordering/already-expired save, timezone revision 409, Nairobi conversion, New York gap `2026-03-08T02:30` and fold `2026-11-01T01:30` rejection.
+- [x] Run `python -m pytest regression_tests/test_announcement_api.py regression_tests/test_announcement_schedule.py -q`; observe missing-interface/behavior failures.
+- [x] Implement optional banner-session resolution using the existing session validator on a borrowed transaction and current DB role; catch only authentication 401 for anonymous fallback. Propagate DB/infrastructure errors. Add protected management read; save resolves the organisation context and canonical UTC times; reject malformed audiences/roles and stale expected revisions.
+- [x] Implement dismissal under authenticated transaction; non-dismissible/ineligible requests fail 403, stale revisions fail 409 and repeats succeed. Reads omit dismissed notices; management read ignores dismissal.
+- [x] Rerun API/service/session/CSRF tests and update intentional old OpenAPI/schema/public-read expectations. Commit the server boundary.
 
 ### Task 3: Superadmin controls and conflict-preserving editor
 
@@ -99,12 +99,12 @@ converts local input through the browser timezone. Editor `loadAnnouncement`
 uses management metadata and keeps `savedAnnouncement`, `annForm`, schedule
 status and timezone revision separate. Save/remove send expected revision.
 
-- [ ] Add failing shipped-editor tests for all audience controls, required role selection, local schedule round trips across different device zones, existing/public legacy defaults, expired saved notice still editable, loaded timezone gating and retained draft on conflict.
-- [ ] Add a two-editor test: both load revision A, first saves B, second receives 409 and preserves its draft until explicit reload. Test read/write races, management load failure/Retry and pending duplicate saves/removals.
-- [ ] Run `node --test regression_tests/test_announcement_editor.cjs regression_tests/test_superadmin_ui.cjs regression_tests/test_frontend_entrypoints.cjs`; verify intended RED failures.
-- [ ] Implement controls for audience/roles, publish-now versus scheduled start, optional expiry and dismissal; add organisation-zone labels and Scheduled/Active/Expired summary. Explain that saving resets dismissals. Preserve message limits/severity and accessible loading/error states.
-- [ ] Load the time helper before the editor; update cache versions/manifest assertions together. Keep conflict drafts separate from saved preview, block writes until metadata loads, and allow explicit reload after conflict.
-- [ ] Rerun focused tests, syntax/diff checks and commit the editor boundary.
+- [x] Add failing shipped-editor tests for all audience controls, required role selection, local schedule round trips across different device zones, existing/public legacy defaults, expired saved notice still editable, loaded timezone gating and retained draft on conflict.
+- [x] Add a two-editor test: both load revision A, first saves B, second receives 409 and preserves its draft until explicit reload. Test read/write races, management load failure/Retry and pending duplicate saves/removals.
+- [x] Run `node --test regression_tests/test_announcement_editor.cjs regression_tests/test_superadmin_ui.cjs regression_tests/test_frontend_entrypoints.cjs`; verify intended RED failures.
+- [x] Implement controls for audience/roles, publish-now versus scheduled start, optional expiry and dismissal; add organisation-zone labels and Scheduled/Active/Expired summary. Explain that saving resets dismissals. Preserve message limits/severity and accessible loading/error states.
+- [x] Load the time helper before the editor; update cache versions/manifest assertions together. Keep conflict drafts separate from saved preview, block writes until metadata loads, and allow explicit reload after conflict.
+- [x] Rerun focused tests, syntax/diff checks and commit the editor boundary.
 
 ### Task 4: Banner dismissal, expiry and account-safe refresh
 
@@ -117,19 +117,19 @@ Authenticated dismissal obtains CSRF with the existing shared helper and POSTs
 markers use `inventory:announcement:dismissed:<revision>` and contain no message.
 Keep a monotonic request generation to reject stale completions.
 
-- [ ] Write failing tests for optional Dismiss visibility, account POST success/failure, anonymous storage failure, anonymous-to-authenticated transition, account switches and a delayed GET arriving after dismissal/removal/newer revision.
-- [ ] Write clock-controlled expiry tests: hide at exact expiry, no-expiry stays visible, long-delay timer re-arms within browser timeout limits; hidden/restored pages refresh. Verify teardown clears every timer/listener and restricted stale notices clear on eligibility-check failure.
-- [ ] Run `node --test regression_tests/test_announcement_delivery.cjs regression_tests/test_announcements_ui.cjs`; observe behavior failures.
-- [ ] Implement dismissal/expiry state and request-generation guards. Use server dismissal mode so anonymous markers never suppress account responses. Recheck UTC expiry when rendering/resuming; retain visible Retry/errors, but never preserve role-targeted stale content after revalidation failure.
-- [ ] Update five snippets with accessible Dismiss/pending/error controls; maintain plain-text rendering and responsive vertical layout. Shared CSRF/helper dependencies are explicit, deferred and versioned. Rerun focused tests and commit delivery changes.
+- [x] Write failing tests for optional Dismiss visibility, account POST success/failure, anonymous storage failure, anonymous-to-authenticated transition, account switches and a delayed GET arriving after dismissal/removal/newer revision.
+- [x] Write clock-controlled expiry tests: hide at exact expiry, no-expiry stays visible, long-delay timer re-arms within browser timeout limits; hidden/restored pages refresh. Verify teardown clears every timer/listener and restricted stale notices clear on eligibility-check failure.
+- [x] Run `node --test regression_tests/test_announcement_delivery.cjs regression_tests/test_announcements_ui.cjs`; observe behavior failures.
+- [x] Implement dismissal/expiry state and request-generation guards. Use server dismissal mode so anonymous markers never suppress account responses. Recheck UTC expiry when rendering/resuming; retain visible Retry/errors, but never preserve role-targeted stale content after revalidation failure.
+- [x] Update five snippets with accessible Dismiss/pending/error controls; maintain plain-text rendering and responsive vertical layout. Shared CSRF/helper dependencies are explicit, deferred and versioned. Rerun focused tests and commit delivery changes.
 
 ### Task 5: Whole-system verification, review and publication
 
 **Files:** `docs/site-announcements.md`, `docs/frontend-organisation.md`, spec/plan status and any remaining regression expectations.
 
-- [ ] Document one-notice semantics, exact-role targeting, public information limits, expiry/polling latency, account/browser dismissal, republishing/reset and migration rollback constraints. A schema rollback requires a compatible backup; do not claim git revert removes v6 safely.
-- [ ] Run `python -m pytest -q`, `node --test regression_tests/*.cjs`, all active JS syntax checks and `git diff --check`. Record fresh results; investigate every failure. Confirm v1–v5 migration bytes unchanged and unrelated stock/auth workflows remain covered.
-- [ ] Request one fresh independent whole-branch review, emphasizing audience leaks, session transitions, DST/clock boundaries, concurrent edits and restore validation. Fix Critical/Important findings and rerun affected/full checks as warranted.
+- [x] Document one-notice semantics, exact-role targeting, public information limits, expiry/polling latency, account/browser dismissal, republishing/reset and migration rollback constraints. A schema rollback requires a compatible backup; do not claim git revert removes v6 safely.
+- [x] Run `python -m pytest -q`, `node --test regression_tests/*.cjs`, all active JS syntax checks and `git diff --check`. Record fresh results; investigate every failure. Confirm v1–v5 migration bytes unchanged and unrelated stock/auth workflows remain covered.
+- [x] Request one fresh independent whole-branch review, emphasizing audience leaks, session transitions, DST/clock boundaries, concurrent edits and restore validation. Fix Critical/Important findings and rerun affected/full checks as warranted.
 - [ ] Publish the branch and PR automatically as previously authorized. Verify remote base and exact published/tested tree equality; do not merge the PR.
 - [ ] After owner merge, confirm migration/deployment state and public asset/anonymous endpoint behavior without production mutations. Report signed-in desktop/mobile verification separately while browser protection remains blocked.
 
@@ -138,3 +138,5 @@ Keep a monotonic request generation to reject stale completions.
 Preserve native implementation in this session, then one fresh final reviewer.
 The owner reviews this written plan before implementation. No production code has
 been changed for announcement controls at the planning stage.
+
+Final verification: 896 Python tests and 697 JavaScript tests pass. Active JS syntax checks and whitespace checks pass; published v1–v5 migrations remain unchanged. Fresh review completed and both Important findings fixed with regression tests. Publication follows under standing authorization; post-merge/live signed-in gates remain pending.

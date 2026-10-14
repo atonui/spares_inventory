@@ -11,6 +11,7 @@ class TemporalField:
     provenance: str
     setting_key: str | None = None
     json_key: str | None = None
+    optional: bool = False
 
 
 # Owner confirmed app-generated timestamps only (2026-10-12). Initial schema
@@ -64,3 +65,13 @@ TEMPORAL_FIELDS = tuple(
                   setting_key=key)
     for key in ('lockout_duration_minutes', 'session_duration_hours', 'remember_me_duration_days', 'calibration_reminder_days')
 )
+
+# Optional version-6 fields participate in assessment while permitting older
+# schemas and legacy JSON without controls; v6 service validates modern notices.
+ANNOUNCEMENT_CONTROL_FIELDS = (
+    TemporalField('announcement_dismissals','dismissed_at','instant','utc','Version 6 serialize_instant writer.',optional=True),
+    TemporalField('system_settings','setting_value','instant','utc','Announcement UTC schedule.',setting_key='system_announcement',json_key='starts_at',optional=True),
+    TemporalField('system_settings','setting_value','instant','utc','Announcement UTC expiry.',setting_key='system_announcement',json_key='expires_at',optional=True),
+)
+
+TEMPORAL_FIELDS += ANNOUNCEMENT_CONTROL_FIELDS

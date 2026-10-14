@@ -75,8 +75,8 @@ def runner():
 
 def test_fresh_database_records_current_versions(tmp_path):
     c=sqlite3.connect(tmp_path/'fresh.db');s=runner().apply_migrations(c)
-    assert s.current_version==5 and s.pending==()
-    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,)]
+    assert s.current_version==6 and s.pending==()
+    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,),(6,)]
 
 def test_adoption_records_only_validated_versions(tmp_path):
     c=legacy_connection(tmp_path/'live.db',current=True);before=snapshot(c)
@@ -91,7 +91,7 @@ def test_adoption_records_only_validated_versions(tmp_path):
                         for name,value in zip(original_columns[table],row)) for row in rows]
         assert [tuple(r) for r in c.execute(f'SELECT {projection} FROM "{table}" ORDER BY rowid')]==expected
     assert c.execute('SELECT business_timezone FROM organisation_settings').fetchone()[0]=='Africa/Nairobi'
-    assert runner().migration_status(c).applied==(1,2,3,4,5)
+    assert runner().migration_status(c).applied==(1,2,3,4,5,6)
 
 def test_repeat_upgrade_preserves_rows_and_applied_at(tmp_path):
     c=legacy_connection(tmp_path/'live.db');runner().apply_migrations(c);before=snapshot(c);schema=schema_snapshot(c)
@@ -134,8 +134,8 @@ def test_two_workers_apply_once(tmp_path):
     p=tmp_path/'live.db';legacy_connection(p).close()
     def run():
         with sqlite3.connect(p,timeout=10) as c:return runner().apply_migrations(c).current_version
-    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[5,5]
-    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==5
+    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[6,6]
+    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==6
 
 def test_write_lock_timeout_leaves_database_unchanged(tmp_path):
     from backend.migrations.validation import MigrationError
@@ -149,7 +149,7 @@ def test_main_wrappers_respect_database_override(tmp_path,monkeypatch):
     import main
     p=tmp_path/'override.db';monkeypatch.setattr(main,'DATABASE',str(p));assert main.init_db() is None
     with main.get_db_connection() as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==5
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==6
         assert c.execute('PRAGMA foreign_keys').fetchone()[0]==1
 
 

@@ -200,6 +200,7 @@ ADMIN_CASES=[
  ('admin_role','PUT','/api/superadmin/users/3/role',{'role':'manager'},None,2),
  ('admin_purge','DELETE','/api/superadmin/database/logs/purge?days=0',None,None,2),
  ('admin_announcement_set','POST','/api/superadmin/announcement',{'message':'Test announcement'},None,2),
+ ('announcement_dismiss','POST','/api/superadmin/announcement/dismiss',{'revision':'fixture'},'announcement',2),
  ('admin_announcement_clear','DELETE','/api/superadmin/announcement',None,None,2),
 ]
 
@@ -207,7 +208,9 @@ ADMIN_CASES=[
 def prepare_account(path,preparation):
     if preparation:
         with closing(connect_database(path)) as conn,conn:
-            if preparation=='password':conn.execute('UPDATE users SET password_hash=? WHERE id=1',(main.hash_password('test-password'),))
+            if preparation=='announcement':
+                conn.execute("INSERT INTO system_settings(setting_key,setting_value) VALUES('system_announcement',?)", ('{"message":"Test","level":"info","revision":"fixture","audience":"authenticated","roles":[],"starts_at":null,"expires_at":null,"dismissible":true}',))
+            elif preparation=='password':conn.execute('UPDATE users SET password_hash=? WHERE id=1',(main.hash_password('test-password'),))
             elif preparation=='extra_session':conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(5,1,'other-admin','2099-01-01T00:00:00.000000Z')")
 
 
@@ -308,7 +311,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
     protected.add(('POST','/api/superadmin/database/restore'))
     exempt={('POST',p) for p in ['/api/auth/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==51
+    assert len(protected)==52
     assert registered==protected|exempt
 
 

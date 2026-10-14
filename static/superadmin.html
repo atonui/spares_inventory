@@ -10,15 +10,18 @@
 <script src="audit.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
-<script src="js/pages/superadmin.js?v=20261014-broadcasts" defer></script>
-<link rel="stylesheet" href="announcements.css?v=20261014-broadcasts">
-<script src="js/shared/announcements.js?v=20261014-broadcasts" defer></script>
+<script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
+<script src="js/pages/superadmin.js?v=20261014-announcement-controls" defer></script>
+<link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
+<script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 
 <body x-data="superPanel()" x-init="init()">
 <section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
+  <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
+  <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
   <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading">Retry</button></p>
 </section>
 
@@ -98,7 +101,7 @@
 
       <div class="nav-section">
         <div class="nav-label">System</div>
-        <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; loadAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
+        <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
           <span class="ni">📢</span> Announcement
         </button>
         <button type="button" class="nav-item" :class="tab==='audit'&&'active'" @click="tab='audit'; loadAudit()" :aria-current="tab==='audit' ? 'page' : null">
@@ -207,7 +210,7 @@
                 <div class="qa-label">Security Config</div>
                 <div class="qa-sub">Login limits &amp; timeouts</div>
               </button>
-              <button class="qa-btn" @click="tab='announcement'; loadAnnouncement()">
+              <button class="qa-btn" @click="tab='announcement'; openAnnouncement()">
                 <span class="qa-icon">📢</span>
                 <div class="qa-label">Broadcast Message</div>
                 <div class="qa-sub">System-wide banner</div>
@@ -645,34 +648,55 @@
 
             <p role="status" x-show="announcementLoading">Loading announcement…</p>
             <p class="action-error" role="alert" x-show="announcementError"><span x-text="announcementError"></span> <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading">Retry</button></p>
+            <p class="action-error" role="alert" x-show="announcementConflict">The saved notice or organisation timezone changed. Reload replaces your draft with the saved notice.</p>
+            <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading || actionPending.announcement">Reload saved notice</button>
+            <p x-show="announcementReady">Saved status: <strong x-text="announcementStatus"></strong></p>
             <!-- Current banner preview -->
             <div x-show="announcement" style="margin-bottom:1.25rem;">
               <div style="font-size:0.75rem;color:#888;margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
-                Active Banner
+                Saved announcement
               </div>
               <div class="ann-bar" :class="'ann-'+(announcement?.level||'info')"
                    style="border-radius:6px;border:1px solid #ddd;">
                 <span x-text="announcement?.message"></span>
                 <button class="btn btn-sm btn-outline" style="margin-left:auto;flex-shrink:0;"
-                        @click="clearAnnouncement()" :disabled="actionPending.announcement || announcementLoading">✕ Remove</button>
+                        @click="clearAnnouncement()" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict">✕ Remove</button>
               </div>
             </div>
 
             <div class="form-group">
               <label>Message</label>
               <textarea style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
-                        maxlength="2000" x-model="annForm.message" :disabled="actionPending.announcement || announcementLoading"
+                        maxlength="2000" x-model="annForm.message" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"
                         placeholder="e.g. Scheduled maintenance tonight at 22:00 UTC…"></textarea>
             </div>
             <div class="form-group">
               <label>Level</label>
-              <select x-model="annForm.level" :disabled="actionPending.announcement || announcementLoading">
+              <select x-model="annForm.level" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict">
                 <option value="info">Info (blue)</option>
                 <option value="warning">Warning (yellow)</option>
                 <option value="danger">Danger (red)</option>
               </select>
             </div>
-            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message.trim() || actionPending.announcement || announcementLoading">
+            <fieldset class="announcement-controls" :disabled="!announcementReady || announcementLoading || actionPending.announcement || announcementConflict">
+              <legend>Delivery controls</legend>
+              <label for="announcement-audience">Who sees this notice</label>
+              <select id="announcement-audience" x-model="annForm.audience"><option value="everyone">Everyone (including visitors)</option><option value="authenticated">All signed-in users</option><option value="roles">Selected roles</option></select>
+              <div x-show="annForm.audience==='roles'" class="announcement-roles" role="group" aria-label="Selected roles">
+                <label><input type="checkbox" value="engineer" x-model="annForm.roles"> Engineer</label>
+                <label><input type="checkbox" value="manager" x-model="annForm.roles"> Manager</label>
+                <label><input type="checkbox" value="admin" x-model="annForm.roles"> Admin</label>
+                <label><input type="checkbox" value="superadmin" x-model="annForm.roles"> Superadmin</label>
+              </div>
+              <p>Schedule timezone: <strong x-text="announcementTimezone"></strong></p>
+              <label><input type="checkbox" x-model="announcementPublishNow"> Publish immediately</label>
+              <div x-show="!announcementPublishNow"><label for="announcement-start">Start time (organisation timezone)</label><input id="announcement-start" type="datetime-local" step="1" x-model="annForm.starts_local"></div>
+              <label><input type="checkbox" x-model="announcementHasExpiry"> Set an expiry</label>
+              <div x-show="announcementHasExpiry"><label for="announcement-expiry">Expiry time (organisation timezone)</label><input id="announcement-expiry" type="datetime-local" step="1" x-model="annForm.expires_local"></div>
+              <label><input type="checkbox" x-model="annForm.dismissible"> Allow users to dismiss this notice</label>
+              <p>Saving republishes this notice and resets previous dismissals. Public notices are visible without signing in.</p>
+            </fieldset>
+            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message.trim() || actionPending.announcement || announcementLoading || !announcementReady || announcementConflict">
               📢 Broadcast
             </button>
             <p x-show="actionPending.announcement" role="status">Updating announcement…</p>

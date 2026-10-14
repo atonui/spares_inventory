@@ -22,7 +22,7 @@ OPERATIONS = {
     ('PUT', '/users/{target_id}/role'), ('GET', '/database/tables'), ('POST', '/database/query'),
     ('GET', '/database/backup'), ('POST', '/database/restore'), ('POST', '/database/vacuum'),
     ('DELETE', '/database/logs/purge'), ('POST', '/announcement'), ('DELETE', '/announcement'),
-    ('GET', '/announcement'), ('GET', '/audit-log'),
+    ('GET', '/announcement'), ('GET', '/announcement/manage'), ('POST', '/announcement/dismiss'), ('GET', '/audit-log'),
 }
 
 
@@ -107,13 +107,14 @@ def test_superadmin_announcement_remains_public(super_api):
     client, path, _ = super_api
     main.app.dependency_overrides.clear()
     client.cookies.clear()
-    assert client.get(PREFIX + '/announcement').json() == {'announcement': None}
+    assert client.get(PREFIX + '/announcement').json()['announcement'] is None
     payload = {'message': 'Public notice', 'level': 'info', 'set_at': '2026-01-01T00:00:00.000000Z'}
     with closing(connect_database(path)) as conn, conn:
         conn.execute("INSERT INTO system_settings(setting_key,setting_value) VALUES('system_announcement',?)", (json.dumps(payload),))
     response = client.get(PREFIX + '/announcement')
     assert response.status_code == 200
-    assert response.json() == {'announcement': payload}
+    assert {k:response.json()['announcement'][k] for k in payload} == payload
+    assert response.json()['announcement']['audience']=='everyone'
 
 
 @pytest.mark.parametrize('endpoint', ['/dashboard', '/locked-accounts', '/sessions', '/users', '/database/tables', '/audit-log'])
@@ -269,7 +270,7 @@ def test_superadmin_restore_upload_cap(super_api, monkeypatch):
 
 def test_superadmin_routes_owned_once_by_extracted_router():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute) and r.path.startswith(PREFIX + '/')]
-    assert len(routes) == 22
+    assert len(routes) == 24
     assert {(method, r.path[len(PREFIX):]) for r in routes for method in r.methods} == OPERATIONS
     assert all(r.endpoint.__module__ == 'backend.routes.superadmin' and r.tags == ['superadmin'] for r in routes)
     get = next(r for r in routes if r.path == PREFIX + '/security-config')
@@ -366,7 +367,16 @@ EXPECTED_SCHEMAS = {'AccountUnlockRequest': {'properties': {'user_id': {'title':
 
 def test_superadmin_schemas_preserve_identity_and_contract():
     from backend.schemas import superadmin as schemas
+    controls = {
+        'audience': {'default':'everyone','title':'Audience','type':'string'},
+        'roles': {'default':[],'items':{'type':'string'},'title':'Roles','type':'array'},
+        'timezone_revision': {'default':1,'title':'Timezone Revision','type':'integer'},
+        'dismissible': {'default':False,'title':'Dismissible','type':'boolean'},
+    }
+    for key in ['starts_local','expires_local','expected_revision']:
+        controls[key]={'anyOf':[{'type':'string'},{'type':'null'}],'default':None,'title':key.replace('_',' ').title()}
     for name, expected in EXPECTED_SCHEMAS.items():
+        if name=='SystemAnnouncementRequest':expected={**expected,'properties':{**expected['properties'],**controls}}
         assert getattr(main,name) is getattr(schemas,name)
         assert getattr(schemas,name).model_json_schema() == expected
     first = schemas.DatabaseQueryRequest(sql='SELECT 1')

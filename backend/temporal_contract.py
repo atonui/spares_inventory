@@ -12,7 +12,7 @@ from .temporal_manifest import TEMPORAL_FIELDS
 
 _FIELDS = {field.column: field for field in TEMPORAL_FIELDS if field.kind == 'instant' and not field.setting_key}
 _FIELDS['recorded_at'] = next(f for f in TEMPORAL_FIELDS if f.table == 'movements' and f.column == 'created_at')
-_FIELDS['set_at'] = next(f for f in TEMPORAL_FIELDS if f.json_key == 'set_at')
+_FIELDS.update({f.json_key:f for f in TEMPORAL_FIELDS if f.json_key and f.kind == 'instant'})
 
 
 def stored_instant(value, column='created_at'):
