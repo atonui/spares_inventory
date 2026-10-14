@@ -11,6 +11,7 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/shared/csrf.js` | Validated token acquisition and bounded CSRF-rejection retry |
 | `static/js/shared/time-context.js` | Timezone-context validation |
 | `static/js/shared/features.js` | Descriptor-preserving composition with duplicate-owner rejection |
+| `static/js/inventory/application-core.js` | Shared session, request, timezone and common data lifecycle providers |
 | `static/js/inventory/reports.js` | Consumption report state, methods and logout reset |
 | `static/js/inventory/replenishment.js` | Replenishment planning, minimum editing and suggested-transfer review |
 | `static/js/inventory/stock-counts.js` | Physical count entry/preview/confirmation and dialog focus |
@@ -30,12 +31,12 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/inventory/browsing.js` | Search/filter state, selected-store balances, permission helpers and derived views |
 | `static/js/inventory/archived-records.js` | Archived parts/stores/users listing, panel state and restoration |
 | `static/js/inventory/navigation.js` | Shared panel/profile-modal flags, open/close actions and live view label |
-| `static/js/pages/inventory-v20.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts, dispatch, stock entry, consumption, parts, store, user, store-type and equipment administration, plus activity logs, movement history, inventory exports, browsing, archived records and navigation |
+| `static/js/pages/inventory-v21.js` | `inventoryApp()`; explicit composition of fresh core and feature factories only |
 | `static/js/pages/profile.js` | `profileManager()`; account, personal/organisation timezone and password settings |
 | `static/js/pages/password-recovery.js` | `forgotPassword()` and `resetPassword()` |
 | `static/js/pages/superadmin.js` | `superPanel()`; platform administration |
 
-Controllers expose the existing global factories consumed by HTML `x-data` expressions. State belongs to each factory instance; do not replace it with module-level mutable forms or arrays.
+Controllers expose the existing global factories consumed by HTML `x-data` expressions. State belongs to each factory instance; do not replace it with module-level mutable forms or arrays. In the ownership sections below, core providers mean inventoryCoreFeature, not an inline object in the page entrypoint.
 
 ## Script dependencies
 
@@ -43,7 +44,7 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 | Page | Local scripts |
 | --- | --- |
-| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → stock-consumption → parts-admin → stores-admin → users-admin → store-types-admin → equipment → activity-logs → movement-history → exports → browsing → archived-records → navigation → inventory-v20 controller |
+| Inventory | temporal → audit → csrf → time-context → features → application-core → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → stock-consumption → parts-admin → stores-admin → users-admin → store-types-admin → equipment → activity-logs → movement-history → exports → browsing → archived-records → navigation → inventory-v21 controller |
 | Profile | temporal → time-context → profile controller |
 | Forgot/reset password | csrf → password-recovery controller |
 | Superadmin | temporal → audit → csrf → time-context → superadmin controller |
@@ -52,7 +53,7 @@ The profile controller retains its explicit security-token retry interface. Othe
 
 ## Frozen legacy entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js`, PR112 `static/js/pages/inventory-v11.js`, PR113 `static/js/pages/inventory-v12.js`, PR114 `static/js/pages/inventory-v13.js`, PR115 `static/js/pages/inventory-v14.js`, PR116 `static/js/pages/inventory-v15.js`, PR117 `static/js/pages/inventory-v16.js`, PR118 `static/js/pages/inventory-v17.js`, PR119 `static/js/pages/inventory-v18.js` and PR120 `static/js/pages/inventory-v19.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v20 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js`, PR112 `static/js/pages/inventory-v11.js`, PR113 `static/js/pages/inventory-v12.js`, PR114 `static/js/pages/inventory-v13.js`, PR115 `static/js/pages/inventory-v14.js`, PR116 `static/js/pages/inventory-v15.js`, PR117 `static/js/pages/inventory-v16.js`, PR118 `static/js/pages/inventory-v17.js`, PR119 `static/js/pages/inventory-v18.js`, PR120 `static/js/pages/inventory-v19.js` and PR121 `static/js/pages/inventory-v20.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v21 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
 
 These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
 
@@ -71,7 +72,7 @@ git diff --check
 
 Existing controller regressions use shipped page entrypoints. Only dedicated legacy tests load the frozen entrypoints directly.
 
-Consumption reports/work-order drill-down are now a separate feature. The inventory core remains large; physical counts, stock import preview/resolution, transfer receipts, dispatch, stock entry/adjustment and consumption are also separate. Parts, store and user administration are also separate; equipment administration is now separate too. Before each move, map state ownership and cross-feature `this` calls. Later composition must preserve property descriptors/getters, method receivers and fresh instance state, and reject duplicate ownership; object spread is unsafe for getter-bearing feature objects. Each boundary receives its own reviewed plan and PR.
+The inventory entrypoint explicitly composes shared application lifecycle and feature owners. New changes must map state and cross-feature calls before introducing a boundary; preserve descriptors/getters, receivers, fresh instance state and duplicate-owner rejection.
 
 ## Consumption report ownership
 
@@ -128,3 +129,11 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 `archivedRecordsFeature()` owns four properties: rows/panel flag plus parallel listing and restore methods. Core supplies API/feedback/loading and catalog/inventory/statistics refresh; the feature supplies its own final archived reload. Parts/store/user administration call it when the panel is open, and navigation writes its flag through the composed app. Parallel grouping/labels, guard/confirmation, server message, six-refresh ordering, partial failure and swallowed-loader behavior remain unchanged. Rows are fresh; restoration does not add timers/local row removal or alter backend policies.
 
 `navigationFeature()` owns14properties: ten shared panel/profile-modal flags, three open/close actions and the live currentViewLabel getter. Feature-owned flags stay with their owners and are coordinated through the composed app. Exact close sets, inventory filtering order, unawaited report/replenishment calls, arbitrary panel names, unspecified modal preservation and label priority/optional-name behavior remain unchanged. Core now retains shared lifecycle/authentication/API/date/data refresh responsibilities.
+
+## Application lifecycle ownership
+
+`inventoryCoreFeature()` owns41properties:21shared session/request/timezone/data states and20methods. It consumes composed peer loaders, browsing filters/balances and report/time-context reset providers without taking UI/feature ownership. Cached authentication, cookie/CSRF requests, direct me fetch, logout/report reset, status-error handling, metadata validation, timezone actor guard, parallel startup, loader failure semantics and dashboard behavior are copied unchanged. Arrays/forms/stats are fresh. The v21 page factory composes core plus19feature factories exactly once per application; no inline core or dynamic loader remains.
+
+## Implementation and acceptance status
+
+The structural frontend refactor is implemented on this final branch, pending owner merge. Automated dependency/behavior tests and fresh review provide local evidence; deployed public script references/assets and signed-in desktop/mobile smoke acceptance remain pending until actually checked. The recorded credential-session restriction still applies. Frozen legacy retirement remains a separate cache-policy decision.
