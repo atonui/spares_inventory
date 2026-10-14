@@ -137,3 +137,20 @@ The inventory entrypoint explicitly composes shared application lifecycle and fe
 ## Implementation and acceptance status
 
 The structural frontend refactor is implemented on this final branch, pending owner merge. Automated dependency/behavior tests and fresh review provide local evidence; deployed public script references/assets and signed-in desktop/mobile smoke acceptance remain pending until actually checked. The recorded credential-session restriction still applies. Frozen legacy retirement remains a separate cache-policy decision.
+
+### HTML cache policy and historical-script retirement
+
+Static HTML responses send `Cache-Control: no-cache`, including GET, HEAD and
+conditional 304 responses. Browsers may store HTML but must revalidate it before
+reuse; ETag and Last-Modified support remain available. JavaScript, CSS and API
+responses retain their existing cache behaviour. The root endpoint returns API
+metadata rather than HTML and is outside this policy.
+
+This policy does not retroactively invalidate previously cached HTML or guarantee
+that suspended tabs, offline copies or saved pages disappear. Historical scripts
+remain available in this release. Before removing them in a separate PR, verify
+the deployed HTML cache headers and current manifests, document the supported
+upgrade behaviour (older saved pages must refresh from the server), and update
+legacy compatibility tests together with the removals. Do not claim that an
+arbitrary waiting period proves all old clients have refreshed. Git history
+preserves retired sources for rollback.

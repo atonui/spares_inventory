@@ -12,6 +12,16 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 
+class RevalidatingHtmlStaticFiles(StaticFiles):
+    """Require cached HTML to validate its script manifest before reuse."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if path.lower().endswith(".html") and response.status_code in (200, 206, 304):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 async def database_integrity_error(request: Request, exc):
     if getattr(exc, "sqlite_errorcode", None) not in (
         sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY,
@@ -50,6 +60,6 @@ def create_inventory_app(
         allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
     )
-    app.mount("/static", StaticFiles(directory=static_directory), name="static")
+    app.mount("/static", RevalidatingHtmlStaticFiles(directory=static_directory), name="static")
 
     return app, limiter
