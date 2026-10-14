@@ -9,9 +9,16 @@
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/pages/profile.js?v=20261013-frontend-1" defer></script>
+<link rel="stylesheet" href="announcements.css?v=20261014-broadcasts">
+<script src="js/shared/announcements.js?v=20261014-broadcasts" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 <body class="profile-page">
+<section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
+  <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading">Retry</button></p>
+</section>
+
 <main class="profile-shell" aria-labelledby="profile-title" x-data="profileManager()" x-init="init()">
 <header class="profile-header"><div><h1 id="profile-title">Account settings</h1><p>Manage your display preferences and password.</p></div><a href="/static/index.html">← Back to dashboard</a></header>
 <div class="profile-content">

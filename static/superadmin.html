@@ -10,11 +10,18 @@
 <script src="audit.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
-<script src="js/pages/superadmin.js?v=20261013-frontend-1" defer></script>
+<script src="js/pages/superadmin.js?v=20261014-broadcasts" defer></script>
+<link rel="stylesheet" href="announcements.css?v=20261014-broadcasts">
+<script src="js/shared/announcements.js?v=20261014-broadcasts" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 </head>
 
 <body x-data="superPanel()" x-init="init()">
+<section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
+  <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading">Retry</button></p>
+</section>
+
 
 <!-- Toasts -->
 <div class="toast-wrap" role="status" aria-live="polite" aria-atomic="true">
@@ -636,6 +643,8 @@
           <div class="panel-header"><span class="panel-title">📢 System Announcement</span></div>
           <div class="panel-body">
 
+            <p role="status" x-show="announcementLoading">Loading announcement…</p>
+            <p class="action-error" role="alert" x-show="announcementError"><span x-text="announcementError"></span> <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading">Retry</button></p>
             <!-- Current banner preview -->
             <div x-show="announcement" style="margin-bottom:1.25rem;">
               <div style="font-size:0.75rem;color:#888;margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
@@ -645,25 +654,25 @@
                    style="border-radius:6px;border:1px solid #ddd;">
                 <span x-text="announcement?.message"></span>
                 <button class="btn btn-sm btn-outline" style="margin-left:auto;flex-shrink:0;"
-                        @click="clearAnnouncement()" :disabled="actionPending.announcement">✕ Remove</button>
+                        @click="clearAnnouncement()" :disabled="actionPending.announcement || announcementLoading">✕ Remove</button>
               </div>
             </div>
 
             <div class="form-group">
               <label>Message</label>
               <textarea style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
-                        x-model="annForm.message" :disabled="actionPending.announcement"
+                        maxlength="2000" x-model="annForm.message" :disabled="actionPending.announcement || announcementLoading"
                         placeholder="e.g. Scheduled maintenance tonight at 22:00 UTC…"></textarea>
             </div>
             <div class="form-group">
               <label>Level</label>
-              <select x-model="annForm.level" :disabled="actionPending.announcement">
+              <select x-model="annForm.level" :disabled="actionPending.announcement || announcementLoading">
                 <option value="info">Info (blue)</option>
                 <option value="warning">Warning (yellow)</option>
                 <option value="danger">Danger (red)</option>
               </select>
             </div>
-            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message || actionPending.announcement">
+            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message.trim() || actionPending.announcement || announcementLoading">
               📢 Broadcast
             </button>
             <p x-show="actionPending.announcement" role="status">Updating announcement…</p>

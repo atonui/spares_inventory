@@ -339,13 +339,16 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             if key not in allowed_keys:
                 raise HTTPException(status_code=400, detail=f"Unknown config key: {key}")
 
-            # Validate numeric
+            limits = {"max_login_attempts": 100, "lockout_duration_minutes": 1440,
+                      "session_duration_hours": 720, "remember_me_duration_days": 365,
+                      "calibration_reminder_days": 365}
+            # Match the UI and calibration endpoint limits.
             try:
                 val = int(body.value)
-                if val < 1:
+                if val < 1 or val > limits[key]:
                     raise ValueError
             except ValueError:
-                raise HTTPException(status_code=400, detail="Value must be a positive integer")
+                raise HTTPException(status_code=400, detail=f"Value must be an integer between 1 and {limits[key]}")
 
             cur = conn.cursor()
             cur.execute("""
@@ -614,7 +617,12 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
             require_superadmin(user_id, conn)
             cur = conn.cursor()
-            payload = json.dumps({"message": body.message, "level": body.level,
+            message = body.message.strip()
+            if not message or len(message) > 2000:
+                raise HTTPException(status_code=400, detail="Message must contain 1 to 2000 characters")
+            if body.level not in {"info", "warning", "danger"}:
+                raise HTTPException(status_code=400, detail="Level must be info, warning or danger")
+            payload = json.dumps({"message": message, "level": body.level,
                                    "set_at": serialize_instant(utc_now())})
             cur.execute("""
                 INSERT INTO system_settings (setting_key, setting_value, updated_by)

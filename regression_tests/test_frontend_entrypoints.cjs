@@ -16,9 +16,10 @@ const factories = ['inventoryApp','profileManager','forgotPassword','resetPasswo
 const owned = {'index.html':['inventoryApp'],'profile.html':['profileManager'],'forgot_password.html':['forgotPassword','resetPassword'],'reset_password.html':['forgotPassword','resetPassword'],'superadmin.html':['superPanel']};
 function context() {return vm.createContext({console,Intl,Date,URLSearchParams,Headers,FormData,setTimeout:()=>{},document:{activeElement:null}});}
 for (const [page,files] of Object.entries(expected)) {
+    files.push('js/shared/announcements.js');
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
         const scripts=pageScripts(page);
-        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
+        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/shared/announcements.js' || f==='js/pages/superadmin.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
         assert.equal(scripts.length,files.length+1);
         assert.equal(scripts.at(-1).src,'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js');
         assert.ok(scripts.every(s=>s.defer));

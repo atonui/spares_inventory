@@ -145,7 +145,7 @@ function superPanel() {
     auditLog: [], auditTotal: 0, auditOffset: 0, auditActions: [], auditError: '', auditLoading: false,
     auditRequest: 0, auditTimezone: null,
     auditFilters: { start_date: '', end_date: '', action: '', status: '' },
-    announcement: null,
+    announcement: null, announcementLoading: false, announcementError: '',
     annForm: { message: '', level: 'info' },
 
     toasts: [],
@@ -494,7 +494,9 @@ async submitPasswordReset() {
     },
 
     // ── Announcement ───────────────────────────────────────────
-    async loadAnnouncement() {
+    async loadAnnouncement(afterWrite = false) {
+      if (this.announcementLoading || (this.actionPending.announcement && !afterWrite)) return;
+      this.announcementLoading = true; this.announcementError = '';
       try {
         const r = await this.api('/superadmin/announcement');
         this.announcement = r.announcement;
@@ -502,23 +504,27 @@ async submitPasswordReset() {
           this.annForm.message = this.announcement.message;
           this.annForm.level   = this.announcement.level;
         }
-      } catch {}
+      } catch (error) { this.announcementError = error.message; }
+      finally { this.announcementLoading = false; }
     },
 
     async saveAnnouncement() {
+      if (this.announcementLoading) return;
       return this.runAction('announcement', async () => {
         await this.api('/superadmin/announcement', {
           method: 'POST', body: JSON.stringify(this.annForm),
         });
-        this.toast('Announcement broadcast!', 'ok');
-        await this.loadAnnouncement();
+        this.toast('Announcement saved. Open pages refresh within 60 seconds.', 'ok');
+        await this.loadAnnouncement(true);
       });
     },
 
     async clearAnnouncement() {
+      if (this.announcementLoading) return;
       return this.runAction('announcement', async () => {
         await this.api('/superadmin/announcement', { method: 'DELETE' });
         this.announcement = null;
+        this.announcementError = '';
         this.annForm = { message: '', level: 'info' };
         this.toast('Announcement cleared', 'ok');
       });
