@@ -24,7 +24,8 @@ The app uses ordered classic JavaScript scripts and AlpineJS 3.13.0, served by F
 | `static/js/inventory/users-admin.js` | User create/edit/archive form state and mutations |
 | `static/js/inventory/store-types-admin.js` | Store-type create/edit/delete-or-deactivate form state and mutations |
 | `static/js/inventory/equipment.js` | Equipment data, CRUD, calibration, transfers, history, derived views and downloads |
-| `static/js/pages/inventory-v14.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts, dispatch, stock entry, consumption, parts, store, user, store-type and equipment administration |
+| `static/js/inventory/activity-logs.js` | Activity filters, metadata, rows, statistics/details, cleanup, diagnostic and CSV export |
+| `static/js/pages/inventory-v15.js` | `inventoryApp()`; core workflows composed with reports, replenishment, counts, imports, receipts, dispatch, stock entry, consumption, parts, store, user, store-type and equipment administration, plus activity logs |
 | `static/js/pages/profile.js` | `profileManager()`; account, personal/organisation timezone and password settings |
 | `static/js/pages/password-recovery.js` | `forgotPassword()` and `resetPassword()` |
 | `static/js/pages/superadmin.js` | `superPanel()`; platform administration |
@@ -37,7 +38,7 @@ Each row is the exact local script order. All local scripts defer; the existing 
 
 | Page | Local scripts |
 | --- | --- |
-| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → stock-consumption → parts-admin → stores-admin → users-admin → store-types-admin → equipment → inventory-v14 controller |
+| Inventory | temporal → audit → csrf → time-context → features → reports → replenishment → stock-counts → stock-imports → transfer-receipts → stock-dispatch → stock-entry → stock-consumption → parts-admin → stores-admin → users-admin → store-types-admin → equipment → activity-logs → inventory-v15 controller |
 | Profile | temporal → time-context → profile controller |
 | Forgot/reset password | csrf → password-recovery controller |
 | Superadmin | temporal → audit → csrf → time-context → superadmin controller |
@@ -46,7 +47,7 @@ The profile controller retains its explicit security-token retry interface. Othe
 
 ## Frozen legacy entrypoints
 
-`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js`, PR112 `static/js/pages/inventory-v11.js`, PR113 `static/js/pages/inventory-v12.js` and PR114 `static/js/pages/inventory-v13.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v14 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
+`static/script.js`, the PR101 `static/js/pages/inventory.js`, PR102 `static/js/pages/inventory-v2.js`, PR103 `static/js/pages/inventory-v3.js`, PR104 `static/js/pages/inventory-v4.js`, PR105 `static/js/pages/inventory-v5.js`, PR106 `static/js/pages/inventory-v6.js`, PR108 `static/js/pages/inventory-v7.js`, PR109 `static/js/pages/inventory-v8.js`, PR110 `static/js/pages/inventory-v9.js`, PR111 `static/js/pages/inventory-v10.js`, PR112 `static/js/pages/inventory-v11.js`, PR113 `static/js/pages/inventory-v12.js` PR114 `static/js/pages/inventory-v13.js` and PR115 `static/js/pages/inventory-v14.js` are retained byte-for-byte for older cached HTML that still references them. Current pages do not load them. Edit the active v15 controller/features, not the frozen files. Loading both the legacy file and extracted helpers in one page would redeclare globals and must not be done.
 
 These files are temporary migration buffers. Removing them requires an explicit cache-compatibility decision; query strings do not make the old URL an immutable asset. Changes to backend contracts must also consider older open pages. Do not add a second production script loader or duplicate active controllers to work around ordering errors.
 
@@ -110,3 +111,5 @@ Consumption reports/work-order drill-down are now a separate feature. The invent
 `storeTypesAdminFeature()` owns the store-type form, editing ID, modal flag and four create/edit/delete-or-deactivate methods. Core supplies API calls, shared loading/feedback and store-type/store refresh providers. Create includes type_code and omits is_active; update omits type_code and includes is_active. Both retain parseInt(order) or zero and raw description. The initial/add form includes is_active true; save resets omit it. Update refreshes types then stores; delete/deactivate refreshes types only and preserves server feedback. Existing swallowed loader errors, fresh forms and 3,000 ms feedback timers remain unchanged.
 
 `equipmentFeature()` owns 34 properties: equipment data/forms/selection/reminder state, six modal/panel flags, sixteen methods and three live getters. Calibration, transfer and history share its selectedEquipment. Core supplies API calls, feedback/loading, currentUser, businessToday and generic downloadCSV; core startup/dashboard calls moved loaders and navigation writes owned flags through the composed application. Equipment CRUD, calibration, transfer, history, reminder settings, derived views and downloads preserve existing behavior, including swallowed loader errors, raw dates/optional nulls, reset-before-refresh, fixed status versus configurable due-soon thresholds, zero-day export fallback and template URL lifecycle. All forms/arrays are fresh.
+
+`activityLogsFeature()` owns sixteen properties: activity response timezone metadata, filters, rows/statistics/detail selection, three panel/modal flags and eight existing methods. Core supplies API/loading/feedback, date formatting, generic CSV download and diagnostic API/token values. Core navigation closes its panel and logout clears its metadata through the composed application. Movement history/context stay separate. Queries, stats/details, unawaited filter reset, raw cleanup query/confirmation and swallowed reload errors, direct diagnostic transport, CSV time-context labeling/audit formatting/fallbacks and timers retain prior behavior. Arrays/stats/filters are fresh; nullable actors remain supported.
