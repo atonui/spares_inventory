@@ -1,4 +1,5 @@
-/* Login-only styles: inventory and password recovery retain their own layout. */
+/* Shared sign-in and account-recovery styles, scoped to the auth screens. */
+.login-screen[x-cloak], .login-screen [x-cloak] { display: none !important; }
 .login-screen {
     width: min(100%, 960px);
     margin: clamp(16px, 6vh, 64px) auto;
@@ -72,3 +73,19 @@
     .login-options { column-gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .login-submit { transition: none; } }
+
+/* Account recovery uses the same shell, fields and actions as sign-in. */
+.recovery-screen .recovery-help { margin: -2px 0 24px; color: #5b6c7c; font-size: 13px; line-height: 1.7; }
+.recovery-field-help { margin-top: 10px; color: #5b6c7c; font-size: 12px; line-height: 1.65; }
+.recovery-strength { height: 4px; margin-top: 12px; overflow: hidden; border-radius: 4px; background: #e3e9ef; }
+.recovery-strength-label { margin-top: 7px; color: #45596b; font-size: 12px; }
+.recovery-back { margin-top: 24px; text-align: center; }
+.recovery-back a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; color: #075eb6; font-size: 13px; font-weight: 600; text-decoration: none; }
+.recovery-back a:hover { text-decoration: underline; }
+.recovery-action { text-decoration: none; margin-top: 24px; }
+.recovery-success { color: #2b4156; font-size: 14px; line-height: 1.7; }
+.recovery-success h3 { margin: 16px 0 8px; color: #172d42; font-size: 21px; letter-spacing: -.025em; }
+.recovery-success p { margin: 0; }
+.recovery-state-icon { display: block; width: 44px; height: 44px; color: #075eb6; }
+.recovery-status { display: flex; align-items: center; gap: 10px; padding: 18px 0; color: #5b6c7c; font-size: 14px; }
+.recovery-loading-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #075eb6; }
