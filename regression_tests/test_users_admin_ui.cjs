@@ -1,0 +1,84 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const {loadPageScripts} = require('./helpers/frontend.cjs');
+const plain = v => JSON.parse(JSON.stringify(v));
+const initial = {email:'',name:'',password:'',role:'engineer',territory:''};
+const saved = {...initial,role:''};
+const row = {id:42,email:'target@example.test',name:'Target',role:'admin',territory:null};
+function setup({confirm=()=>true,fetch}={}) {
+ const timers=[]; const c=vm.createContext({Headers,FormData,URLSearchParams,fetch,confirm,console:{log(){},error(){}},setTimeout(callback,delay){timers.push({callback,delay});}});
+ loadPageScripts('index.html',c); const a=c.inventoryApp(); c.app=a; a.currentUser={id:1,role:'superadmin'}; return {a,c,timers};
+}
+const html=()=>fs.readFileSync('static/index.html','utf8');
+const clicks=()=>[...html().matchAll(/@click="([^"]*)"/g)].map(m=>m[1]);
+function fill(a,op='update'){a.editUser(row);a.userForm.password='new password';if(op==='create')a.editingUser=null;}
+const response=(status,data)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
+test('actual add/cancel/submit and email/password bindings retain create/edit mode',async()=>{
+ const {a,c}=setup();fill(a);const add=clicks().find(e=>e.startsWith('editingUser = null; userForm ='));assert.ok(add);
+ vm.runInContext('with(app){'+add+'}',c);assert.deepEqual(plain(a.userForm),initial);assert.equal(a.editingUser,null);assert.equal(a.showUserModal,true);
+ const source=html();assert.match(source,/<input[^>]*x-model="userForm.email"[^>]*:disabled="!!editingUser"/);assert.match(source,/<input[^>]*x-model="userForm.password"[^>]*:required="!editingUser"/);
+ const submit=[...source.matchAll(/@submit.prevent="([^"]*)"/g)].map(m=>m[1]).find(e=>e==='editingUser ? updateUser() : createUser()');assert.ok(submit);
+ const calls=[];a.createUser=()=>calls.push('create');a.updateUser=()=>calls.push('update');vm.runInContext('with(app){'+submit+'}',c);a.editUser(row);vm.runInContext('with(app){'+submit+'}',c);assert.deepEqual(calls,['create','update']);
+ const form=a.userForm;assert.equal(form.password,'');assert.equal(form.territory,'');
+ const cancel=clicks().find(e=>e==='showUserModal = false; editingUser = null;');assert.ok(cancel);vm.runInContext('with(app){'+cancel+'}',c);assert.equal(a.showUserModal,false);assert.equal(a.editingUser,null);assert.equal(a.userForm,form);
+});
+for(const territory of ['', ' Kitale '])test('create keeps raw full form territory '+JSON.stringify(territory),async()=>{
+ const {a,timers}=setup();fill(a,'create');a.userForm.territory=territory;const before=plain(a.userForm);const calls=[];
+ a.apiCall=async(path,opts)=>{assert.equal(a.loading,true);calls.push([path,opts.method,JSON.parse(opts.body)]);return {};};
+ a.loadUsers=async()=>{assert.deepEqual(plain(a.userForm),saved);assert.equal(a.showUserModal,false);assert.equal(timers.length,0);calls.push('users');};
+ await a.createUser();assert.deepEqual(calls,[['/users','POST',before],'users']);assert.equal(a.successMessage,'User created successfully!');assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);timers[0].callback();assert.equal(a.successMessage,'');
+});
+for(const territory of ['', ' Kitale '])for(const password of ['', 'changed', '  '])test('update preserves territory/password '+JSON.stringify([territory,password]),async()=>{
+ const {a,timers}=setup();fill(a);a.userForm.territory=territory;a.userForm.password=password;let payload;
+ a.apiCall=async(path,opts)=>{assert.equal(path,'/users/42');assert.equal(opts.method,'PUT');payload=JSON.parse(opts.body);return {};};
+ a.loadUsers=async()=>{assert.deepEqual(plain(a.userForm),saved);assert.equal(a.editingUser,null);assert.equal(a.showUserModal,false);assert.equal(timers.length,0);};
+ await a.updateUser();assert.deepEqual(payload,{name:'Target',role:'admin',territory:territory||null,...(password?{password}:{})});assert.equal(a.successMessage,'User updated successfully!');assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);timers[0].callback();assert.equal(a.successMessage,'');
+});
+test('archive decline retains feedback, session and selection',async()=>{
+ const prompts=[];const {a,timers}=setup({confirm(m){prompts.push(m);return false;}});a.error='old';a.successMessage='keep';a.selectedStore={id:42};const user=a.currentUser,selected=a.selectedStore;
+ a.apiCall=async()=>assert.fail('no write');await a.deleteUser(42,'Target');assert.deepEqual(prompts,['Archive user Target? History will be preserved.']);assert.equal(a.error,'old');assert.equal(a.successMessage,'keep');assert.equal(a.currentUser,user);assert.equal(a.selectedStore,selected);assert.equal(timers.length,0);
+});
+for(const open of [false,true])test('archive preserves session/selection and refresh order, panel '+open,async()=>{
+ const calls=[];const {a,timers}=setup({confirm(m){calls.push(m);return true;}});a.showArchivedPanel=open;a.selectedStore={id:42};const selected=a.selectedStore,user=a.currentUser;
+ a.apiCall=async(path,opts)=>{assert.equal(a.loading,true);calls.push([path,opts.method]);return {message:'Server archived'};};
+ for(const [name,label] of [['loadUsers','users'],['loadInventory','inventory'],['loadArchivedRecords','archived']])a[name]=async()=>{assert.equal(a.currentUser,user);assert.equal(a.selectedStore,selected);assert.equal(timers.length,0);calls.push(label);};
+ await a.deleteUser(42,'Target');assert.deepEqual(calls,['Archive user Target? History will be preserved.',['/users/42','DELETE'],'users','inventory',...(open?['archived']:[])]);assert.equal(a.successMessage,'Server archived');assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);
+});
+for(const op of ['create','update','archive'])for(const stage of (op==='archive'?['write','users','inventory','archived']:['write','users']))test(op+' failure at '+stage+' retains prior or saved state',async()=>{
+ const {a,timers}=setup();fill(a,op);a.showArchivedPanel=true;const form=a.userForm,user=a.currentUser;a.selectedStore={id:42};const selected=a.selectedStore;const calls=[];
+ a.apiCall=async()=>{calls.push('write');if(stage==='write')throw Error('offline');return {message:'Archived'};};
+ for(const [name,label] of [['loadUsers','users'],['loadInventory','inventory'],['loadArchivedRecords','archived']])a[name]=async()=>{calls.push(label);if(stage===label)throw Error('offline');};
+ await a[op==='create'?'createUser':op==='update'?'updateUser':'deleteUser'](42,'Target');
+ assert.equal(a.loading,false);assert.equal(timers.length,0);assert.equal(a.error,'Failed to '+(op==='archive'?'archive':op)+' user: offline');assert.equal(a.currentUser,user);assert.equal(a.selectedStore,selected);
+ if(op!=='archive'&&stage!=='write'){assert.deepEqual(plain(a.userForm),saved);assert.equal(a.showUserModal,false);assert.equal(a.editingUser,null);}else{assert.equal(a.userForm,form);assert.equal(a.showUserModal,true);}
+ const order=['write','users',...(op==='archive'?['inventory','archived']:[])];assert.deepEqual(calls,order.slice(0,order.indexOf(stage)+1));
+});
+for(const stage of ['inventory','archived'])test('core '+stage+' refresh failure is swallowed after successful user archive',async()=>{
+ const {a,timers}=setup();a.showArchivedPanel=stage==='archived';a.selectedStore={id:42};const selected=a.selectedStore,user=a.currentUser;const calls=[];
+ a.apiCall=async(path)=>{calls.push(path);if(path==='/users/42')return {message:'Archived'};if(stage==='inventory'&&path==='/inventory')throw Error('offline');if(stage==='archived'&&path.includes('include_archived'))throw Error('offline');return [];};
+ await a.deleteUser(42,'Target');assert.equal(a.successMessage,'Archived');assert.equal(a.currentUser,user);assert.equal(a.selectedStore,selected);assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);
+ assert.equal(a.error,stage==='inventory'?'Inventory could not refresh. Retry or reload the page: offline':'Failed to load archived records: offline');assert.ok(calls.includes('/inventory'));
+});
+for(const role of ['admin','superadmin','engineer'])test('core loadUsers preserves role check '+role,async()=>{
+ const {a}=setup();a.currentUser.role=role;const calls=[];a.apiCall=async(path)=>{calls.push(path);return [{id:2}];};await a.loadUsers();assert.deepEqual(calls,role==='engineer'?[]:['/users']);assert.equal(a.users.length,role==='engineer'?0:1);
+});
+for(const mode of ['initial','retry','permission','token','retry_rejected'])test('real JSON API/CSRF user write '+mode,async()=>{
+ const calls=[];let writes=0;const {a,timers}=setup({fetch:async(url,opts)=>{
+  assert.equal(opts.credentials,'include');calls.push(url);
+  if(url==='/api/csrf-token')return response(mode==='token'?503:200,{csrf_token:'fresh'});
+  assert.equal(url,'/api/users/42');assert.equal(opts.method,'PUT');assert.equal(opts.headers.get('Content-Type'),'application/json');assert.deepEqual(JSON.parse(opts.body),{name:'Target',role:'admin',territory:null});writes++;
+  if(mode==='permission')return response(403,{detail:'Admin required'});
+  if(mode==='retry_rejected'||(mode==='retry'&&writes===1))return response(403,{detail:'Invalid CSRF token'});
+  assert.equal(opts.headers.get('X-CSRF-Token'),'fresh');return response(200,{});
+ }});fill(a);a.userForm.password='';if(mode!=='initial'&&mode!=='token')a.csrfToken='old';a.loadUsers=async()=>{};const form=a.userForm,user=a.currentUser;
+ await a.updateUser();assert.equal(a.currentUser,user);assert.equal(a.loading,false);
+ if(mode==='initial'||mode==='retry'){assert.deepEqual(plain(a.userForm),saved);assert.equal(timers.length,1);}else{assert.equal(a.userForm,form);assert.equal(a.editingUser,42);assert.equal(timers.length,0);assert.match(a.error,/Failed to update user:/);}
+ assert.equal(writes,mode==='token'?0:mode==='retry'||mode==='retry_rejected'?2:1);
+ assert.equal(calls.filter(u=>u==='/api/csrf-token').length,mode==='permission'?0:1);
+});
+test('navigation closes modal without clearing forms/other editing data; instances independent',()=>{
+ const {a}=setup();fill(a);a.editingEquipment=7;a.editingStoreType=8;const form=a.userForm;a.openPanel('showUsersPanel');assert.equal(a.showUserModal,false);assert.equal(a.userForm,form);assert.equal(a.editingUser,42);assert.equal(a.editingEquipment,7);assert.equal(a.editingStoreType,8);
+ const {a:b}=setup();assert.deepEqual(plain(b.userForm),initial);assert.equal(b.editingUser,null);assert.equal(b.showUserModal,false);
+});
