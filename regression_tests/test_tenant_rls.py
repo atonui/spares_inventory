@@ -1,1 +1,153 @@
-YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éíÛM5N‹Z–‹­¦ëeŠw¬Ôˆˆ‰A½ÍÑÉ•ME0I1LµÕÍÐ¥Í½±…Ñ”É½ÝÌ½¸„É•ÕÍ•°É•ÍÑÉ¥Ñ•½¹¹•Ñ¥½¸¸ˆˆˆ()¥µÁ½ÉÐ½Ì)™É½´ÕÕ¥¥µÁ½ÉÐÕÕ¥Ð()¥µÁ½ÉÐÁåÑ•ÍÐ)¥µÁ½ÉÐÁÍå½Áœ)™É½´ÁÍå½Áœ¥µÁ½ÉÐ•ÉÉ½ÉÌ)™É½´ÁÍå½Áœ¥µÁ½ÉÐÍÅ°()ÁåÑ•ÍÑ}Á±Õ¥¹Ì€ô€ ‰É•É•ÍÍ¥½¹}Ñ•ÍÑÌ¹Á½ÍÑÉ•Í}™¥áÑÕÉ•Ìˆ°¤(()ÁåÑ•ÍÐ¹™¥áÑÕÉ”¡…ÕÑ½ÕÍ”õQÉÕ”¤)‘•˜µ¥É…Ñ•‘}Ñ•¹…¹Ñ}Í¡•µ„¡Á½ÍÑÉ•Í}Í¡•µ„¤è(€€€™É½´‰…­•¹¹Á½ÍÑÉ•Í}µ¥É…Ñ¥½¹Ì¹ÉÕ¹¹•È¥µÁ½ÉÐ…ÁÁ±å}Á½ÍÑÉ•Í}µ¥É…Ñ¥½¹Ì((€€€…ÁÁ±å}Á½ÍÑÉ•Í}µ¥É…Ñ¥½¹Ì¡Á½ÍÑÉ•Í}Í¡•µ…lÁt¤(()ÁåÑ•ÍÐ¹™¥áÑÕÉ”)‘•˜ÉÕ¹Ñ¥µ•}É½±”¡Á½ÍÑÉ•Í}Í¡•µ„¤è(€€€½¹¹•Ñ¥½¸°Í¡•µ„€ôÁ½ÍÑÉ•Í}Í¡•µ„(€€€É½±”€ô€‰Ñ•¹…¹Ñ}ÉÕ¹Ñ¥µ•|ˆ€¬ÕÕ¥Ð ¤¹¡•à(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰IQI=1íô9=1=%8ˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤¤¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰I9PUM=8M!5íôQ<íôˆ¤¹™½Éµ…Ð (€€€€€€€ÍÅ°¹%‘•¹Ñ¥™¥•È¡Í¡•µ„¤°ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤(€€€€¤¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰I9PM1P°%9MIP=8ÍÑ½É•ÌQ<íôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤¤¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 (€€€€€€€€‰I9PM1P=8ÕÍ•ÉÌ°Í•ÍÍ¥½¹Ì°½É…¹¥é…Ñ¥½¹}µ•µ‰•ÉÍ¡¥ÁÌ°Á±…Ñ™½Éµ}…‘µ¥¹ÌQ<íôˆ(€€€€¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤¤¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰I9PUM°M1P=8MEU9ÍÑ½É•Í}¥‘}Í•ÄQ<íôˆ¤¹™½Éµ…Ð (€€€€€€€ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤(€€€€¤¤(€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤(€€€ÑÉäè(€€€€€€€å¥•±É½±”(€€€™¥¹…±±äè(€€€€€€€½¹¹•Ñ¥½¸¹É½±±‰…¬ ¤(€€€€€€€½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰IMPI=1ˆ¤(€€€€€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰I=@=]9	díôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤¤¤(€€€€€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰I=@I=1%a%MQLíôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡É½±”¤¤¤(€€€€€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤(()‘•˜Í••‘}ÍÑ½É•Ì¡½¹¹•Ñ¥½¸¤è(€€€½É…¹¥é…Ñ¥½¹Ì€ôl(€€€€€€€½¹¹•Ñ¥½¸¹•á•ÕÑ” (€€€€€€€€€€€€‰%9MIP%9Q<½É…¹¥é…Ñ¥½¹Ì¡¹…µ”°Í±Õœ¤Y1UL€ •Ì°€•Ì¤IQUI9%9¥ˆ°(€€€€€€€€€€€€¡¹…µ”°¹…µ”¹±½Ý•È ¤¤°(€€€€€€€€¤¹™•Ñ¡½¹” ¥l‰¥‰t(€€€€€€€™½È¹…µ”¥¸€ ‰Q•¹…¹Ðˆ°€‰Q•¹…¹Ðˆ¤(€€€t(€€€ÍÑ½É•Ì€ômt(€€€™½È½É…¹¥é…Ñ¥½¹}¥°¹…µ”¥¸é¥À¡½É…¹¥é…Ñ¥½¹Ì°€ ‰]…É•¡½ÕÍ”ˆ°€‰]…É•¡½ÕÍ”ˆ¤¤è(€€€€€€€ÍÑ½É•}¥€ô½¹¹•Ñ¥½¸¹•á•ÕÑ” (€€€€€€€€€€€€ˆˆ‰%9MIP%9Q<ÍÑ½É•Ì¡½É…¹¥é…Ñ¥½¹}¥°¹…µ”°ÑåÁ”¤(€€€€€€€€€€€€€€Y1UL€ •Ì°€•Ì°€Ý…É•¡½ÕÍ”œ¤IQUI9%9¥ˆˆˆ°(€€€€€€€€€€€€¡½É…¹¥é…Ñ¥½¹}¥°¹…µ”¤°(€€€€€€€€¤¹™•Ñ¡½¹” ¥l‰¥‰t(€€€€€€€ÍÑ½É•Ì¹…ÁÁ•¹ ¡½É…¹¥é…Ñ¥½¹}¥°ÍÑ½É•}¥¤¤(€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤(€€€É•ÑÕÉ¸½É…¹¥é…Ñ¥½¹Ì°ÍÑ½É•Ì(()‘•˜Ñ•ÍÑ}µ¥ÍÍ¥¹}½¹Ñ•áÑ}‘•¹¥•Í}Ñ•¹…¹Ñ}É•…‘Í}…¹‘}ÝÉ¥Ñ•Ì¡Á½ÍÑÉ•Í}Í¡•µ„°ÉÕ¹Ñ¥µ•}É½±”¤è(€€€½¹¹•Ñ¥½¸°|€ôÁ½ÍÑÉ•Í}Í¡•µ„(€€€|°ÍÑ½É•Ì€ôÍ••‘}ÍÑ½É•Ì¡½¹¹•Ñ¥½¸¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰MPI=1íôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡ÉÕ¹Ñ¥µ•}É½±”¤¤¤(€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤((€€€Ý¥Ñ ½¹¹•Ñ¥½¸¹ÑÉ…¹Í…Ñ¥½¸ ¤è(€€€€€€€…ÍÍ•ÉÐ½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰M1P½Õ¹Ð ¨¤L½Õ¹ÐI=4ÍÑ½É•Ìˆ¤¹™•Ñ¡½¹” ¥l‰½Õ¹Ð‰t€ôô€À(€€€Ý¥Ñ ÁåÑ•ÍÐ¹É…¥Í•Ì¡•ÉÉ½ÉÌ¹%¹ÍÕ™™¥¥•¹ÑAÉ¥Ù¥±•”¤è(€€€€€€€Ý¥Ñ ½¹¹•Ñ¥½¸¹ÑÉ…¹Í…Ñ¥½¸ ¤è(€€€€€€€€€€€½¹¹•Ñ¥½¸¹•á•ÕÑ” (€€€€€€€€€€€€€€€€‰%9MIP%9Q<ÍÑ½É•Ì¡½É…¹¥é…Ñ¥½¹}¥°¹…µ”°ÑåÁ”¤Y1UL€ •Ì°€9¼½¹Ñ•áÐœ°€Ý…É•¡½ÕÍ”œ¤ˆ°(€€€€€€€€€€€€€€€€¡ÍÑ½É•ÍlÁulÁt°¤°(€€€€€€€€€€€€¤(()‘•˜Ñ•ÍÑ}½¹Ñ•áÑ}Í½Á•Í}É•…‘Í}…¹‘}ÑÉ…¹Í…Ñ¥½¹}•¹‘}±•…ÉÍ}¥Ð£[h‘éì¶»§q«^uÑÉ•Í}Í¡•µ„°ÉÕ¹Ñ¥µ•}É½±”¤è(€€€™É½´‰…­•¹¹Í•ÉÙ¥•Ì¹Ñ•¹…¹Ñ}½¹Ñ•áÐ¥µÁ½ÉÐÍ•Ñ}Ñ•¹…¹Ñ}½¹Ñ•áÐ((€€€½¹¹•Ñ¥½¸°|€ôÁ½ÍÑÉ•Í}Í¡•µ„(€€€½É…¹¥é…Ñ¥½¹Ì°|€ôÍ••‘}ÍÑ½É•Ì¡½¹¹•Ñ¥½¸¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰MPI=1íôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡ÉÕ¹Ñ¥µ•}É½±”¤¤¤(€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤((€€€Ý¥Ñ ÁåÑ•ÍÐ¹É…¥Í•Ì¡IÕ¹Ñ¥µ•ÉÉ½È¤è(€€€€€€€Ý¥Ñ ½¹¹•Ñ¥½¸¹ÑÉ…¹Í…Ñ¥½¸ ¤è(€€€€€€€€€€€Í•Ñ}Ñ•¹…¹Ñ}½¹Ñ•áÐ¡½¹¹•Ñ¥½¸°½É…¹¥é…Ñ¥½¹ÍlÁt¤(€€€€€€€€€€€…ÍÍ•ÉÐ½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰M1P½Õ¹Ð ¨¤L½Õ¹ÐI=4ÍÑ½É•Ìˆ¤¹™•Ñ¡½¹” ¥l‰½Õ¹Ð‰t€ôô€Ä(€€€€€€€€€€€É…¥Í”IÕ¹Ñ¥µ•ÉÉ½È ‰É½±°‰…¬½É…¹¥é…Ñ¥½¸ˆ¤((€€€Ý¥Ñ ½¹¹•Ñ¥½¸¹ÑÉ…¹Í…Ñ¥½¸ ¤è(€€€€€€€…ÍÍ•ÉÐ½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰M1P½Õ¹Ð ¨¤L½Õ¹ÐI=4ÍÑ½É•Ìˆ¤¹™•Ñ¡½¹” ¥l‰½Õ¹Ð‰t€ôô€À(€€€€€€€Í•Ñ}Ñ•¹…¹Ñ}½¹Ñ•áÐ¡½¹¹•Ñ¥½¸°½É…¹¥é…Ñ¥½¹ÍlÅt¤(€€€€€€€É½ÝÌ€ô½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰M1P¹…µ”I=4ÍÑ½É•Ìˆ¤¹™•Ñ¡…±° ¤(€€€€€€€…ÍÍ•ÉÐÉ½ÝÌ€ôômì‰¹…µ”ˆè€‰]…É•¡½ÕÍ”‰õt(()‘•˜Ñ•ÍÑ}½¹Ñ•áÑ}…¹¹½Ñ}ÝÉ¥Ñ•}…¹½Ñ¡•É}½É…¹¥é…Ñ¥½¹Í}É½ÝÌ¡Á½ÍÑÉ•Í}Í¡•µ„°ÉÕ¹Ñ¥µ•}É½±”¤è(€€€™É½´‰…­•¹¹Í•ÉÙ¥•Ì¹Ñ•¹…¹Ñ}½¹Ñ•áÐ¥µÁ½ÉÐÍ•Ñ}Ñ•¹…¹Ñ}½¹Ñ•áÐ((€€€½¹¹•Ñ¥½¸°|€ôÁ½ÍÑÉ•Í}Í¡•µ„(€€€½É…¹¥é…Ñ¥½¹Ì°|€ôÍ••‘}ÍÑ½É•Ì¡½¹¹•Ñ¥½¸¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰MPI=1íôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡ÉÕ¹Ñ¥µ•}É½±”¤¤¤(€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤((€€€Ý¥Ñ ÁåÑ•ÍÐ¹É…¥Í•Ì¡•ÉÉ½ÉÌ¹%¹ÍÕ™™¥¥•¹ÑAÉ¥Ù¥±•”¤è(€€€€€€€Ý¥Ñ ½¹¹•Ñ¥½¸¹ÑÉ…¹Í…Ñ¥½¸ ¤è(€€€€€€€€€€€Í•Ñ}Ñ•¹…¹Ñ}½¹Ñ•áÐ¡½¹¹•Ñ¥½¸°½É…¹¥é…Ñ¥½¹ÍlÁt¤(€€€€€€€€€€€½¹¹•Ñ¥½¸¹•á•ÕÑ” (€€€€€€€€€€€€€€€€‰%9MIP%9Q<ÍÑ½É•Ì¡½É…¹¥é…Ñ¥½¹}¥°¹…µ”°ÑåÁ”¤Y1UL€ •Ì°€MÁ½½™•œ°€Ý…É•¡½ÕÍ”œ¤ˆ°(€€€€€€€€€€€€€€€€¡½É…¹¥é…Ñ¥½¹ÍlÅt°¤°(€€€€€€€€€€€€¤(()‘•˜Ñ•ÍÑ}…ÕÑ¡•¹Ñ¥…Ñ•‘}ÑÉ…¹Í…Ñ¥½¹}ÕÍ•Í}µ•µ‰•ÉÍ¡¥Á}™É½µ}Í•ÍÍ¥½¸¡Á½ÍÑÉ•Í}Í¡•µ„°ÉÕ¹Ñ¥µ•}É½±”¤è(€€€™É½´‰…­•¹¹Í•ÉÙ¥•Ì¹Ñ•¹…¹Ñ}½¹Ñ•áÐ¥µÁ½ÉÐ…ÕÑ¡•¹Ñ¥…Ñ•‘}Ñ•¹…¹Ñ}ÑÉ…¹Í…Ñ¥½¸(€€€™É½´É•É•ÍÍ¥½¹}Ñ•ÍÑÌ¹Ñ•ÍÑ}Ñ•¹…¹Ñ}½¹Ñ•áÐ¥µÁ½ÉÐÍ••‘}ÕÍ•È((€€€½¹¹•Ñ¥½¸°|€ôÁ½ÍÑÉ•Í}Í¡•µ„(€€€½É…¹¥é…Ñ¥½¹Ì°|€ôÍ••‘}ÍÑ½É•Ì¡½¹¹•Ñ¥½¸¤(€€€}½É}¥°ÕÍ•É}¥°Ñ½­•¸€ôÍ••‘}ÕÍ•È¡½¹¹•Ñ¥½¸°É½±”ô‰•¹¥¹••Èˆ¤(€€€½¹¹•Ñ¥½¸¹•á•ÕÑ” (€€€€€€€€‰UAQ½É…¹¥é…Ñ¥½¹}µ•µ‰•ÉÍ¡¥ÁÌMP½É…¹¥é…Ñ¥½¹}¥€ô€•Ì]!IÕÍ•É}¥€ô€•Ìˆ°(€€€€€€€€¡½É…¹¥é…Ñ¥½¹ÍlÁt°ÕÍ•É}¥¤°(€€€€¤(€€€½¹¹•Ñ¥½¸¹½µµ¥Ð ¤(€€€Í¡•µ„€ô½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰M1PÕÉÉ•¹Ñ}Í¡•µ„ ¤L¹…µ”ˆ¤¹™•Ñ¡½¹” ¥l‰¹…µ”‰t((€€€‘•˜Í½Á•‘}½¹¹•Ñ¥½¸ ¤è(€€€€€€€Í½Á•€ôÁÍå½Áœ¹½¹¹•Ð (€€€€€€€€€€€½Ì¹•¹Ù¥É½¹l‰QMQ}Q	M}UI0‰t°(€€€€€€€€€€€É½Ý}™…Ñ½ÉäõÁÍå½Áœ¹É½ÝÌ¹‘¥Ñ}É½Ü°(€€€€€€€€€€€½¹¹•Ñ}Ñ¥µ•½ÕÐôÔ°(€€€€€€€€¤(€€€€€€€Í½Á•¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰MPÍ•…É¡}Á…Ñ Q<íôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡Í¡•µ„¤¤¤(€€€€€€€Í½Á•¹•á•ÕÑ”¡ÍÅ°¹ME0 ‰MPI=1íôˆ¤¹™½Éµ…Ð¡ÍÅ°¹%‘•¹Ñ¥™¥•È¡ÉÕ¹Ñ¥µ•}É½±”¤¤¤(€€€€€€€Í½Á•¹½µµ¥Ð ¤(€€€€€€€É•ÑÕÉ¸Í½Á•((€€€Ý¥Ñ …ÕÑ¡•¹Ñ¥…Ñ•‘}Ñ•¹…¹Ñ}ÑÉ…¹Í…Ñ¥½¸ (€€€€€€€Í½Á•‘}½¹¹•Ñ¥½¸°(€€€€€€€Í•ÍÍ¥½¹}Ñ½­•¸õÑ½­•¸°(€€€€¤…Ì€¡Ñ•¹…¹Ñ}½¹¹•Ñ¥½¸°ÁÉ¥¹¥Á…°¤è(€€€€€€€…ÍÍ•ÉÐÁÉ¥¹¥Á…°¹½É…¹¥é…Ñ¥½¹}¥€ôô}½É}¥(€€€€€€€É½ÝÌ€ôÑ•¹…¹Ñ}½¹¹•Ñ¥½¸¹•á•ÕÑ” ‰M1P¹…µ”I=4ÍÑ½É•Ì=IH	d¹…µ”ˆ¤¹™•Ñ¡…±° ¤((€€€…ÍÍ•ÉÐÉ½ÝÌ€ôômì‰¹…µ”ˆè€‰]…É•¡½ÕÍ”‰õt(
+"""PostgreSQL RLS must isolate rows on a reused, restricted connection."""
+
+import os
+from uuid import uuid4
+
+import pytest
+import psycopg
+from psycopg import errors
+from psycopg import sql
+
+pytest_plugins = ("regression_tests.postgres_fixtures",)
+
+
+@pytest.fixture(autouse=True)
+def migrated_tenant_schema(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    apply_postgres_migrations(postgres_schema[0])
+
+
+@pytest.fixture
+def runtime_role(postgres_schema):
+    connection, schema = postgres_schema
+    role = "tenant_runtime_" + uuid4().hex
+    connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+        sql.Identifier(schema), sql.Identifier(role)
+    ))
+    connection.execute(sql.SQL("GRANT SELECT, INSERT ON stores TO {}").format(sql.Identifier(role)))
+    connection.execute(sql.SQL(
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins TO {}"
+    ).format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE stores_id_seq TO {}").format(
+        sql.Identifier(role)
+    ))
+    connection.commit()
+    try:
+        yield role
+    finally:
+        connection.rollback()
+        connection.execute("RESET ROLE")
+        connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
+        connection.commit()
+
+
+def seed_stores(connection):
+    organizations = [
+        connection.execute(
+            "INSERT INTO organizations(name, slug) VALUES (%s, %s) RETURNING id",
+            (name, name.lower()),
+        ).fetchone()["id"]
+        for name in ("Tenant A", "Tenant B")
+    ]
+    stores = []
+    for organization_id, name in zip(organizations, ("A Warehouse", "B Warehouse")):
+        store_id = connection.execute(
+            """INSERT INTO stores(organization_id, name, type)
+               VALUES (%s, %s, 'warehouse') RETURNING id""",
+            (organization_id, name),
+        ).fetchone()["id"]
+        stores.append((organization_id, store_id))
+    connection.commit()
+    return organizations, stores
+
+
+def test_missing_context_denies_tenant_reads_and_writes(postgres_schema, runtime_role):
+    connection, _ = postgres_schema
+    _, stores = seed_stores(connection)
+    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
+    connection.commit()
+
+    with connection.transaction():
+        assert connection.execute("SELECT count(*) AS count FROM stores").fetchone()["count"] == 0
+    with pytest.raises(errors.InsufficientPrivilege):
+        with connection.transaction():
+            connection.execute(
+                "INSERT INTO stores(organization_id, name, type) VALUES (%s, 'No context', 'warehouse')",
+                (stores[0][0],),
+            )
+
+
+def test_context_scopes_reads_and_transaction_end_clears_it(postgres_schema, runtime_role):
+    from backend.services.tenant_context import set_tenant_context
+
+    connection, _ = postgres_schema
+    organizations, _ = seed_stores(connection)
+    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
+    connection.commit()
+
+    with pytest.raises(RuntimeError):
+        with connection.transaction():
+            set_tenant_context(connection, organizations[0])
+            assert connection.execute("SELECT count(*) AS count FROM stores").fetchone()["count"] == 1
+            raise RuntimeError("roll back organization A")
+
+    with connection.transaction():
+        assert connection.execute("SELECT count(*) AS count FROM stores").fetchone()["count"] == 0
+        set_tenant_context(connection, organizations[1])
+        rows = connection.execute("SELECT name FROM stores").fetchall()
+        assert rows == [{"name": "B Warehouse"}]
+
+
+def test_context_cannot_write_another_organizations_rows(postgres_schema, runtime_role):
+    from backend.services.tenant_context import set_tenant_context
+
+    connection, _ = postgres_schema
+    organizations, _ = seed_stores(connection)
+    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
+    connection.commit()
+
+    with pytest.raises(errors.InsufficientPrivilege):
+        with connection.transaction():
+            set_tenant_context(connection, organizations[0])
+            connection.execute(
+                "INSERT INTO stores(organization_id, name, type) VALUES (%s, 'Spoofed', 'warehouse')",
+                (organizations[1],),
+            )
+
+
+def test_authenticated_transaction_uses_membership_from_session(postgres_schema, runtime_role):
+    from backend.services.tenant_context import authenticated_tenant_transaction
+    from regression_tests.test_tenant_context import seed_user
+
+    connection, _ = postgres_schema
+    organizations, _ = seed_stores(connection)
+    _org_id, user_id, token = seed_user(connection, role="engineer")
+    connection.execute(
+        "UPDATE organization_memberships SET organization_id = %s WHERE user_id = %s",
+        (organizations[0], user_id),
+    )
+    connection.commit()
+    schema = connection.execute("SELECT current_schema() AS name").fetchone()["name"]
+
+    def scoped_connection():
+        scoped = psycopg.connect(
+            os.environ["TEST_DATABASE_URL"],
+            row_factory=psycopg.rows.dict_row,
+            connect_timeout=5,
+        )
+        scoped.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        scoped.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
+        scoped.commit()
+        return scoped
+
+    with authenticated_tenant_transaction(
+        scoped_connection,
+        session_token=token,
+    ) as (tenant_connection, principal):
+        assert principal.organization_id == _org_id
+        rows = tenant_connection.execute("SELECT name FROM stores ORDER BY name").fetchall()
+
+    assert rows == [{"name": "A Warehouse"}]
