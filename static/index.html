@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261012-timezone">
+    <link rel="stylesheet" href="mystyle.css?v=20261016-movement-date-inputs">
     <link rel="stylesheet" href="login.css?v=20261014-recovery-style">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -642,10 +642,10 @@
                 </tr></template></tbody></table></div>
             </section>
 
-            <section x-show="showMovementsPanel" class="controls" aria-labelledby="movement-history-heading">
+            <section x-show="showMovementsPanel" class="controls movement-history-panel" aria-labelledby="movement-history-heading">
                 <h3 id="movement-history-heading">Movement history</h3>
                 <p>Review the latest stock additions, consumption, adjustments, and transfers. Use filters to narrow the displayed movements.</p>
-                <form class="replenishment-toolbar" @submit.prevent="loadMovements()">
+                <form class="replenishment-toolbar movement-history-toolbar" @submit.prevent="loadMovements()">
                     <div><label for="movement-start">From date</label><input id="movement-start" type="date" x-model="movementFilters.startDate"></div>
                     <div><label for="movement-end">Through date</label><input id="movement-end" type="date" x-model="movementFilters.endDate"></div>
                     <div><label for="movement-type">Type</label><select id="movement-type" x-model="movementFilters.movementType"><option value="">All types</option><option value="add">Addition</option><option value="consume">Consumption</option><option value="remove">Adjustment</option><option value="transfer">Transfer</option></select></div>
