@@ -29,7 +29,7 @@ def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schem
 
     connection, schema = postgres_schema
     org_a, user_a, token_a = seed_user(connection, role="owner")
-    org_b, user_b, _token_b = seed_user(connection, role="owner")
+    org_b, user_b, _token_b = seed_user(connection, role="admin")
     seeded_ids = []
     for org_id, user_id, suffix in ((org_a, user_a, "A"), (org_b, user_b, "B")):
         part_id = connection.execute(
