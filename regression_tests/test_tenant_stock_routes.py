@@ -142,7 +142,10 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
     connection.execute(sql.SQL(
         "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, stores, parts, inventory, work_orders TO {}"
     ).format(sql.Identifier(role)))
-    connection.execute(sql.SQL("GRANT INSERT, UPDATE ON inventory, movements, work_orders TO {}").format(
+    connection.execute(sql.SQL("GRANT INSERT, UPDATE ON inventory, work_orders TO {}").format(
+        sql.Identifier(role)
+    ))
+    connection.execute(sql.SQL("GRANT SELECT, INSERT, UPDATE ON movements TO {}").format(
         sql.Identifier(role)
     ))
     connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
