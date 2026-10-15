@@ -109,7 +109,9 @@ def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schem
         filters = {"start_date": date(2026, 5, 1), "end_date": date(2026, 5, 1), "part_id": None, "store_id": None,
                    "engineer_id": None, "work_order_number": None, "limit": 100, "offset": 0}
         report = asyncio.run(report_endpoint(f=filters, user_id=user_a, request=request))
-        csv_report = asyncio.run(csv_endpoint(f=filters, user_id=user_a, request=request))
+        csv_report = asyncio.run(csv_endpoint(
+            f=filters, user_id=user_a, request=request, expected_timezone_revision=1
+        ))
         assert report["totals"] == {"events": 1, "quantity": 3, "parts": 1}
         assert [row["part_number"] for row in report["rows"]] == ["HISTORY-A"]
         assert "HISTORY-A" in csv_report.body.decode("utf-8-sig")
