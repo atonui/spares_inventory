@@ -55,6 +55,7 @@ def test_superadmin_security_config_get_is_read_only(super_api):
         }
     # GET must work without a CSRF token or a request body.
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     before = database_state(path)
     response = client.get(PREFIX + '/security-config')
     assert response.status_code == 200, response.text

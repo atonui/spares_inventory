@@ -4,6 +4,7 @@ from contextlib import closing
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from stock_audit import balance_snapshot, change_after, record_stock_audit
+from backend.services.session_credentials import get_request_credential
 
 class MinimumRequest(BaseModel):
     store_id: int = Field(gt=0, strict=True)
@@ -69,7 +70,7 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
 
     @app.put('/api/inventory/minimum')
     async def minimum(data: MinimumRequest, user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
-        with write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with write_transaction(user_id, get_request_credential(request).value) as conn:
             require_active(conn,'users',user_id)
             require_active(conn,'stores',data.store_id)
             require_active(conn,'parts',data.part_id)

@@ -125,6 +125,7 @@ def test_count_confirmation_requires_csrf_and_explicit_acknowledgement(api):
     p = preview(api).json()
     assert api[0].post('/api/inventory/count-confirm',json={'preview_token':p['preview_token'],'confirmed':False}).status_code == 400
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert confirm(api,p).status_code == 403
 
 

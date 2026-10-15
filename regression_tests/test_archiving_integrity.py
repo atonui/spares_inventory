@@ -140,6 +140,7 @@ def test_archive_permissions_and_csrf(api):
     assert api[0].post('/api/parts/970/restore').status_code==403
     api[2]['id']=1
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert api[0].post('/api/parts/970/restore').status_code==403
 
 

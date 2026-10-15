@@ -54,6 +54,7 @@ def test_restore_requires_csrf(api):
     import main
     api[2]['id']=2
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     response=api[0].post('/api/superadmin/database/restore',files={'file':('bad.db',b'not sqlite')})
     assert response.status_code==403
 

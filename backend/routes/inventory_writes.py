@@ -1,4 +1,5 @@
 """Stock-changing inventory routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.database_sql import execute, execute_cursor, is_postgres
 from backend.temporal import serialize_instant, utc_now
@@ -68,7 +69,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         request: Request = None,
     ):
         """Consume stock from inventory (requires work order)"""
-        with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value, busy_detail="Stock is busy; no changes saved. Try again") as conn:
             cursor = conn.cursor()
 
             # Get inventory item
@@ -166,7 +167,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         request: Request = None,
     ):
         """Set previewed unallocated stock balances as one transaction."""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token'),
+        with authenticated_write_transaction(user_id, get_request_credential(request).value,
                 busy_detail='Database busy; no balances saved. Try again') as conn:
             store = execute(conn, "SELECT type,assigned_user_id FROM stores WHERE id=?",
                             (request_data.store_id,)).fetchone()
@@ -240,7 +241,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         request: Request = None,
     ):
         """Add stock to inventory"""
-        with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value, busy_detail="Stock is busy; no changes saved. Try again") as conn:
             cursor = conn.cursor()
 
             # Check if user can edit this store
@@ -316,7 +317,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         request: Request = None,
     ):
         """Update inventory quantity"""
-        with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value, busy_detail="Stock is busy; no changes saved. Try again") as conn:
             cursor = conn.cursor()
 
             # Get inventory item
@@ -375,7 +376,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         request: Request = None,
     ):
         """Dispatch stock; destination stock becomes available only on receipt."""
-        with authenticated_write_transaction(user_id, request.cookies.get("session_token"), busy_detail="Stock is busy; no changes saved. Try again") as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value, busy_detail="Stock is busy; no changes saved. Try again") as conn:
             item = execute(conn, _locked(conn, "SELECT i.*,s.type,s.assigned_user_id,p.part_number FROM inventory i JOIN stores s ON s.id=i.store_id JOIN parts p ON p.id=i.part_id WHERE i.id=?", "i"),
                            (request_data.inventory_id,)).fetchone()
             if not item:
@@ -422,13 +423,13 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
     @log_endpoint(action='receive_transfer',resource_type='inventory', transactional=True)
     async def receive_transfer(transfer_id: int,data: TransferConfirmationRequest,
         user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
-        return complete_transfer(transfer_id,data,user_id,'received',request,session_token=request.cookies.get('session_token'))
+        return complete_transfer(transfer_id,data,user_id,'received',request,session_token=get_request_credential(request).value)
 
     @router.post('/api/inventory/transfers/{transfer_id}/return')
     @log_endpoint(action='return_transfer',resource_type='inventory', transactional=True)
     async def return_transfer(transfer_id: int,data: TransferConfirmationRequest,
         user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
-        return complete_transfer(transfer_id,data,user_id,'returned',request,session_token=request.cookies.get('session_token'))
+        return complete_transfer(transfer_id,data,user_id,'returned',request,session_token=get_request_credential(request).value)
 
     router.consume_stock = consume_stock
     router.import_stock_balances = import_stock_balances

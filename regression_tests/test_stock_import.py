@@ -69,6 +69,7 @@ def test_import_requires_csrf(api):
     import main
     seed(api)
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert post(api,[{'part_number':'CSV-A','quantity':4,'expected_quantity':7}]).status_code == 403
 
 

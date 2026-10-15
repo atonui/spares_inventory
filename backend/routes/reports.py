@@ -1,4 +1,5 @@
 """Read-only consumption reports with actor-scoped access and complete exports."""
+from backend.services.session_credentials import get_request_credential
 import csv
 import io
 from datetime import date
@@ -76,7 +77,7 @@ def create_stock_report_router(*, get_connection, current_user, require_active) 
     async def consumption(f: dict = Depends(filters),user_id: int = Depends(current_user),request: Request = None):
         with authenticated_database_transaction(
             get_connection, principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,f['start_date'],f['end_date'])
@@ -99,7 +100,7 @@ def create_stock_report_router(*, get_connection, current_user, require_active) 
                               expected_timezone_revision: int | None = Query(default=None,ge=1)):
         with authenticated_database_transaction(
             get_connection, principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             if expected_timezone_revision is not None and expected_timezone_revision!=context.revision:

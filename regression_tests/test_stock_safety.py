@@ -28,6 +28,7 @@ def api(tmp_path, monkeypatch):
     current = {'id': 1}
     main.app.dependency_overrides[main.get_current_user] = lambda: current['id']
     main.app.dependency_overrides[main.verify_csrf] = lambda: True
+    main.app.dependency_overrides[main.verify_authenticated_csrf] = lambda: True
     with TestClient(main.app) as client:
         def credential(request):
             # Preserve tokens explicitly supplied by session-management tests.

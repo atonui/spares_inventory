@@ -1,4 +1,5 @@
 """Platform-level tenant provisioning and global administrator management."""
+from backend.services.session_credentials import get_request_credential
 
 import json
 
@@ -31,7 +32,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         with authenticated_platform_transaction(
-            get_connection, session_token=request.cookies.get("session_token"),
+            get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
         ) as (conn, _principal):
             organizations = conn.execute(
@@ -61,7 +62,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         with authenticated_platform_transaction(
-            get_connection, session_token=request.cookies.get("session_token"),
+            get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
         ) as (conn, _principal):
             rows = conn.execute(
@@ -75,7 +76,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         with authenticated_platform_transaction(
-            get_connection, session_token=request.cookies.get("session_token"),
+            get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
         ) as (conn, _principal):
             rows = conn.execute(
@@ -95,7 +96,7 @@ def create_platform_organizations_router(
         require_postgres()
         try:
             with authenticated_platform_transaction(
-                get_connection, session_token=request.cookies.get("session_token"),
+                get_connection, session_token=get_request_credential(request).value,
                 expected_user_id=getattr(user_id, "user_id", user_id),
             ) as (conn, principal):
                 try:
@@ -128,7 +129,7 @@ def create_platform_organizations_router(
             raise HTTPException(status_code=404, detail="Organization member not found") from None
         require_postgres()
         with authenticated_platform_transaction(
-            get_connection, session_token=request.cookies.get("session_token"),
+            get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
             membership = conn.execute(
@@ -159,7 +160,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         with authenticated_platform_transaction(
-            get_connection, session_token=request.cookies.get("session_token"),
+            get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
             target = conn.execute(
@@ -186,7 +187,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         with authenticated_platform_transaction(
-            get_connection, session_token=request.cookies.get("session_token"),
+            get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
             conn.execute("LOCK TABLE platform_admins IN EXCLUSIVE MODE")

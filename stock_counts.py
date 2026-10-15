@@ -1,5 +1,6 @@
 """Physical counting over existing inventory rows; no reservation redistribution."""
 from stock_audit import balance_snapshot, change_after, record_stock_audit
+from backend.services.session_credentials import get_request_credential
 import hashlib
 import json
 from contextlib import closing
@@ -118,7 +119,7 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
         if not body.confirmed:
             raise HTTPException(400, 'Confirm that these are the physical counts before saving')
         data = read_token(body.preview_token,'preview',user_id)
-        with write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with write_transaction(user_id, get_request_credential(request).value) as conn:
             store = permitted_store(conn,data['store_id'],user_id)
             fresh_snapshot(conn,data)
             changed = 0

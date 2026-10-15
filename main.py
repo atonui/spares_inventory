@@ -1,4 +1,9 @@
-from fastapi import Cookie, Header, HTTPException
+from fastapi import Cookie, Depends, Header, HTTPException, Request, Security
+from fastapi.security import APIKeyCookie, HTTPBearer
+from backend.services.session_credentials import (
+    get_request_credential,
+    resolve_request_credential,
+)
 
 from contextlib import asynccontextmanager, contextmanager
 from typing import List
@@ -51,6 +56,22 @@ REMEMBER_ME_DURATION_DAYS = 30
 # csrf configuration
 csrf_helpers = create_csrf_helpers(CSRF_SECRET)
 csrf_serializer = csrf_helpers.serializer
+
+session_cookie_security = APIKeyCookie(
+    name="session_token",
+    scheme_name="SessionCookie",
+    description="Existing HTTP-only browser session cookie.",
+    auto_error=False,
+)
+session_bearer_security = HTTPBearer(
+    scheme_name="BearerAuth",
+    bearerFormat="Opaque",
+    description=(
+        "Opaque, high-entropy session credential; not a JWT. The server resolves "
+        "session expiry, revocation, user, tenant, and permissions from database state."
+    ),
+    auto_error=False,
+)
 
 
 # Database setup
@@ -347,10 +368,20 @@ from backend.schemas.equipment import (
 
 
 # Authentication dependency
-async def get_current_user(session_token: str = Cookie(None)):
+async def get_current_user(
+    session_token: str = Cookie(None),
+    request: Request = None,
+    _cookie_auth=Security(session_cookie_security),
+    _bearer_auth=Security(session_bearer_security),
+):
     """Validate and update activity within one short writer transaction."""
+    credential = (
+        get_request_credential(request)
+        if request is not None
+        else resolve_request_credential(session_token, None)
+    )
     return authenticate_session(
-        session_token, get_db_connection,
+        credential.value, get_db_connection,
         session_validator=require_session,
         transaction_factory=write_stock_transaction,
         busy_detail=GENERIC_BUSY_DETAIL,
@@ -363,6 +394,18 @@ async def verify_csrf(x_csrf_token: str = Header(None)):
     return require_csrf_token(x_csrf_token, verify_csrf_token)
 
 
+async def verify_authenticated_csrf(
+    request: Request,
+    _user=Depends(get_current_user),
+    x_csrf_token: str = Header(None),
+):
+    """Require authentication first; waive CSRF only for a validated Bearer request."""
+    credential = get_request_credential(request)
+    if credential.transport == "bearer":
+        return True
+    return require_csrf_token(x_csrf_token, verify_csrf_token)
+
+
 from backend.routes.auth import create_auth_router
 
 app.include_router(create_auth_router(
@@ -371,6 +414,7 @@ app.include_router(create_auth_router(
     stock_writer=lambda: stock_write_transaction(),
     current_user=get_current_user,
     csrf_dependency=verify_csrf,
+    authenticated_csrf_dependency=verify_authenticated_csrf,
     csrf_token_factory=lambda: generate_csrf_token(),
     password_hash=lambda password: hash_password(password),
     password_verify=lambda plain, hashed: verify_password(plain, hashed),
@@ -394,14 +438,14 @@ app.include_router(create_timezone_settings_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
 ))
 
 app.include_router(create_organization_settings_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
 ))
 
 from backend.routes.invitations import create_invitation_router
@@ -412,6 +456,7 @@ app.include_router(create_invitation_router(
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
     current_user=get_current_user,
     csrf_dependency=verify_csrf,
+    authenticated_csrf_dependency=verify_authenticated_csrf,
     password_hash=lambda password: hash_password(password),
     password_verify=lambda plain, hashed: verify_password(plain, hashed),
     encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
@@ -422,7 +467,7 @@ app.include_router(create_invitation_router(
 app.include_router(create_platform_organizations_router(
     get_connection=lambda: get_db_connection(),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
     frontend_url=settings.INVITATION_BASE_URL or FRONTEND_URL,
 ))
@@ -431,7 +476,7 @@ app.include_router(create_stores_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     admin_guard=lambda *args, **kwargs: check_admin(*args, **kwargs),
     active_record_guard=lambda *args, **kwargs: require_active_record(*args, **kwargs),
     archive_admin_guard=lambda *args, **kwargs: require_archive_admin(*args, **kwargs),
@@ -447,7 +492,7 @@ app.include_router(create_parts_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     admin_guard=lambda *args, **kwargs: check_admin(*args, **kwargs),
     archive_admin_guard=lambda *args, **kwargs: require_archive_admin(*args, **kwargs),
     archive_service=lambda *args, **kwargs: archive_record(*args, **kwargs),
@@ -469,7 +514,7 @@ from backend.routes.inventory_writes import create_inventory_write_router
 
 inventory_write_router = create_inventory_write_router(
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     endpoint_log=log_endpoint,
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     stock_access_guard=lambda *args, **kwargs: require_stock_access(*args, **kwargs),
@@ -525,7 +570,7 @@ app.include_router(create_users_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     user_management_guard=lambda *args, **kwargs: require_user_management(*args, **kwargs),
     archive_admin_guard=lambda *args, **kwargs: require_archive_admin(*args, **kwargs),
     archive_service=lambda *args, **kwargs: archive_record(*args, **kwargs),
@@ -542,7 +587,7 @@ app.include_router(create_history_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     admin_guard=lambda *args, **kwargs: check_admin(*args, **kwargs),
     activity_log=lambda *args, **kwargs: log_activity(*args, **kwargs),
     error_log=lambda *args, **kwargs: error_logger.error(*args, **kwargs),
@@ -577,7 +622,7 @@ app.include_router(create_equipment_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     admin_guard=lambda *args, **kwargs: check_admin(*args, **kwargs),
     active_record_guard=lambda *args, **kwargs: require_active_record(*args, **kwargs),
     endpoint_log=lambda *args, **kwargs: log_endpoint(*args, **kwargs),
@@ -621,7 +666,7 @@ app.include_router(create_superadmin_router(
     database_path=lambda: DATABASE,
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
     current_user=get_current_user,
-    csrf_dependency=verify_csrf,
+    csrf_dependency=verify_authenticated_csrf,
     superadmin_guard=lambda user_id, conn=None: require_superadmin(user_id, conn),
     password_hash=lambda password: hash_password(password),
     activity_log=lambda *args, **kwargs: log_activity(*args, **kwargs),
@@ -635,7 +680,7 @@ from replenishment import register_replenishment_routes, require_planned_dispatc
 register_replenishment_routes(
     app, get_connection=get_db_connection, write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
     require_active=require_active_record, require_access=require_stock_access,
-    current_user=get_current_user, verify_csrf=verify_csrf,
+    current_user=get_current_user, verify_csrf=verify_authenticated_csrf,
 )
 
 from backend.routes.reports import create_stock_report_router
@@ -651,7 +696,7 @@ from stock_counts import register_stock_count_routes
 register_stock_count_routes(
     app, get_connection=get_db_connection, write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
     require_active=require_active_record, require_access=require_stock_access,
-    current_user=get_current_user, verify_csrf=verify_csrf, secret=SECRET_KEY,
+    current_user=get_current_user, verify_csrf=verify_authenticated_csrf, secret=SECRET_KEY,
 )
 
 if __name__ == "__main__":

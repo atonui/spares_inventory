@@ -1,4 +1,5 @@
 """Authenticated timezone preferences, with revision-protected business changes."""
+from backend.services.session_credentials import get_request_credential
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.schemas.timezone_settings import BusinessTimezoneUpdate
 from backend.services.timezone_policy import resolve_business_context, resolve_display_zone
@@ -24,7 +25,7 @@ def create_timezone_settings_router(*, get_connection, authenticated_writer, cur
         with authenticated_database_transaction(
             get_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
@@ -33,7 +34,7 @@ def create_timezone_settings_router(*, get_connection, authenticated_writer, cur
     @router.put('/api/organisation/timezone')
     async def update_timezone(body: BusinessTimezoneUpdate, request: Request,
                               user_id: int=Depends(current_user), csrf_valid: bool=Depends(csrf_dependency)):
-        with authenticated_writer(user_id,request.cookies.get('session_token')) as conn:
+        with authenticated_writer(user_id,get_request_credential(request).value) as conn:
             context=resolve_business_context(conn,actor_id=user_id)
             actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
             actor=execute(conn,'SELECT name FROM users WHERE id=?',(actor_id,)).fetchone()

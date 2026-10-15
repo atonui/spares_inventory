@@ -1,4 +1,5 @@
 """Tenant-scoped company settings and ownership administration."""
+from backend.services.session_credentials import get_request_credential
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -44,7 +45,7 @@ def create_organization_settings_router(
         with authenticated_database_transaction(
             get_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             require_saas_postgres(conn)
@@ -58,7 +59,7 @@ def create_organization_settings_router(
         user_id=Depends(current_user),
         csrf_valid: bool = Depends(csrf_dependency),
     ):
-        with authenticated_writer(user_id, request.cookies.get("session_token")) as conn:
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             require_saas_postgres(conn)
             principal = user_id
             require_company_admin(principal)
@@ -112,7 +113,7 @@ def create_organization_settings_router(
         user_id=Depends(current_user),
         csrf_valid: bool = Depends(csrf_dependency),
     ):
-        with authenticated_writer(user_id, request.cookies.get("session_token")) as conn:
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             require_saas_postgres(conn)
             principal: AuthenticatedPrincipal = user_id
             require_company_admin(principal)

@@ -1,4 +1,5 @@
 """User administration routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import instant_response
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -29,7 +30,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
 
     @router.post('/api/users/{target_user_id}/restore')
     async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
                 require_company_admin(user_id)
                 target = execute(
@@ -55,7 +56,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                 result = {"success": True, "message": "Company membership restored; sign in again to regain access"}
                 _record_mutation_activity(conn, user_id, "restore_user", "user", result, request)
                 return result
-        return archive_record('users',target_user_id,user_id,restore=True,session_token=request.cookies.get('session_token'))
+        return archive_record('users',target_user_id,user_id,restore=True,session_token=get_request_credential(request).value)
 
 
     @router.get("/api/users", response_model=List[UserResponse])
@@ -64,7 +65,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     async def get_users(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
         with authenticated_database_transaction(
             get_db_connection, principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             if is_postgres(conn):
                 require_company_admin(principal)
@@ -93,7 +94,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Create new user (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
                 require_company_admin(user_id)
                 raise HTTPException(status_code=410, detail="Create users with an invitation instead")
@@ -147,7 +148,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Update user (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
                 principal = user_id
                 require_company_admin(principal)
@@ -259,7 +260,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
                 require_company_admin(user_id)
                 target = execute(
@@ -286,6 +287,6 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                 result = {"success": True, "message": "Company membership deactivated"}
                 _record_mutation_activity(conn, user_id, "deactivate_user", "user", result, request)
                 return result
-        return archive_record("users", target_user_id, user_id, session_token=request.cookies.get("session_token"))
+        return archive_record("users", target_user_id, user_id, session_token=get_request_credential(request).value)
 
     return router

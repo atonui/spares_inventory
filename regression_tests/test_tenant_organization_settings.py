@@ -22,6 +22,7 @@ def organization_settings_api(postgres_schema):
     from backend.services.authenticated_transactions import authenticated_write_transaction
     from backend.services.principals import AuthenticatedPrincipal
     from backend.temporal import serialize_instant, utc_now
+    from backend.services.session_credentials import hash_session_credential
 
     connection, schema = postgres_schema
     apply_postgres_migrations(connection)
@@ -49,8 +50,8 @@ def organization_settings_api(postgres_schema):
     manager_token = "settings-manager-token"
     for user_id, token in ((owner_id, owner_token), (manager_id, manager_token)):
         connection.execute(
-            "INSERT INTO sessions(user_id,session_token,expires_at) VALUES (%s,%s,%s)",
-            (user_id, token, serialize_instant(utc_now() + timedelta(hours=1))),
+            "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+            (user_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
         )
     role = "settings_runtime_" + uuid4().hex
     connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))

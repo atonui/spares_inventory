@@ -19,6 +19,7 @@ AUTH_OPERATIONS = {
     ('GET', '/api/verify-reset-token/{token}'), ('POST', '/api/auth/login'),
     ('GET', '/api/auth/sessions'), ('DELETE', '/api/auth/sessions/{session_id}'),
     ('POST', '/api/auth/sessions/revoke-all'), ('POST', '/api/auth/logout'),
+    ('POST', '/api/auth/native/login'),
     ('GET', '/api/me'),
 }
 
@@ -40,7 +41,7 @@ def set_reset_token(db, token='auth-reset', expired=False):
 def test_auth_routes_owned_once_by_extracted_router():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)]
     scoped = [r for r in routes if any((m, r.path) in AUTH_OPERATIONS for m in r.methods)]
-    assert len(scoped) == 14
+    assert len(scoped) == 15
     assert {(m, r.path) for r in scoped for m in r.methods} == AUTH_OPERATIONS
     assert all(r.endpoint.__module__ == 'backend.routes.auth' for r in scoped)
     assert next(r for r in routes if r.path == '/api/inventory/add' and 'POST' in r.methods).endpoint.__module__ == 'backend.routes.inventory_writes'
@@ -50,7 +51,7 @@ def test_auth_dependencies_keep_override_identity(auth_api):
     client, db, actor = auth_api
     route = next(r for r in main.app.routes if getattr(r, 'path', '') == '/api/profile'
                  and 'PUT' in getattr(r, 'methods', set()))
-    assert {d.call for d in route.dependant.dependencies} == {main.get_current_user, main.verify_csrf}
+    assert {d.call for d in route.dependant.dependencies} == {main.get_current_user, main.verify_authenticated_csrf}
     actor['id'] = 3
     assert client.get('/api/profile').json()['id'] == 3
     assert client.put('/api/profile', json={'email': 'changed@example.com'}).status_code == 200
@@ -108,6 +109,7 @@ def test_auth_runtime_collaborators_are_late_bound(auth_api, tmp_path, monkeypat
 def test_auth_public_rate_limits_preserved(auth_api, path, payload, limit, initial_status):
     client, _, _ = auth_api
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     headers = {'X-CSRF-Token': client.get('/api/csrf-token').json()['csrf_token']}
     for _ in range(limit):
         assert client.post(path, json=payload, headers=headers).status_code == initial_status
@@ -130,12 +132,36 @@ def test_auth_login_expiry_and_cookie(auth_api, remember, seconds):
     response = client.post('/api/auth/login', json={'email': 'user1@example.com', 'password': 'test-password', 'remember_me': remember})
     assert response.status_code == 200
     assert response.json()['user']['id'] == 1
+    assert 'access_token' not in response.json()
+    assert 'token_type' not in response.json()
     cookie = response.headers['set-cookie'].lower()
     assert f'max-age={seconds}' in cookie
     assert '; httponly' in cookie and '; secure' in cookie and 'samesite=lax' in cookie
     with sqlite3.connect(db) as conn:
         created, expires = conn.execute('SELECT created_at,expires_at FROM sessions ORDER BY id DESC LIMIT 1').fetchone()
     assert abs((datetime.fromisoformat(expires) - datetime.fromisoformat(created)).total_seconds() - seconds) < 2
+
+
+def test_native_login_requires_csrf_and_is_disabled_for_sqlite(auth_api):
+    client, _, _ = auth_api
+    main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
+
+    no_csrf = client.post(
+        '/api/auth/native/login',
+        json={'email': 'user1@example.com', 'password': 'test-password'},
+    )
+    assert no_csrf.status_code == 403
+    assert no_csrf.json()['detail'] == 'CSRF token missing'
+
+    csrf = client.get('/api/csrf-token').json()['csrf_token']
+    response = client.post(
+        '/api/auth/native/login',
+        json={'email': 'user1@example.com', 'password': 'test-password'},
+        headers={'X-CSRF-Token': csrf},
+    )
+    assert response.status_code == 503
+    assert response.json()['detail'] == 'Native login requires PostgreSQL'
 
 
 def test_auth_login_lockout(auth_api):
@@ -195,6 +221,7 @@ def test_auth_profile_sessions_and_logout(auth_api):
 def test_auth_profile_requires_real_csrf(auth_api):
     client, _, _ = auth_api
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert client.put('/api/profile', json={}).json()['detail'] == 'CSRF token missing'
     assert client.put('/api/profile', json={}, headers={'X-CSRF-Token': 'invalid'}).json()['detail'] == 'Invalid CSRF token'
     token = client.get('/api/csrf-token').json()['csrf_token']

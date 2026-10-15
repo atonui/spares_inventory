@@ -1,4 +1,5 @@
 """Store administration routes composed with application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import instant_response
 import csv
 import io
@@ -36,7 +37,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             if include_archived:
@@ -48,7 +49,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
     @router.post('/api/stores/{store_id}/restore')
     async def restore_stores(store_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
-        return archive_record('stores',store_id,user_id,restore=True,session_token=request.cookies.get('session_token'))
+        return archive_record('stores',store_id,user_id,restore=True,session_token=get_request_credential(request).value)
 
 
     @router.post("/api/stores")
@@ -60,7 +61,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Create new store (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             if request_data.assigned_user_id is not None:
@@ -133,7 +134,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         """Bulk import stores from a CSV file (admin only)"""
         content = await file.read()
         reader = list(csv.DictReader(io.StringIO(content.decode())))
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
             # Check if current user is admin
             if not check_admin(user_id, conn):
@@ -200,7 +201,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Update store (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             require_active_record(conn,"stores",store_id)
@@ -281,7 +282,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        return archive_record("stores", store_id, user_id, session_token=request.cookies.get("session_token"))
+        return archive_record("stores", store_id, user_id, session_token=get_request_credential(request).value)
 
 
     @router.get("/api/store-types", response_model=List[StoreTypeResponse])
@@ -295,7 +296,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, _principal):
             cursor = conn.cursor()
@@ -317,7 +318,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Create new store type (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Check if user is admin
@@ -376,7 +377,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Update store type (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             if not check_admin(user_id, conn):
@@ -440,7 +441,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Delete/deactivate store type (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             if not check_admin(user_id, conn):
@@ -510,7 +511,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, _principal):
             cursor = conn.cursor()

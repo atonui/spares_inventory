@@ -8,6 +8,7 @@ from . import (
     v0002_tenancy,
     v0003_tenant_policies,
     v0004_tenant_administration,
+    v0005_hashed_sessions,
 )
 
 
@@ -30,6 +31,7 @@ MIGRATIONS = tuple(
         v0002_tenancy,
         v0003_tenant_policies,
         v0004_tenant_administration,
+        v0005_hashed_sessions,
     )
 )
 

@@ -1,4 +1,5 @@
 """Read-only inventory routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from typing import List
@@ -26,7 +27,7 @@ def create_inventory_read_router(*, get_connection, current_user,
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, _principal):
             if not is_postgres(conn):
@@ -64,7 +65,7 @@ def create_inventory_read_router(*, get_connection, current_user,
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             if not is_postgres(conn):
@@ -111,7 +112,7 @@ def create_inventory_read_router(*, get_connection, current_user,
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             if not is_postgres(conn):

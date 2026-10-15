@@ -103,6 +103,7 @@ def test_minimum_respects_store_permissions_and_csrf(api):
     seed(api)
     assert minimum(api,store=951,expected=4).status_code==403
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert minimum(api).status_code==403
 
 

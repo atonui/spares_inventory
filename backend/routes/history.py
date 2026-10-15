@@ -1,4 +1,5 @@
 """History routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from datetime import timedelta
 from backend.temporal_contract import instant_response
 from typing import List, Optional
@@ -47,7 +48,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         try:
             with authenticated_database_transaction(
                 get_db_connection, principal_or_user=user_id,
-                session_token=request.cookies.get('session_token') if request else None, readonly=True,
+                session_token=get_request_credential(request).value if request else None, readonly=True,
             ) as (conn, principal):
                 if is_postgres(conn):
                     table_exists = bool(execute(conn, "SELECT to_regclass('activity_logs') AS name").fetchone()["name"])
@@ -79,7 +80,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         """Get movement history with advanced filtering"""
         with authenticated_database_transaction(
             get_db_connection, principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
@@ -162,7 +163,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         """Get activity logs (admin only for all logs, users can see their own)"""
         with authenticated_database_transaction(
             get_connection=get_db_connection, principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
@@ -231,7 +232,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         """Get activity statistics (admin only)"""
         with authenticated_database_transaction(
             get_db_connection, principal_or_user=user_id,
-            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
@@ -318,7 +319,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Delete activity logs older than specified days (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             user = execute(conn, "SELECT name FROM users WHERE id = ?", (actor_id(user_id),)).fetchone()
 
             if not user or not log_manager(user_id, conn):

@@ -1,4 +1,5 @@
 """Privileged administration HTTP routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import instant_response
 import json
 import os
@@ -45,7 +46,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
 
             if len(body.new_password) < 8:
@@ -178,7 +179,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             cur = conn.cursor()
             cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
@@ -206,7 +207,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             if not body.user_ids:
                 raise HTTPException(status_code=400, detail="No user IDs provided")
@@ -256,7 +257,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             cur = conn.cursor()
             cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
@@ -282,15 +283,20 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             cur = conn.cursor()
             # Preserve the calling superadmin's own session
-            current_token = request.cookies.get("session_token")
-            cur.execute("""
-                UPDATE sessions SET is_active = 0
-                WHERE session_token != ? AND is_active = 1
-            """, (current_token,))
+            current_token = get_request_credential(request).value
+            from backend.database_sql import execute, is_postgres
+            from backend.services.session_credentials import hash_session_credential
+            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
+            token_value = hash_session_credential(current_token) if is_postgres(conn) else current_token
+            execute(
+                conn,
+                f"UPDATE sessions SET is_active = 0 WHERE {token_column} != ? AND is_active = 1",
+                (token_value,),
+            )
             killed = cur.rowcount
 
             log_activity(user_id, "superadmin", "force_logout_all",
@@ -329,7 +335,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
 
             allowed_keys = {
@@ -393,7 +399,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             valid_roles = {"engineer", "manager", "admin", "superadmin"}
             if body.role not in valid_roles:
@@ -476,7 +482,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         finally:
             conn.close()
 
-        log_authenticated_activity(user_id, request.cookies.get('session_token'), username='superadmin', action='db_query', details={'sql': sql[:200]})
+        log_authenticated_activity(user_id, get_request_credential(request).value, username='superadmin', action='db_query', details={'sql': sql[:200]})
         return {"columns": columns, "rows": result, "count": len(result)}
 
 
@@ -502,7 +508,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         dst.close()
         src.close()
 
-        log_authenticated_activity(user_id, request.cookies.get('session_token'), username='superadmin', action='db_backup', details={'filename': backup_name})
+        log_authenticated_activity(user_id, get_request_credential(request).value, username='superadmin', action='db_backup', details={'filename': backup_name})
         return FileResponse(backup_path, filename=backup_name,
                             media_type="application/octet-stream")
 
@@ -515,7 +521,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
     ):
         require_superadmin(user_id)
-        session_token = request.cookies.get('session_token')
+        session_token = get_request_credential(request).value
         def validate_actor(conn):
             require_session(conn, session_token, expected_user_id=user_id)
             require_superadmin(user_id, conn)
@@ -560,7 +566,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         conn.close()
         after = os.path.getsize(database_path()) if os.path.exists(database_path()) else 0
 
-        log_authenticated_activity(user_id, request.cookies.get('session_token'), username='superadmin', action='db_vacuum', details={'before_bytes': before, 'after_bytes': after})
+        log_authenticated_activity(user_id, get_request_credential(request).value, username='superadmin', action='db_vacuum', details={'before_bytes': before, 'after_bytes': after})
         return {
             "success": True,
             "before_bytes": before,
@@ -577,7 +583,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         request: Request = None,
     ):
         """Purge activity_logs and system_logs older than `days` days (0 = all)."""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             cur = conn.cursor()
 
@@ -615,7 +621,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             message = body.message.strip()
             if not message or len(message) > 2000:
@@ -650,7 +656,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             notices.remove_notice(conn, expected_revision=expected_revision)
             log_activity(user_id,'superadmin','remove_announcement',details={'revision':expected_revision},conn=conn)
@@ -672,7 +678,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         with closing(get_db_connection()) as conn:
             conn.execute('BEGIN')
             viewer=None
-            token=request.cookies.get('session_token')
+            token=get_request_credential(request).value
             if token:
                 try:viewer=session_validator(conn,token)
                 except HTTPException as error:
@@ -683,8 +689,8 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
     @superadmin_router.post("/announcement/dismiss")
     async def dismiss_announcement(body: AnnouncementDismissRequest, request: Request,
                                    user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf)):
-        with authenticated_write_transaction(user_id,request.cookies.get('session_token')) as conn:
-            viewer=session_validator(conn,request.cookies.get('session_token'),expected_user_id=user_id)
+        with authenticated_write_transaction(user_id,get_request_credential(request).value) as conn:
+            viewer=session_validator(conn,get_request_credential(request).value,expected_user_id=user_id)
             if body.viewer_key is not None and body.viewer_key!='user:'+str(user_id):raise HTTPException(409,'Account changed. Refresh before dismissing.')
             notice=notices.load_notice(conn)
             if not notice or notice['revision']!=body.revision:raise HTTPException(409,'Announcement changed. Refresh before dismissing it.')
