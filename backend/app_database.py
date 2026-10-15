@@ -27,6 +27,14 @@ def make_database_defaults(
 
 
 def initialize_application_database(database_path, *, defaults):
+    if is_postgresql_dsn(database_path):
+        from backend.postgres_migrations.runner import apply_postgres_migrations
+
+        connection = connect_postgres(database_path)
+        try:
+            return apply_postgres_migrations(connection)
+        finally:
+            connection.close()
     return initialize_database(database_path, defaults=defaults)
 
 

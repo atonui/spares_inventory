@@ -71,10 +71,11 @@ def date_metadata(context, start=None, end=None):
                 start_utc=serialize_instant(lower) if lower else None, end_utc=serialize_instant(upper) if upper else None)
 
 
-def date_predicates(column, metadata):
+def date_predicates(column, metadata, *, canonical_instants=False):
     sql = ''; params = []
+    instant_column = column if canonical_instants else f'utc_instant({column})'
     for key, operator in [('start_utc', '>='), ('end_utc', '<')]:
         if metadata[key]:
-            sql += f' AND utc_instant({column}) {operator} ?'
+            sql += f' AND {instant_column} {operator} ?'
             params.append(metadata[key])
     return sql, params

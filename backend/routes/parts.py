@@ -2,9 +2,10 @@
 from backend.temporal_contract import instant_response
 import csv
 import io
-from contextlib import closing
 from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.services.tenant_context import authenticated_database_transaction
 from backend.schemas.parts import PartResponse, CreatePartRequest, UpdatePartRequest
 
 
@@ -27,11 +28,16 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
     @instant_response
     @log_endpoint(action="view_parts", resource_type="parts")
     async def get_parts(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
-        with closing(get_db_connection()) as conn:
-            if include_archived or 'parts' == 'users':
-                require_archive_admin(conn,user_id)
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=request.cookies.get("session_token") if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            if include_archived:
+                require_archive_admin(conn,principal)
             where='' if include_archived else ' WHERE archived_at IS NULL'
-            rows=conn.execute('SELECT id, part_number, description, category, unit_cost, archived_at FROM parts'+where+' ORDER BY part_number').fetchall()
+            rows=execute(conn, 'SELECT id, part_number, description, category, unit_cost, archived_at FROM parts'+where+' ORDER BY part_number').fetchall()
             return [dict(row) for row in rows]
 
 
@@ -57,25 +63,30 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if part number already exists
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 "SELECT id FROM parts WHERE part_number = ?", (request_data.part_number,)
             )
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Part number already exists")
 
             # Create part
-            cursor.execute(
-                """
-                INSERT INTO parts (part_number, description, category, unit_cost)
-                VALUES (?, ?, ?, ?)
-            """,
-                (
-                    request_data.part_number,
-                    request_data.description,
-                    request_data.category,
-                    request_data.unit_cost,
-                ),
-            )
+            values = (request_data.part_number, request_data.description,
+                      request_data.category, request_data.unit_cost)
+            if is_postgres(conn):
+                execute_cursor(
+                    conn, cursor,
+                    """INSERT INTO parts
+                       (organization_id, part_number, description, category, unit_cost)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (user_id.organization_id, *values),
+                )
+            else:
+                execute_cursor(
+                    conn, cursor,
+                    """INSERT INTO parts (part_number, description, category, unit_cost)
+                       VALUES (?, ?, ?, ?)""",
+                    values,
+                )
 
 
             _result = {
@@ -134,7 +145,7 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
                         continue
 
                     # Check if part_number already exists
-                    cursor.execute(
+                    execute_cursor(conn, cursor,
                         "SELECT id FROM parts WHERE part_number = ?", (row["part_number"],)
                     )
                     if cursor.fetchone():
@@ -142,15 +153,28 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
                         skipped_details.append(f"Part {row['part_number']} already exists")
                         continue
 
-                    cursor.execute(
-                        "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
-                        (
-                            row["part_number"],
-                            row["description"],
-                            row.get("category", ""),
-                            float(row.get("unit_cost", 0)),
-                        ),
-                    )
+                    values = (row["part_number"], row["description"],
+                              row.get("category", ""), float(row.get("unit_cost", 0)))
+                    if is_postgres(conn):
+                        with conn.transaction():
+                            execute_cursor(
+                                conn, cursor,
+                                """INSERT INTO parts
+                                   (organization_id, part_number, description, category, unit_cost)
+                                   VALUES (?, ?, ?, ?, ?) ON CONFLICT (organization_id, part_number)
+                                   DO NOTHING""",
+                                (user_id.organization_id, *values),
+                            )
+                        if cursor.rowcount == 0:
+                            skipped += 1
+                            skipped_details.append(f"Part {row['part_number']} already exists")
+                            continue
+                    else:
+                        execute_cursor(
+                            conn, cursor,
+                            "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
+                            values,
+                        )
                     added += 1
                 except Exception as e:
                     skipped += 1
@@ -183,14 +207,16 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
             cursor = conn.cursor()
 
             # Check if current user is admin
-            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
-
-            if user["role"] != "admin":
+            if is_postgres(conn) and not check_admin(user_id, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
+            if not is_postgres(conn):
+                execute_cursor(conn, cursor, "SELECT role FROM users WHERE id = ?", (user_id,))
+                user = cursor.fetchone()
+                if not user or user["role"] != "admin":
+                    raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if part exists
-            cursor.execute("SELECT id FROM parts WHERE id = ?", (part_id,))
+            execute_cursor(conn, cursor, "SELECT id FROM parts WHERE id = ?", (part_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Part not found")
 
@@ -200,7 +226,7 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
 
             if request_data.part_number is not None:
                 # Check if new part number already exists
-                cursor.execute(
+                execute_cursor(conn, cursor,
                     "SELECT id FROM parts WHERE part_number = ? AND id != ?",
                     (request_data.part_number, part_id),
                 )
@@ -226,7 +252,7 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
 
             values.append(part_id)
 
-            cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE id = ?", values)
+            execute_cursor(conn, cursor, f"UPDATE parts SET {', '.join(updates)} WHERE id = ?", values)
 
 
             _result = {"success": True, "message": "Part updated successfully"}

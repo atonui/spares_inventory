@@ -1,5 +1,5 @@
 """History routes with explicit application dependencies."""
-from contextlib import closing
+from datetime import timedelta
 from backend.temporal_contract import instant_response
 from typing import List, Optional
 from backend.temporal_contract import date_metadata, date_predicates, register_instant_comparison
@@ -7,6 +7,10 @@ from backend.services.timezone_policy import resolve_business_context
 import json
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from backend.schemas.history import MovementResponse, ActivityLogResponse
+from backend.database_sql import execute, is_postgres
+from backend.services.principals import AuthenticatedPrincipal
+from backend.services.tenant_context import authenticated_database_transaction
+from backend.temporal import serialize_instant, utc_now
 from stock_audit import PROTECTED_AUDIT_SQL
 
 
@@ -21,6 +25,19 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
     check_admin = admin_guard
     log_activity = activity_log
 
+    def actor_id(principal):
+        return principal.user_id if isinstance(principal, AuthenticatedPrincipal) else principal
+
+    def company_admin(principal):
+        return (principal.company_role in {"owner", "admin"}
+                if isinstance(principal, AuthenticatedPrincipal) else bool(check_admin(principal)))
+
+    def log_manager(principal, conn):
+        if isinstance(principal, AuthenticatedPrincipal):
+            return principal.organization_id is not None and principal.company_role in {"owner", "admin"}
+        user = execute(conn, "SELECT role FROM users WHERE id = ?", (principal,)).fetchone()
+        return bool(user and user["role"] == "admin")
+
     @router.get("/api/logs/test")
     @instant_response
     async def test_logging(
@@ -28,37 +45,21 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
     ):
         """Test endpoint to verify logging is working"""
         try:
-            # Test database connection
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Check if table exists
-            cursor.execute("""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name='activity_logs'
-            """)
-            table_exists = cursor.fetchone() is not None
-
-            # Get count of logs
-            if table_exists:
-                cursor.execute("SELECT COUNT(*) as count FROM activity_logs")
-                log_count = cursor.fetchone()["count"]
-            else:
-                log_count = 0
-
-            # Get user info
-            cursor.execute("SELECT name, role FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
-
-            conn.close()
-
-            return {
-                "status": "ok",
-                "table_exists": table_exists,
-                "log_count": log_count,
-                "current_user": dict(user) if user else None,
-                "can_view_logs": user["role"] == "admin" if user else False,
-            }
+            with authenticated_database_transaction(
+                get_db_connection, principal_or_user=user_id,
+                session_token=request.cookies.get('session_token') if request else None, readonly=True,
+            ) as (conn, principal):
+                if is_postgres(conn):
+                    table_exists = bool(execute(conn, "SELECT to_regclass('activity_logs') AS name").fetchone()["name"])
+                else:
+                    table_exists = execute(conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='activity_logs'").fetchone() is not None
+                log_count = execute(conn, "SELECT COUNT(*) AS count FROM activity_logs").fetchone()["count"] if table_exists else 0
+                user = execute(conn, "SELECT name, role FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
+                return {
+                    "status": "ok", "table_exists": table_exists, "log_count": log_count,
+                    "current_user": dict(user) if user else None,
+                    "can_view_logs": log_manager(principal, conn),
+                }
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
@@ -76,15 +77,16 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Get movement history with advanced filtering"""
-        with closing(get_db_connection()) as conn:
-            conn.execute('BEGIN')
-            context=resolve_business_context(conn,actor_id=user_id)
+        with authenticated_database_transaction(
+            get_db_connection, principal_or_user=user_id,
+            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+        ) as (conn, principal):
+            context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
             if response is not None:
                 response.headers['X-Report-Time-Context']=json.dumps(metadata,separators=(',',':'))
-            register_instant_comparison(conn)
-            cursor = conn.cursor()
-
+            if not is_postgres(conn):
+                register_instant_comparison(conn)
             query = """
                 SELECT
                     m.id,
@@ -118,7 +120,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             #     """
             # params.extend([user_id, user_id, user_id])
 
-            date_sql,date_params=date_predicates('m.created_at',metadata)
+            date_sql,date_params=date_predicates('m.created_at',metadata,canonical_instants=is_postgres(conn))
             query+=date_sql;params.extend(date_params)
 
             # Movement type filtering
@@ -136,11 +138,11 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 query += " AND (m.from_store_id = ? OR m.to_store_id = ?)"
                 params.extend([store_id, store_id])
 
-            query += " ORDER BY utc_instant(m.created_at) DESC, m.id DESC LIMIT ?"
+            query += (" ORDER BY m.created_at DESC, m.id DESC LIMIT ?" if is_postgres(conn)
+                      else " ORDER BY utc_instant(m.created_at) DESC, m.id DESC LIMIT ?")
             params.append(limit)
 
-            cursor.execute(query, params)
-            movements = cursor.fetchall()
+            movements = execute(conn, query, params).fetchall()
 
             return [dict(movement) for movement in movements]
 
@@ -158,22 +160,23 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Get activity logs (admin only for all logs, users can see their own)"""
-        with closing(get_db_connection()) as conn:
-            conn.execute('BEGIN')
-            context=resolve_business_context(conn,actor_id=user_id)
+        with authenticated_database_transaction(
+            get_connection=get_db_connection, principal_or_user=user_id,
+            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+        ) as (conn, principal):
+            context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
             if response is not None:
                 response.headers['X-Report-Time-Context']=json.dumps(metadata,separators=(',',':'))
-            register_instant_comparison(conn)
-            cursor = conn.cursor()
-
+            if not is_postgres(conn):
+                register_instant_comparison(conn)
             query = "SELECT * FROM activity_logs WHERE 1=1"
             params = []
 
             # Non-admins can only see their own logs
-            if not check_admin(user_id):
+            if not company_admin(principal):
                 query += " AND user_id = ?"
-                params.append(user_id)
+                params.append(actor_id(principal))
             else:
                 # Admins can filter by specific user
                 if target_user_id:
@@ -185,18 +188,18 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 query += " AND action = ?"
                 params.append(action)
 
-            date_sql,date_params=date_predicates('created_at',metadata)
+            date_sql,date_params=date_predicates('created_at',metadata,canonical_instants=is_postgres(conn))
             query+=date_sql;params.extend(date_params)
 
             if status:
                 query += " AND status = ?"
                 params.append(status)
 
-            query += " ORDER BY utc_instant(created_at) DESC, id DESC LIMIT ?"
+            query += (" ORDER BY created_at DESC, id DESC LIMIT ?" if is_postgres(conn)
+                      else " ORDER BY utc_instant(created_at) DESC, id DESC LIMIT ?")
             params.append(limit)
 
-            cursor.execute(query, params)
-            logs = cursor.fetchall()
+            logs = execute(conn, query, params).fetchall()
 
             try:
                 # Convert to list of dicts and ensure all fields are present
@@ -226,30 +229,28 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Get activity statistics (admin only)"""
-        with closing(get_db_connection()) as conn:
-            conn.execute('BEGIN')
-            context=resolve_business_context(conn,actor_id=user_id)
+        with authenticated_database_transaction(
+            get_db_connection, principal_or_user=user_id,
+            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+        ) as (conn, principal):
+            context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
-            register_instant_comparison(conn)
-            cursor = conn.cursor()
+            if not is_postgres(conn):
+                register_instant_comparison(conn)
 
             # Check if user is admin
-            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
-
-            if user["role"] != "admin":
+            if not log_manager(principal, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
 
-            date_filter,params=date_predicates('created_at',metadata)
+            date_filter,params=date_predicates('created_at',metadata,canonical_instants=is_postgres(conn))
 
             # Total activities
-            cursor.execute(
+            total_activities = execute(conn,
                 f"SELECT COUNT(*) as total FROM activity_logs WHERE 1=1 {date_filter}", params
-            )
-            total_activities = cursor.fetchone()["total"]
+            ).fetchone()["total"]
 
             # Activities by action
-            cursor.execute(
+            by_action = [dict(row) for row in execute(conn,
                 f"""
                 SELECT action, COUNT(*) as count
                 FROM activity_logs
@@ -259,11 +260,10 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 LIMIT 10
             """,
                 params,
-            )
-            by_action = [dict(row) for row in cursor.fetchall()]
+            ).fetchall()]
 
             # Activities by user (top 10)
-            cursor.execute(
+            by_user = [dict(row) for row in execute(conn,
                 f"""
                 SELECT username, COUNT(*) as count
                 FROM activity_logs
@@ -273,11 +273,10 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 LIMIT 10
             """,
                 params,
-            )
-            by_user = [dict(row) for row in cursor.fetchall()]
+            ).fetchall()]
 
             # Error rate
-            cursor.execute(
+            error_stats = dict(execute(conn,
                 f"""
                 SELECT
                     COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
@@ -286,21 +285,20 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 WHERE 1=1 {date_filter}
             """,
                 params,
-            )
-            error_stats = dict(cursor.fetchone())
+            ).fetchone())
 
             # Recent logins
-            cursor.execute(
+            recent_order = "created_at DESC, id DESC" if is_postgres(conn) else "utc_instant(created_at) DESC, id DESC"
+            recent_logins = [dict(row) for row in execute(conn,
                 f"""
                 SELECT username, created_at, ip_address
                 FROM activity_logs
                 WHERE action = 'login' {date_filter}
-                ORDER BY utc_instant(created_at) DESC, id DESC
+                ORDER BY {recent_order}
                 LIMIT 10
             """,
                 params,
-            )
-            recent_logins = [dict(row) for row in cursor.fetchall()]
+            ).fetchall()]
 
 
             return {
@@ -321,25 +319,21 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
     ):
         """Delete activity logs older than specified days (admin only)"""
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
-            cursor = conn.cursor()
+            user = execute(conn, "SELECT name FROM users WHERE id = ?", (actor_id(user_id),)).fetchone()
 
-            # Check if user is admin
-            cursor.execute("SELECT role,name FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
-
-            if not user or user["role"] != "admin":
+            if not user or not log_manager(user_id, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Delete old logs
-            cursor.execute(
+            cutoff = serialize_instant(utc_now() - timedelta(days=days))
+            older_than_cutoff = "created_at < ?" if is_postgres(conn) else "julianday(created_at) < julianday(?)"
+            deleted_count = execute(conn,
                 f"""
                 DELETE FROM activity_logs
-                WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND julianday(created_at) < julianday('now', '-' || ? || ' days')
+                WHERE action NOT IN {PROTECTED_AUDIT_SQL} AND {older_than_cutoff}
             """,
-                (days,),
-            )
-
-            deleted_count = cursor.rowcount
+                (cutoff,),
+            ).rowcount
 
 
             log_activity(
