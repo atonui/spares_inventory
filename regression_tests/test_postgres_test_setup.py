@@ -53,7 +53,7 @@ def test_postgres_connection_and_schema_fixture_use_disposable_database(postgres
 
     assert isinstance(connection, psycopg.Connection)
     assert schema_name.startswith("test_")
-    assert connection.execute("SELECT current_schema()").fetchone()[0] == schema_name
+    assert connection.execute("SELECT current_schema() AS name").fetchone()["name"] == schema_name
     connection.execute("CREATE TABLE fixture_probe (id integer PRIMARY KEY)")
     connection.execute("INSERT INTO fixture_probe VALUES (1)")
     assert connection.execute("SELECT id FROM fixture_probe").fetchone()[0] == 1

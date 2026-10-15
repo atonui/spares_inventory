@@ -9,6 +9,7 @@ import psycopg
 import pytest
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
+from psycopg.rows import dict_row
 
 
 def postgres_test_dsn() -> str:
@@ -27,8 +28,10 @@ def postgres_test_dsn() -> str:
 
 @pytest.fixture
 def postgres_admin_connection():
-    """Open an autocommit test connection after checking its database name."""
-    connection = psycopg.connect(postgres_test_dsn(), autocommit=True, connect_timeout=5)
+    """Open an isolated test connection after checking its database name."""
+    connection = psycopg.connect(
+        postgres_test_dsn(), row_factory=dict_row, connect_timeout=5
+    )
     try:
         yield connection
     finally:
@@ -42,8 +45,11 @@ def postgres_schema(postgres_admin_connection):
     schema_name = f"test_{uuid4().hex}"
     connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema_name)))
     connection.execute("SELECT set_config('search_path', %s, false)", (schema_name,))
+    connection.commit()
     try:
         yield connection, schema_name
     finally:
+        connection.rollback()
         connection.execute("SELECT set_config('search_path', 'public', false)")
         connection.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema_name)))
+        connection.commit()

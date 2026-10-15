@@ -38,3 +38,25 @@ def test_main_database_wrappers_use_current_database_path(tmp_path, monkeypatch)
     assert database_path.exists()
     assert setting["setting_value"] == str(main.SESSION_DURATION_HOURS)
     assert user_table["name"] == "users"
+
+
+def test_application_database_initializes_postgres_migrations(monkeypatch):
+    import backend.app_database as app_database
+
+    calls = []
+    connection = type("Connection", (), {"close": lambda self: calls.append("closed")})()
+    monkeypatch.setattr(app_database, "connect_postgres", lambda dsn: calls.append(dsn) or connection)
+    monkeypatch.setattr(
+        "backend.postgres_migrations.runner.apply_postgres_migrations",
+        lambda conn: calls.append(conn) or "migration-status",
+        raising=False,
+    )
+
+    result = app_database.initialize_application_database(
+        "postgresql://user@db/inventory_test", defaults={}
+    )
+
+    assert result == "migration-status"
+    assert calls[0] == "postgresql://user@db/inventory_test"
+    assert calls[1] is connection
+    assert calls[2] == "closed"
