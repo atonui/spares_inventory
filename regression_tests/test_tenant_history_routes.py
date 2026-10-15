@@ -32,6 +32,9 @@ def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schem
     org_b, user_b, _token_b = seed_user(connection, role="admin")
     seeded_ids = []
     for org_id, user_id, suffix in ((org_a, user_a, "A"), (org_b, user_b, "B")):
+        connection.execute(
+            "INSERT INTO organization_settings(organization_id) VALUES (%s)", (org_id,)
+        )
         part_id = connection.execute(
             "INSERT INTO parts(organization_id,part_number,description) VALUES (%s,%s,%s) RETURNING id",
             (org_id, f"HISTORY-{suffix}", "History part"),
