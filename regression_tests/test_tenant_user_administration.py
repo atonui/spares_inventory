@@ -64,6 +64,7 @@ def tenant_user_api(postgres_schema):
         connection.execute(sql.SQL("GRANT SELECT, UPDATE ON {} TO {}").format(
             sql.Identifier(table), sql.Identifier(role)
         ))
+    connection.execute(sql.SQL("GRANT SELECT ON platform_admins TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE activity_logs_id_seq TO {}").format(
         sql.Identifier(role)

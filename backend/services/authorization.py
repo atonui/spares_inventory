@@ -65,18 +65,32 @@ def require_user_management(user_id: int, requested_role=None, target_user_id=No
 
 
 def require_superadmin(user_id: int, conn=None, get_connection=None):
-    """Raise 403 unless the caller has role == 'superadmin'."""
+    """Require platform authority on PostgreSQL and preserve SQLite compatibility."""
+    if isinstance(user_id, AuthenticatedPrincipal):
+        if not user_id.is_platform_admin:
+            raise HTTPException(status_code=403, detail="Platform administrator access required")
+        return
     close = conn is None
     if close:
         conn = get_connection()
-    cur = conn.cursor()
-    cur.row_factory = sqlite3.Row
     try:
-        row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+        import psycopg
+        if isinstance(conn, psycopg.Connection):
+            row = conn.execute(
+                "SELECT 1 FROM platform_admins WHERE user_id = %s", (user_id,)
+            ).fetchone()
+            allowed = row is not None
+        else:
+            cur = conn.cursor()
+            cur.row_factory = sqlite3.Row
+            try:
+                row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+            finally:
+                cur.close()
+            allowed = bool(row and row["role"] == "superadmin")
     finally:
-        cur.close()
         if close:
             conn.close()
-    if not row or row["role"] != "superadmin":
-        raise HTTPException(status_code=403, detail="Superadmin access required")
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Platform administrator access required")
 

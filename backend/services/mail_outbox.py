@@ -49,8 +49,8 @@ def claim_pending_mail(conn, *, now: datetime, lease_seconds: int = 60) -> dict 
                WHERE (status = 'pending' AND attempt_count < %s AND available_at <= %s)
                   OR (status = 'claimed' AND lease_expires_at <= %s)
                ORDER BY available_at, id
-               FOR UPDATE SKIP LOCKED
                LIMIT 1
+               FOR UPDATE SKIP LOCKED
            )
            UPDATE mail_outbox AS mail
            SET status = 'claimed', claim_token = %s, lease_expires_at = %s,

@@ -1,0 +1,153 @@
+"""Platform-level tenant provisioning and global administrator management."""
+
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from backend.database_sql import is_postgres
+from backend.schemas.invitations import CompanyRoleUpdateRequest, OrganizationCreateRequest
+from backend.services.invitations import create_organization_with_owner_invitation
+from backend.services.mail_payloads import validate_mail_encryption_key
+from backend.services.platform_transactions import authenticated_platform_transaction
+
+
+def create_platform_organizations_router(
+    *, get_connection, current_user, csrf_dependency,
+    encryption_key, frontend_url,
+) -> APIRouter:
+    router = APIRouter(prefix="/api/platform", tags=["platform"])
+
+    def require_postgres():
+        conn = get_connection()
+        try:
+            if not is_postgres(conn):
+                raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
+        finally:
+            conn.close()
+
+    @router.post("/organizations")
+    async def provision_organization(
+        body: OrganizationCreateRequest,
+        request: Request,
+        user_id=Depends(current_user),
+        csrf_valid=Depends(csrf_dependency),
+    ):
+        require_postgres()
+        try:
+            with authenticated_platform_transaction(
+                get_connection, session_token=request.cookies.get("session_token"),
+                expected_user_id=getattr(user_id, "user_id", user_id),
+            ) as (conn, principal):
+                try:
+                    validate_mail_encryption_key(encryption_key)
+                except ValueError:
+                    raise HTTPException(status_code=503, detail="Invitation delivery is not configured")
+                return {"success": True, "organization": create_organization_with_owner_invitation(
+                    conn, name=body.name, slug=body.slug, owner_email=str(body.owner_email),
+                    actor_user_id=principal.user_id, frontend_url=frontend_url,
+                    encryption_key=encryption_key,
+                )}
+        except HTTPException:
+            raise
+        except Exception as exc:
+            # Avoid exposing uniqueness/database/provider details in platform APIs.
+            from psycopg import IntegrityError
+            if isinstance(exc, IntegrityError):
+                raise HTTPException(status_code=409, detail="Organization name or slug is already in use") from None
+            raise
+
+    @router.put("/organizations/{organization_id}/members/{user_id}/role")
+    async def change_company_role(
+        organization_id: str, user_id: int, body: CompanyRoleUpdateRequest,
+        request: Request, actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+    ):
+        from uuid import UUID
+        try:
+            org_id = UUID(organization_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=404, detail="Organization member not found") from None
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=request.cookies.get("session_token"),
+            expected_user_id=getattr(actor, "user_id", actor),
+        ) as (conn, principal):
+            membership = conn.execute(
+                """SELECT company_role FROM organization_memberships
+                   WHERE organization_id = %s AND user_id = %s FOR UPDATE""",
+                (org_id, user_id),
+            ).fetchone()
+            if membership is None:
+                raise HTTPException(status_code=404, detail="Organization member not found")
+            if membership["company_role"] == "owner":
+                raise HTTPException(status_code=409, detail="Transfer ownership in company settings first")
+            conn.execute(
+                "UPDATE organization_memberships SET company_role = %s WHERE organization_id = %s AND user_id = %s",
+                (body.role, org_id, user_id),
+            )
+            conn.execute(
+                """INSERT INTO platform_audit_events
+                   (actor_user_id, organization_id, action, result, details)
+                   VALUES (%s, %s, 'company_role_changed', 'success', %s::jsonb)""",
+                (principal.user_id, org_id, json.dumps({"target_user_id": user_id, "role": body.role})),
+            )
+            return {"success": True}
+
+    @router.put("/admins/{target_user_id}")
+    async def grant_platform_admin(
+        target_user_id: int, request: Request,
+        actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+    ):
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=request.cookies.get("session_token"),
+            expected_user_id=getattr(actor, "user_id", actor),
+        ) as (conn, principal):
+            target = conn.execute(
+                "SELECT id FROM users WHERE id = %s AND archived_at IS NULL", (target_user_id,)
+            ).fetchone()
+            if target is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            conn.execute(
+                "INSERT INTO platform_admins (user_id) VALUES (%s) ON CONFLICT (user_id) DO NOTHING",
+                (target_user_id,),
+            )
+            conn.execute(
+                """INSERT INTO platform_audit_events
+                   (actor_user_id, action, result, details)
+                   VALUES (%s, 'platform_admin_granted', 'success', %s::jsonb)""",
+                (principal.user_id, json.dumps({"target_user_id": target_user_id})),
+            )
+            return {"success": True}
+
+    @router.delete("/admins/{target_user_id}")
+    async def revoke_platform_admin(
+        target_user_id: int, request: Request,
+        actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+    ):
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=request.cookies.get("session_token"),
+            expected_user_id=getattr(actor, "user_id", actor),
+        ) as (conn, principal):
+            conn.execute("LOCK TABLE platform_admins IN EXCLUSIVE MODE")
+            active_admins = conn.execute(
+                """SELECT count(*) AS n FROM platform_admins pa JOIN users u ON u.id = pa.user_id
+                   WHERE u.archived_at IS NULL"""
+            ).fetchone()["n"]
+            target = conn.execute(
+                "SELECT 1 FROM platform_admins WHERE user_id = %s FOR UPDATE", (target_user_id,)
+            ).fetchone()
+            if target is None:
+                raise HTTPException(status_code=404, detail="Platform administrator not found")
+            if active_admins <= 1:
+                raise HTTPException(status_code=409, detail="The last platform administrator cannot be removed")
+            conn.execute("DELETE FROM platform_admins WHERE user_id = %s", (target_user_id,))
+            conn.execute(
+                """INSERT INTO platform_audit_events
+                   (actor_user_id, action, result, details)
+                   VALUES (%s, 'platform_admin_revoked', 'success', %s::jsonb)""",
+                (principal.user_id, json.dumps({"target_user_id": target_user_id})),
+            )
+            return {"success": True}
+
+    return router

@@ -46,6 +46,17 @@ def test_platform_admin_status_is_independent_of_company_role():
     assert error.value.status_code == 403
 
 
+def test_superadmin_guard_uses_platform_admin_membership_on_principal():
+    from backend.services.authorization import require_superadmin
+    from backend.services.principals import AuthenticatedPrincipal
+
+    principal = AuthenticatedPrincipal(41, None, None, True)
+    assert require_superadmin(principal) is None
+    with pytest.raises(HTTPException) as error:
+        require_superadmin(AuthenticatedPrincipal(42, None, None, False))
+    assert error.value.status_code == 403
+
+
 @pytest.mark.parametrize('actor,expected', [(1, True), (2, True), (3, False), (99, False)])
 def test_admin_check_borrows_connection(tmp_path, actor, expected):
     from backend.services.authorization import check_admin

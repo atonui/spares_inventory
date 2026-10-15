@@ -60,6 +60,7 @@ def organization_settings_api(postgres_schema):
     connection.execute(sql.SQL(
         "GRANT SELECT, UPDATE ON users, sessions, organization_memberships, organizations, organization_settings TO {}"
     ).format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT SELECT ON platform_admins TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE activity_logs_id_seq TO {}").format(
         sql.Identifier(role)

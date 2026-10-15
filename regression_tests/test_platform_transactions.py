@@ -6,6 +6,13 @@ from fastapi import HTTPException
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
+@pytest.fixture(autouse=True)
+def migrated_platform_schema(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    apply_postgres_migrations(postgres_schema[0])
+
+
 def test_platform_transaction_allows_platform_only_principal_without_tenant_context(postgres_schema):
     import psycopg
 

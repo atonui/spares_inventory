@@ -56,6 +56,7 @@ def test_concurrent_workers_claim_distinct_messages(migrated_outbox):
     connection, schema, organization_id = migrated_outbox
     _enqueue(connection, organization_id, "a")
     _enqueue(connection, organization_id, "b")
+    connection.commit()
     second = psycopg.connect(
         __import__("os").environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row
     )

@@ -24,7 +24,8 @@ OPERATIONS = {
 
 def test_users_router_registration_and_dependency_identity():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)
-              and (r.path == '/api/users' or r.path.startswith('/api/users/'))]
+              and (r.path == '/api/users' or r.path.startswith('/api/users/'))
+              and r.endpoint.__module__ == 'backend.routes.users']
     assert len(routes) == 5
     assert {(method, r.path) for r in routes for method in r.methods} == OPERATIONS
     for route in routes:
@@ -36,6 +37,17 @@ def test_users_router_registration_and_dependency_identity():
         assert {d.call for d in route.dependant.dependencies} == expected
     read = next(r for r in routes if r.methods == {'GET'})
     assert read.response_model == list[main.UserResponse] or read.response_model == main.List[main.UserResponse]
+
+    invitation_routes = {(method, route.path) for route in main.app.routes
+                         if isinstance(route, APIRoute)
+                         and route.endpoint.__module__ == 'backend.routes.invitations'
+                         for method in route.methods}
+    assert invitation_routes == {
+        ('POST', '/api/users/invitations'), ('GET', '/api/users/invitations'),
+        ('DELETE', '/api/users/invitations/{invitation_id}'),
+        ('POST', '/api/users/invitations/{invitation_id}/resend'),
+        ('POST', '/api/invitations/accept'),
+    }
 
 
 def test_users_schema_reexports_and_defaults():
