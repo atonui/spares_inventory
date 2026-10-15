@@ -11,7 +11,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2)
+    assert status.applied_versions == (1, 2, 3)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -55,7 +55,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     policies = connection.execute(
         """SELECT tablename FROM pg_policies WHERE schemaname = current_schema()"""
     ).fetchall()
-    assert policies == []
+    assert {row["tablename"] for row in policies} == expected
     constraints = {
         row["conname"]
         for row in connection.execute(
@@ -123,7 +123,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=3,
+        version=4,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -138,5 +138,5 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 3"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 4"
     ).fetchone()["count"] == 0
