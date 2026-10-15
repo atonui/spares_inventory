@@ -56,6 +56,7 @@ def platform_api(postgres_schema):
     admin.execute(sql.SQL("GRANT SELECT, INSERT ON organizations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT INSERT ON organization_settings, organization_invitations, mail_outbox, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_invitations TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON mail_outbox TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT USAGE, SELECT ON SEQUENCE organization_invitations_id_seq, mail_outbox_id_seq, platform_audit_events_id_seq TO {}"
     ).format(sql.Identifier(runtime_role)))

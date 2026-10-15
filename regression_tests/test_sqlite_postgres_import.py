@@ -93,7 +93,7 @@ def test_import_apply_maps_first_superadmin_to_platform_and_company_owner(sqlite
     assert identity["session_token"] is None and identity["reset_token"] is None
     assert admin.execute("SELECT user_id FROM activity_logs WHERE action='legacy-anonymous'").fetchone()["user_id"] is None
     assert admin.execute("SELECT quantity FROM inventory WHERE id=1").fetchone()["quantity"] == 19
-    if before.get("organisation_settings"):
+    if _before.get("organisation_settings"):
         assert admin.execute("SELECT business_timezone,revision FROM organization_settings").fetchone() == {
             "business_timezone": "Europe/London", "revision": 9,
         }
