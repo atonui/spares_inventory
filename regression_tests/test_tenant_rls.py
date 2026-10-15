@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 import pytest
+import psycopg
 from psycopg import errors
 from psycopg import sql
 

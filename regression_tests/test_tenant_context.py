@@ -1,6 +1,7 @@
 """Authenticated principal resolution and transaction-local tenant context."""
 
 from datetime import timedelta
+import os
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -156,7 +157,7 @@ def test_authenticate_session_returns_principal_for_postgres(postgres_schema):
 
     def new_connection():
         conn = psycopg.connect(
-            connection.info.dsn,
+            os.environ["TEST_DATABASE_URL"],
             row_factory=psycopg.rows.dict_row,
             connect_timeout=5,
         )
