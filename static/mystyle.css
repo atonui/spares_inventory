@@ -959,6 +959,7 @@ label.btn {
 .minimum-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .75rem; }
 .replenishment-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 1rem; margin-block: 1.5rem 1rem; }
 .replenishment-toolbar label { display: block; margin-bottom: .5rem; }
+.movement-history-toolbar > div { min-width: 0; }
 .replenishment-table .stock-cell-value { display: flex; flex-direction: column; gap: .4rem; overflow-wrap: anywhere; }
 .replenishment-suggestions > div { display: flex; flex-direction: column; align-items: start; gap: .4rem; margin-bottom: .75rem; }
 .source-owner-note { color: #475569; font-size: .875rem; }
@@ -968,6 +969,29 @@ label.btn {
     .replenishment-toolbar > div { width: 100%; }
     .replenishment-toolbar select { width: 100%; }
     .replenishment-panel button, .replenishment-panel input, .replenishment-panel select { min-height: 44px; }
+    .movement-history-panel .movement-history-toolbar > div { width: 100%; min-width: 0; }
+    .movement-history-panel .movement-history-toolbar select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+    .movement-history-panel .movement-history-toolbar input[type="date"] {
+        -webkit-appearance: none;
+        appearance: none;
+        box-sizing: border-box;
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 48px;
+        padding: .65rem .75rem;
+        border: 1px solid #b8c4d1;
+        border-radius: .5rem;
+        background-color: #fff;
+        color: #1f2937;
+        font: inherit;
+        font-size: 16px;
+    }
+    .movement-history-panel .movement-history-toolbar input[type="date"]::-webkit-datetime-edit { min-width: 0; padding: 0; }
+    .movement-history-panel .movement-history-toolbar input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+    .movement-history-panel .movement-history-toolbar input[type="date"]::-webkit-calendar-picker-indicator { margin: 0; padding: .15rem; cursor: pointer; }
+    .movement-history-panel .movement-history-toolbar input[type="date"]:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
 }
 
 /* Recorded evidence uses the existing responsive stock table. */

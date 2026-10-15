@@ -8,12 +8,16 @@ const blank={startDate:'',endDate:'',movementType:'',partId:'',storeId:''};
 test('movement history navigation has a rendered panel with filters and rows',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  assert.match(html,/<section[^>]*x-show="showMovementsPanel"/);
+ assert.match(html,/<section[^>]*class="controls movement-history-panel"/);
  assert.match(html,/x-model="movementFilters\.startDate"/);
  assert.match(html,/x-model="movementFilters\.endDate"/);
  assert.match(html,/x-model="movementFilters\.movementType"/);
  assert.match(html,/x-model="movementFilters\.partId"/);
  assert.match(html,/x-model="movementFilters\.storeId"/);
  assert.match(html,/x-for="movement in movements/);
+ const css=fs.readFileSync('static/mystyle.css','utf8');
+ const mobileCss=css.slice(css.indexOf('@media (max-width: 768px)'));
+ assert.match(mobileCss,/\.movement-history-panel \.movement-history-toolbar input\[type="date"\]\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*min-width:\s*0;/);
 });
 const movement={id:1,created_at:'2026-10-12T09:00:00Z',movement_type:'TRANSFER',part_number:'P-1',quantity:0,from_store_name:null,to_store_name:'Site',work_order:null,created_by_name:'Engineer',transfer_status:'RECEIVED',completed_by_name:'Receiver',completed_at:'2026-10-12T10:00:00Z'};
 class FixedDate extends Date{constructor(...args){super(...(args.length?args:['2026-10-14T02:00:00Z']));}static now(){return new FixedDate().getTime();}}
