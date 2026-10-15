@@ -15,6 +15,12 @@ const expected = {
 const factories = ['inventoryApp','profileManager','forgotPassword','resetPassword','superPanel'];
 const owned = {'index.html':['inventoryApp'],'profile.html':['profileManager'],'forgot_password.html':['forgotPassword','resetPassword'],'reset_password.html':['forgotPassword','resetPassword'],'superadmin.html':['superPanel']};
 function context() {return vm.createContext({console,Intl,Date,URLSearchParams,Headers,FormData,setTimeout:()=>{},document:{activeElement:null}});}
+test('HTML entrypoints begin with a doctype',()=>{
+    for(const page of Object.keys(expected)) {
+        const html=fs.readFileSync(path.join(root,'static',page),'utf8');
+        assert.equal(html.startsWith('<!DOCTYPE html>'),true,`${page} must begin with a doctype`);
+    }
+});
 for (const [page,files] of Object.entries(expected)) {
     files.push('js/shared/announcements.js');
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
