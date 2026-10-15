@@ -42,7 +42,7 @@ test('inventory and profile retain lazy getters and method receivers',()=>{
         const current=loadPageScripts(page,context())[factory]();
         const getter=factory==='inventoryApp'?'replenishmentRows':'displayTimezoneDirty';
         assert.equal(typeof Object.getOwnPropertyDescriptor(current,getter).get,'function');
-        if(factory==='inventoryApp') assert.equal(Object.keys(current).length,265);
+        if(factory==='inventoryApp') assert.equal(Object.keys(current).length,271);
         if(factory==='inventoryApp') {
             current.replenishmentPlan={rows:[{store_id:1},{store_id:2}]};current.replenishmentStoreFilter='2';
             assert.equal(current.replenishmentRows.length,1);assert.equal(current.replenishmentRows[0].store_id,2);

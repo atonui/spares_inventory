@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str
+    MIGRATION_DATABASE_URL: str | None = None
     SECRET_KEY: str
     SMTP_SERVER: str
     SMTP_PORT: int

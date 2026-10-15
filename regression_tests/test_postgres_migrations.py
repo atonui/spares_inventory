@@ -1,6 +1,7 @@
 """Versioned PostgreSQL schema migration contracts."""
 
 import pytest
+import psycopg
 
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
@@ -208,11 +209,15 @@ def test_invitation_rls_denies_reads_without_matching_context(postgres_schema):
         sql.Identifier(role)
     ))
     connection.commit()
-    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
-    connection.commit()
-    connection.execute("SELECT set_config('app.organization_id', '', true)")
-    assert connection.execute("SELECT count(*) AS count FROM organization_invitations").fetchone()["count"] == 0
-    connection.commit()
-    connection.execute("RESET ROLE")
+    from regression_tests.postgres_fixtures import postgres_test_dsn
+    with psycopg.connect(postgres_test_dsn(), row_factory=connection.row_factory) as reader:
+        reader.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        reader.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+        reader.commit()
+        reader.execute("SELECT set_config('app.organization_id', '', true)")
+        assert reader.execute(
+            "SELECT count(*) AS count FROM organization_invitations"
+        ).fetchone()["count"] == 0
     connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
+    connection.commit()

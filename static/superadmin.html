@@ -55,18 +55,18 @@
   <aside class="sidebar">
     <div class="sidebar-brand">
       <h2>Inventory Management</h2>
-      <p>Superadmin Panel</p>
+      <p x-text="me?.saas_mode ? 'Platform Administration' : 'Superadmin Panel'">Superadmin Panel</p>
     </div>
 
     <nav aria-label="Superadmin navigation">
-      <div class="nav-section">
+      <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Overview</div>
         <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'" :aria-current="tab==='dashboard' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg></span> Dashboard
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Security</div>
         <button type="button" class="nav-item" :class="tab==='accounts'&&'active'" @click="tab='accounts'; loadLocked()" :aria-current="tab==='accounts' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#lock"></use></svg></span> Locked Accounts
@@ -80,14 +80,14 @@
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Users</div>
         <button type="button" class="nav-item" :class="tab==='users'&&'active'" @click="tab='users'; loadUsers()" :aria-current="tab==='users' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#users"></use></svg></span> All Users
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Database</div>
         <button type="button" class="nav-item" :class="tab==='tables'&&'active'" @click="tab='tables'; loadTables()" :aria-current="tab==='tables' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#database"></use></svg></span> Tables
@@ -100,7 +100,7 @@
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">System</div>
         <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#broadcast"></use></svg></span> Announcement
@@ -109,11 +109,20 @@
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#clipboard"></use></svg></span> Audit Log
         </button>
       </div>
+      <div class="nav-section" x-show="me?.saas_mode && me?.is_platform_admin">
+        <div class="nav-label">Platform</div>
+        <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'; loadPlatformDashboard()" :aria-current="tab==='dashboard' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg></span> Overview
+        </button>
+        <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#store"></use></svg></span> Organizations
+        </button>
+      </div>
     </nav>
 
     <div class="sidebar-footer">
       <div class="sf-name" x-text="me?.name || '...'"></div>
-      <div class="sf-role">Superadmin</div>
+      <div class="sf-role" x-text="me?.saas_mode ? 'Platform admin' : 'Superadmin'">Superadmin</div>
       <a href="/static/index.html"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#arrow-left"></use></svg> Back to App</a>
     </div>
   </aside>
@@ -133,7 +142,7 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" x-model="tab" @change="selectSection($event.target.value)">
-          <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-text="title"></option></template>
+          <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','organizations'].includes(key)" x-text="title"></option></template>
         </select>
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
@@ -147,7 +156,7 @@
     <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading">
 
       <!-- ══════════ DASHBOARD ══════════ -->
-      <div x-show="tab==='dashboard'">
+      <div x-show="tab==='dashboard' && !me?.saas_mode">
 
         <div class="stat-grid">
           <div class="stat-card">
@@ -220,6 +229,47 @@
         </div>
 
       </div><!-- /dashboard -->
+
+      <div x-show="tab==='dashboard' && me?.saas_mode">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-num" x-text="dashboard.organizations_active ?? '—'"></div><div class="stat-lbl">Active Organizations</div></div>
+          <div class="stat-card"><div class="stat-num" x-text="dashboard.organizations_total ?? '—'"></div><div class="stat-lbl">All Organizations</div></div>
+          <div class="stat-card"><div class="stat-num" x-text="dashboard.identities_active ?? '—'"></div><div class="stat-lbl">Active Accounts</div></div>
+          <div class="stat-card"><div class="stat-num" x-text="dashboard.platform_admins ?? '—'"></div><div class="stat-lbl">Platform Administrators</div></div>
+          <div class="stat-card"><div class="stat-num" x-text="dashboard.mail_pending ?? '—'"></div><div class="stat-lbl">Queued Email</div></div>
+          <div class="stat-card"><div class="stat-num red" x-text="dashboard.mail_failed ?? '—'"></div><div class="stat-lbl">Failed Email</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Tenant overview</span></div>
+          <div class="panel-body"><p>Platform totals exclude tenant inventory. Organization records are managed separately from company workspaces.</p>
+            <button class="btn btn-success" @click="tab='organizations'; loadOrganizations()">Manage organizations</button>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='organizations' && me?.saas_mode">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Provision an organization</span></div>
+          <div class="panel-body">
+            <form @submit.prevent="provisionOrganization()">
+              <div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div>
+              <div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div>
+              <div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div>
+              <button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization">Create organization and send invitation</button>
+              <p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p>
+            </form>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Organizations</span><button class="btn btn-sm btn-outline" @click="loadOrganizations()" :disabled="loading">Refresh</button></div>
+          <div class="panel-body" style="overflow:auto">
+            <table><thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Created</th></tr></thead>
+              <tbody><template x-for="org in organizations" :key="org.id"><tr><td x-text="org.name"></td><td x-text="org.slug"></td><td x-text="org.is_active ? 'Active' : 'Inactive'"></td><td x-text="org.created_at"></td></tr></template></tbody>
+            </table>
+            <p x-show="!organizations.length && !loading">No organizations have been provisioned.</p>
+          </div>
+        </div>
+      </div>
 
 
       <!-- ══════════ LOCKED ACCOUNTS ══════════ -->

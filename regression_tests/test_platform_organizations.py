@@ -94,7 +94,7 @@ def test_platform_provisions_tenant_and_encrypted_owner_invitation(platform_api)
     create = api.endpoint("POST", "/api/platform/organizations")
     result = asyncio.run(create(
         body=OrganizationCreateRequest(
-            name="Acme Services", slug="acme-services", owner_email="owner@example.test"
+            name="Acme Services", slug="acme-services", owner_email="owner@example.com"
         ),
         request=api.request, user_id=api.principal, csrf_valid=True,
     ))

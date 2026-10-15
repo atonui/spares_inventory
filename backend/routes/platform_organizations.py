@@ -25,6 +25,66 @@ def create_platform_organizations_router(
         finally:
             conn.close()
 
+    @router.get("/dashboard")
+    async def platform_dashboard(
+        request: Request, actor=Depends(current_user),
+    ):
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=request.cookies.get("session_token"),
+            expected_user_id=getattr(actor, "user_id", actor), readonly=True,
+        ) as (conn, _principal):
+            organizations = conn.execute(
+                "SELECT count(*) AS total, count(*) FILTER (WHERE is_active) AS active FROM organizations"
+            ).fetchone()
+            identities = conn.execute(
+                "SELECT count(*) AS total FROM users WHERE archived_at IS NULL"
+            ).fetchone()["total"]
+            admins = conn.execute("SELECT count(*) AS total FROM platform_admins").fetchone()["total"]
+            mail = conn.execute(
+                """SELECT count(*) FILTER (WHERE status = 'pending') AS pending,
+                          count(*) FILTER (WHERE status = 'failed') AS failed
+                   FROM mail_outbox"""
+            ).fetchone()
+            return {
+                "organizations_total": organizations["total"],
+                "organizations_active": organizations["active"],
+                "identities_active": identities,
+                "platform_admins": admins,
+                "mail_pending": mail["pending"],
+                "mail_failed": mail["failed"],
+            }
+
+    @router.get("/organizations")
+    async def list_organizations(
+        request: Request, actor=Depends(current_user),
+    ):
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=request.cookies.get("session_token"),
+            expected_user_id=getattr(actor, "user_id", actor), readonly=True,
+        ) as (conn, _principal):
+            rows = conn.execute(
+                "SELECT id, name, slug, is_active, created_at FROM organizations ORDER BY name, id"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    @router.get("/admins")
+    async def list_platform_admins(
+        request: Request, actor=Depends(current_user),
+    ):
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=request.cookies.get("session_token"),
+            expected_user_id=getattr(actor, "user_id", actor), readonly=True,
+        ) as (conn, _principal):
+            rows = conn.execute(
+                """SELECT u.id, u.email, u.name FROM platform_admins pa
+                   JOIN users u ON u.id = pa.user_id WHERE u.archived_at IS NULL
+                   ORDER BY u.name, u.id"""
+            ).fetchall()
+            return [dict(row) for row in rows]
+
     @router.post("/organizations")
     async def provision_organization(
         body: OrganizationCreateRequest,

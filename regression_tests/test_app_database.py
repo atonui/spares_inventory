@@ -60,3 +60,22 @@ def test_application_database_initializes_postgres_migrations(monkeypatch):
     assert calls[0] == "postgresql://user@db/inventory_test"
     assert calls[1] is connection
     assert calls[2] == "closed"
+
+
+def test_application_database_uses_separate_migration_connection(monkeypatch):
+    import backend.app_database as app_database
+
+    calls = []
+    connection = type("Connection", (), {"close": lambda self: None})()
+    monkeypatch.setattr(app_database, "connect_postgres", lambda dsn: calls.append(dsn) or connection)
+    monkeypatch.setattr(
+        "backend.postgres_migrations.runner.apply_postgres_migrations",
+        lambda conn: "migration-status",
+        raising=False,
+    )
+    app_database.initialize_application_database(
+        "postgresql://runtime@db/inventory",
+        defaults={},
+        migration_database_url="postgresql://migrator@db/inventory",
+    )
+    assert calls == ["postgresql://migrator@db/inventory"]

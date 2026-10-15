@@ -14,6 +14,15 @@ class MailDeliveryError(Exception):
         super().__init__(code)
 
 
+class _StatusResponse:
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code < 200 or self.status_code >= 300:
+            raise RuntimeError("mail provider returned a non-success status")
+
+
 class _UrllibTransport:
     def post(self, url, *, json, headers, timeout):
         import json as json_module
@@ -26,9 +35,9 @@ class _UrllibTransport:
         )
         try:
             with urlopen(request, timeout=timeout) as response:
-                return response
+                return _StatusResponse(response.status)
         except HTTPError as exc:
-            return exc
+            return _StatusResponse(exc.code)
 
 
 def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:

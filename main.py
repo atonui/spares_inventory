@@ -72,7 +72,11 @@ def database_defaults():
 
 def init_db():
     """Apply explicit migrations and preserve configured bootstrap defaults."""
-    initialize_application_database(DATABASE, defaults=database_defaults())
+    initialize_application_database(
+        DATABASE,
+        defaults=database_defaults(),
+        migration_database_url=settings.MIGRATION_DATABASE_URL,
+    )
 
 
 # ============ CSRF UTILITIES ============

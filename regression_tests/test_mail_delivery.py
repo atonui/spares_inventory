@@ -61,6 +61,33 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     assert timeout > 0
 
 
+def test_default_urllib_transport_accepts_success_status(monkeypatch):
+    import backend.services.mail_delivery as delivery
+
+    class _UrlResponse:
+        status = 202
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    calls = []
+    monkeypatch.setattr(delivery, "urlopen", lambda request, timeout: (calls.append((request, timeout)) or _UrlResponse()))
+    delivery.send_mail(
+        {
+            "message_type": "organization_invitation",
+            "recipient_email": "owner@example.test",
+            "payload": {"invitation_url": "https://example.test/accept?token=secret"},
+        },
+        api_key="resend-secret",
+        from_address="Inventory <no-reply@example.test>",
+    )
+    assert len(calls) == 1
+    assert calls[0][0].full_url == "https://api.resend.com/emails"
+
+
 def test_provider_error_exposes_only_sanitized_code():
     from backend.services.mail_delivery import MailDeliveryError, send_mail
 

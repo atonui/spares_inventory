@@ -35,9 +35,11 @@ def deliver_claimed_mail(
             http_transport=http_transport,
         )
     except MailDeliveryError as exc:
+        message["_delivery_error_code"] = exc.code
         logger.warning("mail delivery failed code=%s", exc.code)
         return False
     except Exception:
+        message["_delivery_error_code"] = "payload_unavailable"
         logger.warning("mail delivery failed code=payload_unavailable")
         return False
     logger.info("mail delivery sent")
@@ -74,7 +76,7 @@ def claim_and_deliver_once(
                 mail_id=message["id"],
                 claim_token=str(message["claim_token"]),
                 retry_at=current + timedelta(seconds=retry_delay),
-                error_code="delivery_failed",
+                error_code=message.get("_delivery_error_code", "delivery_failed"),
                 terminal=terminal,
             )
     return True

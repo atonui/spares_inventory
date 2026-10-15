@@ -37,7 +37,26 @@ test('settings cannot save before a successful load or during refresh',async()=>
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
 test('mobile navigation reaches every existing panel and loads its data',()=>{const a=app();for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,10);assert.match(html,/aria-current/);});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,12);assert.match(html,/aria-current/);});
+test('SaaS platform boot loads only platform data',async()=>{
+ const a=app(),calls=[];
+ a.getCsrf=async()=>calls.push('csrf');
+ a.getMe=async()=>{a.me={saas_mode:true,is_platform_admin:true};calls.push('me');return true;};
+ a.loadPlatformDashboard=async()=>calls.push('platform-dashboard');
+ a.loadOrganizations=async()=>calls.push('organizations');
+ a.loadTimezoneContext=async()=>assert.fail('legacy tenant timezone must not load');
+ a.loadDashboard=async()=>assert.fail('legacy dashboard must not load');
+ await a.init();
+ assert.deepEqual(calls,['csrf','me','platform-dashboard','organizations']);
+});
+test('platform organization form sends name slug and owner invitation',async()=>{
+ const a=app();a.toast=()=>{};a.organizationForm={name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'};
+ const calls=[];a.api=async(path,options)=>{calls.push([path,options.method,JSON.parse(options.body)]);return {success:true};};
+ a.loadOrganizations=async()=>calls.push('organizations');a.loadPlatformDashboard=async()=>calls.push('dashboard');
+ await a.provisionOrganization();
+ assert.deepEqual(calls,[['/platform/organizations','POST',{name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'}],'organizations','dashboard']);
+ assert.deepEqual(JSON.parse(JSON.stringify(a.organizationForm)),{name:'',slug:'',owner_email:''});
+});
 test('dialog traps focus in both directions',()=>{const a=app();let focused;const first={focus:()=>focused='first'},last={focus:()=>focused='last'};const el={querySelectorAll:()=>[first,last]};let prevented=false;const event={target:last,shiftKey:false,preventDefault:()=>prevented=true};a.trapDialogFocus(event,el);assert.equal(focused,'first');assert.equal(prevented,true);event.target=first;event.shiftKey=true;a.trapDialogFocus(event,el);assert.equal(focused,'last');});
 
 test('dialog focuses a control once and restores the opener on close',()=>{const a=app();let focused=0,restored=0;const opener={isConnected:true,focus:()=>restored++};const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:opener},WeakMap};vm.createContext(c);loadPageScripts('superadmin.html',c);const panel=c.superPanel();panel.$nextTick=fn=>fn();const el={querySelector:()=>({focus:()=>focused++})};panel.syncDialog(el,true);panel.syncDialog(el,true);assert.equal(focused,1);panel.syncDialog(el,false);assert.equal(restored,1);});

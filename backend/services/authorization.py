@@ -92,5 +92,5 @@ def require_superadmin(user_id: int, conn=None, get_connection=None):
         if close:
             conn.close()
     if not allowed:
-        raise HTTPException(status_code=403, detail="Platform administrator access required")
+        raise HTTPException(status_code=403, detail="Superadmin access required")
 

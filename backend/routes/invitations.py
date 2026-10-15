@@ -60,11 +60,19 @@ def create_invitation_router(
                 validate_mail_encryption_key(encryption_key)
             except ValueError:
                 raise HTTPException(status_code=503, detail="Invitation delivery is not configured") from None
-            result = create_invitation(
-                conn, organization_id=principal.organization_id,
-                invited_by=principal.user_id, email=str(body.email), company_role=body.role,
-                frontend_url=frontend_url, encryption_key=encryption_key,
-            )
+            try:
+                result = create_invitation(
+                    conn, organization_id=principal.organization_id,
+                    invited_by=principal.user_id, email=str(body.email), company_role=body.role,
+                    frontend_url=frontend_url, encryption_key=encryption_key,
+                )
+            except HTTPException:
+                raise
+            except Exception as exc:
+                from psycopg.errors import UniqueViolation
+                if isinstance(exc, UniqueViolation):
+                    raise HTTPException(status_code=409, detail="An invitation is already pending for this email") from None
+                raise
             return {"success": True, "invitation": result}
 
     if limiter:
@@ -140,6 +148,7 @@ def create_invitation_router(
 
     async def accept_company_invitation(
         body: InvitationAcceptRequest, request: Request,
+        csrf_valid=Depends(csrf_dependency),
     ):
         try:
             organization_id = UUID(body.organization_id)
@@ -151,11 +160,19 @@ def create_invitation_router(
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             with conn.transaction():
                 set_tenant_context(conn, organization_id)
-                return accept_invitation(
-                    conn, organization_id=organization_id, token=body.token,
-                    name=body.name, password=body.password,
-                    password_hash=password_hash, password_verify=password_verify,
-                )
+                try:
+                    return accept_invitation(
+                        conn, organization_id=organization_id, token=body.token,
+                        name=body.name, password=body.password,
+                        password_hash=password_hash, password_verify=password_verify,
+                    )
+                except HTTPException:
+                    raise
+                except Exception as exc:
+                    from psycopg.errors import UniqueViolation
+                    if isinstance(exc, UniqueViolation):
+                        raise HTTPException(status_code=400, detail="Invitation is invalid or expired") from None
+                    raise
         finally:
             conn.close()
 

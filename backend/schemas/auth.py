@@ -38,3 +38,5 @@ class UserResponse(BaseModel):
     name: str
     role: str
     territory: Optional[str]
+    is_platform_admin: bool = False
+    saas_mode: bool = False

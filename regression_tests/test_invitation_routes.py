@@ -112,7 +112,7 @@ def test_owner_can_invite_admin_without_returning_token(invitation_api):
     api = invitation_api
     create = api.endpoint("POST", "/api/users/invitations")
     result = asyncio.run(create(
-        body=InvitationCreateRequest(email="person@example.test", role="admin"),
+        body=InvitationCreateRequest(email="person@example.com", role="admin"),
         request=api.request("owner"), user_id=api.principal("owner"), csrf_valid=True,
     ))
     assert result["success"] is True
@@ -127,7 +127,7 @@ def test_company_admin_cannot_invite_another_admin(invitation_api):
     create = api.endpoint("POST", "/api/users/invitations")
     with pytest.raises(HTTPException) as error:
         asyncio.run(create(
-            body=InvitationCreateRequest(email="person@example.test", role="admin"),
+            body=InvitationCreateRequest(email="person@example.com", role="admin"),
             request=api.request("admin"), user_id=api.principal("admin"), csrf_valid=True,
         ))
     assert error.value.status_code == 403

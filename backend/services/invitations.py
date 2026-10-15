@@ -30,7 +30,10 @@ def _invitation_link(base_url: str, organization_id, token: str) -> str:
     parsed = urlsplit(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("Invitation base URL must be an absolute HTTP URL")
-    path = parsed.path.rstrip("/") + "/accept_invitation.html"
+    base_path = parsed.path.rstrip("/")
+    path = (base_path + "/accept_invitation.html") if base_path.endswith("/static") else (
+        base_path + "/static/accept_invitation.html"
+    )
     return urlunsplit((parsed.scheme, parsed.netloc, path,
                        urlencode({"organization_id": str(organization_id), "token": token}), ""))
 
