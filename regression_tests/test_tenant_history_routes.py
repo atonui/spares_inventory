@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from datetime import date
 from uuid import uuid4
 
 import psycopg
@@ -20,7 +21,9 @@ def migrated_tenant_schema(postgres_schema):
 
 def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schema, migrated_tenant_schema):
     from backend.routes.history import create_history_router
+    from backend.routes.reports import create_stock_report_router
     from backend.services.authenticated_transactions import authenticated_write_transaction
+    from backend.services.stock_access import require_active_record
     from regression_tests.test_tenant_context import seed_user
 
     connection, schema = postgres_schema
@@ -91,6 +94,22 @@ def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schem
         assert [row["username"] for row in activity] == ["User A"]
         assert stats["total_activities"] == 1
         assert stats["by_action"] == [{"action": "consume_stock", "count": 1}]
+
+        reports = create_stock_report_router(
+            get_connection=scoped_connection,
+            current_user=lambda: None,
+            require_active=require_active_record,
+        )
+        report_endpoint = next(route.endpoint for route in reports.routes if route.path == "/api/reports/consumption")
+        csv_endpoint = next(route.endpoint for route in reports.routes if route.path == "/api/reports/consumption.csv")
+        filters = {"start_date": date(2026, 5, 1), "end_date": date(2026, 5, 1), "part_id": None, "store_id": None,
+                   "engineer_id": None, "work_order_number": None, "limit": 100, "offset": 0}
+        report = asyncio.run(report_endpoint(f=filters, user_id=user_a, request=request))
+        csv_report = asyncio.run(csv_endpoint(f=filters, user_id=user_a, request=request))
+        assert report["totals"] == {"events": 1, "quantity": 3, "parts": 1}
+        assert [row["part_number"] for row in report["rows"]] == ["HISTORY-A"]
+        assert "HISTORY-A" in csv_report.body.decode("utf-8-sig")
+        assert "HISTORY-B" not in csv_report.body.decode("utf-8-sig")
     finally:
         connection.rollback()
         connection.execute("RESET ROLE")
