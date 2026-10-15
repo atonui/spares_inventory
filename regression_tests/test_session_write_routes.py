@@ -39,6 +39,7 @@ def session_api(tmp_path,monkeypatch):
         return uid
     main.app.dependency_overrides[main.get_current_user]=initial_auth
     main.app.dependency_overrides[main.verify_csrf]=lambda:True
+    main.app.dependency_overrides[main.verify_authenticated_csrf]=lambda:True
     try:
         with TestClient(main.app) as client:
             client.cookies.set('session_token','admin-token')
@@ -321,7 +322,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('PUT', '/api/platform/admins/{target_user_id}'),
         ('DELETE', '/api/platform/admins/{target_user_id}'),
     })
-    exempt={('POST',p) for p in ['/api/auth/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
+    exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
     assert len(protected)==62
     assert registered==protected|exempt

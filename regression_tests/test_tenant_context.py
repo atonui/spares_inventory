@@ -23,6 +23,7 @@ def migrated_tenant_schema(postgres_schema):
 
 def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, active=True):
     from backend.temporal import serialize_instant, utc_now
+    from backend.services.session_credentials import hash_session_credential
 
     org_id = conn.execute(
         "INSERT INTO organizations(name, slug) VALUES (%s, %s) RETURNING id",
@@ -43,9 +44,9 @@ def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, a
         conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (user_id,))
     session_token = f"token-{org_id}"
     conn.execute(
-        """INSERT INTO sessions(user_id, session_token, expires_at)
+        """INSERT INTO sessions(user_id, session_token_hash, expires_at)
            VALUES (%s, %s, %s)""",
-        (user_id, session_token, serialize_instant(utc_now() + timedelta(hours=1))),
+        (user_id, hash_session_credential(session_token), serialize_instant(utc_now() + timedelta(hours=1))),
     )
     return org_id, user_id, session_token
 

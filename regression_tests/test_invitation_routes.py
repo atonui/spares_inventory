@@ -23,6 +23,7 @@ def invitation_api(postgres_schema):
     from backend.services.authenticated_transactions import authenticated_write_transaction
     from backend.services.principals import AuthenticatedPrincipal
     from backend.temporal import serialize_instant, utc_now
+    from backend.services.session_credentials import hash_session_credential
 
     admin, schema = postgres_schema
     apply_postgres_migrations(admin)
@@ -44,8 +45,8 @@ def invitation_api(postgres_schema):
             (org_id, user_id, role),
         )
         admin.execute(
-            "INSERT INTO sessions(user_id,session_token,expires_at) VALUES (%s,%s,%s)",
-            (user_id, token, serialize_instant(utc_now() + timedelta(hours=1))),
+            "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+            (user_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
         )
         identities[role] = (user_id, token)
 
@@ -79,6 +80,7 @@ def invitation_api(postgres_schema):
             get_connection, user_id=principal, session_token=token
         ),
         current_user=lambda: None, csrf_dependency=lambda: None,
+        authenticated_csrf_dependency=lambda: None,
         password_hash=lambda value: "hash:" + value,
         password_verify=lambda plain, hashed: hashed == "hash:" + plain,
         encryption_key=Fernet.generate_key().decode(),

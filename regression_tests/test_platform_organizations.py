@@ -21,6 +21,7 @@ def platform_api(postgres_schema):
     from backend.routes.platform_organizations import create_platform_organizations_router
     from backend.services.principals import AuthenticatedPrincipal
     from backend.temporal import serialize_instant, utc_now
+    from backend.services.session_credentials import hash_session_credential
 
     admin, schema = postgres_schema
     apply_postgres_migrations(admin)
@@ -30,8 +31,8 @@ def platform_api(postgres_schema):
     token = "platform-token-" + uuid4().hex
     admin.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (admin_id,))
     admin.execute(
-        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES (%s,%s,%s)",
-        (admin_id, token, serialize_instant(utc_now() + timedelta(hours=1))),
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (admin_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
     )
     org_id = admin.execute(
         "INSERT INTO organizations(name,slug) VALUES ('Existing Tenant',%s) RETURNING id",

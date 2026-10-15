@@ -1,4 +1,5 @@
 """Equipment administration routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from typing import List
@@ -77,7 +78,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
@@ -178,7 +179,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
@@ -219,7 +220,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Create new equipment (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             if request_data.assigned_user_id is not None:
@@ -298,7 +299,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Update equipment (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             if not check_admin(user_id, conn):
@@ -366,7 +367,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Transfer equipment to another user"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             require_active_record(conn,"users",request_data.to_user_id)
@@ -423,7 +424,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Update equipment calibration"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Get equipment
@@ -482,7 +483,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Delete/deactivate equipment (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             if not check_admin(user_id, conn):
@@ -531,7 +532,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         with authenticated_database_transaction(
             get_db_connection,
             principal_or_user=user_id,
-            session_token=request.cookies.get("session_token") if request else None,
+            session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, _principal):
             if not is_postgres(conn):
@@ -583,7 +584,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Update calibration reminder days setting (admin only)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if days < 1 or days > 365:
                 raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
 

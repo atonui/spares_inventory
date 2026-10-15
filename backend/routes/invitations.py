@@ -1,4 +1,9 @@
 """Company-managed invitations and public token acceptance."""
+from backend.services.session_credentials import (
+    get_optional_request_credential,
+    get_request_credential,
+    hash_session_credential,
+)
 
 import hashlib
 from uuid import UUID
@@ -20,20 +25,25 @@ from backend.services.tenant_context import set_tenant_context
 
 def create_invitation_router(
     *, get_connection, authenticated_writer, current_user, csrf_dependency,
+    authenticated_csrf_dependency,
     password_hash, password_verify, encryption_key, frontend_url, limiter=None,
 ) -> APIRouter:
     router = APIRouter(tags=["invitations"])
+    verify_authenticated_csrf = authenticated_csrf_dependency
 
     def invitation_actor_key(request: Request) -> str:
-        token = request.cookies.get("session_token")
-        if not token:
+        credential = get_optional_request_credential(request)
+        if credential is None:
             return "invitation-unauthenticated"
+        token = credential.value
         conn = get_connection()
         try:
             row = execute(
                 conn,
-                "SELECT user_id FROM sessions WHERE session_token = ? AND is_active = TRUE",
-                (token,),
+                "SELECT user_id FROM sessions WHERE session_token_hash = ? AND is_active = TRUE"
+                if is_postgres(conn)
+                else "SELECT user_id FROM sessions WHERE session_token = ? AND is_active = TRUE",
+                (hash_session_credential(token) if is_postgres(conn) else token,),
             ).fetchone()
             if row:
                 return "invitation-actor:" + str(row["user_id"])
@@ -47,9 +57,9 @@ def create_invitation_router(
         body: InvitationCreateRequest,
         request: Request,
         user_id=Depends(current_user),
-        csrf_valid=Depends(csrf_dependency),
+        csrf_valid=Depends(verify_authenticated_csrf),
     ):
-        with authenticated_writer(user_id, request.cookies.get("session_token")) as conn:
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             principal = user_id
@@ -85,7 +95,7 @@ def create_invitation_router(
     async def list_company_invitations(
         request: Request, user_id=Depends(current_user),
     ):
-        with authenticated_writer(user_id, request.cookies.get("session_token")) as conn:
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             require_company_admin(user_id)
@@ -99,9 +109,9 @@ def create_invitation_router(
     @router.delete("/api/users/invitations/{invitation_id}")
     async def cancel_company_invitation(
         invitation_id: int, request: Request,
-        user_id=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+        user_id=Depends(current_user), csrf_valid=Depends(verify_authenticated_csrf),
     ):
-        with authenticated_writer(user_id, request.cookies.get("session_token")) as conn:
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             require_company_admin(user_id)
@@ -110,9 +120,9 @@ def create_invitation_router(
 
     async def resend_company_invitation(
         invitation_id: int, request: Request,
-        user_id=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+        user_id=Depends(current_user), csrf_valid=Depends(verify_authenticated_csrf),
     ):
-        with authenticated_writer(user_id, request.cookies.get("session_token")) as conn:
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             require_company_admin(user_id)

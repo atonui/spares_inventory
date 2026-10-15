@@ -1,4 +1,5 @@
 """Work-order listing routes with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
@@ -22,7 +23,7 @@ def create_work_order_router(*, get_connection: Callable[[], sqlite3.Connection]
             expected_user_id = user_id.user_id if hasattr(user_id, "user_id") else user_id
             with authenticated_tenant_transaction(
                 lambda: conn,
-                session_token=request.cookies.get("session_token") if request else None,
+                session_token=get_request_credential(request).value if request else None,
                 expected_user_id=expected_user_id,
                 readonly=True,
             ) as (tenant_conn, principal):

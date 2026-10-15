@@ -75,6 +75,7 @@ def test_dismissal_rejects_account_switch_and_requires_csrf(super_api):
     c.cookies.set('session_token','engineer-token')
     assert c.post(PREFIX+'/dismiss',json={'revision':n['revision'],'viewer_key':'user:2'}).status_code==409
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert c.post(PREFIX+'/dismiss',json={'revision':n['revision']}).status_code==403
     assert c.get(PREFIX).json()['announcement'] is not None
 

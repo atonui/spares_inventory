@@ -8,6 +8,7 @@ from fastapi import HTTPException, Request
 from backend.services.activity import record_activity
 from backend.database_sql import execute, execute_cursor
 from backend.services.principals import AuthenticatedPrincipal
+from backend.services.session_credentials import get_optional_request_credential
 
 
 def log_activity(
@@ -209,9 +210,10 @@ def create_endpoint_logger(
                     ):
                         try:
                             authenticated_activity = authenticated_activity_provider()
+                            credential = get_optional_request_credential(request) if request else None
                             authenticated_activity(
                                 user_id=user_id,
-                                session_token=request.cookies.get("session_token") if request else None,
+                                session_token=credential.value if credential else None,
                                 username=username,
                                 action=action,
                                 resource_type=resource_type,

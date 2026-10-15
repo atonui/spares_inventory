@@ -28,7 +28,7 @@ def test_inventory_write_routes_are_registered_from_write_router():
         assert endpoint.__module__ == "backend.routes.inventory_writes"
         dependencies = {dependency.call for dependency in route.dependant.dependencies}
         assert main.get_current_user in dependencies
-        assert main.verify_csrf in dependencies
+        assert main.verify_authenticated_csrf in dependencies
 
 
 def test_inventory_write_request_models_are_reexported_from_main():

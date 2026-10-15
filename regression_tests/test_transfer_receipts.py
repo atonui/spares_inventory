@@ -81,6 +81,7 @@ def test_return_preserves_threshold_after_source_is_restocked(api,restock_thresh
 def test_confirmation_requires_csrf(api):
     seed(api);mid=dispatch(api).json()['transfer_id'];api[2]['id']=4
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert finish(api,mid).status_code==403
 
 

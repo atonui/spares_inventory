@@ -15,6 +15,7 @@ pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 def _member(conn, organization_id, email, role, *, active=True):
     from backend.temporal import serialize_instant, utc_now
+    from backend.services.session_credentials import hash_session_credential
     from datetime import timedelta
 
     user_id = conn.execute(
@@ -27,8 +28,8 @@ def _member(conn, organization_id, email, role, *, active=True):
     )
     token = "token-" + email
     conn.execute(
-        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES (%s,%s,%s)",
-        (user_id, token, serialize_instant(utc_now() + timedelta(hours=1))),
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (user_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
     )
     return user_id, token
 

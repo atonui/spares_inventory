@@ -35,7 +35,7 @@ def test_stores_registered_once_with_original_dependencies():
         assert route.tags == []
         expected = {main.get_current_user}
         if route.methods != {'GET'}:
-            expected.add(main.verify_csrf)
+            expected.add(main.verify_authenticated_csrf)
         assert {d.call for d in route.dependant.dependencies} == expected
 
 

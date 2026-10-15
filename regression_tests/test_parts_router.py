@@ -29,7 +29,7 @@ def test_parts_registration_and_dependency_identity():
         assert r.tags == []
         expected = {main.get_current_user}
         if r.methods != {'GET'}:
-            expected.add(main.verify_csrf)
+            expected.add(main.verify_authenticated_csrf)
         assert {d.call for d in r.dependant.dependencies} == expected
 
 

@@ -1,4 +1,5 @@
 """Authentication routes composed with explicit application dependencies."""
+from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from datetime import timedelta
@@ -9,12 +10,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from backend.schemas.auth import (
     UserProfileUpdate, PasswordChange, ForgotPasswordRequest, ResetPasswordRequest,
-    UserLogin, UserResponse,
+    UserLogin, UserResponse, NativeLoginResponse,
 )
+from backend.services.session_credentials import hash_session_credential
+from backend.database_sql import execute, execute_cursor, is_postgres
+
+
+def register_sqlite_instant_comparison(conn):
+    if not is_postgres(conn):
+        register_instant_comparison(conn)
 
 
 def create_auth_router(*, get_connection, authenticated_writer, stock_writer, current_user,
-                       csrf_dependency, csrf_token_factory, password_hash,
+                       csrf_dependency, authenticated_csrf_dependency, csrf_token_factory, password_hash,
                        password_verify, security_config, reset_email,
                        activity_log, endpoint_log, mutation_activity,
                        limiter, logger, cookie_secure) -> APIRouter:
@@ -24,7 +32,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     authenticated_write_transaction = authenticated_writer
     stock_write_transaction = stock_writer
     get_current_user = current_user
-    verify_csrf = csrf_dependency
+    verify_csrf = authenticated_csrf_dependency
+    verify_public_csrf = csrf_dependency
     generate_csrf_token = csrf_token_factory
     hash_password = password_hash
     verify_password = password_verify
@@ -33,6 +42,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     log_activity = activity_log
     log_endpoint = endpoint_log
     _record_mutation_activity = mutation_activity
+
+    def authenticated_user_id(user):
+        return getattr(user, "user_id", user)
 
     @router.get("/api/csrf-token")
     @instant_response
@@ -49,10 +61,24 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         """Get current user's profile"""
         conn = get_db_connection()
-        register_instant_comparison(conn)
+        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
-        cursor.execute(
+        if is_postgres(conn):
+            principal = user_id
+            cursor = conn.cursor()
+            execute_cursor(conn, cursor,
+                "SELECT id, email, name, territory, created_at, display_timezone FROM users WHERE id = %s",
+                (principal.user_id,),
+            )
+            user = cursor.fetchone()
+            conn.close()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return dict(user) | {
+                "role": principal.company_role or "platform_admin",
+            }
+        execute_cursor(conn, cursor,
             "SELECT id, email, name, role, territory, created_at, display_timezone FROM users WHERE id = ?",
             (user_id,),
         )
@@ -73,34 +99,35 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request: Request = None,
     ):
         """Update user profile (email)"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        actor_id = authenticated_user_id(user_id)
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Check if user exists
-            cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+            execute_cursor(conn, cursor, "SELECT id FROM users WHERE id = ?", (actor_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="User not found")
 
             if profile_update.email:
                 # Check if email already exists
-                cursor.execute(
+                execute_cursor(conn, cursor,
                     "SELECT id FROM users WHERE email = ? AND id != ?",
-                    (profile_update.email, user_id),
+                    (profile_update.email, actor_id),
                 )
                 if cursor.fetchone():
                     raise HTTPException(status_code=400, detail="Email already in use")
 
-                cursor.execute(
-                    "UPDATE users SET email = ? WHERE id = ?", (profile_update.email, user_id)
+                execute_cursor(conn, cursor,
+                    "UPDATE users SET email = ? WHERE id = ?", (profile_update.email, actor_id)
                 )
 
 
             if 'display_timezone' in profile_update.model_fields_set:
-                cursor.execute('UPDATE users SET display_timezone=? WHERE id=?',
-                               (profile_update.display_timezone,user_id))
+                execute_cursor(conn, cursor, 'UPDATE users SET display_timezone=? WHERE id=?',
+                               (profile_update.display_timezone,actor_id))
 
             # Get updated user info
-            cursor.execute("SELECT email,display_timezone FROM users WHERE id = ?", (user_id,))
+            execute_cursor(conn, cursor, "SELECT email,display_timezone FROM users WHERE id = ?", (actor_id,))
             user = cursor.fetchone()
 
             return {"message": "Profile updated successfully", "email": user["email"],
@@ -115,11 +142,12 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request: Request = None,
     ):
         """Change user password"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        actor_id = authenticated_user_id(user_id)
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Get current user
-            cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+            execute_cursor(conn, cursor, "SELECT password_hash FROM users WHERE id = ?", (actor_id,))
             user = cursor.fetchone()
 
             if not user:
@@ -127,7 +155,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             # Verify current password using bcrypt
             if not verify_password(password_data.current_password, user["password_hash"]):
-                logger.error(f"Password verification failed for user {user_id}")
+                logger.error(f"Password verification failed for user {actor_id}")
                 raise HTTPException(status_code=400, detail="Current password is incorrect")
 
             # Validate new password
@@ -139,16 +167,16 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             # Update password and invalidate session token
             new_hash = hash_password(password_data.new_password)
 
-            cursor.execute(
-                "UPDATE users SET password_hash = ?, session_token = NULL WHERE id = ?",
-                (new_hash, user_id),
+            execute_cursor(conn, cursor,
+                "UPDATE users SET password_hash = ?, session_token = NULL, session_expires = NULL WHERE id = ?",
+                (new_hash, actor_id),
             )
 
             # Deactivate all sessions for this user i.e. force logout from all devices
-            cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
+            execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (actor_id,))
 
 
-            logger.info(f"Password changed successfully for user {user_id}")
+            logger.info(f"Password changed successfully for user {actor_id}")
 
             return {"message": "Password changed successfully. Please login again."}
 
@@ -160,18 +188,19 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request: Request = None,
     ):
         # Revoke all sessions except the current one
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        actor_id = authenticated_user_id(user_id)
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
-            current_token = request.cookies.get("session_token")
+            current_token = get_request_credential(request).value
+            from backend.database_sql import execute, is_postgres
+            current_key = hash_session_credential(current_token) if is_postgres(conn) else current_token
+            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
 
-            cursor.execute(
-                """
-                UPDATE sessions
-                SET is_active = 0
-                WHERE user_id = ? AND session_token != ? AND is_active = 1
-            """,
-                (user_id, current_token),
+            cursor = execute(
+                conn,
+                f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ? AND is_active = 1",
+                (actor_id, current_key),
             )
 
             revoked_count = cursor.rowcount
@@ -187,7 +216,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     @limiter.limit("3/hour")  # 3 password reset requests per hour
     async def forgot_password(
         request_data: ForgotPasswordRequest,
-        csrf_valid: bool = Depends(verify_csrf),
+        csrf_valid: bool = Depends(verify_public_csrf),
         request: Request = None,
     ):
         """Initiate password reset process"""
@@ -195,11 +224,11 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_agent = request.headers.get("user-agent", "")[:200]
 
         conn = get_db_connection()
-        register_instant_comparison(conn)
+        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Find user by email
-        cursor.execute("SELECT id, name FROM users WHERE email = ? AND archived_at IS NULL", (request_data.email,))
+        execute_cursor(conn, cursor, "SELECT id, name FROM users WHERE email = ? AND archived_at IS NULL", (request_data.email,))
         user = cursor.fetchone()
 
         # Log the attempt (even if email doesn't exist, for security monitoring)
@@ -232,9 +261,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         expires_at = utc_now() + timedelta(hours=1)
 
         # Store token in users table
-        cursor.execute(
-            """UPDATE users 
-               SET reset_token = ?, reset_token_expires = ? 
+        execute_cursor(conn, cursor,
+            """UPDATE users
+               SET reset_token = ?, reset_token_expires = ?
                WHERE id = ? AND archived_at IS NULL""",
             (token, serialize_instant(expires_at), user_id),
         )
@@ -257,7 +286,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     @limiter.limit("5/hour")  # 5 password reset attempts per hour
     async def reset_password(
         request_data: ResetPasswordRequest,
-        csrf_valid: bool = Depends(verify_csrf),
+        csrf_valid: bool = Depends(verify_public_csrf),
         request: Request = None,
     ):
         """Reset password using token"""
@@ -265,13 +294,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_agent = request.headers.get("user-agent", "")[:200]
 
         conn = get_db_connection()
-        register_instant_comparison(conn)
+        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Validate token
-        cursor.execute(
-            """SELECT id, name, email, reset_token_expires 
-               FROM users 
+        execute_cursor(conn, cursor,
+            """SELECT id, name, email, reset_token_expires
+               FROM users
                WHERE reset_token = ? AND archived_at IS NULL""",
             (request_data.token,),
         )
@@ -331,12 +360,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             conn.close()
             raise HTTPException(status_code=400,detail='Token has expired')
         # Update password and clear token
-        cursor.execute(
-            """UPDATE users 
-               SET password_hash = ?, 
-                   reset_token = NULL, 
+        execute_cursor(conn, cursor,
+            """UPDATE users
+               SET password_hash = ?,
+                   reset_token = NULL,
                    reset_token_expires = NULL,
-                   session_token = NULL
+                   session_token = NULL,
+                   session_expires = NULL
                WHERE id = ? AND reset_token = ? AND archived_at IS NULL""",
             (new_hash, user["id"], request_data.token),
         )
@@ -346,7 +376,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             conn.close()
             raise HTTPException(status_code=400,detail='Invalid or expired token')
 
-        cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
+        execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
 
         conn.commit()
         conn.close()
@@ -376,12 +406,12 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         ip_address = request.client.host if hasattr(request, "client") else None
 
         conn = get_db_connection()
-        register_instant_comparison(conn)
+        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
-        cursor.execute(
-            """SELECT id, name, reset_token_expires 
-               FROM users 
+        execute_cursor(conn, cursor,
+            """SELECT id, name, reset_token_expires
+               FROM users
                WHERE reset_token = ? AND archived_at IS NULL""",
             (token,),
         )
@@ -414,46 +444,43 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         return {"valid": True}
 
 
-    @router.post("/api/auth/login")
-    @limiter.limit("5/minute")  # 5 attempts per minute
-    async def login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_csrf)):
-        """Enhanced user login with security features"""
-        ip_address = request.client.host if hasattr(request, "client") else None
+    def perform_login(user_login: UserLogin, request: Request, *, native: bool):
+        from backend.database_sql import execute, is_postgres
+        from backend.postgres_database import postgres_transaction
+
+        ip_address = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent", "")[:200]
-
-        cfg              = get_security_config()
-        max_attempts     = cfg["max_login_attempts"]
-        lockout_minutes  = cfg["lockout_duration_minutes"]
-        session_hours    = cfg["session_duration_hours"]
-        remember_me_days = cfg["remember_me_duration_days"]
-
+        cfg = get_security_config()
         conn = get_db_connection()
-        register_instant_comparison(conn)
-        cursor = conn.cursor()
+        postgres = is_postgres(conn)
+        if native and not postgres:
+            conn.close()
+            raise HTTPException(status_code=503, detail="Native login requires PostgreSQL")
+        if not postgres:
+            register_sqlite_instant_comparison(conn)
 
-        # Get user
-        cursor.execute(
-            """SELECT id, email, name, role, territory, password_hash, 
-               failed_login_attempts, account_locked_until 
-               FROM users WHERE email = ? AND archived_at IS NULL""",
-            (user_login.email,),
-        )
-        user = cursor.fetchone()
+        if postgres:
+            query = """SELECT u.id, u.email, u.name,
+                              COALESCE(om.company_role, CASE WHEN pa.user_id IS NOT NULL THEN 'platform_admin' END) AS role,
+                              u.territory, u.password_hash, u.failed_login_attempts,
+                              u.account_locked_until
+                       FROM users AS u
+                       LEFT JOIN organization_memberships AS om ON om.user_id = u.id AND om.is_active = TRUE
+                       LEFT JOIN platform_admins AS pa ON pa.user_id = u.id
+                       WHERE u.email = ? AND u.archived_at IS NULL"""
+        else:
+            query = """SELECT id, email, name, role, territory, password_hash,
+                              failed_login_attempts, account_locked_until
+                       FROM users WHERE email = ? AND archived_at IS NULL"""
+        user = execute(conn, query, (user_login.email,)).fetchone()
 
-        # Check if account is locked
         if user and user["account_locked_until"]:
             lockout_time = stored_instant(user["account_locked_until"], "account_locked_until")
             if utc_now() < lockout_time:
-                remaining_minutes = int(
-                    (lockout_time - utc_now()).total_seconds() / 60
-                )
+                remaining_minutes = int((lockout_time - utc_now()).total_seconds() / 60)
                 log_activity(
-                    user_id=user["id"],
-                    username=user["name"],
-                    action="login_blocked",
-                    status="error",
-                    error_message="Account locked",
-                    ip_address=ip_address,
+                    user_id=user["id"], username=user["name"], action="login_blocked",
+                    status="error", error_message="Account locked", ip_address=ip_address,
                     user_agent=user_agent,
                 )
                 conn.close()
@@ -462,136 +489,153 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     detail=f"Account locked. Try again in {remaining_minutes} minutes.",
                 )
 
-        # Verify password
         if not user or not verify_password(user_login.password, user["password_hash"]):
-            # Log failed attempt
             if user:
                 failed_attempts = user["failed_login_attempts"] + 1
-
-                if failed_attempts >= max_attempts:
-                    # Lock account
-                    lockout_until = utc_now() + timedelta(
-                        minutes=lockout_minutes
-                    )
-                    cursor.execute(
-                        """UPDATE users 
-                           SET failed_login_attempts = ?, account_locked_until = ? 
-                           WHERE id = ?""",
+                if failed_attempts >= cfg["max_login_attempts"]:
+                    lockout_until = utc_now() + timedelta(minutes=cfg["lockout_duration_minutes"])
+                    execute(
+                        conn,
+                        "UPDATE users SET failed_login_attempts = ?, account_locked_until = ? WHERE id = ?",
                         (failed_attempts, serialize_instant(lockout_until), user["id"]),
                     )
                     conn.commit()
-
                     log_activity(
-                        user_id=user["id"],
-                        username=user["name"],
-                        action="account_locked",
-                        status="error",
-                        error_message="Too many failed attempts",
-                        ip_address=ip_address,
-                        user_agent=user_agent,
+                        user_id=user["id"], username=user["name"], action="account_locked",
+                        status="error", error_message="Too many failed attempts",
+                        ip_address=ip_address, user_agent=user_agent,
                     )
-
                     conn.close()
                     raise HTTPException(
                         status_code=423,
-                        detail=f"Account locked due to too many failed attempts. Try again in {lockout_minutes} minutes.",
+                        detail=("Account locked due to too many failed attempts. "
+                                f"Try again in {cfg['lockout_duration_minutes']} minutes."),
                     )
-                else:
-                    cursor.execute(
-                        "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
-                        (failed_attempts, user["id"]),
-                    )
-                    conn.commit()
-
+                execute(
+                    conn, "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
+                    (failed_attempts, user["id"]),
+                )
+                conn.commit()
             log_activity(
-                user_id=user["id"] if user else 0,
-                username=user_login.email,
-                action="login_failed",
-                status="error",
-                error_message="Invalid credentials",
-                ip_address=ip_address,
-                user_agent=user_agent,
+                user_id=user["id"] if user else 0, username=user_login.email,
+                action="login_failed", status="error", error_message="Invalid credentials",
+                ip_address=ip_address, user_agent=user_agent,
             )
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Successful login - reset failed attempts and unlock
-        session_token = secrets.token_urlsafe(32)
-
-        # Calculate session expiration
+        raw_credential = secrets.token_urlsafe(32)
         if user_login.remember_me:
-            expires = utc_now() + timedelta(days=remember_me_days)
-            max_age = remember_me_days * 24 * 60 * 60
+            expires = utc_now() + timedelta(days=cfg["remember_me_duration_days"])
+            max_age = cfg["remember_me_duration_days"] * 24 * 60 * 60
         else:
-            expires = utc_now() + timedelta(hours=session_hours)
-            max_age = session_hours * 60 * 60
-
-        # Serialize the active-account check with session creation and archiving.
+            expires = utc_now() + timedelta(hours=cfg["session_duration_hours"])
+            max_age = cfg["session_duration_hours"] * 60 * 60
         conn.close()
-        with stock_write_transaction() as conn:
-            cursor=conn.cursor()
-            if not conn.execute('SELECT 1 FROM users WHERE id=? AND archived_at IS NULL',(user['id'],)).fetchone():
-                raise HTTPException(status_code=401,detail='Invalid credentials')
-            # Create session in sessions table
-            cursor.execute(
-                """
-                INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (user["id"], session_token, serialize_instant(expires), ip_address, user_agent),
-            )
 
-            # Update user record
-            cursor.execute(
-                """
-                UPDATE users
-                SET failed_login_attempts = 0,
-                    account_locked_until = NULL,
-                    last_login = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
-                WHERE id = ?
-            """,
-                (user["id"],),
-            )
+        if postgres:
+            session_conn = get_db_connection()
+            try:
+                with postgres_transaction(session_conn):
+                    active = session_conn.execute(
+                        "SELECT id FROM users WHERE id = %s AND archived_at IS NULL FOR UPDATE",
+                        (user["id"],),
+                    ).fetchone()
+                    if active is None:
+                        raise HTTPException(status_code=401, detail="Invalid credentials")
+                    session_conn.execute(
+                        """INSERT INTO sessions (user_id, session_token_hash, expires_at, ip_address, user_agent)
+                           VALUES (%s, %s, %s, %s, %s)""",
+                        (user["id"], hash_session_credential(raw_credential),
+                         serialize_instant(expires), ip_address, user_agent),
+                    )
+                    session_conn.execute(
+                        """UPDATE users SET failed_login_attempts = 0,
+                                  account_locked_until = NULL, last_login = %s
+                           WHERE id = %s""",
+                        (serialize_instant(utc_now()), user["id"]),
+                    )
+                    from backend.services.principals import resolve_principal
+                    principal = resolve_principal(session_conn, raw_credential)
+                    user_role = principal.company_role or "platform_admin"
+            finally:
+                session_conn.close()
+        else:
+            with stock_write_transaction() as session_conn:
+                active = execute(
+                    session_conn,
+                    "SELECT 1 FROM users WHERE id = ? AND archived_at IS NULL",
+                    (user["id"],),
+                ).fetchone()
+                if not active:
+                    raise HTTPException(status_code=401, detail="Invalid credentials")
+                execute(
+                    session_conn,
+                    """INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (user["id"], raw_credential, serialize_instant(expires), ip_address, user_agent),
+                )
+                execute(
+                    session_conn,
+                    """UPDATE users SET failed_login_attempts = 0,
+                              account_locked_until = NULL,
+                              last_login = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
+                       WHERE id = ?""",
+                    (user["id"],),
+                )
+            user_role = user["role"]
 
-
-
-        # Log successful login
         log_activity(
-            user_id=user["id"],
-            username=user["name"],
-            action="login",
-            details={"role": user["role"], "remember_me": user_login.remember_me},
-            ip_address=ip_address,
-            user_agent=user_agent,
+            user_id=user["id"], username=user["name"], action="login",
+            details={"role": user_role, "remember_me": user_login.remember_me},
+            ip_address=ip_address, user_agent=user_agent,
         )
+        logger.info("User %s (%s) logged in from %s", user["name"], user["id"], ip_address)
 
-        logger.info(f"User {user['name']} ({user['id']}) logged in from {ip_address}")
-
-        # Create response
         response_data = {
             "success": True,
             "user": {
-                "id": user["id"],
-                "email": user["email"],
-                "name": user["name"],
-                "role": user["role"],
-                "territory": user["territory"],
+                "id": user["id"], "email": user["email"], "name": user["name"],
+                "role": user_role, "territory": user["territory"],
             },
         }
+        if native:
+            response_data.update({
+                "token_type": "Bearer",
+                "access_token": raw_credential,
+                "expires_at": serialize_instant(expires),
+            })
+            return JSONResponse(content=response_data)
 
         response = JSONResponse(content=response_data)
-
-        # Set HTTPOnly cookie
         response.set_cookie(
-            key="session_token",
-            value=session_token,
-            httponly=True,
-            secure=cookie_secure(),
-            samesite="lax",
-            max_age=max_age,
+            key="session_token", value=raw_credential, httponly=True,
+            secure=cookie_secure(), samesite="lax", max_age=max_age,
         )
-
         return response
+
+
+    @router.post("/api/auth/login")
+    @limiter.limit("5/minute")
+    async def login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_public_csrf)):
+        """Authenticate a browser and set its existing HTTP-only session cookie."""
+        return perform_login(user_login, request, native=False)
+
+
+    @router.post(
+        "/api/auth/native/login",
+        response_model=NativeLoginResponse,
+        responses={
+            401: {"description": "Invalid credentials or inactive account"},
+            403: {"description": "No active company membership or platform-admin access"},
+            423: {"description": "Account temporarily locked"},
+            503: {"description": "Native login requires PostgreSQL"},
+        },
+    )
+    @limiter.limit("5/minute")
+    async def native_login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_public_csrf)):
+        """Issue an opaque bearer session. Requires the normal CSRF token; tenant context is server-derived."""
+        return perform_login(user_login, request, native=True)
 
 
     @router.get("/api/auth/sessions")
@@ -600,22 +644,27 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get user's active sessions"""
+        from backend.database_sql import execute, is_postgres
+
         conn = get_db_connection()
-        register_instant_comparison(conn)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT id, created_at, last_activity, ip_address, user_agent,
-                   CASE WHEN session_token = ? THEN 1 ELSE 0 END as is_current
-            FROM sessions
-            WHERE user_id = ? AND is_active = 1
-            ORDER BY utc_instant(last_activity) DESC, id DESC
-        """,
-            (request.cookies.get("session_token"), user_id),
-        )
-
-        sessions = cursor.fetchall()
+        actor_id = authenticated_user_id(user_id)
+        credential = get_request_credential(request).value
+        if is_postgres(conn):
+            current_key = hash_session_credential(credential)
+            order_by = "last_activity DESC"
+            session_column = "session_token_hash"
+        else:
+            register_sqlite_instant_comparison(conn)
+            current_key = credential
+            order_by = "utc_instant(last_activity) DESC"
+            session_column = "session_token"
+        sessions = execute(
+            conn,
+            f"""SELECT id, created_at, last_activity, ip_address, user_agent,
+                       CASE WHEN {session_column} = ? THEN 1 ELSE 0 END AS is_current
+                FROM sessions WHERE user_id = ? AND is_active = 1 ORDER BY {order_by}, id DESC""",
+            (current_key, actor_id),
+        ).fetchall()
         conn.close()
 
         return [dict(session) for session in sessions]
@@ -629,17 +678,18 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request: Request = None,
     ):
         """Revoke a specific session"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        actor_id = authenticated_user_id(user_id)
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Verify session belongs to user
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 """
                 UPDATE sessions
                 SET is_active = 0
                 WHERE id = ? AND user_id = ?
             """,
-                (session_id, user_id),
+                (session_id, actor_id),
             )
 
             if cursor.rowcount == 0:
@@ -656,18 +706,19 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request: Request = None,
     ):
         """Revoke all sessions except current"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        actor_id = authenticated_user_id(user_id)
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
-            current_token = request.cookies.get("session_token")
+            current_token = get_request_credential(request).value
+            from backend.database_sql import execute, is_postgres
+            current_key = hash_session_credential(current_token) if is_postgres(conn) else current_token
+            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
 
-            cursor.execute(
-                """
-                UPDATE sessions
-                SET is_active = 0
-                WHERE user_id = ? AND session_token != ?
-            """,
-                (user_id, current_token),
+            cursor = execute(
+                conn,
+                f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ?",
+                (actor_id, current_key),
             )
 
             revoked_count = cursor.rowcount
@@ -680,12 +731,19 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     @log_endpoint(action="logout", transactional=True)
     async def logout(user_id: int = Depends(get_current_user), request: Request = None, csrf_valid: bool = Depends(verify_csrf)):
         """Logout and clear session cookie"""
-        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+        actor_id = authenticated_user_id(user_id)
+        credential = get_request_credential(request).value
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
-            cursor.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user_id,))
-            cursor.execute(
-                "UPDATE sessions SET is_active = 0 WHERE user_id = ? AND session_token = ?",
-                (user_id, request.cookies.get("session_token")),
+            from backend.database_sql import execute, is_postgres
+            if not is_postgres(conn):
+                execute(conn, "UPDATE users SET session_token = NULL, session_expires = NULL WHERE id = ?", (actor_id,))
+            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
+            token_value = hash_session_credential(credential) if is_postgres(conn) else credential
+            execute(
+                conn,
+                f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} = ?",
+                (actor_id, token_value),
             )
 
             response = JSONResponse(content={"success": True})
@@ -694,7 +752,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             _result = response
 
-            _record_mutation_activity(conn, user_id, 'logout', None, _result, request)
+            _record_mutation_activity(conn, actor_id, 'logout', None, _result, request)
             return _result
 
 
@@ -720,7 +778,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     "saas_mode": True,
                 }) if row else None
             else:
-                register_instant_comparison(conn)
+                register_sqlite_instant_comparison(conn)
                 row = execute(
                     conn,
                     "SELECT id, email, name, role, territory, archived_at FROM users WHERE id = ?",

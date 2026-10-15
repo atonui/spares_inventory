@@ -1,5 +1,6 @@
 """Authentication, profile and shared user response schemas."""
-from typing import Optional
+from datetime import datetime
+from typing import Literal, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from backend.temporal import validate_zone
 
@@ -40,3 +41,21 @@ class UserResponse(BaseModel):
     territory: Optional[str]
     is_platform_admin: bool = False
     saas_mode: bool = False
+
+
+class NativeLoginUserResponse(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: str
+    territory: Optional[str] = None
+
+
+class NativeLoginResponse(BaseModel):
+    success: bool
+    token_type: Literal["Bearer"]
+    access_token: str = Field(
+        description="Opaque server-managed session credential; not a JWT. Store only in platform-protected storage."
+    )
+    expires_at: datetime
+    user: NativeLoginUserResponse

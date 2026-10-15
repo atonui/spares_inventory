@@ -52,6 +52,7 @@ def test_personal_invalid_zone_and_business_csrf_rejected(api):
     client, db, actor=api
     assert client.put('/api/profile',json={'display_timezone':'BST'}).status_code==422
     main.app.dependency_overrides.pop(main.verify_csrf)
+    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     assert client.put('/api/organisation/timezone',json={'timezone':'UTC','expected_revision':1}).status_code==403
 
 

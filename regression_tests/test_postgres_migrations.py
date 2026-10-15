@@ -12,7 +12,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4)
+    assert status.applied_versions == (1, 2, 3, 4, 5)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -125,7 +125,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=5,
+        version=6,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -140,7 +140,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 5"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 6"
     ).fetchone()["count"] == 0
 
 
@@ -151,7 +151,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == (1, 2, 3, 4)
+    assert status.applied_versions == (1, 2, 3, 4, 5)
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -176,6 +176,49 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
             "VALUES (%s, 'invite@example.test', 'manager', 'another-hash', %s, '2099-01-01T00:00:00Z')",
             (org_a, user),
         )
+
+
+def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_schema, monkeypatch):
+    from hashlib import sha256
+
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection, _ = postgres_schema
+    all_migrations = registry.MIGRATIONS
+    monkeypatch.setattr(registry, "MIGRATIONS", all_migrations[:4])
+    apply_postgres_migrations(connection)
+
+    user = connection.execute(
+        "INSERT INTO users (email, name, password_hash, session_token) "
+        "VALUES ('legacy@example.test', 'Legacy', 'x', 'legacy-user-token') RETURNING id"
+    ).fetchone()["id"]
+    connection.execute(
+        "INSERT INTO sessions (user_id, session_token, expires_at) "
+        "VALUES (%s, 'still-valid-session-token', '2099-01-01T00:00:00Z')",
+        (user,),
+    )
+
+    monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
+    status = apply_postgres_migrations(connection)
+
+    assert status.applied_versions == (1, 2, 3, 4, 5)
+    session_columns = {
+        row["column_name"]
+        for row in connection.execute(
+            """SELECT column_name FROM information_schema.columns
+               WHERE table_schema = current_schema() AND table_name = 'sessions'"""
+        ).fetchall()
+    }
+    assert "session_token" not in session_columns
+    assert "session_token_hash" in session_columns
+    stored_hash = connection.execute(
+        "SELECT session_token_hash FROM sessions WHERE user_id = %s", (user,)
+    ).fetchone()["session_token_hash"]
+    assert stored_hash == sha256(b"still-valid-session-token").hexdigest()
+    assert connection.execute(
+        "SELECT session_token FROM users WHERE id = %s", (user,)
+    ).fetchone()["session_token"] is None
 
 
 def test_invitation_rls_denies_reads_without_matching_context(postgres_schema):

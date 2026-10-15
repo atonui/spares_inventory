@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from backend.temporal import parse_storage_instant, utc_now
 from backend.temporal_manifest import TemporalField
+from .session_credentials import hash_session_credential
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
     """Resolve the session's sole active company membership from trusted database state."""
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    session_token_hash = hash_session_credential(session_token)
     row = conn.execute(
         """SELECT s.user_id, s.expires_at, u.archived_at,
                   om.organization_id, om.company_role, om.is_active AS membership_active,
@@ -39,8 +41,8 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
            JOIN users AS u ON u.id = s.user_id
            LEFT JOIN organization_memberships AS om ON om.user_id = u.id
            LEFT JOIN platform_admins AS pa ON pa.user_id = u.id
-           WHERE s.session_token = %s AND s.is_active = TRUE""",
-        (session_token,),
+           WHERE s.session_token_hash = %s AND s.is_active = TRUE""",
+        (session_token_hash,),
     ).fetchone()
     if row is None or row["archived_at"] is not None:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
