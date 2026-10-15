@@ -20,6 +20,20 @@ def check_admin(user_id: int, conn=None, get_connection=None) -> bool:
             conn.close()
 
 
+def require_company_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
+    """Require an active, server-resolved owner or admin company membership."""
+    if principal.organization_id is None or principal.company_role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Company administrator access required")
+    return principal
+
+
+def require_platform_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
+    """Require platform authority independently of any company role."""
+    if not principal.is_platform_admin:
+        raise HTTPException(status_code=403, detail="Platform administrator access required")
+    return principal
+
+
 def require_archive_admin(conn,user_id):
     if isinstance(user_id, AuthenticatedPrincipal):
         if user_id.organization_id is None or user_id.company_role not in {"owner", "admin"}:
@@ -51,18 +65,32 @@ def require_user_management(user_id: int, requested_role=None, target_user_id=No
 
 
 def require_superadmin(user_id: int, conn=None, get_connection=None):
-    """Raise 403 unless the caller has role == 'superadmin'."""
+    """Require platform authority on PostgreSQL and preserve SQLite compatibility."""
+    if isinstance(user_id, AuthenticatedPrincipal):
+        if not user_id.is_platform_admin:
+            raise HTTPException(status_code=403, detail="Platform administrator access required")
+        return
     close = conn is None
     if close:
         conn = get_connection()
-    cur = conn.cursor()
-    cur.row_factory = sqlite3.Row
     try:
-        row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+        import psycopg
+        if isinstance(conn, psycopg.Connection):
+            row = conn.execute(
+                "SELECT 1 FROM platform_admins WHERE user_id = %s", (user_id,)
+            ).fetchone()
+            allowed = row is not None
+        else:
+            cur = conn.cursor()
+            cur.row_factory = sqlite3.Row
+            try:
+                row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+            finally:
+                cur.close()
+            allowed = bool(row and row["role"] == "superadmin")
     finally:
-        cur.close()
         if close:
             conn.close()
-    if not row or row["role"] != "superadmin":
+    if not allowed:
         raise HTTPException(status_code=403, detail="Superadmin access required")
 

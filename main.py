@@ -72,7 +72,11 @@ def database_defaults():
 
 def init_db():
     """Apply explicit migrations and preserve configured bootstrap defaults."""
-    initialize_application_database(DATABASE, defaults=database_defaults())
+    initialize_application_database(
+        DATABASE,
+        defaults=database_defaults(),
+        migration_database_url=settings.MIGRATION_DATABASE_URL,
+    )
 
 
 # ============ CSRF UTILITIES ============
@@ -384,12 +388,43 @@ app.include_router(create_auth_router(
 from backend.routes.stores import create_stores_router
 
 from backend.routes.timezone_settings import create_timezone_settings_router
+from backend.routes.organization_settings import create_organization_settings_router
 
 app.include_router(create_timezone_settings_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
     current_user=get_current_user,
     csrf_dependency=verify_csrf,
+))
+
+app.include_router(create_organization_settings_router(
+    get_connection=lambda: get_db_connection(),
+    authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
+    current_user=get_current_user,
+    csrf_dependency=verify_csrf,
+))
+
+from backend.routes.invitations import create_invitation_router
+from backend.routes.platform_organizations import create_platform_organizations_router
+
+app.include_router(create_invitation_router(
+    get_connection=lambda: get_db_connection(),
+    authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
+    current_user=get_current_user,
+    csrf_dependency=verify_csrf,
+    password_hash=lambda password: hash_password(password),
+    password_verify=lambda plain, hashed: verify_password(plain, hashed),
+    encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+    frontend_url=settings.INVITATION_BASE_URL or FRONTEND_URL,
+    limiter=limiter,
+))
+
+app.include_router(create_platform_organizations_router(
+    get_connection=lambda: get_db_connection(),
+    current_user=get_current_user,
+    csrf_dependency=verify_csrf,
+    encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+    frontend_url=settings.INVITATION_BASE_URL or FRONTEND_URL,
 ))
 
 app.include_router(create_stores_router(

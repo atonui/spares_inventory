@@ -75,10 +75,13 @@ function superPanel() {
       users:     'All Users',    tables: 'Database Tables',
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
+      organizations: 'Organizations',
     },
 
     // data stores
     dashboard: {},
+    organizations: [],
+    organizationForm: { name: '', slug: '', owner_email: '' },
     locked: [], selectedLocked: [],
     sessions: [],
     panelLoads: {
@@ -166,7 +169,12 @@ function superPanel() {
     // ── Boot ──────────────────────────────────────────────────
     async init() {
       await this.getCsrf();
-      await this.getMe();
+      if (!await this.getMe()) return;
+      if (this.me?.saas_mode) {
+        await this.loadPlatformDashboard();
+        await this.loadOrganizations();
+        return;
+      }
       await this.loadTimezoneContext();
       await this.loadDashboard();
       await this.loadAnnouncement();
@@ -175,6 +183,7 @@ function superPanel() {
     refresh() {
       const loaders = {
         dashboard: () => this.loadDashboard(),
+        organizations: () => this.loadOrganizations(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
@@ -240,11 +249,13 @@ async submitPasswordReset() {
         const r = await fetch(`${this.apiUrl}/me`, { credentials: 'include' });
         if (r.status === 401) { location.href = '/static/index.html'; return; }
         this.me = await r.json();
-        if (this.me.role !== 'superadmin') {
-          this.toast('Access denied — superadmin role required.', 'danger');
+        if (!this.me.is_platform_admin && this.me.role !== 'superadmin') {
+          this.toast('Access denied — platform administrator access required.', 'danger');
           setTimeout(() => location.href = '/static/index.html', 2000);
+          return false;
         }
-      } catch { location.href = '/static/index.html'; }
+        return true;
+      } catch { location.href = '/static/index.html'; return false; }
     },
 
     async api(path, opts = {}) {
@@ -270,6 +281,39 @@ async submitPasswordReset() {
       try { this.dashboard = await this.api('/superadmin/dashboard'); }
       catch (e) { this.toast(e.message, 'danger'); }
       finally { this.loading = false; }
+    },
+
+    async loadPlatformDashboard() {
+      this.loading = true;
+      try { this.dashboard = await this.api('/platform/dashboard'); }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    async loadOrganizations() {
+      this.loading = true;
+      try { this.organizations = await this.api('/platform/organizations'); }
+      catch (e) { this.toast(e.message, 'danger'); }
+      finally { this.loading = false; }
+    },
+
+    async provisionOrganization() {
+      const form = this.organizationForm;
+      if (!form.name.trim() || !form.slug.trim() || !form.owner_email.trim()) return;
+      return this.runAction('provisionOrganization', async () => {
+        await this.api('/platform/organizations', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: form.name.trim(),
+            slug: form.slug.trim(),
+            owner_email: form.owner_email.trim(),
+          }),
+        });
+        this.organizationForm = { name: '', slug: '', owner_email: '' };
+        this.toast('Organization created and owner invitation queued.', 'ok');
+        await this.loadOrganizations();
+        await this.loadPlatformDashboard();
+      });
     },
 
     // ── Locked accounts ────────────────────────────────────────

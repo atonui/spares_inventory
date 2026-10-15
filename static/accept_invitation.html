@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>Accept invitation — Inventory</title>
+  <link rel="stylesheet" href="mystyle.css?v=20261012-timezone">
+  <link rel="stylesheet" href="login.css?v=20261014-recovery-style">
+  <style>[x-cloak]{display:none!important}.invite-card{max-width:34rem;margin:8vh auto;padding:2rem;background:#fff;border-radius:12px;box-shadow:0 8px 36px #10253a18}.invite-card h1{margin-top:0}.invite-card .form-group{margin:1rem 0}.invite-card input{width:100%;box-sizing:border-box;padding:.75rem}.invite-status{margin:1rem 0}</style>
+  <script src="js/shared/csrf.js?v=20261014-frontend-21" defer></script>
+  <script src="js/pages/accept-invitation.js?v=20261015-saas" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
+</head>
+<body>
+  <main class="invite-card" x-data="acceptInvitation()" x-init="init()">
+    <p class="login-eyebrow">INVITATION</p>
+    <h1>Join your inventory team</h1>
+    <p>Choose your name and password to finish setting up your account.</p>
+    <form x-show="!complete" @submit.prevent="submit()">
+      <div class="form-group">
+        <label for="invite-name">Name <span>(for a new account)</span></label>
+        <input id="invite-name" type="text" autocomplete="name" maxlength="200" x-model="name">
+      </div>
+      <div class="form-group">
+        <label for="invite-password">Password</label>
+        <input id="invite-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required x-model="password">
+      </div>
+      <p class="invite-status" x-show="error" role="alert" x-text="error"></p>
+      <p class="invite-status" x-show="!token" role="alert">This invitation link is incomplete or unavailable.</p>
+      <button class="btn btn-success" type="submit" :disabled="busy || !token">
+        <span x-text="busy ? 'Accepting…' : 'Accept invitation'"></span>
+      </button>
+    </form>
+    <section x-show="complete" role="status" aria-live="polite">
+      <p x-text="message"></p>
+      <a class="btn" href="/static/index.html">Continue to sign in</a>
+    </section>
+  </main>
+</body>
+</html>

@@ -13,10 +13,10 @@ function setup(globals = {}) {
     vm.runInContext(fs.readFileSync(filename, 'utf8'), c, {filename});
     return c;
 }
-test('user administration owns exactly seven properties and independent forms', () => {
+test('user administration owns its invitation state and independent forms', () => {
     const c = setup();
     const a = c.usersAdminFeature(), b = c.usersAdminFeature();
-    assert.deepEqual(Object.keys(a).sort(), ['userForm', 'showUserModal', 'editingUser', 'createUser', 'editUser', 'updateUser', 'deleteUser'].sort());
+    assert.deepEqual(Object.keys(a).sort(), ['userForm', 'showUserModal', 'editingUser', 'createUser', 'editUser', 'updateUser', 'deleteUser', 'invitations', 'invitationsLoading', 'loadInvitations', 'inviteUser', 'resendInvitation', 'cancelInvitation'].sort());
     assert.deepEqual(plain(a.userForm), initial);
     assert.equal(a.showUserModal, false);
     assert.equal(a.editingUser, null);

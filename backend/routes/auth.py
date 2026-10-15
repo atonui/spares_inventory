@@ -705,14 +705,30 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         """Get current user information"""
         conn = get_db_connection()
-        register_instant_comparison(conn)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "SELECT id, email, name, role, territory FROM users WHERE id = ?", (user_id,)
-        )
-        user = cursor.fetchone()
-        conn.close()
+        try:
+            from backend.database_sql import execute, is_postgres
+            if is_postgres(conn):
+                principal = user_id
+                row = execute(
+                    conn,
+                    "SELECT id, email, name, territory, archived_at FROM users WHERE id = ?",
+                    (principal.user_id,),
+                ).fetchone()
+                user = (dict(row) | {
+                    "role": principal.company_role or "platform_admin",
+                    "is_platform_admin": principal.is_platform_admin,
+                    "saas_mode": True,
+                }) if row else None
+            else:
+                register_instant_comparison(conn)
+                row = execute(
+                    conn,
+                    "SELECT id, email, name, role, territory, archived_at FROM users WHERE id = ?",
+                    (user_id,),
+                ).fetchone()
+                user = (dict(row) | {"is_platform_admin": False, "saas_mode": False}) if row else None
+        finally:
+            conn.close()
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")

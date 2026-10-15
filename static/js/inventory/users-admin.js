@@ -10,6 +10,69 @@ function usersAdminFeature() {
 
         showUserModal: false,
         editingUser: null,
+        invitations: [],
+        invitationsLoading: false,
+
+        async loadInvitations() {
+            if (!this.currentUser?.saas_mode) return;
+            this.invitationsLoading = true;
+            try {
+                this.invitations = await this.apiCall('/users/invitations');
+            } catch (error) {
+                this.error = 'Failed to load invitations: ' + error.message;
+            } finally {
+                this.invitationsLoading = false;
+            }
+        },
+
+        async inviteUser() {
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+            try {
+                await this.apiCall('/users/invitations', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: this.userForm.email, role: this.userForm.role })
+                });
+                this.successMessage = 'Invitation sent. It expires in seven days.';
+                this.showUserModal = false;
+                this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
+                await this.loadInvitations();
+                setTimeout(() => this.successMessage = '', 3000);
+            } catch (error) {
+                this.error = 'Failed to invite user: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async cancelInvitation(invitationId) {
+            this.loading = true;
+            this.error = '';
+            try {
+                await this.apiCall('/users/invitations/' + invitationId, { method: 'DELETE' });
+                await this.loadInvitations();
+            } catch (error) {
+                this.error = 'Failed to cancel invitation: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async resendInvitation(invitationId) {
+            this.loading = true;
+            this.error = '';
+            try {
+                await this.apiCall('/users/invitations/' + invitationId + '/resend', { method: 'POST' });
+                this.successMessage = 'A fresh invitation link was sent.';
+                await this.loadInvitations();
+                setTimeout(() => this.successMessage = '', 3000);
+            } catch (error) {
+                this.error = 'Failed to resend invitation: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
 
         async createUser() {
             this.loading = true;

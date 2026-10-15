@@ -309,9 +309,21 @@ def test_every_registered_mutation_has_a_behavioral_classification():
     from fastapi.routing import APIRoute
     protected={(case[1],_route_template(case[2])) for case in STOCK_CASES+CATALOG_CASES+ADMIN_CASES}
     protected.add(('POST','/api/superadmin/database/restore'))
+    protected.update({('PUT', '/api/organization/settings'),
+                      ('POST', '/api/organization/owner-transfer')})
+    protected.update({
+        ('POST', '/api/users/invitations'),
+        ('POST', '/api/users/invitations/{invitation_id}/resend'),
+        ('DELETE', '/api/users/invitations/{invitation_id}'),
+        ('POST', '/api/invitations/accept'),
+        ('POST', '/api/platform/organizations'),
+        ('PUT', '/api/platform/organizations/{organization_id}/members/{user_id}/role'),
+        ('PUT', '/api/platform/admins/{target_user_id}'),
+        ('DELETE', '/api/platform/admins/{target_user_id}'),
+    })
     exempt={('POST',p) for p in ['/api/auth/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==52
+    assert len(protected)==62
     assert registered==protected|exempt
 
 

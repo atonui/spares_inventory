@@ -285,7 +285,7 @@ function inventoryCoreFeature() {
                     this.loadStoreTypes()
                 ];
 
-                if (['admin','superadmin'].includes(this.currentUser?.role)) {
+                if (['owner','admin','superadmin'].includes(this.currentUser?.role)) {
                     promises.push(this.loadUsers());
                 }
 
@@ -357,8 +357,11 @@ function inventoryCoreFeature() {
         },
 
         async loadUsers() {
-            if (['admin','superadmin'].includes(this.currentUser?.role)) {
+            if (['owner','admin','superadmin'].includes(this.currentUser?.role)) {
                 this.users = await this.apiCall('/users');
+                if (this.currentUser?.saas_mode && typeof this.loadInvitations === 'function') {
+                    await this.loadInvitations();
+                }
             }
         },
 

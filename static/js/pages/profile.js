@@ -30,7 +30,7 @@ function profileManager() {
         get timezoneSaving() { return this.displayTimezoneSaving || this.businessTimezoneSaving; },
         get displayTimezoneDirty() { return this.displayTimezoneDraft !== (this.profile.display_timezone || ''); },
         get businessTimezoneDirty() { return Boolean(this.timezoneContext && this.businessTimezoneDraft !== this.timezoneContext.business_timezone); },
-        get canManageBusinessTimezone() { return ['admin','superadmin'].includes(this.profile.role); },
+        get canManageBusinessTimezone() { return ['owner','admin','superadmin'].includes(this.profile.role); },
         get detectedTimezone() {
             const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
             return InventoryTime.isValidZone(zone) ? zone : '';

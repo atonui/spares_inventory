@@ -19,10 +19,22 @@ test('actual add/cancel/submit and email/password bindings retain create/edit mo
  const {a,c}=setup();fill(a);const add=clicks().find(e=>e.startsWith('editingUser = null; userForm ='));assert.ok(add);
  vm.runInContext('with(app){'+add+'}',c);assert.deepEqual(plain(a.userForm),initial);assert.equal(a.editingUser,null);assert.equal(a.showUserModal,true);
  const source=html();assert.match(source,/<input[^>]*x-model="userForm.email"[^>]*:disabled="!!editingUser"/);assert.match(source,/<input[^>]*x-model="userForm.password"[^>]*:required="!editingUser"/);
- const submit=[...source.matchAll(/@submit.prevent="([^"]*)"/g)].map(m=>m[1]).find(e=>e==='editingUser ? updateUser() : createUser()');assert.ok(submit);
- const calls=[];a.createUser=()=>calls.push('create');a.updateUser=()=>calls.push('update');vm.runInContext('with(app){'+submit+'}',c);a.editUser(row);vm.runInContext('with(app){'+submit+'}',c);assert.deepEqual(calls,['create','update']);
+ const submit=[...source.matchAll(/@submit.prevent="([^"]*)"/g)].map(m=>m[1]).find(e=>e.includes('editingUser ? updateUser()')&&e.includes('inviteUser()'));assert.ok(submit);
+ const calls=[];a.createUser=()=>calls.push('create');a.inviteUser=()=>calls.push('invite');a.updateUser=()=>calls.push('update');vm.runInContext('with(app){'+submit+'}',c);a.currentUser.saas_mode=true;vm.runInContext('with(app){'+submit+'}',c);a.editUser(row);vm.runInContext('with(app){'+submit+'}',c);assert.deepEqual(calls,['create','invite','update']);
  const form=a.userForm;assert.equal(form.password,'');assert.equal(form.territory,'');
  const cancel=clicks().find(e=>e==='showUserModal = false; editingUser = null;');assert.ok(cancel);vm.runInContext('with(app){'+cancel+'}',c);assert.equal(a.showUserModal,false);assert.equal(a.editingUser,null);assert.equal(a.userForm,form);
+});
+test('SaaS invite sends only email and company role, then reloads invitations',async()=>{
+ const {a,timers}=setup();a.currentUser={id:1,role:'owner',saas_mode:true};a.userForm={email:'person@example.test',name:'ignored',password:'must-not-send',role:'manager',territory:'hidden'};
+ const calls=[];a.apiCall=async(path,opts)=>{calls.push([path,opts.method,opts.body&&JSON.parse(opts.body)]);return {};};
+ a.loadInvitations=async()=>calls.push('invitations');await a.inviteUser();
+ assert.deepEqual(calls,[['/users/invitations','POST',{email:'person@example.test',role:'manager'}],'invitations']);
+ assert.equal(a.showUserModal,false);assert.equal(a.userForm.email,'');assert.equal(a.successMessage,'Invitation sent. It expires in seven days.');assert.equal(timers[0].delay,3000);
+});
+test('pending invitation resend and cancel use scoped company routes',async()=>{
+ const {a}=setup();const calls=[];a.loading=false;a.apiCall=async(path,opts)=>{calls.push([path,opts.method]);return [];};a.loadInvitations=async()=>calls.push('refresh');
+ await a.resendInvitation(17);await a.cancelInvitation(17);
+ assert.deepEqual(calls,[['/users/invitations/17/resend','POST'],'refresh',['/users/invitations/17','DELETE'],'refresh']);
 });
 for(const territory of ['', ' Kitale '])test('create keeps raw full form territory '+JSON.stringify(territory),async()=>{
  const {a,timers}=setup();fill(a,'create');a.userForm.territory=territory;const before=plain(a.userForm);const calls=[];
@@ -61,7 +73,7 @@ for(const stage of ['inventory','archived'])test('core '+stage+' refresh failure
  await a.deleteUser(42,'Target');assert.equal(a.successMessage,'Archived');assert.equal(a.currentUser,user);assert.equal(a.selectedStore,selected);assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);
  assert.equal(a.error,stage==='inventory'?'Inventory could not refresh. Retry or reload the page: offline':'Failed to load archived records: offline');assert.ok(calls.includes('/inventory'));
 });
-for(const role of ['admin','superadmin','engineer'])test('core loadUsers preserves role check '+role,async()=>{
+for(const role of ['owner','admin','superadmin','engineer'])test('core loadUsers preserves role check '+role,async()=>{
  const {a}=setup();a.currentUser.role=role;const calls=[];a.apiCall=async(path)=>{calls.push(path);return [{id:2}];};await a.loadUsers();assert.deepEqual(calls,role==='engineer'?[]:['/users']);assert.equal(a.users.length,role==='engineer'?0:1);
 });
 for(const mode of ['initial','retry','permission','token','retry_rejected'])test('real JSON API/CSRF user write '+mode,async()=>{

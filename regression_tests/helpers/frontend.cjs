@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const staticRoot = path.resolve(__dirname, '../../static');
-const pages = new Set(['index.html', 'profile.html', 'forgot_password.html', 'reset_password.html', 'superadmin.html']);
+const pages = new Set(['index.html', 'profile.html', 'forgot_password.html', 'reset_password.html', 'superadmin.html', 'accept_invitation.html']);
 const loaded = new WeakMap();
 
 function pageScripts(page) {

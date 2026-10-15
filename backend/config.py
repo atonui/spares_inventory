@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str
+    MIGRATION_DATABASE_URL: str | None = None
     SECRET_KEY: str
     SMTP_SERVER: str
     SMTP_PORT: int
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     CSRF_SECRET: str
     COOKIE_SECURE: bool = True
+    MAIL_PAYLOAD_ENCRYPTION_KEY: str | None = None
+    RESEND_API_KEY: str | None = None
+    RESEND_FROM_EMAIL: str | None = None
+    INVITATION_BASE_URL: str | None = None
     CORS_ALLOWED_ORIGINS: List[str] = ["https://sparesinventory-production.up.railway.app"]
 
     @field_validator("CORS_ALLOWED_ORIGINS")

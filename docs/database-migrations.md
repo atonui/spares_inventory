@@ -104,3 +104,46 @@ or deliberately recover the independent pre-cutover snapshot with the matching
 v4 application. Pause writes and agree the recovery point first: recovery loses
 all stock, users, settings and audit changes made after that snapshot. There is
 no automatic downgrade and no dependency on paid Railway backups.
+
+## PostgreSQL SaaS import rehearsal
+
+`backend.migration_import` copies a SQLite snapshot through a private staging
+copy. The original file is opened read-only and is never migrated or edited.
+The staging copy is upgraded with the existing SQLite migration chain before
+validation, so legacy timestamps and anonymous audit actors receive the same
+reviewed migrations as an application startup.
+
+The target must be PostgreSQL with every registered PostgreSQL migration
+already applied and no organization or application rows. The importer refuses
+a nonempty target. It creates one organization, moves operational rows and
+history into that tenant, maps the selected legacy superadmin to the first
+company owner and a separate platform-admin record, and maps any other legacy
+superadmins to company admins. It clears legacy session/reset tokens and does
+not copy session rows; all users must sign in again after a future cutover.
+The command prints counts and reconciliation results only.
+
+Set the destination migration-role DSN in `MIGRATION_DATABASE_URL`. Do not use
+the restricted runtime `DATABASE_URL` for import. The first command is a
+rollback-only rehearsal; `--apply` is required to commit:
+
+```bash
+export MIGRATION_DATABASE_URL='postgresql://...'
+python -m backend.migration_import import-sqlite \
+  --source /secure/snapshots/inventory.db \
+  --target-dsn-env MIGRATION_DATABASE_URL \
+  --organization-name 'First Company' \
+  --platform-admin-email admin@example.com
+
+python -m backend.migration_import import-sqlite \
+  --source /secure/snapshots/inventory.db \
+  --target-dsn-env MIGRATION_DATABASE_URL \
+  --organization-name 'First Company' \
+  --platform-admin-email admin@example.com \
+  --apply
+```
+
+Run both commands against disposable rehearsal copies first. Compare the report
+to independently recorded counts and balances. Never put a DSN, password hash,
+session token, raw record, or backup file in command history, logs, CI artifacts,
+or a pull request. A failed import rolls back target changes; fix the source or
+empty the disposable target and rehearse again.
