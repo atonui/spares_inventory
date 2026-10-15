@@ -1,6 +1,13 @@
 """Application database helpers that bind settings to path-based database APIs."""
 
 from backend.database import DEFAULT_SETTINGS, connect_database, initialize_database
+from backend.postgres_database import connect_postgres
+
+
+def is_postgresql_dsn(database_url):
+    return isinstance(database_url, str) and database_url.startswith(
+        ("postgresql://", "postgres://")
+    )
 
 
 def make_database_defaults(
@@ -24,4 +31,6 @@ def initialize_application_database(database_path, *, defaults):
 
 
 def open_application_database(database_path):
+    if is_postgresql_dsn(database_path):
+        return connect_postgres(database_path)
     return connect_database(database_path)
