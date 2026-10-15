@@ -29,7 +29,7 @@ def sqlite_snapshot(tmp_path, request):
         created = serialize_instant(utc_now())
         source.execute("UPDATE organisation_settings SET business_timezone='Europe/London',revision=9")
         source.execute("INSERT INTO system_settings(setting_key,setting_value,updated_by,updated_at) VALUES ('system_announcement',?,?,?)",
-                       ('{"message":"Maintenance notice","level":"warning","revision":"notice-1"}', 7, created))
+                       ('{"message":"Maintenance notice","level":"warning","revision":"notice-1","audience":"everyone","roles":[],"starts_at":null,"expires_at":null,"dismissible":false,"set_at":"' + created + '"}', 7, created))
         source.execute("INSERT INTO announcement_dismissals(user_id,revision,dismissed_at) VALUES (8,'notice-1',?)",
                        (created,))
         if source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_transfers'").fetchone():

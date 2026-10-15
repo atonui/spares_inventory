@@ -193,7 +193,8 @@ def _insert_rows(target, table: str, columns: tuple[str, ...], rows, *, organiza
             else:
                 shaped.append(data.get(column))
         values.append(tuple(shaped))
-    target.executemany(statement, values)
+    with target.cursor() as cursor:
+        cursor.executemany(statement, values)
 
 
 def _advance_identity_sequences(target) -> None:
@@ -268,12 +269,13 @@ def import_sqlite_snapshot(
             "reset_token": lambda _v: None,
             "reset_token_expires": lambda _v: None,
         })
-        target.executemany(
-            "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,%s)",
-            [(organization_id, row["id"], "owner" if row["id"] == platform_user["id"]
-              else ("admin" if row["role"] == "superadmin" else row["role"]))
-             for row in users],
-        )
+        with target.cursor() as cursor:
+            cursor.executemany(
+                "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,%s)",
+                [(organization_id, row["id"], "owner" if row["id"] == platform_user["id"]
+                  else ("admin" if row["role"] == "superadmin" else row["role"]))
+                 for row in users],
+            )
         target.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_user["id"],))
 
         imported_counts = {"users": len(users), "memberships": len(users), "platform_admins": 1}
