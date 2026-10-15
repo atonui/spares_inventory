@@ -15,6 +15,11 @@ def _fernet(key: str) -> Fernet:
         raise ValueError("MAIL_PAYLOAD_ENCRYPTION_KEY must be a valid Fernet key") from exc
 
 
+def validate_mail_encryption_key(key: str) -> None:
+    """Validate worker configuration before claiming any durable mail."""
+    _fernet(key)
+
+
 def encrypt_mail_payload(payload: dict[str, Any], key: str) -> str:
     if not isinstance(payload, dict):
         raise TypeError("mail payload must be an object")
