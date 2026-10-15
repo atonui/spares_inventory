@@ -13,14 +13,17 @@ def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
         conn.execute("BEGIN IMMEDIATE")
     require_active_record(conn,"stores",store_id)
     require_active_record(conn,"parts",part_id)
-    statement = (
-        "SELECT id FROM inventory WHERE store_id = ? AND part_id = ? "
-        "AND ((work_order_id = ?) OR (work_order_id IS NULL AND ? IS NULL)) "
-        "ORDER BY id LIMIT 1"
-    )
     if postgres:
-        statement += " FOR UPDATE"
-    row = execute(conn, statement, (store_id, part_id, work_order_id, work_order_id)).fetchone()
+        statement = (
+            "SELECT id FROM inventory WHERE store_id = ? AND part_id = ? "
+            "AND work_order_id IS NOT DISTINCT FROM ? ORDER BY id LIMIT 1 FOR UPDATE"
+        )
+    else:
+        statement = (
+            "SELECT id FROM inventory WHERE store_id = ? AND part_id = ? "
+            "AND CAST(work_order_id AS NUMERIC) IS CAST(? AS NUMERIC) ORDER BY id LIMIT 1"
+        )
+    row = execute(conn, statement, (store_id, part_id, work_order_id)).fetchone()
     if row:
         execute(
             conn,
