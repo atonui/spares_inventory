@@ -101,3 +101,98 @@ def test_inventory_read_route_only_returns_session_company_rows(postgres_schema,
         connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
         connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
         connection.commit()
+
+
+def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrated_tenant_schema):
+    from backend.routes.inventory_writes import create_inventory_write_router
+    from backend.schemas.inventory_writes import AddStockRequest
+    from backend.services.authenticated_transactions import authenticated_write_transaction
+    from backend.services.inventory import add_inventory_quantity
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.stock_access import require_active_record, require_stock_access
+    from regression_tests.test_tenant_context import seed_user
+
+    connection, schema = postgres_schema
+    organization_a, user_id, token = seed_user(connection, role="owner")
+    organization_b = connection.execute(
+        "INSERT INTO organizations(name, slug) VALUES ('Tenant B', 'stock-write-tenant-b') RETURNING id"
+    ).fetchone()["id"]
+    part_a = connection.execute(
+        "INSERT INTO parts(organization_id, part_number, description) VALUES (%s, 'ADD-A', 'Part A') RETURNING id",
+        (organization_a,),
+    ).fetchone()["id"]
+    store_a = connection.execute(
+        "INSERT INTO stores(organization_id, name, type) VALUES (%s, 'Store A', 'warehouse') RETURNING id",
+        (organization_a,),
+    ).fetchone()["id"]
+    part_b = connection.execute(
+        "INSERT INTO parts(organization_id, part_number, description) VALUES (%s, 'ADD-B', 'Part B') RETURNING id",
+        (organization_b,),
+    ).fetchone()["id"]
+    store_b = connection.execute(
+        "INSERT INTO stores(organization_id, name, type) VALUES (%s, 'Store B', 'warehouse') RETURNING id",
+        (organization_b,),
+    ).fetchone()["id"]
+    role = "stock_write_runtime_" + uuid4().hex
+    connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+        sql.Identifier(schema), sql.Identifier(role)
+    ))
+    connection.execute(sql.SQL(
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, stores, parts, inventory, work_orders TO {}"
+    ).format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT INSERT, UPDATE ON inventory, movements, work_orders TO {}").format(
+        sql.Identifier(role)
+    ))
+    connection.execute(sql.SQL(
+        "GRANT USAGE, SELECT ON SEQUENCE inventory_id_seq, movements_id_seq, work_orders_id_seq TO {}"
+    ).format(sql.Identifier(role)))
+    connection.commit()
+
+    def scoped_connection():
+        scoped = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+        scoped.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        scoped.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+        scoped.commit()
+        return scoped
+
+    router = create_inventory_write_router(
+        current_user=lambda: None,
+        csrf_dependency=lambda: None,
+        endpoint_log=lambda *_args, **_kwargs: lambda endpoint: endpoint,
+        authenticated_writer=lambda principal, session: authenticated_write_transaction(
+            scoped_connection, user_id=principal, session_token=session
+        ),
+        stock_access_guard=require_stock_access,
+        active_record_guard=require_active_record,
+        balance_reader=lambda *_args: {},
+        inventory_adder=add_inventory_quantity,
+        stock_audit=lambda *_args, **_kwargs: None,
+        stock_change_reader=lambda *_args: {},
+        planned_dispatch_guard=lambda *_args: None,
+        transfer_completion=lambda *_args, **_kwargs: None,
+    )
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/inventory/add")
+    request = type("RequestStub", (), {"cookies": {"session_token": token}})()
+    try:
+        result = asyncio.run(endpoint(
+            request_data=AddStockRequest(part_id=part_a, store_id=store_a, quantity=4),
+            user_id=AuthenticatedPrincipal(user_id, organization_a, "owner", False),
+            csrf_valid=True,
+            request=request,
+        ))
+        assert result["success"] is True
+        assert connection.execute(
+            "SELECT quantity FROM inventory WHERE organization_id = %s AND store_id = %s AND part_id = %s",
+            (organization_a, store_a, part_a),
+        ).fetchone()["quantity"] == 4
+        assert connection.execute(
+            "SELECT count(*) AS count FROM inventory WHERE organization_id = %s AND store_id = %s AND part_id = %s",
+            (organization_b, store_b, part_b),
+        ).fetchone()["count"] == 0
+    finally:
+        connection.rollback()
+        connection.execute("RESET ROLE")
+        connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
+        connection.commit()
