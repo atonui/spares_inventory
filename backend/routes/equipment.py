@@ -1,11 +1,13 @@
 """Equipment administration routes with explicit application dependencies."""
 from backend.temporal_contract import register_instant_comparison
-from contextlib import closing
 from backend.temporal_contract import instant_response
 from typing import List
 from datetime import timedelta
 from backend.temporal import utc_now, validate_zone
 from backend.services.timezone_policy import resolve_business_context
+from backend.services.tenant_context import authenticated_database_transaction
+from backend.services.principals import AuthenticatedPrincipal
+from backend.database_sql import execute, is_postgres
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.schemas.equipment import (
     EquipmentResponse, CreateEquipmentRequest, UpdateEquipmentRequest,
@@ -34,44 +36,46 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get equipment statistics"""
-        with closing(get_db_connection()) as conn:
-            conn.execute('BEGIN')
-            context=resolve_business_context(conn,actor_id=user_id)
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=request.cookies.get("session_token") if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            context=resolve_business_context(conn,actor_id=principal)
             today=utc_now().astimezone(validate_zone(context.timezone)).date().isoformat()
-            cursor = conn.cursor()
-
-            # Get user role
-            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
+            actor_id = principal.user_id if isinstance(principal, AuthenticatedPrincipal) else principal
+            if isinstance(principal, AuthenticatedPrincipal):
+                is_admin = principal.company_role in {"owner", "admin"}
+            else:
+                user = execute(conn, "SELECT role FROM users WHERE id = ?", (actor_id,)).fetchone()
+                is_admin = bool(user and user["role"] in ("admin", "superadmin"))
 
             # Total equipment
-            cursor.execute("SELECT COUNT(*) as count FROM equipment WHERE status = 'active'")
-            total_equipment = cursor.fetchone()["count"]
+            total_equipment = execute(conn, "SELECT COUNT(*) as count FROM equipment WHERE status = 'active'").fetchone()["count"]
 
             # My equipment
-            cursor.execute(
+            my_equipment = execute(conn,
                 """
                 SELECT COUNT(*) as count FROM equipment
                 WHERE status = 'active' AND assigned_user_id = ?
             """,
-                (user_id,),
-            )
-            my_equipment = cursor.fetchone()["count"]
+                (actor_id,),
+            ).fetchone()["count"]
 
             # Get calibration reminder days
-            cursor.execute("""
+            reminder_setting = execute(conn, """
                 SELECT setting_value FROM system_settings
                 WHERE setting_key = 'calibration_reminder_days'
-            """)
-            reminder_setting = cursor.fetchone()
+            """).fetchone()
             reminder_days = int(reminder_setting["setting_value"]) if reminder_setting else 30
 
             # Equipment due soon
             from datetime import date
             check_date = (date.fromisoformat(today) + timedelta(days=reminder_days)).isoformat()
 
-            if user["role"] in ("admin", "superadmin"):
-                cursor.execute(
+            if is_admin:
+                due_soon = execute(conn,
                     """
                     SELECT COUNT(*) as count FROM equipment
                     WHERE status = 'active'
@@ -80,9 +84,9 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                     AND next_calibration_date >= ?
                 """,
                     (check_date,today),
-                )
+                ).fetchone()["count"]
             else:
-                cursor.execute(
+                due_soon = execute(conn,
                     """
                     SELECT COUNT(*) as count FROM equipment
                     WHERE status = 'active'
@@ -91,21 +95,20 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                     AND next_calibration_date <= ?
                     AND next_calibration_date >= ?
                 """,
-                    (user_id, check_date,today),
-                )
+                    (actor_id, check_date,today),
+                ).fetchone()["count"]
 
-            due_soon = cursor.fetchone()["count"]
 
             # Overdue equipment
-            if user["role"] in ("admin", "superadmin"):
-                cursor.execute("""
+            if is_admin:
+                overdue = execute(conn, """
                     SELECT COUNT(*) as count FROM equipment
                     WHERE status = 'active'
                     AND next_calibration_date IS NOT NULL
                     AND next_calibration_date < ?
-                """, (today,))
+                """, (today,)).fetchone()["count"]
             else:
-                cursor.execute(
+                overdue = execute(conn,
                     """
                     SELECT COUNT(*) as count FROM equipment
                     WHERE status = 'active'
@@ -113,10 +116,8 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                     AND next_calibration_date IS NOT NULL
                     AND next_calibration_date < ?
                 """,
-                    (user_id,today),
-                )
-
-            overdue = cursor.fetchone()["count"]
+                    (actor_id,today),
+                ).fetchone()["count"]
 
 
             return {
@@ -136,33 +137,37 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
         request: Request = None,
     ):
         """Get equipment list"""
-        with closing(get_db_connection()) as conn:
-            conn.execute('BEGIN')
-            context=resolve_business_context(conn,actor_id=user_id)
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=request.cookies.get("session_token") if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            context=resolve_business_context(conn,actor_id=principal)
             today=utc_now().astimezone(validate_zone(context.timezone)).date().isoformat()
-            cursor = conn.cursor()
+            actor_id = principal.user_id if isinstance(principal, AuthenticatedPrincipal) else principal
+            if isinstance(principal, AuthenticatedPrincipal):
+                can_see_all = principal.company_role in {"owner", "admin"}
+            else:
+                user = execute(conn, "SELECT role FROM users WHERE id = ?", (actor_id,)).fetchone()
+                can_see_all = bool(user and user["role"] == "admin")
 
-            # Get user role
-            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
-
-            query = """
+            delta = "CAST(CAST(e.next_calibration_date AS date) - CAST(? AS date) AS integer)" if is_postgres(conn) else "CAST(julianday(e.next_calibration_date) - julianday(?) AS INTEGER)"
+            query = f"""
                 SELECT
                     e.*,
                     u.name as assigned_user_name,
-                    CAST(julianday(e.next_calibration_date) - julianday(?) AS INTEGER) as days_until_calibration
+                    {delta} as days_until_calibration
                 FROM equipment e
                 LEFT JOIN users u ON e.assigned_user_id = u.id
                 WHERE e.status = 'active'
             """
 
-            if not show_all and user["role"] != "admin":
+            if not show_all and not can_see_all:
                 query += " AND e.assigned_user_id = ?"
-                cursor.execute(query + " ORDER BY e.next_calibration_date", (today,user_id))
+                equipment = execute(conn, query + " ORDER BY e.next_calibration_date", (today,actor_id)).fetchall()
             else:
-                cursor.execute(query + " ORDER BY e.next_calibration_date",(today,))
-
-            equipment = cursor.fetchall()
+                equipment = execute(conn, query + " ORDER BY e.next_calibration_date",(today,)).fetchall()
 
             return [dict(eq) for eq in equipment]
 
