@@ -11,14 +11,39 @@ from psycopg import sql
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
-@pytest.fixture(autouse=True)
+@pytest.mark.parametrize("company_role, store_owner, store_type, allowed", [
+    ("owner", 30, "warehouse", True),
+    ("admin", 30, "warehouse", True),
+    ("manager", 30, "warehouse", False),
+    ("engineer", 9, "warehouse", True),
+    ("engineer", 30, "central", True),
+    ("engineer", 30, "warehouse", False),
+])
+def test_stock_access_uses_membership_role_and_company_assignments(
+    company_role, store_owner, store_type, allowed
+):
+    from uuid import uuid4
+    from fastapi import HTTPException
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.stock_access import require_stock_access
+
+    principal = AuthenticatedPrincipal(9, uuid4(), company_role, False)
+    if allowed:
+        require_stock_access(None, principal, store_type, store_owner)
+    else:
+        with pytest.raises(HTTPException) as error:
+            require_stock_access(None, principal, store_type, store_owner)
+        assert error.value.status_code == 403
+
+
+@pytest.fixture
 def migrated_tenant_schema(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations
 
     apply_postgres_migrations(postgres_schema[0])
 
 
-def test_inventory_read_route_only_returns_session_company_rows(postgres_schema):
+def test_inventory_read_route_only_returns_session_company_rows(postgres_schema, migrated_tenant_schema):
     from backend.routes.inventory_reads import create_inventory_read_router
     from regression_tests.test_tenant_context import seed_user
 
