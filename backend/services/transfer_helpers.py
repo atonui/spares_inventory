@@ -2,6 +2,7 @@
 
 from fastapi import HTTPException
 from backend.database_sql import execute
+from .principals import AuthenticatedPrincipal
 
 
 def require_no_pending_transfer(conn, kind, identifier):
@@ -14,7 +15,10 @@ def require_no_pending_transfer(conn, kind, identifier):
 
 
 def transfer_permissions(actor, row, user_id):
-    admin=actor and actor['role'] in ('admin','superadmin')
+    if isinstance(actor, AuthenticatedPrincipal):
+        admin = actor.organization_id is not None and actor.company_role in ('owner', 'admin')
+    else:
+        admin = actor and actor['role'] in ('admin', 'superadmin')
     receive=bool(admin or row['dest_owner']==user_id or (row['dest_owner'] is None and row['dest_type']=='central'))
     returned=bool(admin or row['created_by']==user_id or row['source_owner']==user_id)
     return receive,returned
