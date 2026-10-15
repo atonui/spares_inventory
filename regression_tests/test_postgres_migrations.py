@@ -11,7 +11,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3)
+    assert status.applied_versions == (1, 2, 3, 4)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -33,6 +33,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
         "organization_settings",
         "company_announcements",
         "announcement_dismissals",
+        "organization_invitations",
     }
     assert expected <= tenant_tables
     columns = {
@@ -123,7 +124,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=4,
+        version=5,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -138,5 +139,80 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 4"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 5"
     ).fetchone()["count"] == 0
+
+
+def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_schema):
+    from psycopg.errors import UniqueViolation
+
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection, _ = postgres_schema
+    status = apply_postgres_migrations(connection)
+    assert status.applied_versions == (1, 2, 3, 4)
+    connection.execute("SET LOCAL row_security = off")
+    org_a = connection.execute(
+        "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
+    ).fetchone()["id"]
+    org_b = connection.execute(
+        "INSERT INTO organizations (name, slug) VALUES ('B', 'b') RETURNING id"
+    ).fetchone()["id"]
+    user = connection.execute(
+        "INSERT INTO users (email, name, password_hash) VALUES ('owner@example.test', 'Owner', 'x') RETURNING id"
+    ).fetchone()["id"]
+    for org_id in (org_a, org_b):
+        connection.execute(
+            "INSERT INTO organization_invitations "
+            "(organization_id, email_normalized, company_role, token_hash, invited_by, expires_at) "
+            "VALUES (%s, 'invite@example.test', 'engineer', 'hash-' || %s, %s, '2099-01-01T00:00:00Z')",
+            (org_id, org_id, user),
+        )
+    with pytest.raises(UniqueViolation):
+        connection.execute(
+            "INSERT INTO organization_invitations "
+            "(organization_id, email_normalized, company_role, token_hash, invited_by, expires_at) "
+            "VALUES (%s, 'invite@example.test', 'manager', 'another-hash', %s, '2099-01-01T00:00:00Z')",
+            (org_a, user),
+        )
+
+
+def test_invitation_rls_denies_reads_without_matching_context(postgres_schema):
+    from uuid import uuid4
+
+    from psycopg import sql
+
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection, _ = postgres_schema
+    apply_postgres_migrations(connection)
+    org = connection.execute(
+        "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
+    ).fetchone()["id"]
+    user = connection.execute(
+        "INSERT INTO users (email, name, password_hash) VALUES ('owner@example.test', 'Owner', 'x') RETURNING id"
+    ).fetchone()["id"]
+    connection.execute(
+        "INSERT INTO organization_invitations "
+        "(organization_id, email_normalized, company_role, token_hash, invited_by, expires_at) "
+        "VALUES (%s, 'invite@example.test', 'engineer', 'hash', %s, '2099-01-01T00:00:00Z')",
+        (org, user),
+    )
+    role = "invitation_reader_" + uuid4().hex
+    connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    schema = connection.execute("SELECT current_schema() AS name").fetchone()["name"]
+    connection.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+        sql.Identifier(schema), sql.Identifier(role)
+    ))
+    connection.execute(sql.SQL("GRANT SELECT ON organization_invitations TO {}").format(
+        sql.Identifier(role)
+    ))
+    connection.commit()
+    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+    connection.commit()
+    connection.execute("SELECT set_config('app.organization_id', '', true)")
+    assert connection.execute("SELECT count(*) AS count FROM organization_invitations").fetchone()["count"] == 0
+    connection.commit()
+    connection.execute("RESET ROLE")
+    connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))

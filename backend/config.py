@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     CSRF_SECRET: str
     COOKIE_SECURE: bool = True
+    MAIL_PAYLOAD_ENCRYPTION_KEY: str | None = None
     CORS_ALLOWED_ORIGINS: List[str] = ["https://sparesinventory-production.up.railway.app"]
 
     @field_validator("CORS_ALLOWED_ORIGINS")

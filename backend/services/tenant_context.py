@@ -13,6 +13,7 @@ from .principals import AuthenticatedPrincipal, resolve_principal
 
 
 def require_company_principal(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
+    """Require a resolved active membership; platform status alone grants no tenant access."""
     if principal.organization_id is None or principal.company_role is None:
         raise HTTPException(status_code=403, detail="Company membership required")
     return principal

@@ -3,7 +3,12 @@
 from dataclasses import dataclass
 from hashlib import sha256
 
-from . import v0001_core_schema, v0002_tenancy, v0003_tenant_policies
+from . import (
+    v0001_core_schema,
+    v0002_tenancy,
+    v0003_tenant_policies,
+    v0004_tenant_administration,
+)
 
 
 @dataclass(frozen=True)
@@ -20,7 +25,12 @@ class Migration:
 
 MIGRATIONS = tuple(
     Migration(module.VERSION, module.NAME, module.SQL)
-    for module in (v0001_core_schema, v0002_tenancy, v0003_tenant_policies)
+    for module in (
+        v0001_core_schema,
+        v0002_tenancy,
+        v0003_tenant_policies,
+        v0004_tenant_administration,
+    )
 )
 
 

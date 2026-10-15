@@ -18,3 +18,4 @@ anyio==4.14.2
 # IANA data fallback for hosts without a system timezone database.
 tzdata==2026.5
 psycopg[binary]==3.3.6
+cryptography==50.0.2

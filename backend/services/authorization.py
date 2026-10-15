@@ -20,6 +20,20 @@ def check_admin(user_id: int, conn=None, get_connection=None) -> bool:
             conn.close()
 
 
+def require_company_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
+    """Require an active, server-resolved owner or admin company membership."""
+    if principal.organization_id is None or principal.company_role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Company administrator access required")
+    return principal
+
+
+def require_platform_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
+    """Require platform authority independently of any company role."""
+    if not principal.is_platform_admin:
+        raise HTTPException(status_code=403, detail="Platform administrator access required")
+    return principal
+
+
 def require_archive_admin(conn,user_id):
     if isinstance(user_id, AuthenticatedPrincipal):
         if user_id.organization_id is None or user_id.company_role not in {"owner", "admin"}:
