@@ -13,6 +13,13 @@ from psycopg import sql
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
+@pytest.fixture(autouse=True)
+def migrated_tenant_schema(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    apply_postgres_migrations(postgres_schema[0])
+
+
 def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, active=True):
     from backend.temporal import serialize_instant, utc_now
 
