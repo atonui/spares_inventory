@@ -384,8 +384,16 @@ app.include_router(create_auth_router(
 from backend.routes.stores import create_stores_router
 
 from backend.routes.timezone_settings import create_timezone_settings_router
+from backend.routes.organization_settings import create_organization_settings_router
 
 app.include_router(create_timezone_settings_router(
+    get_connection=lambda: get_db_connection(),
+    authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
+    current_user=get_current_user,
+    csrf_dependency=verify_csrf,
+))
+
+app.include_router(create_organization_settings_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
     current_user=get_current_user,

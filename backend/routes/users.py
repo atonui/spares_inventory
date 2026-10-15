@@ -6,6 +6,7 @@ from backend.schemas.auth import UserResponse
 from backend.schemas.users import CreateUserRequest, UpdateUserRequest
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
+from backend.services.authorization import require_company_admin
 from backend.database_sql import execute, is_postgres
 
 
@@ -28,6 +29,32 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
 
     @router.post('/api/users/{target_user_id}/restore')
     async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
+        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+            if is_postgres(conn):
+                require_company_admin(user_id)
+                target = execute(
+                    conn,
+                    """SELECT company_role, is_active FROM organization_memberships
+                       WHERE organization_id = ? AND user_id = ?""",
+                    (user_id.organization_id, target_user_id),
+                ).fetchone()
+                if not target:
+                    raise HTTPException(status_code=404, detail="Company member not found")
+                if target["company_role"] == "owner":
+                    raise HTTPException(status_code=403, detail="Transfer ownership before changing the owner")
+                if target["company_role"] == "admin" and user_id.company_role != "owner":
+                    raise HTTPException(status_code=403, detail="Only the owner can restore an admin")
+                if target["is_active"]:
+                    raise HTTPException(status_code=409, detail="Company member is already active")
+                execute(
+                    conn,
+                    """UPDATE organization_memberships SET is_active = TRUE
+                       WHERE organization_id = ? AND user_id = ? AND is_active = FALSE""",
+                    (user_id.organization_id, target_user_id),
+                )
+                result = {"success": True, "message": "Company membership restored; sign in again to regain access"}
+                _record_mutation_activity(conn, user_id, "restore_user", "user", result, request)
+                return result
         return archive_record('users',target_user_id,user_id,restore=True,session_token=request.cookies.get('session_token'))
 
 
@@ -39,8 +66,8 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
             get_db_connection, principal_or_user=user_id,
             session_token=request.cookies.get('session_token') if request else None, readonly=True,
         ) as (conn, principal):
-            require_archive_admin(conn,principal)
             if is_postgres(conn):
+                require_company_admin(principal)
                 where = "om.organization_id = ?"
                 if not include_archived:
                     where += " AND om.is_active = TRUE AND u.archived_at IS NULL"
@@ -51,6 +78,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                     (principal.organization_id,),
                 ).fetchall()
             else:
+                require_archive_admin(conn, principal)
                 where='' if include_archived else ' WHERE archived_at IS NULL'
                 rows=execute(conn,'SELECT id, email, name, role, territory, archived_at FROM users'+where+' ORDER BY name').fetchall()
             return [dict(row) for row in rows]
@@ -65,8 +93,11 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Create new user (admin only)"""
-        password_hash = hash_password(request_data.password)
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+            if is_postgres(conn):
+                require_company_admin(user_id)
+                raise HTTPException(status_code=410, detail="Create users with an invitation instead")
+            password_hash = hash_password(request_data.password)
             cursor = conn.cursor()
 
             # Check if current user is admin
@@ -116,8 +147,59 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Update user (admin only)"""
-        password_hash = hash_password(request_data.password) if request_data.password is not None else None
         with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+            if is_postgres(conn):
+                principal = user_id
+                require_company_admin(principal)
+                if request_data.password is not None:
+                    raise HTTPException(status_code=400, detail="Password changes use the account recovery flow")
+                target = execute(
+                    conn,
+                    """SELECT om.company_role, om.is_active
+                       FROM organization_memberships AS om
+                       JOIN users AS u ON u.id = om.user_id
+                       WHERE om.organization_id = ? AND om.user_id = ?
+                         AND u.archived_at IS NULL FOR UPDATE OF om, u""",
+                    (principal.organization_id, target_user_id),
+                ).fetchone()
+                if target is None:
+                    raise HTTPException(status_code=404, detail="Company member not found")
+                if not target["is_active"]:
+                    raise HTTPException(status_code=409, detail="Company member is inactive")
+                if target["company_role"] == "owner":
+                    raise HTTPException(status_code=403, detail="Use the ownership transfer operation")
+                if target["company_role"] == "admin" and principal.company_role != "owner":
+                    raise HTTPException(status_code=403, detail="Only the owner can manage an admin")
+                if request_data.role in {"owner", "superadmin"}:
+                    raise HTTPException(status_code=400, detail="This role cannot be assigned through user management")
+                if request_data.role == "admin" and principal.company_role != "owner":
+                    raise HTTPException(status_code=403, detail="Only the owner can assign the admin role")
+
+                user_updates = []
+                values = []
+                if request_data.name is not None:
+                    user_updates.append("name = ?")
+                    values.append(request_data.name)
+                if request_data.territory is not None:
+                    user_updates.append("territory = ?")
+                    values.append(request_data.territory)
+                if user_updates:
+                    values.append(target_user_id)
+                    execute(conn, f"UPDATE users SET {', '.join(user_updates)} WHERE id = ?", values)
+                if request_data.role is not None:
+                    execute(
+                        conn,
+                        """UPDATE organization_memberships SET company_role = ?
+                           WHERE organization_id = ? AND user_id = ? AND is_active = TRUE""",
+                        (request_data.role, principal.organization_id, target_user_id),
+                    )
+                if not user_updates and request_data.role is None:
+                    raise HTTPException(status_code=400, detail="No updates provided")
+                result = {"success": True, "message": "Company member updated successfully"}
+                _record_mutation_activity(conn, principal, "update_user", "user", result, request)
+                return result
+
+            password_hash = hash_password(request_data.password) if request_data.password is not None else None
             cursor = conn.cursor()
 
             # Check if current user is admin
@@ -177,6 +259,33 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         csrf_valid: bool = Depends(verify_csrf),
         request: Request = None,
     ):
+        with authenticated_write_transaction(user_id, request.cookies.get('session_token')) as conn:
+            if is_postgres(conn):
+                require_company_admin(user_id)
+                target = execute(
+                    conn,
+                    """SELECT company_role, is_active FROM organization_memberships
+                       WHERE organization_id = ? AND user_id = ? FOR UPDATE""",
+                    (user_id.organization_id, target_user_id),
+                ).fetchone()
+                if target is None:
+                    raise HTTPException(status_code=404, detail="Company member not found")
+                if target["company_role"] == "owner":
+                    raise HTTPException(status_code=403, detail="Transfer ownership before deactivating the owner")
+                if target["company_role"] == "admin" and user_id.company_role != "owner":
+                    raise HTTPException(status_code=403, detail="Only the owner can deactivate an admin")
+                if not target["is_active"]:
+                    raise HTTPException(status_code=409, detail="Company member is already inactive")
+                execute(
+                    conn,
+                    """UPDATE organization_memberships SET is_active = FALSE
+                       WHERE organization_id = ? AND user_id = ? AND is_active = TRUE""",
+                    (user_id.organization_id, target_user_id),
+                )
+                execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
+                result = {"success": True, "message": "Company membership deactivated"}
+                _record_mutation_activity(conn, user_id, "deactivate_user", "user", result, request)
+                return result
         return archive_record("users", target_user_id, user_id, session_token=request.cookies.get("session_token"))
 
     return router
