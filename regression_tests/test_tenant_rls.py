@@ -124,7 +124,7 @@ def test_authenticated_transaction_uses_membership_from_session(postgres_schema,
 
     connection, _ = postgres_schema
     organizations, _ = seed_stores(connection)
-    _org_id, user_id, token = seed_user(connection, role="engineer")
+    _seeded_org_id, user_id, token = seed_user(connection, role="engineer")
     connection.execute(
         "UPDATE organization_memberships SET organization_id = %s WHERE user_id = %s",
         (organizations[0], user_id),
@@ -147,7 +147,7 @@ def test_authenticated_transaction_uses_membership_from_session(postgres_schema,
         scoped_connection,
         session_token=token,
     ) as (tenant_connection, principal):
-        assert principal.organization_id == _org_id
+        assert principal.organization_id == organizations[0]
         rows = tenant_connection.execute("SELECT name FROM stores ORDER BY name").fetchall()
 
     assert rows == [{"name": "A Warehouse"}]
