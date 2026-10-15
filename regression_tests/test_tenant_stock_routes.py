@@ -110,6 +110,7 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
     from backend.services.inventory import add_inventory_quantity
     from backend.services.principals import AuthenticatedPrincipal
     from backend.services.stock_access import require_active_record, require_stock_access
+    from stock_audit import record_stock_audit
     from regression_tests.test_tenant_context import seed_user
 
     connection, schema = postgres_schema
@@ -144,8 +145,9 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
     connection.execute(sql.SQL("GRANT INSERT, UPDATE ON inventory, movements, work_orders TO {}").format(
         sql.Identifier(role)
     ))
+    connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL(
-        "GRANT USAGE, SELECT ON SEQUENCE inventory_id_seq, movements_id_seq, work_orders_id_seq TO {}"
+        "GRANT USAGE, SELECT ON SEQUENCE inventory_id_seq, movements_id_seq, work_orders_id_seq, activity_logs_id_seq TO {}"
     ).format(sql.Identifier(role)))
     connection.commit()
 
@@ -167,7 +169,7 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
         active_record_guard=require_active_record,
         balance_reader=lambda *_args: {},
         inventory_adder=add_inventory_quantity,
-        stock_audit=lambda *_args, **_kwargs: None,
+        stock_audit=record_stock_audit,
         stock_change_reader=lambda *_args: {},
         planned_dispatch_guard=lambda *_args: None,
         transfer_completion=lambda *_args, **_kwargs: None,
@@ -190,6 +192,10 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
             "SELECT count(*) AS count FROM inventory WHERE organization_id = %s AND store_id = %s AND part_id = %s",
             (organization_b, store_b, part_b),
         ).fetchone()["count"] == 0
+        assert connection.execute(
+            "SELECT count(*) AS count FROM activity_logs WHERE organization_id = %s AND action = 'add_stock'",
+            (organization_a,),
+        ).fetchone()["count"] == 1
     finally:
         connection.rollback()
         connection.execute("RESET ROLE")
