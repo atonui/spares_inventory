@@ -91,7 +91,7 @@ def test_inventory_read_route_only_returns_session_company_rows(postgres_schema,
         transfer_permission=lambda *_args: (False, False),
     )
     endpoint = next(route.endpoint for route in router.routes if route.path == "/api/inventory")
-    request = type("RequestStub", (), {"cookies": {"session_token": token}})()
+    request = type("RequestStub", (), {"cookies": {"session_token": token}, "client": None, "headers": {}})()
     try:
         rows = asyncio.run(endpoint(user_id=user_id, request=request))
         assert [(row["part_number"], row["quantity"]) for row in rows] == [("PART-A", 4)]
@@ -178,7 +178,7 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
         transfer_completion=lambda *_args, **_kwargs: None,
     )
     endpoint = next(route.endpoint for route in router.routes if route.path == "/api/inventory/add")
-    request = type("RequestStub", (), {"cookies": {"session_token": token}})()
+    request = type("RequestStub", (), {"cookies": {"session_token": token}, "client": None, "headers": {}})()
     try:
         result = asyncio.run(endpoint(
             request_data=AddStockRequest(part_id=part_a, store_id=store_a, quantity=4),
