@@ -43,7 +43,7 @@ def test_startup_rejects_unknown_newer_migration_history(postgres_schema):
     admin, schema = postgres_schema
     apply_postgres_migrations(admin)
     admin.execute(
-        "INSERT INTO postgres_schema_migrations(version,name,checksum) VALUES (5,'future','future')"
+        "INSERT INTO postgres_schema_migrations(version,name,checksum) VALUES (6,'future','future')"
     )
     admin.commit()
     dsn = _schema_dsn(schema)

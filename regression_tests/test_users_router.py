@@ -33,7 +33,7 @@ def test_users_router_registration_and_dependency_identity():
         assert route.tags == []
         expected = {main.get_current_user}
         if route.methods != {'GET'}:
-            expected.add(main.verify_csrf)
+            expected.add(main.verify_authenticated_csrf)
         assert {d.call for d in route.dependant.dependencies} == expected
     read = next(r for r in routes if r.methods == {'GET'})
     assert read.response_model == list[main.UserResponse] or read.response_model == main.List[main.UserResponse]

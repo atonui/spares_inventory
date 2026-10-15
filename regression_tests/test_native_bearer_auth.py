@@ -1,6 +1,7 @@
 """PostgreSQL native bearer login must use hashed server-side sessions."""
 
 from datetime import datetime, timedelta, timezone
+import asyncio
 import json
 from types import SimpleNamespace
 from uuid import uuid4
@@ -129,11 +130,11 @@ def test_native_login_uses_shared_account_lockout(native_auth_api):
     api.connection.commit()
 
     with pytest.raises(HTTPException) as error:
-        api.endpoint("/api/auth/native/login")(
+        asyncio.run(api.endpoint("/api/auth/native/login")(
             UserLogin(email="native@example.test", password="wrong"),
             login_request(),
             csrf_valid=True,
-        )
+        ))
     assert error.value.status_code == 423
     user = api.connection.execute(
         "SELECT failed_login_attempts, account_locked_until FROM users WHERE id = %s",
@@ -143,11 +144,11 @@ def test_native_login_uses_shared_account_lockout(native_auth_api):
     assert user["account_locked_until"] is not None
 
     with pytest.raises(HTTPException) as locked:
-        api.endpoint("/api/auth/native/login")(
+        asyncio.run(api.endpoint("/api/auth/native/login")(
             UserLogin(email="native@example.test", password="correct-password"),
             login_request(),
             csrf_valid=True,
-        )
+        ))
     assert locked.value.status_code == 423
 
 
@@ -157,11 +158,11 @@ def test_native_login_issues_one_bearer_and_stores_only_its_hash(native_auth_api
     from backend.services.session_credentials import hash_session_credential
 
     api = native_auth_api
-    response = api.endpoint("/api/auth/native/login")(
+    response = asyncio.run(api.endpoint("/api/auth/native/login")(
         UserLogin(email="native@example.test", password="correct-password", remember_me=True),
         login_request(),
         csrf_valid=True,
-    )
+    ))
     payload = json.loads(response.body)
 
     assert response.status_code == 200
@@ -197,11 +198,11 @@ def test_web_login_keeps_cookie_contract_and_does_not_return_bearer(native_auth_
     from backend.schemas.auth import UserLogin
 
     api = native_auth_api
-    response = api.endpoint("/api/auth/login")(
+    response = asyncio.run(api.endpoint("/api/auth/login")(
         UserLogin(email="native@example.test", password="correct-password"),
         login_request(),
         csrf_valid=True,
-    )
+    ))
     payload = json.loads(response.body)
 
     assert response.status_code == 200
@@ -212,17 +213,16 @@ def test_web_login_keeps_cookie_contract_and_does_not_return_bearer(native_auth_
 
 
 def test_valid_bearer_request_is_authenticated_before_csrf_exemption(native_auth_api, monkeypatch):
-    import asyncio
     import main
     from fastapi import HTTPException
     from backend.schemas.auth import UserLogin
 
     api = native_auth_api
-    response = api.endpoint("/api/auth/native/login")(
+    response = asyncio.run(api.endpoint("/api/auth/native/login")(
         UserLogin(email="native@example.test", password="correct-password"),
         login_request(),
         csrf_valid=True,
-    )
+    ))
     token = json.loads(response.body)["access_token"]
     monkeypatch.setattr(main, "get_db_connection", api.get_connection)
 

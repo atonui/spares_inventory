@@ -285,7 +285,7 @@ def test_superadmin_routes_owned_once_by_extracted_router():
 def test_superadmin_dependency_override_identity(super_api):
     client, path, control = super_api
     route = next(r for r in main.app.routes if getattr(r, 'path', '') == PREFIX + '/security-config/{key}')
-    assert {d.call for d in route.dependant.dependencies} == {main.get_current_user, main.verify_csrf}
+    assert {d.call for d in route.dependant.dependencies} == {main.get_current_user, main.verify_authenticated_csrf}
     assert client.put(PREFIX + '/security-config/max_login_attempts', json={'value': '7'}).status_code == 200
     control['damage'] = "UPDATE sessions SET is_active=0 WHERE session_token='root-token'"
     assert client.put(PREFIX + '/security-config/max_login_attempts', json={'value': '8'}).status_code == 401

@@ -27,7 +27,7 @@ def test_history_registration_and_dependencies():
         assert route.tags == []
         expected = {main.get_current_user}
         if route.methods == {'DELETE'}:
-            expected.add(main.verify_csrf)
+            expected.add(main.verify_authenticated_csrf)
         assert {d.call for d in route.dependant.dependencies} == expected
 
 

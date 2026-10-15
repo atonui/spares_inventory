@@ -1,5 +1,8 @@
 """Privileged administration HTTP routes with explicit application dependencies."""
-from backend.services.session_credentials import get_request_credential
+from backend.services.session_credentials import (
+    get_optional_request_credential,
+    get_request_credential,
+)
 from backend.temporal_contract import instant_response
 import json
 import os
@@ -678,7 +681,8 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         with closing(get_db_connection()) as conn:
             conn.execute('BEGIN')
             viewer=None
-            token=get_request_credential(request).value
+            credential=get_optional_request_credential(request)
+            token=credential.value if credential else None
             if token:
                 try:viewer=session_validator(conn,token)
                 except HTTPException as error:
