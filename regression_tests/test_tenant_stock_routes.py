@@ -162,8 +162,8 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
         current_user=lambda: None,
         csrf_dependency=lambda: None,
         endpoint_log=lambda *_args, **_kwargs: lambda endpoint: endpoint,
-        authenticated_writer=lambda principal, session: authenticated_write_transaction(
-            scoped_connection, user_id=principal, session_token=session
+        authenticated_writer=lambda principal, session, **kwargs: authenticated_write_transaction(
+            scoped_connection, user_id=principal, session_token=session, **kwargs
         ),
         stock_access_guard=require_stock_access,
         active_record_guard=require_active_record,
