@@ -61,8 +61,10 @@ to send mail.
    extensions, schema privileges, and role separation intended for cutover.
    Start the reviewed application once with the migration login so its
    PostgreSQL migrations are current, then verify runtime access separately.
-4. Export its DSN into an environment variable without placing credentials in
-   shell history, command arguments, terminal recordings, or CI artifacts.
+4. Export the migration-role DSN as `MIGRATION_DATABASE_URL` without placing
+   credentials in shell history, command arguments, terminal recordings, or
+   CI artifacts. The runtime `DATABASE_URL` role does not own the imported
+   tables and must not be used for import.
 5. Run the importer first without `--apply`. It opens the SQLite source
    read-only, creates a private staging copy, applies the reviewed SQLite
    migrations to that copy, and rolls back all PostgreSQL writes after
@@ -78,19 +80,19 @@ to send mail.
    the health and tenant smoke tests. A backup is not verified until restore
    and validation succeed.
 
-Example commands (the `DATABASE_URL` value is supplied out of band):
+Example commands (the `MIGRATION_DATABASE_URL` value is supplied out of band):
 
 ```bash
 python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
-  --target-dsn-env DATABASE_URL \
+  --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
   --platform-admin-email admin@example.com
 
 # Reset the disposable target to its migrated, empty state, then commit:
 python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
-  --target-dsn-env DATABASE_URL \
+  --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
   --platform-admin-email admin@example.com \
   --apply

@@ -122,20 +122,21 @@ superadmins to company admins. It clears legacy session/reset tokens and does
 not copy session rows; all users must sign in again after a future cutover.
 The command prints counts and reconciliation results only.
 
-Set the destination DSN in the environment. The first command is a
+Set the destination migration-role DSN in `MIGRATION_DATABASE_URL`. Do not use
+the restricted runtime `DATABASE_URL` for import. The first command is a
 rollback-only rehearsal; `--apply` is required to commit:
 
 ```bash
-export DATABASE_URL='postgresql://...'
+export MIGRATION_DATABASE_URL='postgresql://...'
 python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
-  --target-dsn-env DATABASE_URL \
+  --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
   --platform-admin-email admin@example.com
 
 python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
-  --target-dsn-env DATABASE_URL \
+  --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
   --platform-admin-email admin@example.com \
   --apply
