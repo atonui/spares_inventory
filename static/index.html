@@ -642,6 +642,39 @@
                 </tr></template></tbody></table></div>
             </section>
 
+            <section x-show="showMovementsPanel" class="controls" aria-labelledby="movement-history-heading">
+                <h3 id="movement-history-heading">Movement history</h3>
+                <p>Review the latest stock additions, consumption, adjustments, and transfers. Use filters to narrow the displayed movements.</p>
+                <form class="replenishment-toolbar" @submit.prevent="loadMovements()">
+                    <div><label for="movement-start">From date</label><input id="movement-start" type="date" x-model="movementFilters.startDate"></div>
+                    <div><label for="movement-end">Through date</label><input id="movement-end" type="date" x-model="movementFilters.endDate"></div>
+                    <div><label for="movement-type">Type</label><select id="movement-type" x-model="movementFilters.movementType"><option value="">All types</option><option value="add">Addition</option><option value="consume">Consumption</option><option value="remove">Adjustment</option><option value="transfer">Transfer</option></select></div>
+                    <div><label for="movement-part">Part</label><select id="movement-part" x-model="movementFilters.partId"><option value="">All parts</option><template x-for="part in parts" :key="part.id"><option :value="part.id" x-text="part.part_number + ' — ' + part.description"></option></template></select></div>
+                    <div><label for="movement-store">Store</label><select id="movement-store" x-model="movementFilters.storeId"><option value="">All stores</option><template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
+                    <button class="btn btn-primary" type="submit" :disabled="loading">Apply filters</button>
+                    <button class="btn" type="button" @click="clearMovementFilters()" :disabled="loading">Clear filters</button>
+                    <button class="btn" type="button" @click="loadMovements()" :disabled="loading">Refresh</button>
+                    <button class="btn" type="button" @click="exportMovementsCSV()" :disabled="loading || !movements.length">Export CSV</button>
+                </form>
+                <p x-show="loading" role="status">Loading movement history…</p>
+                <p x-show="!loading && !movements.length">No movements match these filters.</p>
+                <p x-show="movements.length">Showing the latest 100 matching movements.</p>
+                <div class="report-table-wrap" x-show="movements.length"><table class="stock-table">
+                    <thead><tr><th>Date / time</th><th>Type</th><th>Part</th><th>Quantity</th><th>From store</th><th>To store</th><th>Work order</th><th>Recorded by</th><th>Transfer status</th></tr></thead>
+                    <tbody><template x-for="movement in movements" :key="movement.id"><tr>
+                        <td x-text="formatBusinessInstant(movement.created_at, movementTimeContext)"></td>
+                        <td x-text="movement.movement_type"></td>
+                        <td><strong x-text="movement.part_number"></strong></td>
+                        <td x-text="movement.quantity"></td>
+                        <td x-text="movement.from_store_name || '—'"></td>
+                        <td x-text="movement.to_store_name || '—'"></td>
+                        <td x-text="movement.work_order || '—'"></td>
+                        <td x-text="movement.created_by_name"></td>
+                        <td x-text="movement.transfer_status || '—'"></td>
+                    </tr></template></tbody>
+                </table></div>
+            </section>
+
             <!-- Transfer Stock Modal -->
             <div x-show="showTransferModal" class="modal" @click.outside="showTransferModal = false">
                 <div class="modal-content">
