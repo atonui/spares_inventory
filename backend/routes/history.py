@@ -120,7 +120,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             #     """
             # params.extend([user_id, user_id, user_id])
 
-            date_sql,date_params=date_predicates('m.created_at',metadata)
+            date_sql,date_params=date_predicates('m.created_at',metadata,canonical_instants=is_postgres(conn))
             query+=date_sql;params.extend(date_params)
 
             # Movement type filtering
@@ -188,7 +188,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 query += " AND action = ?"
                 params.append(action)
 
-            date_sql,date_params=date_predicates('created_at',metadata)
+            date_sql,date_params=date_predicates('created_at',metadata,canonical_instants=is_postgres(conn))
             query+=date_sql;params.extend(date_params)
 
             if status:
@@ -242,7 +242,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             if not log_manager(principal, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
 
-            date_filter,params=date_predicates('created_at',metadata)
+            date_filter,params=date_predicates('created_at',metadata,canonical_instants=is_postgres(conn))
 
             # Total activities
             total_activities = execute(conn,
