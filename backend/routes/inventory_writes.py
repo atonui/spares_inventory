@@ -352,7 +352,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             if is_postgres(conn):
                 execute_cursor(conn, cursor, """INSERT INTO movements
                     (organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
-                    VALUES(?,?,?,?,?,?,?) RETURNING id""",+                    (_organization_id(conn, user_id), *movement_values))
+                    VALUES(?,?,?,?,?,?,?) RETURNING id""",
+                    (_organization_id(conn, user_id), *movement_values))
             else:
                 execute_cursor(conn, cursor, """INSERT INTO movements
                     (to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
