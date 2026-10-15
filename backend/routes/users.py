@@ -1,10 +1,12 @@
 """User administration routes with explicit application dependencies."""
 from backend.temporal_contract import instant_response
-from contextlib import closing
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.schemas.auth import UserResponse
 from backend.schemas.users import CreateUserRequest, UpdateUserRequest
+from backend.services.principals import AuthenticatedPrincipal
+from backend.services.tenant_context import authenticated_database_transaction
+from backend.database_sql import execute, is_postgres
 
 
 def create_users_router(*, get_connection, authenticated_writer, current_user,
@@ -33,11 +35,24 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     @instant_response
     @log_endpoint(action="view_users", resource_type="user")
     async def get_users(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
-        with closing(get_db_connection()) as conn:
-            if include_archived or 'users' == 'users':
-                require_archive_admin(conn,user_id)
-            where='' if include_archived else ' WHERE archived_at IS NULL'
-            rows=conn.execute('SELECT id, email, name, role, territory, archived_at FROM users'+where+' ORDER BY name').fetchall()
+        with authenticated_database_transaction(
+            get_db_connection, principal_or_user=user_id,
+            session_token=request.cookies.get('session_token') if request else None, readonly=True,
+        ) as (conn, principal):
+            require_archive_admin(conn,principal)
+            if is_postgres(conn):
+                where = "om.organization_id = ?"
+                if not include_archived:
+                    where += " AND om.is_active = TRUE AND u.archived_at IS NULL"
+                rows = execute(conn,
+                    """SELECT u.id,u.email,u.name,om.company_role AS role,u.territory,u.archived_at
+                       FROM users AS u JOIN organization_memberships AS om ON om.user_id=u.id
+                       WHERE """ + where + " ORDER BY u.name,u.id",
+                    (principal.organization_id,),
+                ).fetchall()
+            else:
+                where='' if include_archived else ' WHERE archived_at IS NULL'
+                rows=execute(conn,'SELECT id, email, name, role, territory, archived_at FROM users'+where+' ORDER BY name').fetchall()
             return [dict(row) for row in rows]
 
 
