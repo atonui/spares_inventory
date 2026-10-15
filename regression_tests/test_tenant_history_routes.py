@@ -22,6 +22,7 @@ def migrated_tenant_schema(postgres_schema):
 def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schema, migrated_tenant_schema):
     from backend.routes.history import create_history_router
     from backend.routes.reports import create_stock_report_router
+    from backend.routes.users import create_users_router
     from backend.services.authenticated_transactions import authenticated_write_transaction
     from backend.services.stock_access import require_active_record
     from regression_tests.test_tenant_context import seed_user
@@ -110,6 +111,22 @@ def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schem
         assert [row["part_number"] for row in report["rows"]] == ["HISTORY-A"]
         assert "HISTORY-A" in csv_report.body.decode("utf-8-sig")
         assert "HISTORY-B" not in csv_report.body.decode("utf-8-sig")
+
+        users_router = create_users_router(
+            get_connection=scoped_connection,
+            authenticated_writer=lambda *_args, **_kwargs: None,
+            current_user=lambda: None,
+            csrf_dependency=lambda: None,
+            user_management_guard=lambda *_args, **_kwargs: None,
+            archive_admin_guard=lambda *_args, **_kwargs: None,
+            archive_service=lambda *_args, **_kwargs: None,
+            password_hash=lambda value: value,
+            endpoint_log=lambda *_args, **_kwargs: lambda endpoint: endpoint,
+            mutation_activity=lambda *_args, **_kwargs: None,
+        )
+        users_endpoint = next(route.endpoint for route in users_router.routes if route.path == "/api/users")
+        users = asyncio.run(users_endpoint(user_id=user_a, request=request))
+        assert [(row["id"], row["role"]) for row in users] == [(user_a, "owner")]
     finally:
         connection.rollback()
         connection.execute("RESET ROLE")
