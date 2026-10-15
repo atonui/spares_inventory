@@ -1,152 +1,1 @@
-"""PostgreSQL RLS must isolate rows on a reused, restricted connection."""
-
-from uuid import uuid4
-
-import pytest
-import psycopg
-from psycopg import errors
-from psycopg import sql
-
-pytest_plugins = ("regression_tests.postgres_fixtures",)
-
-
-@pytest.fixture(autouse=True)
-def migrated_tenant_schema(postgres_schema):
-    from backend.postgres_migrations.runner import apply_postgres_migrations
-
-    apply_postgres_migrations(postgres_schema[0])
-
-
-@pytest.fixture
-def runtime_role(postgres_schema):
-    connection, schema = postgres_schema
-    role = "tenant_runtime_" + uuid4().hex
-    connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
-    connection.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
-        sql.Identifier(schema), sql.Identifier(role)
-    ))
-    connection.execute(sql.SQL("GRANT SELECT, INSERT ON stores TO {}").format(sql.Identifier(role)))
-    connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins TO {}"
-    ).format(sql.Identifier(role)))
-    connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE stores_id_seq TO {}").format(
-        sql.Identifier(role)
-    ))
-    connection.commit()
-    try:
-        yield role
-    finally:
-        connection.rollback()
-        connection.execute("RESET ROLE")
-        connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
-        connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
-        connection.commit()
-
-
-def seed_stores(connection):
-    organizations = [
-        connection.execute(
-            "INSERT INTO organizations(name, slug) VALUES (%s, %s) RETURNING id",
-            (name, name.lower()),
-        ).fetchone()["id"]
-        for name in ("Tenant A", "Tenant B")
-    ]
-    stores = []
-    for organization_id, name in zip(organizations, ("A Warehouse", "B Warehouse")):
-        store_id = connection.execute(
-            """INSERT INTO stores(organization_id, name, type)
-               VALUES (%s, %s, 'warehouse') RETURNING id""",
-            (organization_id, name),
-        ).fetchone()["id"]
-        stores.append((organization_id, store_id))
-    connection.commit()
-    return organizations, stores
-
-
-def test_missing_context_denies_tenant_reads_and_writes(postgres_schema, runtime_role):
-    connection, _ = postgres_schema
-    _, stores = seed_stores(connection)
-    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
-    connection.commit()
-
-    with connection.transaction():
-        assert connection.execute("SELECT count(*) AS count FROM stores").fetchone()["count"] == 0
-    with pytest.raises(errors.InsufficientPrivilege):
-        with connection.transaction():
-            connection.execute(
-                "INSERT INTO stores(organization_id, name, type) VALUES (%s, 'No context', 'warehouse')",
-                (stores[0][0],),
-            )
-
-
-def test_context_scopes_reads_and_transaction_end_clears_it(postgres_schema, runtime_role):
-    from backend.services.tenant_context import set_tenant_context
-
-    connection, _ = postgres_schema
-    organizations, _ = seed_stores(connection)
-    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
-    connection.commit()
-
-    with pytest.raises(RuntimeError):
-        with connection.transaction():
-            set_tenant_context(connection, organizations[0])
-            assert connection.execute("SELECT count(*) AS count FROM stores").fetchone()["count"] == 1
-            raise RuntimeError("roll back organization A")
-
-    with connection.transaction():
-        assert connection.execute("SELECT count(*) AS count FROM stores").fetchone()["count"] == 0
-        set_tenant_context(connection, organizations[1])
-        rows = connection.execute("SELECT name FROM stores").fetchall()
-        assert rows == [{"name": "B Warehouse"}]
-
-
-def test_context_cannot_write_another_organizations_rows(postgres_schema, runtime_role):
-    from backend.services.tenant_context import set_tenant_context
-
-    connection, _ = postgres_schema
-    organizations, _ = seed_stores(connection)
-    connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
-    connection.commit()
-
-    with pytest.raises(errors.InsufficientPrivilege):
-        with connection.transaction():
-            set_tenant_context(connection, organizations[0])
-            connection.execute(
-                "INSERT INTO stores(organization_id, name, type) VALUES (%s, 'Spoofed', 'warehouse')",
-                (organizations[1],),
-            )
-
-
-def test_authenticated_transaction_uses_membership_from_session(postgres_schema, runtime_role):
-    from backend.services.tenant_context import authenticated_tenant_transaction
-    from regression_tests.test_tenant_context import seed_user
-
-    connection, _ = postgres_schema
-    organizations, _ = seed_stores(connection)
-    _org_id, user_id, token = seed_user(connection, role="engineer")
-    connection.execute(
-        "UPDATE organization_memberships SET organization_id = %s WHERE user_id = %s",
-        (organizations[0], user_id),
-    )
-    connection.commit()
-    schema = connection.execute("SELECT current_schema() AS name").fetchone()["name"]
-
-    def scoped_connection():
-        scoped = psycopg.connect(
-            connection.info.dsn,
-            row_factory=psycopg.rows.dict_row,
-            connect_timeout=5,
-        )
-        scoped.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
-        scoped.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(runtime_role)))
-        scoped.commit()
-        return scoped
-
-    with authenticated_tenant_transaction(
-        scoped_connection,
-        session_token=token,
-    ) as (tenant_connection, principal):
-        assert principal.organization_id == _org_id
-        rows = tenant_connection.execute("SELECT name FROM stores ORDER BY name").fetchall()
-
-    assert rows == [{"name": "A Warehouse"}]
+Y™Áäx-ÆÈ‹j◊ù¢Îi∫⁄+äßj[hëÈ‹¢ÈÌ€M5NãZñã≠¶Îeäw¨‘ààâAΩÕ—ù…ïME0ÅI1LÅµ’Õ–Å•ÕΩ±Ö—îÅ…Ω›ÃÅΩ∏ÅÑÅ…ï’Õïê∞Å…ïÕ—…•ç—ïêÅçΩππïç—•Ω∏∏ààà()•µ¡Ω…–ÅΩÃ)ô…Ω¥Å’’•êÅ•µ¡Ω…–Å’’•ê–()•µ¡Ω…–Å¡Â—ïÕ–)•µ¡Ω…–Å¡ÕÂçΩ¡ú)ô…Ω¥Å¡ÕÂçΩ¡úÅ•µ¡Ω…–Åï……Ω…Ã)ô…Ω¥Å¡ÕÂçΩ¡úÅ•µ¡Ω…–ÅÕ≈∞()¡Â—ïÕ—}¡±’ù•πÃÄÙÄ†â…ïù…ïÕÕ•Ωπ}—ïÕ—Ãπ¡ΩÕ—ù…ïÕ}ô•·—’…ïÃà∞§(()¡Â—ïÕ–πô•·—’…î°Ö’—Ω’ÕîıQ…’î§)ëïòÅµ•ù…Ö—ïë}—ïπÖπ—}Õç°ïµÑ°¡ΩÕ—ù…ïÕ}Õç°ïµÑ§Ë(ÄÄÄÅô…Ω¥ÅâÖç≠ïπêπ¡ΩÕ—ù…ïÕ}µ•ù…Ö—•ΩπÃπ…’ππï»Å•µ¡Ω…–ÅÖ¡¡±Â}¡ΩÕ—ù…ïÕ}µ•ù…Ö—•ΩπÃ((ÄÄÄÅÖ¡¡±Â}¡ΩÕ—ù…ïÕ}µ•ù…Ö—•ΩπÃ°¡ΩÕ—ù…ïÕ}Õç°ïµÖl¡t§(()¡Â—ïÕ–πô•·—’…î)ëïòÅ…’π—•µï}…Ω±î°¡ΩÕ—ù…ïÕ}Õç°ïµÑ§Ë(ÄÄÄÅçΩππïç—•Ω∏∞ÅÕç°ïµÑÄÙÅ¡ΩÕ—ù…ïÕ}Õç°ïµÑ(ÄÄÄÅ…Ω±îÄÙÄâ—ïπÖπ—}…’π—•µï|àÄ¨Å’’•ê–†§π°ï‡(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âIQÅI=1ÅÌÙÅ9=1=%8à§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…Ω±î§§§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âI9PÅUMÅ=8ÅM!5ÅÌÙÅQ<ÅÌÙà§πôΩ…µÖ–†(ÄÄÄÄÄÄÄÅÕ≈∞π%ëïπ—•ô•ï»°Õç°ïµÑ§∞ÅÕ≈∞π%ëïπ—•ô•ï»°…Ω±î§(ÄÄÄÄ§§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âI9PÅM1P∞Å%9MIPÅ=8ÅÕ—Ω…ïÃÅQ<ÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…Ω±î§§§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†(ÄÄÄÄÄÄÄÄâI9PÅM1PÅ=8Å’Õï…Ã∞ÅÕïÕÕ•ΩπÃ∞ÅΩ…ùÖπ•ÈÖ—•Ωπ}µïµâï…Õ°•¡Ã∞Å¡±Ö—ôΩ…µ}Öëµ•πÃÅQ<ÅÌÙà(ÄÄÄÄ§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…Ω±î§§§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âI9PÅUM∞ÅM1PÅ=8ÅMEU9ÅÕ—Ω…ïÕ}•ë}ÕïƒÅQ<ÅÌÙà§πôΩ…µÖ–†(ÄÄÄÄÄÄÄÅÕ≈∞π%ëïπ—•ô•ï»°…Ω±î§(ÄÄÄÄ§§(ÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§(ÄÄÄÅ—…‰Ë(ÄÄÄÄÄÄÄÅÂ•ï±êÅ…Ω±î(ÄÄÄÅô•πÖ±±‰Ë(ÄÄÄÄÄÄÄÅçΩππïç—•Ω∏π…Ω±±âÖç¨†§(ÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î†âIMPÅI=1à§(ÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âI=@Å=]9Å	dÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…Ω±î§§§(ÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âI=@ÅI=1Å%Åa%MQLÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…Ω±î§§§(ÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§(()ëïòÅÕïïë}Õ—Ω…ïÃ°çΩππïç—•Ω∏§Ë(ÄÄÄÅΩ…ùÖπ•ÈÖ—•ΩπÃÄÙÅl(ÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î†(ÄÄÄÄÄÄÄÄÄÄÄÄâ%9MIPÅ%9Q<ÅΩ…ùÖπ•ÈÖ—•ΩπÃ°πÖµî∞ÅÕ±’ú§ÅY1ULÄ†ïÃ∞ÄïÃ§ÅIQUI9%9Å•êà∞(ÄÄÄÄÄÄÄÄÄÄÄÄ°πÖµî∞ÅπÖµîπ±Ω›ï»†§§∞(ÄÄÄÄÄÄÄÄ§πôï—ç°Ωπî†•lâ•êât(ÄÄÄÄÄÄÄÅôΩ»ÅπÖµîÅ•∏Ä†âQïπÖπ–Åà∞ÄâQïπÖπ–Åà§(ÄÄÄÅt(ÄÄÄÅÕ—Ω…ïÃÄÙÅmt(ÄÄÄÅôΩ»ÅΩ…ùÖπ•ÈÖ—•Ωπ}•ê∞ÅπÖµîÅ•∏ÅÈ•¿°Ω…ùÖπ•ÈÖ—•ΩπÃ∞Ä†âÅ]Ö…ï°Ω’Õîà∞ÄâÅ]Ö…ï°Ω’Õîà§§Ë(ÄÄÄÄÄÄÄÅÕ—Ω…ï}•êÄÙÅçΩππïç—•Ω∏πï·ïç’—î†(ÄÄÄÄÄÄÄÄÄÄÄÄààâ%9MIPÅ%9Q<ÅÕ—Ω…ïÃ°Ω…ùÖπ•ÈÖ—•Ωπ}•ê∞ÅπÖµî∞Å—Â¡î§(ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅY1ULÄ†ïÃ∞ÄïÃ∞Äù›Ö…ï°Ω’Õîú§ÅIQUI9%9Å•êààà∞(ÄÄÄÄÄÄÄÄÄÄÄÄ°Ω…ùÖπ•ÈÖ—•Ωπ}•ê∞ÅπÖµî§∞(ÄÄÄÄÄÄÄÄ§πôï—ç°Ωπî†•lâ•êât(ÄÄÄÄÄÄÄÅÕ—Ω…ïÃπÖ¡¡ïπê†°Ω…ùÖπ•ÈÖ—•Ωπ}•ê∞ÅÕ—Ω…ï}•ê§§(ÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§(ÄÄÄÅ…ï—’…∏ÅΩ…ùÖπ•ÈÖ—•ΩπÃ∞ÅÕ—Ω…ïÃ(()ëïòÅ—ïÕ—}µ•ÕÕ•πù}çΩπ—ï·—}ëïπ•ïÕ}—ïπÖπ—}…ïÖëÕ}Öπë}›…•—ïÃ°¡ΩÕ—ù…ïÕ}Õç°ïµÑ∞Å…’π—•µï}…Ω±î§Ë(ÄÄÄÅçΩππïç—•Ω∏∞Å|ÄÙÅ¡ΩÕ—ù…ïÕ}Õç°ïµÑ(ÄÄÄÅ|∞ÅÕ—Ω…ïÃÄÙÅÕïïë}Õ—Ω…ïÃ°çΩππïç—•Ω∏§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âMPÅI=1ÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…’π—•µï}…Ω±î§§§(ÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§((ÄÄÄÅ›•—†ÅçΩππïç—•Ω∏π—…ÖπÕÖç—•Ω∏†§Ë(ÄÄÄÄÄÄÄÅÖÕÕï…–ÅçΩππïç—•Ω∏πï·ïç’—î†âM1PÅçΩ’π–†®§ÅLÅçΩ’π–ÅI=4ÅÕ—Ω…ïÃà§πôï—ç°Ωπî†•lâçΩ’π–âtÄÙÙÄ¿(ÄÄÄÅ›•—†Å¡Â—ïÕ–π…Ö•ÕïÃ°ï……Ω…Ãπ%πÕ’ôô•ç•ïπ—A…•Ÿ•±ïùî§Ë(ÄÄÄÄÄÄÄÅ›•—†ÅçΩππïç—•Ω∏π—…ÖπÕÖç—•Ω∏†§Ë(ÄÄÄÄÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î†(ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄâ%9MIPÅ%9Q<ÅÕ—Ω…ïÃ°Ω…ùÖπ•ÈÖ—•Ωπ}•ê∞ÅπÖµî∞Å—Â¡î§ÅY1ULÄ†ïÃ∞Äù9ºÅçΩπ—ï·–ú∞Äù›Ö…ï°Ω’Õîú§à∞(ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ°Õ—Ω…ïÕl¡ul¡t∞§∞(ÄÄÄÄÄÄÄÄÄÄÄÄ§(()ëïòÅ—ïÕ—}çΩπ—ï·—}ÕçΩ¡ïÕ}…ïÖëÕ}Öπë}—…ÖπÕÖç—•Ωπ}ïπë}ç±ïÖ…Õ}•–£[hëÈÏ∂ªßq´^u—ù…ïÕ}Õç°ïµÑ∞Å…’π—•µï}…Ω±î§Ë(ÄÄÄÅô…Ω¥ÅâÖç≠ïπêπÕï…Ÿ•çïÃπ—ïπÖπ—}çΩπ—ï·–Å•µ¡Ω…–ÅÕï—}—ïπÖπ—}çΩπ—ï·–((ÄÄÄÅçΩππïç—•Ω∏∞Å|ÄÙÅ¡ΩÕ—ù…ïÕ}Õç°ïµÑ(ÄÄÄÅΩ…ùÖπ•ÈÖ—•ΩπÃ∞Å|ÄÙÅÕïïë}Õ—Ω…ïÃ°çΩππïç—•Ω∏§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âMPÅI=1ÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…’π—•µï}…Ω±î§§§(ÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§((ÄÄÄÅ›•—†Å¡Â—ïÕ–π…Ö•ÕïÃ°I’π—•µï……Ω»§Ë(ÄÄÄÄÄÄÄÅ›•—†ÅçΩππïç—•Ω∏π—…ÖπÕÖç—•Ω∏†§Ë(ÄÄÄÄÄÄÄÄÄÄÄÅÕï—}—ïπÖπ—}çΩπ—ï·–°çΩππïç—•Ω∏∞ÅΩ…ùÖπ•ÈÖ—•ΩπÕl¡t§(ÄÄÄÄÄÄÄÄÄÄÄÅÖÕÕï…–ÅçΩππïç—•Ω∏πï·ïç’—î†âM1PÅçΩ’π–†®§ÅLÅçΩ’π–ÅI=4ÅÕ—Ω…ïÃà§πôï—ç°Ωπî†•lâçΩ’π–âtÄÙÙÄƒ(ÄÄÄÄÄÄÄÄÄÄÄÅ…Ö•ÕîÅI’π—•µï……Ω»†â…Ω±∞ÅâÖç¨ÅΩ…ùÖπ•ÈÖ—•Ω∏Åà§((ÄÄÄÅ›•—†ÅçΩππïç—•Ω∏π—…ÖπÕÖç—•Ω∏†§Ë(ÄÄÄÄÄÄÄÅÖÕÕï…–ÅçΩππïç—•Ω∏πï·ïç’—î†âM1PÅçΩ’π–†®§ÅLÅçΩ’π–ÅI=4ÅÕ—Ω…ïÃà§πôï—ç°Ωπî†•lâçΩ’π–âtÄÙÙÄ¿(ÄÄÄÄÄÄÄÅÕï—}—ïπÖπ—}çΩπ—ï·–°çΩππïç—•Ω∏∞ÅΩ…ùÖπ•ÈÖ—•ΩπÕl≈t§(ÄÄÄÄÄÄÄÅ…Ω›ÃÄÙÅçΩππïç—•Ω∏πï·ïç’—î†âM1PÅπÖµîÅI=4ÅÕ—Ω…ïÃà§πôï—ç°Ö±∞†§(ÄÄÄÄÄÄÄÅÖÕÕï…–Å…Ω›ÃÄÙÙÅmÏâπÖµîàËÄâÅ]Ö…ï°Ω’Õîâıt(()ëïòÅ—ïÕ—}çΩπ—ï·—}çÖππΩ—}›…•—ï}ÖπΩ—°ï…}Ω…ùÖπ•ÈÖ—•ΩπÕ}…Ω›Ã°¡ΩÕ—ù…ïÕ}Õç°ïµÑ∞Å…’π—•µï}…Ω±î§Ë(ÄÄÄÅô…Ω¥ÅâÖç≠ïπêπÕï…Ÿ•çïÃπ—ïπÖπ—}çΩπ—ï·–Å•µ¡Ω…–ÅÕï—}—ïπÖπ—}çΩπ—ï·–((ÄÄÄÅçΩππïç—•Ω∏∞Å|ÄÙÅ¡ΩÕ—ù…ïÕ}Õç°ïµÑ(ÄÄÄÅΩ…ùÖπ•ÈÖ—•ΩπÃ∞Å|ÄÙÅÕïïë}Õ—Ω…ïÃ°çΩππïç—•Ω∏§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î°Õ≈∞πME0†âMPÅI=1ÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…’π—•µï}…Ω±î§§§(ÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§((ÄÄÄÅ›•—†Å¡Â—ïÕ–π…Ö•ÕïÃ°ï……Ω…Ãπ%πÕ’ôô•ç•ïπ—A…•Ÿ•±ïùî§Ë(ÄÄÄÄÄÄÄÅ›•—†ÅçΩππïç—•Ω∏π—…ÖπÕÖç—•Ω∏†§Ë(ÄÄÄÄÄÄÄÄÄÄÄÅÕï—}—ïπÖπ—}çΩπ—ï·–°çΩππïç—•Ω∏∞ÅΩ…ùÖπ•ÈÖ—•ΩπÕl¡t§(ÄÄÄÄÄÄÄÄÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î†(ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄâ%9MIPÅ%9Q<ÅÕ—Ω…ïÃ°Ω…ùÖπ•ÈÖ—•Ωπ}•ê∞ÅπÖµî∞Å—Â¡î§ÅY1ULÄ†ïÃ∞ÄùM¡ΩΩôïêú∞Äù›Ö…ï°Ω’Õîú§à∞(ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ°Ω…ùÖπ•ÈÖ—•ΩπÕl≈t∞§∞(ÄÄÄÄÄÄÄÄÄÄÄÄ§(()ëïòÅ—ïÕ—}Ö’—°ïπ—•çÖ—ïë}—…ÖπÕÖç—•Ωπ}’ÕïÕ}µïµâï…Õ°•¡}ô…Ωµ}ÕïÕÕ•Ω∏°¡ΩÕ—ù…ïÕ}Õç°ïµÑ∞Å…’π—•µï}…Ω±î§Ë(ÄÄÄÅô…Ω¥ÅâÖç≠ïπêπÕï…Ÿ•çïÃπ—ïπÖπ—}çΩπ—ï·–Å•µ¡Ω…–ÅÖ’—°ïπ—•çÖ—ïë}—ïπÖπ—}—…ÖπÕÖç—•Ω∏(ÄÄÄÅô…Ω¥Å…ïù…ïÕÕ•Ωπ}—ïÕ—Ãπ—ïÕ—}—ïπÖπ—}çΩπ—ï·–Å•µ¡Ω…–ÅÕïïë}’Õï»((ÄÄÄÅçΩππïç—•Ω∏∞Å|ÄÙÅ¡ΩÕ—ù…ïÕ}Õç°ïµÑ(ÄÄÄÅΩ…ùÖπ•ÈÖ—•ΩπÃ∞Å|ÄÙÅÕïïë}Õ—Ω…ïÃ°çΩππïç—•Ω∏§(ÄÄÄÅ}Ω…ù}•ê∞Å’Õï…}•ê∞Å—Ω≠ï∏ÄÙÅÕïïë}’Õï»°çΩππïç—•Ω∏∞Å…Ω±îÙâïπù•πïï»à§(ÄÄÄÅçΩππïç—•Ω∏πï·ïç’—î†(ÄÄÄÄÄÄÄÄâUAQÅΩ…ùÖπ•ÈÖ—•Ωπ}µïµâï…Õ°•¡ÃÅMPÅΩ…ùÖπ•ÈÖ—•Ωπ}•êÄÙÄïÃÅ]!IÅ’Õï…}•êÄÙÄïÃà∞(ÄÄÄÄÄÄÄÄ°Ω…ùÖπ•ÈÖ—•ΩπÕl¡t∞Å’Õï…}•ê§∞(ÄÄÄÄ§(ÄÄÄÅçΩππïç—•Ω∏πçΩµµ•–†§(ÄÄÄÅÕç°ïµÑÄÙÅçΩππïç—•Ω∏πï·ïç’—î†âM1PÅç’……ïπ—}Õç°ïµÑ†§ÅLÅπÖµîà§πôï—ç°Ωπî†•lâπÖµîât((ÄÄÄÅëïòÅÕçΩ¡ïë}çΩππïç—•Ω∏†§Ë(ÄÄÄÄÄÄÄÅÕçΩ¡ïêÄÙÅ¡ÕÂçΩ¡úπçΩππïç–†(ÄÄÄÄÄÄÄÄÄÄÄÅΩÃπïπŸ•…ΩπlâQMQ}Q	M}UI0ât∞(ÄÄÄÄÄÄÄÄÄÄÄÅ…Ω›}ôÖç—Ω…‰ı¡ÕÂçΩ¡úπ…Ω›Ãπë•ç—}…Ω‹∞(ÄÄÄÄÄÄÄÄÄÄÄÅçΩππïç—}—•µïΩ’–Ù‘∞(ÄÄÄÄÄÄÄÄ§(ÄÄÄÄÄÄÄÅÕçΩ¡ïêπï·ïç’—î°Õ≈∞πME0†âMPÅÕïÖ…ç°}¡Ö—†ÅQ<ÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°Õç°ïµÑ§§§(ÄÄÄÄÄÄÄÅÕçΩ¡ïêπï·ïç’—î°Õ≈∞πME0†âMPÅI=1ÅÌÙà§πôΩ…µÖ–°Õ≈∞π%ëïπ—•ô•ï»°…’π—•µï}…Ω±î§§§(ÄÄÄÄÄÄÄÅÕçΩ¡ïêπçΩµµ•–†§(ÄÄÄÄÄÄÄÅ…ï—’…∏ÅÕçΩ¡ïê((ÄÄÄÅ›•—†ÅÖ’—°ïπ—•çÖ—ïë}—ïπÖπ—}—…ÖπÕÖç—•Ω∏†(ÄÄÄÄÄÄÄÅÕçΩ¡ïë}çΩππïç—•Ω∏∞(ÄÄÄÄÄÄÄÅÕïÕÕ•Ωπ}—Ω≠ï∏ı—Ω≠ï∏∞(ÄÄÄÄ§ÅÖÃÄ°—ïπÖπ—}çΩππïç—•Ω∏∞Å¡…•πç•¡Ö∞§Ë(ÄÄÄÄÄÄÄÅÖÕÕï…–Å¡…•πç•¡Ö∞πΩ…ùÖπ•ÈÖ—•Ωπ}•êÄÙÙÅ}Ω…ù}•ê(ÄÄÄÄÄÄÄÅ…Ω›ÃÄÙÅ—ïπÖπ—}çΩππïç—•Ω∏πï·ïç’—î†âM1PÅπÖµîÅI=4ÅÕ—Ω…ïÃÅ=IHÅ	dÅπÖµîà§πôï—ç°Ö±∞†§((ÄÄÄÅÖÕÕï…–Å…Ω›ÃÄÙÙÅmÏâπÖµîàËÄâÅ]Ö…ï°Ω’Õîâıt(
