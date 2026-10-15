@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from psycopg.pq import TransactionStatus
 
 from backend.postgres_database import postgres_transaction
+from backend.database_sql import is_postgres
 from .principals import AuthenticatedPrincipal, resolve_principal
 
 
@@ -49,5 +50,35 @@ def authenticated_tenant_transaction(
                 raise HTTPException(status_code=401, detail="Invalid or expired session")
             set_tenant_context(conn, principal.organization_id)
             yield conn, principal
+    finally:
+        conn.close()
+
+
+@contextmanager
+def authenticated_database_transaction(
+    get_connection,
+    *,
+    principal_or_user,
+    session_token: str | None,
+    readonly: bool = False,
+):
+    """Use tenant RLS on PostgreSQL and preserve the validated SQLite path."""
+    conn = get_connection()
+    if is_postgres(conn):
+        expected_user_id = (
+            principal_or_user.user_id
+            if isinstance(principal_or_user, AuthenticatedPrincipal)
+            else principal_or_user
+        )
+        with authenticated_tenant_transaction(
+            lambda: conn,
+            session_token=session_token,
+            expected_user_id=expected_user_id,
+            readonly=readonly,
+        ) as (tenant_conn, principal):
+            yield tenant_conn, principal
+        return
+    try:
+        yield conn, principal_or_user
     finally:
         conn.close()

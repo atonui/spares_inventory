@@ -5,7 +5,8 @@ from fastapi import HTTPException
 def require_active_record(conn,table,identifier):
     if table not in ('users','stores','parts'):
         raise ValueError('Unsupported active record type')
-    row=conn.execute(f'SELECT archived_at FROM {table} WHERE id=?',(identifier,)).fetchone()
+    placeholder = "%s" if hasattr(conn, "info") else "?"
+    row=conn.execute(f'SELECT archived_at FROM {table} WHERE id={placeholder}',(identifier,)).fetchone()
     if not row:
         raise HTTPException(status_code=400,detail=f'{table} record does not exist')
     if row['archived_at'] is not None:

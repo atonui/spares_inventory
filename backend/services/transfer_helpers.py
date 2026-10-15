@@ -1,13 +1,14 @@
 """Transfer permissions, pending-record guards, and atomic completion."""
 
 from fastapi import HTTPException
+from backend.database_sql import execute
 
 
 def require_no_pending_transfer(conn, kind, identifier):
     predicates={'part':'m.part_id=?','store':'(m.from_store_id=? OR m.to_store_id=?)',
                 'user':'(m.created_by=? OR s1.assigned_user_id=? OR s2.assigned_user_id=?)'}
     values=(identifier,)*(1 if kind=='part' else 2 if kind=='store' else 3)
-    row=conn.execute("SELECT 1 FROM stock_transfers t JOIN movements m ON m.id=t.movement_id JOIN stores s1 ON s1.id=m.from_store_id JOIN stores s2 ON s2.id=m.to_store_id WHERE t.status='in_transit' AND "+predicates[kind]+" LIMIT 1",values).fetchone()
+    row=execute(conn,"SELECT 1 FROM stock_transfers t JOIN movements m ON m.id=t.movement_id JOIN stores s1 ON s1.id=m.from_store_id JOIN stores s2 ON s2.id=m.to_store_id WHERE t.status='in_transit' AND "+predicates[kind]+" LIMIT 1",values).fetchone()
     if row:
         raise HTTPException(status_code=400,detail='Cannot delete a record used by an in-transit transfer. Complete the receipt or physical return first')
 

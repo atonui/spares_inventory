@@ -2,10 +2,13 @@
 
 import sqlite3
 from fastapi import HTTPException
+from .principals import AuthenticatedPrincipal
 
 
 def check_admin(user_id: int, conn=None, get_connection=None) -> bool:
     """Check current authority, borrowing an owning mutation connection."""
+    if isinstance(user_id, AuthenticatedPrincipal):
+        return user_id.organization_id is not None and user_id.company_role in {"owner", "admin"}
     close = conn is None
     if close:
         conn = get_connection()
@@ -18,6 +21,10 @@ def check_admin(user_id: int, conn=None, get_connection=None) -> bool:
 
 
 def require_archive_admin(conn,user_id):
+    if isinstance(user_id, AuthenticatedPrincipal):
+        if user_id.organization_id is None or user_id.company_role not in {"owner", "admin"}:
+            raise HTTPException(status_code=403,detail='Admin access required')
+        return
     actor=conn.execute('SELECT role FROM users WHERE id=? AND archived_at IS NULL',(user_id,)).fetchone()
     if not actor or actor['role'] not in ('admin','superadmin'):
         raise HTTPException(status_code=403,detail='Admin access required')

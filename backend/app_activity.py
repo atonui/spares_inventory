@@ -6,6 +6,8 @@ from functools import wraps
 from fastapi import HTTPException, Request
 
 from backend.services.activity import record_activity
+from backend.database_sql import execute, execute_cursor
+from backend.services.principals import AuthenticatedPrincipal
 
 
 def log_activity(
@@ -110,7 +112,8 @@ def log_authenticated_activity(authenticated_writer, error_logger, user_id: int,
 
 
 def record_mutation_activity(conn, user_id, action, resource_type, result, request):
-    actor = conn.execute("SELECT name FROM users WHERE id=?", (user_id,)).fetchone()
+    actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
+    actor = execute(conn, "SELECT name FROM users WHERE id=?", (actor_id,)).fetchone()
     details = (
         {
             k: v
@@ -167,7 +170,8 @@ def create_endpoint_logger(
                         try:
                             conn = get_connection()
                             cursor = conn.cursor()
-                            cursor.execute("SELECT name FROM users WHERE id = ?", (user_id,))
+                            actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
+                            execute_cursor(conn, cursor, "SELECT name FROM users WHERE id = ?", (actor_id,))
                             user = cursor.fetchone()
                             conn.close()
                             if user:

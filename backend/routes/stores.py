@@ -2,9 +2,11 @@
 from backend.temporal_contract import instant_response
 import csv
 import io
-from contextlib import closing
 from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.services.tenant_context import authenticated_database_transaction
+from backend.temporal import serialize_instant, utc_now
 from backend.schemas.stores import (
     StoreResponse, StoreTypeResponse, CreateStoreTypeRequest, UpdateStoreTypeRequest,
     CreateStoreRequest, UpdateStoreRequest,
@@ -31,11 +33,16 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
     @router.get("/api/stores", response_model=List[StoreResponse])
     @instant_response
     async def get_stores(include_archived: bool = False, user_id: int = Depends(get_current_user), request: Request = None):
-        with closing(get_db_connection()) as conn:
-            if include_archived or 'stores' == 'users':
-                require_archive_admin(conn,user_id)
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=request.cookies.get("session_token") if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            if include_archived:
+                require_archive_admin(conn,principal)
             where='' if include_archived else ' WHERE archived_at IS NULL'
-            rows=conn.execute('SELECT id, name, type, location, assigned_user_id, archived_at FROM stores'+where+' ORDER BY name').fetchall()
+            rows=execute(conn, 'SELECT id, name, type, location, assigned_user_id, archived_at FROM stores'+where+' ORDER BY name').fetchall()
             return [dict(row) for row in rows]
 
 
@@ -64,7 +71,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Validate store type from database
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 """ SELECT id, is_active FROM store_types WHERE type_code = ? """,
                 (request_data.type,),
             )
@@ -83,20 +90,26 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 )
 
             # Create store
-            cursor.execute(
-                """
-                INSERT INTO stores (name, type, location, assigned_user_id)
-                VALUES (?, ?, ?, ?)
-            """,
-                (
-                    request_data.name,
-                    request_data.type,
-                    request_data.location,
-                    request_data.assigned_user_id,
-                ),
-            )
-
-            store_id = cursor.lastrowid
+            if is_postgres(conn):
+                execute_cursor(
+                    conn,
+                    cursor,
+                    """INSERT INTO stores
+                       (organization_id, name, type, location, assigned_user_id)
+                       VALUES (?, ?, ?, ?, ?) RETURNING id""",
+                    (user_id.organization_id, request_data.name, request_data.type,
+                     request_data.location, request_data.assigned_user_id),
+                )
+                store_id = cursor.fetchone()["id"]
+            else:
+                execute_cursor(
+                    conn, cursor,
+                    """INSERT INTO stores (name, type, location, assigned_user_id)
+                       VALUES (?, ?, ?, ?)""",
+                    (request_data.name, request_data.type, request_data.location,
+                     request_data.assigned_user_id),
+                )
+                store_id = cursor.lastrowid
 
 
             _result = {
@@ -151,10 +164,22 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                     )
                     if assigned_user_id is not None:
                         require_active_record(conn,"users",assigned_user_id)
-                    cursor.execute(
-                        "INSERT INTO stores (name, type, location, assigned_user_id) VALUES (?, ?, ?, ?)",
-                        (row["name"], row["type"], row.get("location"), assigned_user_id),
-                    )
+                    if is_postgres(conn):
+                        with conn.transaction():
+                            execute_cursor(
+                                conn, cursor,
+                                """INSERT INTO stores
+                                   (organization_id, name, type, location, assigned_user_id)
+                                   VALUES (?, ?, ?, ?, ?)""",
+                                (user_id.organization_id, row["name"], row["type"],
+                                 row.get("location"), assigned_user_id),
+                            )
+                    else:
+                        execute_cursor(
+                            conn, cursor,
+                            "INSERT INTO stores (name, type, location, assigned_user_id) VALUES (?, ?, ?, ?)",
+                            (row["name"], row["type"], row.get("location"), assigned_user_id),
+                        )
                     added += 1
                 except Exception as e:
                     skipped += 1
@@ -187,7 +212,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if store exists
-            cursor.execute("SELECT id FROM stores WHERE id = ?", (store_id,))
+            execute_cursor(conn, cursor, "SELECT id FROM stores WHERE id = ?", (store_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Store not found")
 
@@ -201,7 +226,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
             if request_data.type is not None:
                 # validate store type from the database
-                cursor.execute(
+                execute_cursor(conn, cursor,
                     """
                     SELECT id, is_active
                     FROM store_types
@@ -239,7 +264,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
             values.append(store_id)
 
-            cursor.execute(f"UPDATE stores SET {', '.join(updates)} WHERE id = ?", values)
+            execute_cursor(conn, cursor, f"UPDATE stores SET {', '.join(updates)} WHERE id = ?", values)
 
 
             _result = {"success": True, "message": "Store updated successfully"}
@@ -267,27 +292,20 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         """Get all store types"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        if include_inactive:
-            cursor.execute("""
-                SELECT id, type_code, type_name, description, is_active, display_order
-                FROM store_types
-                ORDER BY display_order, type_name
-            """)
-        else:
-            cursor.execute("""
-                SELECT id, type_code, type_name, description, is_active, display_order
-                FROM store_types
-                WHERE is_active = 1
-                ORDER BY display_order, type_name
-            """)
-
-        types = cursor.fetchall()
-        conn.close()
-
-        return [dict(t) for t in types]
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=request.cookies.get("session_token") if request else None,
+            readonly=True,
+        ) as (conn, _principal):
+            cursor = conn.cursor()
+            query = """SELECT id, type_code, type_name, description, is_active, display_order
+                       FROM store_types"""
+            if not include_inactive:
+                query += " WHERE is_active = TRUE"
+            query += " ORDER BY display_order, type_name"
+            execute_cursor(conn, cursor, query)
+            return [dict(row) for row in cursor.fetchall()]
 
 
     @router.post("/api/store-types")
@@ -307,27 +325,32 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if type_code already exists
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 "SELECT id FROM store_types WHERE type_code = ?", (request_data.type_code,)
             )
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Store type code already exists")
 
             try:
-                cursor.execute(
-                    """
-                    INSERT INTO store_types (type_code, type_name, description, display_order)
-                    VALUES (?, ?, ?, ?)
-                """,
-                    (
-                        request_data.type_code,
-                        request_data.type_name,
-                        request_data.description,
-                        request_data.display_order,
-                    ),
-                )
-
-                store_type_id = cursor.lastrowid
+                if is_postgres(conn):
+                    execute_cursor(
+                        conn, cursor,
+                        """INSERT INTO store_types
+                           (organization_id, type_code, type_name, description, display_order)
+                           VALUES (?, ?, ?, ?, ?) RETURNING id""",
+                        (user_id.organization_id, request_data.type_code, request_data.type_name,
+                         request_data.description, request_data.display_order),
+                    )
+                    store_type_id = cursor.fetchone()["id"]
+                else:
+                    execute_cursor(
+                        conn, cursor,
+                        """INSERT INTO store_types (type_code, type_name, description, display_order)
+                           VALUES (?, ?, ?, ?)""",
+                        (request_data.type_code, request_data.type_name,
+                         request_data.description, request_data.display_order),
+                    )
+                    store_type_id = cursor.lastrowid
 
                 _result = {
                     "success": True,
@@ -360,7 +383,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if store type exists
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
             )
             store_type = cursor.fetchone()
@@ -381,7 +404,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
             if request_data.is_active is not None:
                 updates.append("is_active = ?")
-                values.append(1 if request_data.is_active else 0)
+                values.append(request_data.is_active)
 
             if request_data.display_order is not None:
                 updates.append("display_order = ?")
@@ -390,10 +413,11 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
             if not updates:
                 raise HTTPException(status_code=400, detail="No updates provided")
 
-            updates.append("updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')")
+            updates.append("updated_at = ?")
+            values.append(serialize_instant(utc_now()))
             values.append(type_id)
 
-            cursor.execute(f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?", values)
+            execute_cursor(conn, cursor, f"UPDATE store_types SET {', '.join(updates)} WHERE id = ?", values)
 
 
             _result = {
@@ -423,7 +447,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if store type exists
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 "SELECT type_code, type_name FROM store_types WHERE id = ?", (type_id,)
             )
             store_type = cursor.fetchone()
@@ -431,7 +455,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=404, detail="Store type not found")
 
             # Check if any stores are using this type
-            cursor.execute(
+            execute_cursor(conn, cursor,
                 """
                 SELECT COUNT(*) as count
                 FROM stores
@@ -443,13 +467,13 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
 
             if store_count > 0:
                 # Soft delete - just deactivate
-                cursor.execute(
+                execute_cursor(conn, cursor,
                     """
                     UPDATE store_types
-                    SET is_active = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
+                    SET is_active = FALSE, updated_at = ?
                     WHERE id = ?
                 """,
-                    (type_id,),
+                    (serialize_instant(utc_now()), type_id),
                 )
 
 
@@ -464,7 +488,7 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 return _result
             else:
                 # Hard delete - no stores using it
-                cursor.execute("DELETE FROM store_types WHERE id = ?", (type_id,))
+                execute_cursor(conn, cursor, "DELETE FROM store_types WHERE id = ?", (type_id,))
 
 
                 _result = {
@@ -483,20 +507,20 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
         type_code: str, user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Validate if a store type code exists and is active"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT id, type_name, is_active
-            FROM store_types
-            WHERE type_code = ?
-        """,
-            (type_code,),
-        )
-
-        store_type = cursor.fetchone()
-        conn.close()
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=request.cookies.get("session_token") if request else None,
+            readonly=True,
+        ) as (conn, _principal):
+            cursor = conn.cursor()
+            execute_cursor(
+                conn,
+                cursor,
+                "SELECT id, type_name, is_active FROM store_types WHERE type_code = ?",
+                (type_code,),
+            )
+            store_type = cursor.fetchone()
 
         if not store_type:
             raise HTTPException(status_code=404, detail="Store type not found")
