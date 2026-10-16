@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="mystyle.css?v=20261016-mobile-dialog-scroll">
-<link rel="stylesheet" href="superadmin.css?v=20261016-org-mobile-cards-fix">
+<link rel="stylesheet" href="superadmin.css?v=20261016-mobile-audit-cards">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261013-frontend-1" defer></script>
@@ -775,7 +775,7 @@
           <p class="list-count" x-show="auditLoading" role="status">Loading audit entries…</p>
           <div class="audit-error" x-show="auditError" role="alert"><span x-text="auditError"></span> <button class="btn btn-sm btn-outline" @click="loadAudit()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg> Retry</button></div>
           <div style="overflow-x:auto;" x-show="!auditError && !auditLoading">
-            <table class="tbl">
+            <table class="audit-table tbl">
               <thead>
                 <tr>
                   <th>Time</th>
@@ -788,15 +788,15 @@
               <tbody>
                 <template x-for="log in auditLog" :key="log.id">
                   <tr>
-                    <td style="font-size:0.8rem;white-space:nowrap;" x-text="fmtAuditDate(log.created_at)"></td>
-                    <td><span class="tag tag-blue" style="font-family:monospace;" x-text="log.action"></span></td>
-                    <td style="font-size:0.8rem;"
+                    <td data-label="Time" x-text="fmtAuditDate(log.created_at)"></td>
+                    <td data-label="Action"><span class="tag tag-blue" style="font-family:monospace;" x-text="log.action"></span></td>
+                    <td data-label="Resource"
                         x-text="(log.resource_type||'') + (log.resource_id ? ' #'+log.resource_id : '')"></td>
-                    <td>
+                    <td data-label="Status">
                       <span :class="log.status==='success' ? 'tag tag-green' : 'tag tag-red'"
                             x-text="log.status"></span>
                     </td>
-                    <td><details><summary>View details</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere" x-text="formatStockAuditDetails(log.details)"></p></details></td>
+                    <td data-label="Details"><details><summary>View details</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere" x-text="formatStockAuditDetails(log.details)"></p></details></td>
                   </tr>
                 </template>
               </tbody>

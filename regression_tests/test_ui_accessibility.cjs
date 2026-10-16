@@ -237,3 +237,18 @@ test('platform organization table becomes labeled cards on mobile', () => {
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.organizations-table[^}]*display:\s*block/s.test(css), 'Organization table should switch to a mobile card layout');
     assert.ok(/\.organizations-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile values should retain visible field labels');
 });
+
+test('platform audit entries become labeled cards on mobile', () => {
+    const html = read('superadmin.html');
+    const section = html.slice(html.indexOf("x-show=\"tab==='audit'\""), html.indexOf('class="audit-pagination"'));
+    const start = section.indexOf('<table class="audit-table tbl">');
+    const end = section.indexOf('</table>', start);
+    assert.ok(start >= 0 && end > start, 'Missing audit table');
+    const table = section.slice(start, end);
+    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
+        'Time', 'Action', 'Resource', 'Status', 'Details'
+    ]);
+    const css = read('superadmin.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.audit-table[^}]*display:\s*block/s.test(css), 'Audit table should switch to a mobile card layout');
+    assert.ok(/\.audit-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile audit values should retain visible field labels');
+});
