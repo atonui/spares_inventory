@@ -617,6 +617,12 @@ body > [x-data="inventoryApp()"] > .card { margin-inline: auto; }
     .stock-table td[data-label="Actions"] .stock-cell-value { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     .stock-table .store-tag, .stock-table .wo-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
     .store-search input { min-height: 44px; font-size: 16px; }
+    .in-transit-transfers-table, .in-transit-transfers-table tbody { display: block; width: 100%; min-width: 0; }
+    .in-transit-transfers-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .in-transit-transfers-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
+    .in-transit-transfers-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+    .in-transit-transfers-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #465561; }
+    .in-transit-transfers-table td[data-label="Action"] .btn { width: 100%; min-height: 44px; white-space: normal; }
 }
 
 /* Tablet improvements */

@@ -2,6 +2,9 @@ const {loadPageScripts} = require('./helpers/frontend.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
+const fs=require('node:fs');
+const path=require('node:path');
+const readStatic=name=>fs.readFileSync(path.join(__dirname,'..','static',name),'utf8');
 function app(confirmResult=true) {
     const context={console,setTimeout:()=>{},confirm:()=>confirmResult};
     vm.createContext(context);
@@ -237,6 +240,24 @@ test('core dispatch uses the real composed pending-transfer loader', async () =>
     await a.transferStock();
     assert.deepEqual(calls, ['/inventory/transfer', 'inventory', 'stats', '/inventory/transfers']);
     assert.equal(a.pendingTransfers[0].id, 42);
+});
+
+test('in-transit transfers become labeled mobile cards while keeping receipt actions', () => {
+    const html = readStatic('index.html');
+    const panel = html.indexOf('<section class="inventory-table" style="margin-bottom:1rem;">');
+    const start = html.indexOf('<table class="in-transit-transfers-table">', panel);
+    const end = html.indexOf('</table>', start);
+    assert.ok(panel >= 0 && start > panel && end > start, 'Missing in-transit transfers table');
+    const table = html.slice(start, end);
+    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
+        'Dispatched', 'Part', 'Quantity', 'Source store', 'Destination store', 'Sent by', 'Work order', 'Action'
+    ]);
+    assert.match(table, /@click="confirmTransfer\(transfer,'receive'\)"/, 'Receipt confirmation should remain available');
+    assert.match(table, /@click="confirmTransfer\(transfer,'return'\)"/, 'Return confirmation should remain available');
+    const css = readStatic('mystyle.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.in-transit-transfers-table[^}]*display:\s*block/s.test(css), 'Transfers should switch to a mobile card layout');
+    assert.ok(/\.in-transit-transfers-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile transfer values should retain field labels');
+    assert.ok(/\.in-transit-transfers-table\s+td\[data-label="Action"\][^}]*\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Transfer confirmation actions should retain mobile touch size');
 });
 
 test('core startup uses the real composed pending-transfer loader', async () => {

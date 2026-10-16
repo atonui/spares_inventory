@@ -239,16 +239,16 @@
                     <button class="btn btn-sm ui-icon-only" @click="refreshTransfers()" :disabled="loading" aria-label="Refresh transfers" title="Refresh transfers"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
                 </div>
                 <div style="overflow-x:auto;" x-show="pendingTransfers.length > 0">
-                    <table>
-                        <thead><tr><th>Dispatched</th><th>Part</th><th>Qty</th><th>From</th><th>To</th><th>Sender</th><th>WO#</th><th>Confirmation</th></tr></thead>
+                    <table class="in-transit-transfers-table">
+                        <thead><tr><th>Dispatched</th><th>Part</th><th>Quantity</th><th>Source store</th><th>Destination store</th><th>Sent by</th><th>Work order</th><th>Action</th></tr></thead>
                         <tbody>
                             <template x-for="transfer in pendingTransfers" :key="transfer.id">
                                 <tr>
-                                    <td x-text="formatInstant(transfer.created_at)"></td>
-                                    <td x-text="transfer.part_number"></td><td x-text="transfer.quantity"></td>
-                                    <td x-text="transfer.from_store_name"></td><td x-text="transfer.to_store_name"></td>
-                                    <td x-text="transfer.created_by_name"></td><td x-text="transfer.work_order || '-'"></td>
-                                    <td>
+                                    <td data-label="Dispatched" x-text="formatInstant(transfer.created_at)"></td>
+                                    <td data-label="Part" x-text="transfer.part_number"></td><td data-label="Quantity" x-text="transfer.quantity"></td>
+                                    <td data-label="Source store" x-text="transfer.from_store_name"></td><td data-label="Destination store" x-text="transfer.to_store_name"></td>
+                                    <td data-label="Sent by" x-text="transfer.created_by_name"></td><td data-label="Work order" x-text="transfer.work_order || '-'"></td>
+                                    <td data-label="Action">
                                         <button class="btn btn-sm btn-success" x-show="transfer.can_receive" @click="confirmTransfer(transfer,'receive')" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#check"></use></svg> Confirm receipt</button>
                                         <button class="btn btn-sm" x-show="transfer.can_return" @click="confirmTransfer(transfer,'return')" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#check"></use></svg> Confirm returned to source</button>
                                         <span x-show="!transfer.can_receive && !transfer.can_return">Awaiting recipient or sender</span>
