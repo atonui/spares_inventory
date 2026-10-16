@@ -483,7 +483,7 @@
             </div>
             <p x-show="panelReady('users')" class="list-count" role="status" x-text="filteredUsers.length + ' of ' + allUsers.length + ' users'"></p>
           <div x-show="panelReady('users')" style="overflow-x:auto;">
-            <table class="tbl">
+            <table class="tbl users-table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -493,16 +493,16 @@
                   <th>Failed Logins</th>
                   <th>Last Login</th>
                   <th>Status</th>
-                  <th>Force Logout</th>
+                  <th>Account Actions</th>
                   <th>Reset Password</th>
                 </tr>
               </thead>
               <tbody>
                 <template x-for="u in filteredUsers" :key="u.id">
                   <tr>
-                    <td style="font-weight:600;" x-text="u.name"></td>
-                    <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
-                    <td>
+                    <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
+                    <td data-label="Email" style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
+                    <td data-label="Role">
                       <select style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;background:white;"
                               x-model="u._role" :disabled="u._saving" :aria-label="'Role for ' + u.name">
                         <option value="engineer">engineer</option>
@@ -517,21 +517,23 @@
                       </div>
                       <p class="action-error" role="alert" x-show="u._error" x-text="u._error"></p>
                     </td>
-                    <td style="font-size:0.8rem;" x-text="u.territory||'—'"></td>
-                    <td>
+                    <td data-label="Territory" style="font-size:0.8rem;" x-text="u.territory||'—'"></td>
+                    <td data-label="Failed Logins">
                       <span :class="u.failed_login_attempts>0?'tag tag-amber':'tag tag-grey'"
                             x-text="u.failed_login_attempts"></span>
                     </td>
-                    <td style="font-size:0.8rem;" x-text="u.last_login ? fmtDate(u.last_login) : 'Never'"></td>
-                    <td>
+                    <td data-label="Last Login" style="font-size:0.8rem;" x-text="u.last_login ? fmtDate(u.last_login) : 'Never'"></td>
+                    <td data-label="Status">
                       <span x-show="isLocked(u)"  class="tag tag-red">Locked</span>
                       <span x-show="!isLocked(u)" class="tag tag-green">Active</span>
                     </td>
-                    <td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
-                      <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock" title="Unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#unlock"></use></svg> Unlock</button>
-                      <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Force logout</button>
+                    <td data-label="Account Actions">
+                      <div class="user-admin-actions">
+                        <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock" title="Unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#unlock"></use></svg> Unlock</button>
+                        <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Force logout</button>
+                      </div>
                     </td>
-                    <td>
+                    <td data-label="Reset Password">
                       <button class="btn btn-sm btn-amber" @click="openResetModal(u)" title="Reset password"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#lock"></use></svg> Reset password</button>
                     </td>
                   </tr>

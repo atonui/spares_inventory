@@ -379,6 +379,7 @@ button, select, input, textarea, a { touch-action: manipulation; }
 
 .role-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .5rem; }
 .role-change { flex-basis: 100%; font-size: .8rem; color: #475569; }
+.user-admin-actions { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
 .action-error { color: #9f1239; font-size: .85rem; margin-top: .5rem; overflow-wrap: anywhere; }
 
 .list-filters { display: flex; flex-wrap: wrap; gap: .75rem; padding: 1rem 1rem .5rem; align-items: end; }
@@ -399,6 +400,14 @@ button, select, input, textarea, a { touch-action: manipulation; }
   .sessions-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
   .sessions-table td { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .75rem; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
   .sessions-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #475569; }
+
+  .users-table, .users-table tbody { display: block; width: 100%; min-width: 0; }
+  .users-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .users-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
+  .users-table td { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .75rem; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .users-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #475569; }
+  .users-table td[data-label="Role"] select { width: 100%; min-height: 40px; }
+  .user-admin-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
 }
 
 @media (max-width: 768px) {
