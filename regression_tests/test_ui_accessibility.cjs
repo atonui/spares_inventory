@@ -159,6 +159,12 @@ test('primary, success, warning, and consume actions meet WCAG AA contrast', () 
 
     assertAa('Primary action', primaryFg, primaryBg);
     assertAa('Primary action hover', primaryFg, declaration(mainCss, '.btn:hover', 'background'));
+    const inventoryHoverFg = declaration(mainCss, '.inventory-controls .btn:hover', 'color');
+    const replenishmentHoverFg = declaration(mainCss, '.replenishment-panel .btn:hover', 'color');
+    assert.equal(inventoryHoverFg, '#ffffff');
+    assert.equal(replenishmentHoverFg, '#ffffff');
+    assertAa('Inventory control hover action', inventoryHoverFg, declaration(mainCss, '.inventory-controls .btn:hover', 'background'));
+    assertAa('Replenishment hover action', replenishmentHoverFg, declaration(mainCss, '.replenishment-panel .btn:hover', 'background'));
     assertAa('Success action', primaryFg, successBg);
     assertAa('Success action hover', primaryFg, declaration(mainCss, '.btn-success:hover', 'background'));
     assertAa('Warning action', declaration(mainCss, '.btn-warning', 'color'), warningBg);
