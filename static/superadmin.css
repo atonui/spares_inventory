@@ -395,6 +395,16 @@ button, select, input, textarea, a { touch-action: manipulation; }
   .organizations-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #475569; }
 }
 
+@media (max-width: 768px) {
+  .audit-table, .audit-table tbody { display: block; width: 100%; min-width: 0; }
+  .audit-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .audit-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
+  .audit-table td { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .75rem; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .audit-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #475569; }
+  .audit-table td[data-label="Details"] details { min-width: 0; }
+  .audit-table td[data-label="Details"] summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
+}
+
 .audit-pagination { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; padding: .75rem 1rem; }
 .audit-pagination span { font-size: .85rem; }
 .audit-error { padding: 1rem; color: #9f1239; overflow-wrap: anywhere; }
