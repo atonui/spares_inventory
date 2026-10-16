@@ -533,6 +533,51 @@ def test_native_logout_revokes_refresh_credential_without_setting_cookie(native_
     assert error.value.status_code == 401
 
 
+def test_password_change_revokes_all_native_refresh_credentials(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, PasswordChange, UserLogin
+    from fastapi import HTTPException
+
+    api = native_auth_api
+    login = api.endpoint("/api/auth/native/login")
+    first = json.loads(asyncio.run(login(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    )).body)
+    second = json.loads(asyncio.run(login(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    )).body)
+
+    change_request = Request({
+        "type": "http", "method": "POST", "path": "/api/profile/change-password",
+        "headers": [(b"authorization", f"Bearer {first['access_token']}".encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+    result = asyncio.run(api.endpoint("/api/profile/change-password")(
+        PasswordChange(current_password="correct-password", new_password="new-password"),
+        user_id=api.user_id, csrf_valid=True, request=change_request,
+    ))
+
+    assert result["message"] == "Password changed successfully. Please login again."
+    assert api.connection.execute(
+        "SELECT password_hash FROM users WHERE id = %s", (api.user_id,),
+    ).fetchone()["password_hash"] == "hashed:new-password"
+
+    for index, session in enumerate((first, second)):
+        request_id = f"after-password-change-{index:04d}"
+        refresh_request = Request({
+            "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+            "headers": [(b"x-request-id", request_id.encode())],
+            "client": ("127.0.0.1", 1234),
+        })
+        with pytest.raises(HTTPException) as error:
+            asyncio.run(api.endpoint("/api/auth/native/refresh")(
+                NativeRefreshRequest(refresh_token=session["refresh_token"]),
+                refresh_request, request_id,
+            ))
+        assert error.value.status_code == 401
+
+
 def test_admin_force_logout_revokes_native_refresh_credential(native_auth_api):
     from backend.routes.superadmin import create_superadmin_router
     from backend.schemas.auth import NativeRefreshRequest, UserLogin
