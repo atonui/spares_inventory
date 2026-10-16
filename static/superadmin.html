@@ -293,7 +293,7 @@
           <div x-show="locked.length===0 && !loading" class="empty"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#check"></use></svg> No accounts are currently locked</div>
 
           <div x-show="locked.length>0" style="overflow-x:auto;">
-            <table class="tbl">
+            <table class="tbl locked-accounts-table">
               <thead>
                 <tr>
                   <th><input type="checkbox" aria-label="Select all locked user accounts" @change="toggleAll($event)" :disabled="actionPending.unlock" style="cursor:pointer;"></th>
@@ -308,13 +308,13 @@
               <tbody>
                 <template x-for="u in locked" :key="u.id">
                   <tr>
-                    <td><input type="checkbox" :value="u.id" x-model="selectedLocked" :aria-label="'Select account for ' + u.name" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
-                    <td style="font-weight:600;" x-text="u.name"></td>
-                    <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
-                    <td><span class="tag tag-grey" x-text="u.role"></span></td>
-                    <td><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
-                    <td style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
-                    <td><button class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#unlock"></use></svg> Unlock</button></td>
+                    <td data-label="Select"><input type="checkbox" :value="u.id" x-model="selectedLocked" :aria-label="'Select account for ' + u.name" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
+                    <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
+                    <td data-label="Email" style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
+                    <td data-label="Role"><span class="tag tag-grey" x-text="u.role"></span></td>
+                    <td data-label="Failed Attempts"><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
+                    <td data-label="Locked Until" style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
+                    <td data-label="Action"><button class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#unlock"></use></svg> Unlock</button></td>
                   </tr>
                 </template>
               </tbody>
