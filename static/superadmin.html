@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
-<link rel="stylesheet" href="mystyle.css?v=20261012-timezone">
-<link rel="stylesheet" href="superadmin.css?v=20261012-feedback">
+<link rel="stylesheet" href="mystyle.css?v=20261016-uiux-accessibility">
+<link rel="stylesheet" href="superadmin.css?v=20261016-uiux-accessibility">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261013-frontend-1" defer></script>
@@ -188,7 +188,7 @@
             <template x-for="[role, count] in Object.entries(dashboard.users_by_role||{})">
               <div style="text-align:center;">
                 <div style="font-size:1.6rem;font-weight:700;color:#007bff;" x-text="count"></div>
-                <div style="font-size:0.75rem;color:#888;text-transform:capitalize;" x-text="role"></div>
+                <div style="font-size:0.75rem;color:#666;text-transform:capitalize;" x-text="role"></div>
               </div>
             </template>
           </div>
@@ -296,7 +296,7 @@
             <table class="tbl">
               <thead>
                 <tr>
-                  <th><input type="checkbox" @change="toggleAll($event)" :disabled="actionPending.unlock" style="cursor:pointer;"></th>
+                  <th><input type="checkbox" aria-label="Select all locked user accounts" @change="toggleAll($event)" :disabled="actionPending.unlock" style="cursor:pointer;"></th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
@@ -308,7 +308,7 @@
               <tbody>
                 <template x-for="u in locked" :key="u.id">
                   <tr>
-                    <td><input type="checkbox" :value="u.id" x-model="selectedLocked" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
+                    <td><input type="checkbox" :value="u.id" x-model="selectedLocked" :aria-label="'Select account for ' + u.name" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
                     <td style="font-weight:600;" x-text="u.name"></td>
                     <td style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
                     <td><span class="tag tag-grey" x-text="u.role"></span></td>
@@ -378,13 +378,13 @@
                   <tr>
                     <td>
                       <div style="font-weight:600;" x-text="s.name"></div>
-                      <div style="font-size:0.75rem;color:#888;" x-text="s.email"></div>
+                      <div style="font-size:0.75rem;color:#666;" x-text="s.email"></div>
                     </td>
                     <td><span class="tag tag-grey" x-text="s.role"></span></td>
                     <td style="font-size:0.8rem;font-family:monospace;" x-text="s.ip_address||'—'"></td>
                     <td style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
                     <td style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
-                    <td style="font-size:0.75rem;color:#888;" x-text="parseUA(s.user_agent)"></td>
+                    <td style="font-size:0.75rem;color:#666;" x-text="parseUA(s.user_agent)"></td>
                     <td><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Terminate</button></td>
                   </tr>
                 </template>
@@ -410,7 +410,7 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Security Parameters</span>
-            <span style="font-size:0.75rem;color:#888;">Changes apply to new logins immediately</span>
+            <span style="font-size:0.75rem;color:#666;">Changes apply to new logins immediately</span>
           </div>
           <div class="panel-body">
             <template x-for="[key, meta] in Object.entries(cfgMeta)">
@@ -438,7 +438,7 @@
             <button class="btn btn-sm btn-outline ui-icon-only" @click="loadConfig()" :disabled="panelLoads.config.loading" aria-label="Refresh security configuration" title="Refresh security configuration"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
           </div>
           <div class="panel-body" x-show="panelReady('config')">
-            <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:#aaa;font-size:0.875rem;">
+            <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:#666;font-size:0.875rem;">
               No values saved yet — save a parameter above to create them.
             </div>
             <template x-for="[key, row] in Object.entries(secConfig)">
@@ -578,7 +578,8 @@
             <span class="tag tag-amber">SELECT only — read-only</span>
           </div>
           <div class="panel-body">
-            <textarea class="sql-editor" x-model="sqlInput"
+            <label for="sql-query-editor">SQL query</label>
+            <textarea id="sql-query-editor" class="sql-editor" x-model="sqlInput"
                       placeholder="SELECT * FROM users LIMIT 10;"
                       @keydown.ctrl.enter="runQuery()"></textarea>
             <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;align-items:center;">
@@ -638,7 +639,7 @@
             <div class="panel-body">
               <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Download a consistent SQLite snapshot of the live database.</p>
               <div style="margin-bottom:1rem;">
-                <div style="font-size:0.75rem;color:#888;">Current size</div>
+                <div style="font-size:0.75rem;color:#666;">Current size</div>
                 <div style="font-size:1.4rem;font-weight:700;color:#333;" x-text="fmtBytes(dashboard.database_size_bytes)"></div>
               </div>
               <button class="btn btn-success" @click="backupDB()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Backup</button>
@@ -674,8 +675,8 @@
             <div class="panel-body">
               <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Delete old activity and system log entries to free up space.</p>
               <div class="form-group">
-                <label>Older than (days) — 0 deletes all general logs; stock audit evidence is retained</label>
-                <input type="number" x-model="purgeDays" min="0" placeholder="90">
+                <label for="purge-days">Older than (days) — 0 deletes all general logs; stock audit evidence is retained</label>
+                <input id="purge-days" type="number" x-model="purgeDays" min="0" placeholder="90">
               </div>
               <button class="btn btn-sm btn-red" @click="purgeLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg> Purge Logs</button>
               <div x-show="purgeResult"
@@ -703,7 +704,7 @@
             <p x-show="announcementReady">Saved status: <strong x-text="announcementStatus"></strong></p>
             <!-- Current banner preview -->
             <div x-show="announcement" style="margin-bottom:1.25rem;">
-              <div style="font-size:0.75rem;color:#888;margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
+              <div style="font-size:0.75rem;color:#666;margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
                 Saved announcement
               </div>
               <div class="ann-bar" :class="'ann-'+(announcement?.level||'info')"
@@ -715,14 +716,14 @@
             </div>
 
             <div class="form-group">
-              <label>Message</label>
-              <textarea style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
+              <label for="announcement-message">Message</label>
+              <textarea id="announcement-message" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
                         maxlength="2000" x-model="annForm.message" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"
                         placeholder="e.g. Scheduled maintenance this evening…"></textarea>
             </div>
             <div class="form-group">
-              <label>Level</label>
-              <select x-model="annForm.level" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict">
+              <label for="announcement-level">Level</label>
+              <select id="announcement-level" x-model="annForm.level" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict">
                 <option value="info">Info (blue)</option>
                 <option value="warning">Warning (yellow)</option>
                 <option value="danger">Danger (red)</option>
