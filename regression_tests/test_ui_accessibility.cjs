@@ -295,3 +295,20 @@ test('platform audit entries become labeled cards on mobile', () => {
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.audit-table[^}]*display:\s*block/s.test(css), 'Audit table should switch to a mobile card layout');
     assert.ok(/\.audit-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile audit values should retain visible field labels');
 });
+
+test('locked account table becomes labeled cards on mobile without losing selection or unlock actions', () => {
+    const html = read('superadmin.html');
+    const accountsTab = html.indexOf("<div x-show=\"tab==='accounts'\">");
+    const start = html.indexOf('<table class="tbl locked-accounts-table">', accountsTab);
+    const end = html.indexOf('</table>', start);
+    assert.ok(accountsTab >= 0 && start > accountsTab && end > start, 'Missing locked accounts table');
+    const table = html.slice(start, end);
+    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
+        'Select', 'Name', 'Email', 'Role', 'Failed Attempts', 'Locked Until', 'Action'
+    ]);
+    assert.match(table, /x-model="selectedLocked"/, 'Locked account selection should remain available');
+    assert.match(table, /@click="unlock\(u\)"/, 'Per-account unlock action should remain available');
+    const css = read('superadmin.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.locked-accounts-table[^}]*display:\s*block/s.test(css), 'Locked accounts should switch to a mobile card layout');
+    assert.ok(/\.locked-accounts-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile locked account values should retain visible field labels');
+});

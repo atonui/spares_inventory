@@ -389,6 +389,14 @@ button, select, input, textarea, a { touch-action: manipulation; }
 @media (max-width: 480px) { .list-filters label { flex-basis: 100%; } }
 
 @media (max-width: 768px) {
+  .locked-accounts-table, .locked-accounts-table tbody { display: block; width: 100%; min-width: 0; }
+  .locked-accounts-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .locked-accounts-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
+  .locked-accounts-table td { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .locked-accounts-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #475569; }
+  .locked-accounts-table td[data-label="Select"] input[type="checkbox"] { width: 20px; height: 20px; }
+  .locked-accounts-table td[data-label="Action"] .btn { min-height: 44px; }
+
   .organizations-table, .organizations-table tbody { display: block; width: 100%; min-width: 0; }
   .organizations-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .organizations-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
