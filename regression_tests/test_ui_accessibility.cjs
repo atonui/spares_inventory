@@ -128,6 +128,20 @@ test('visible form labels are programmatically associated with controls', () => 
     assert.deepEqual(missing, [], `Unlabelled controls:\n${missing.join('\n')}`);
 });
 
+test('inventory dialogs expose accessible names and modal semantics', () => {
+    const tags = htmlTags(read('index.html'));
+    const dialogs = tags.filter(tag => !tag.closing && tag.name === 'div' && tag.attrs.class?.split(/\s+/).includes('modal'));
+    assert.equal(dialogs.length, 7, 'Expected the seven inventory dialogs');
+    for (const dialog of dialogs) {
+        assert.equal(dialog.attrs.role, 'dialog');
+        assert.equal(dialog.attrs['aria-modal'], 'true');
+        assert.ok(dialog.attrs.tabindex, 'Dialog should be programmatically focusable');
+        const labelId = dialog.attrs['aria-labelledby'];
+        assert.ok(labelId, 'Dialog should reference its visible title');
+        assert.ok(tags.some(tag => !tag.closing && /^h[1-6]$/.test(tag.name) && tag.attrs.id === labelId), `Missing dialog title ${labelId}`);
+    }
+});
+
 test('primary, success, warning, and consume actions meet WCAG AA contrast', () => {
     const mainCss = read('mystyle.css');
     const adminCss = read('superadmin.css');
