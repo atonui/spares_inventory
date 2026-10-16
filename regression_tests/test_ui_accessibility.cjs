@@ -312,3 +312,45 @@ test('locked account table becomes labeled cards on mobile without losing select
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.locked-accounts-table[^}]*display:\s*block/s.test(css), 'Locked accounts should switch to a mobile card layout');
     assert.ok(/\.locked-accounts-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile locked account values should retain visible field labels');
 });
+
+test('remaining fixed inventory tables become labeled mobile cards and keep row actions', () => {
+    const html = read('index.html');
+    const cases = [
+        {
+            marker: '<!-- All Parts Panel -->',
+            labels: ['Part Number', 'Description', 'Category', 'Unit Cost', 'Quantity'],
+        },
+        {
+            marker: '<section x-show="showArchivedPanel',
+            labels: ['Type', 'Record', 'Archived', 'Action'],
+            action: 'restoreArchivedRecord(record)',
+        },
+        {
+            marker: '<!-- Store Management Panel (Admin Only) -->',
+            labels: ['Name', 'Type', 'Location', 'Assigned To', 'Actions'],
+            action: 'deleteStore(store.id, store.name)',
+        },
+        {
+            marker: '<!-- All Stores Panel -->',
+            labels: ['Store Name', 'Type', 'Location', 'Assigned To', 'Total Items', 'Actions'],
+            action: 'viewStoreInventory(store)',
+        },
+    ];
+
+    for (const {marker, labels, action} of cases) {
+        const section = html.indexOf(marker);
+        const start = html.indexOf('<table class="inventory-reference-table">', section);
+        const end = html.indexOf('</table>', start);
+        assert.ok(section >= 0 && start > section && end > start, `Missing table after ${marker}`);
+        const table = html.slice(start, end);
+        assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), labels);
+        if (action) assert.ok(table.includes(action), `Missing row action ${action}`);
+    }
+
+    const css = read('mystyle.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.inventory-reference-table,\s*\.inventory-reference-table tbody\s*\{[^}]*display:\s*block/s.test(css), 'Fixed inventory tables should switch to mobile cards');
+    assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
+    assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
+    assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
+    assert.match(html, /href="mystyle\.css\?v=20261016-mobile-inventory-tables"/, 'Mobile stylesheet changes should use a fresh cache version');
+});
