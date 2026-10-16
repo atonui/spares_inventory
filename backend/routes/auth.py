@@ -6,11 +6,13 @@ from datetime import timedelta
 from backend.temporal import utc_now, serialize_instant
 from backend.temporal_contract import stored_instant
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request
+import re
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from backend.schemas.auth import (
     UserProfileUpdate, PasswordChange, ForgotPasswordRequest, ResetPasswordRequest,
     UserLogin, UserResponse, NativeLoginResponse,
+    NativeRefreshRequest, NativeRefreshResponse,
 )
 from backend.schemas.api_v1 import CsrfTokenResponse, SuccessResponse
 from backend.services.session_credentials import hash_session_credential
@@ -26,7 +28,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                        csrf_dependency, authenticated_csrf_dependency, csrf_token_factory, password_hash,
                        password_verify, security_config, reset_email,
                        activity_log, endpoint_log, mutation_activity,
-                       limiter, logger, cookie_secure) -> APIRouter:
+                       limiter, logger, cookie_secure,
+                       native_refresh_encryption_key=None) -> APIRouter:
     """Register existing HTTP flows without owning application infrastructure."""
     router = APIRouter()
     get_db_connection = get_connection
@@ -457,6 +460,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         if native and not postgres:
             conn.close()
             raise HTTPException(status_code=503, detail="Native login requires PostgreSQL")
+        if native:
+            from backend.services.native_refresh import encrypt_retry_response
+            try:
+                encrypt_retry_response(native_refresh_encryption_key, {}, "validation")
+            except (ValueError, TypeError):
+                conn.close()
+                raise HTTPException(status_code=503, detail="Native refresh is unavailable") from None
         if not postgres:
             register_sqlite_instant_comparison(conn)
 
@@ -526,12 +536,21 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         raw_credential = secrets.token_urlsafe(32)
+        raw_refresh_credential = secrets.token_urlsafe(32) if native else None
         if user_login.remember_me:
             expires = utc_now() + timedelta(days=cfg["remember_me_duration_days"])
             max_age = cfg["remember_me_duration_days"] * 24 * 60 * 60
         else:
             expires = utc_now() + timedelta(hours=cfg["session_duration_hours"])
             max_age = cfg["session_duration_hours"] * 60 * 60
+        absolute_expires = expires
+        if native:
+            absolute_expires = expires
+            if user_login.remember_me:
+                absolute_expires = utc_now() + timedelta(days=cfg["remember_me_duration_days"])
+            else:
+                absolute_expires = utc_now() + timedelta(hours=cfg["session_duration_hours"])
+            expires = min(utc_now() + timedelta(minutes=15), absolute_expires)
         conn.close()
 
         if postgres:
@@ -544,12 +563,22 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     ).fetchone()
                     if active is None:
                         raise HTTPException(status_code=401, detail="Invalid credentials")
-                    session_conn.execute(
-                        """INSERT INTO sessions (user_id, session_token_hash, expires_at, ip_address, user_agent)
-                           VALUES (%s, %s, %s, %s, %s)""",
+                    session_id = session_conn.execute(
+                        """INSERT INTO sessions (user_id, session_token_hash, expires_at,
+                                                  absolute_expires_at, ip_address, user_agent)
+                           VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
                         (user["id"], hash_session_credential(raw_credential),
-                         serialize_instant(expires), ip_address, user_agent),
-                    )
+                         serialize_instant(expires), serialize_instant(absolute_expires),
+                         ip_address, user_agent),
+                    ).fetchone()["id"]
+                    if native:
+                        session_conn.execute(
+                            """INSERT INTO session_refresh_credentials
+                               (session_id, token_hash, issued_at, expires_at)
+                               VALUES (%s, %s, %s, %s)""",
+                            (session_id, hash_session_credential(raw_refresh_credential),
+                             serialize_instant(utc_now()), serialize_instant(absolute_expires)),
+                        )
                     session_conn.execute(
                         """UPDATE users SET failed_login_attempts = 0,
                                   account_locked_until = NULL, last_login = %s
@@ -605,8 +634,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 "token_type": "Bearer",
                 "access_token": raw_credential,
                 "expires_at": serialize_instant(expires),
+                "refresh_token": raw_refresh_credential,
             })
-            return JSONResponse(content=response_data)
+            return JSONResponse(content=response_data, headers={"Cache-Control": "no-store"})
 
         response = JSONResponse(content=response_data)
         response.set_cookie(
@@ -637,6 +667,141 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     async def native_login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_public_csrf)):
         """Issue an opaque bearer session. Requires the normal CSRF token; tenant context is server-derived."""
         return perform_login(user_login, request, native=True)
+
+
+    @limiter.limit("5/minute")
+    async def native_refresh(
+        payload: NativeRefreshRequest,
+        request: Request,
+        request_id: str = Header(..., alias="X-Request-ID", min_length=1, max_length=64),
+    ):
+        """Rotate a native credential pair with a bounded exact-request retry."""
+        from backend.database_sql import is_postgres
+        from backend.postgres_database import postgres_transaction
+        from backend.services.native_refresh import (
+            encrypt_retry_response, decrypt_retry_response, parse_native_refresh_instant,
+        )
+
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", request_id):
+            raise HTTPException(status_code=422, detail="Invalid X-Request-ID")
+        try:
+            # Validate configuration before locking or consuming any refresh credential.
+            encrypt_retry_response(native_refresh_encryption_key, {}, "validation")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=503, detail="Native refresh is unavailable") from None
+
+        conn = get_db_connection()
+        if not is_postgres(conn):
+            conn.close()
+            raise HTTPException(status_code=503, detail="Native refresh requires PostgreSQL")
+
+        now = utc_now()
+        now_text = serialize_instant(now)
+        refresh_hash = hash_session_credential(payload.refresh_token)
+        result = None
+        error_status = None
+        try:
+            with postgres_transaction(conn):
+                credential = conn.execute(
+                    """SELECT id, session_id, token_hash, consumed_at, retry_request_id,
+                              retry_response_ciphertext, retry_response_expires_at
+                       FROM session_refresh_credentials WHERE token_hash = %s FOR UPDATE""",
+                    (refresh_hash,),
+                ).fetchone()
+                if credential is None:
+                    error_status = 401
+                else:
+                    session = conn.execute(
+                        """SELECT id, user_id, is_active, absolute_expires_at
+                           FROM sessions WHERE id = %s FOR UPDATE""",
+                        (credential["session_id"],),
+                    ).fetchone()
+                    if session is None or not session["is_active"]:
+                        error_status = 401
+                    elif now >= parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at"):
+                        conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
+                        error_status = 401
+                    else:
+                        account = conn.execute(
+                            """SELECT u.archived_at,
+                                      EXISTS (SELECT 1 FROM organization_memberships om
+                                              WHERE om.user_id = u.id AND om.is_active = TRUE) AS has_membership,
+                                      EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = u.id) AS is_platform_admin
+                               FROM users u WHERE u.id = %s""",
+                            (session["user_id"],),
+                        ).fetchone()
+                        if (account is None or account["archived_at"] is not None
+                                or not (account["has_membership"] or account["is_platform_admin"])):
+                            conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
+                            error_status = 401
+                        elif credential["consumed_at"] is not None:
+                            retry_expires = (
+                                parse_native_refresh_instant(credential["retry_response_expires_at"], "retry_response_expires_at")
+                                if credential["retry_response_expires_at"] else None
+                            )
+                            if (credential["retry_request_id"] == request_id
+                                    and retry_expires is not None and now < retry_expires
+                                    and credential["retry_response_ciphertext"]):
+                                try:
+                                    result = decrypt_retry_response(
+                                        native_refresh_encryption_key,
+                                        credential["retry_response_ciphertext"], refresh_hash,
+                                    )
+                                except Exception:
+                                    error_status = 503
+                            else:
+                                conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
+                                error_status = 401
+                        else:
+                            absolute_expires = parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at")
+                            access = secrets.token_urlsafe(32)
+                            refresh = secrets.token_urlsafe(32)
+                            access_expires = min(now + timedelta(minutes=15), absolute_expires)
+                            body = {
+                                "success": True,
+                                "token_type": "Bearer",
+                                "access_token": access,
+                                "refresh_token": refresh,
+                                "expires_at": serialize_instant(access_expires),
+                            }
+                            encrypted = encrypt_retry_response(
+                                native_refresh_encryption_key, body, refresh_hash,
+                            )
+                            conn.execute(
+                                """UPDATE session_refresh_credentials
+                                   SET consumed_at = %s, retry_request_id = %s,
+                                       retry_response_ciphertext = %s, retry_response_expires_at = %s
+                                   WHERE id = %s""",
+                                (now_text, request_id, encrypted,
+                                 serialize_instant(now + timedelta(seconds=60)), credential["id"]),
+                            )
+                            conn.execute(
+                                """INSERT INTO session_refresh_credentials
+                                   (session_id, token_hash, issued_at, expires_at)
+                                   VALUES (%s, %s, %s, %s)""",
+                                (session["id"], hash_session_credential(refresh), now_text,
+                                 serialize_instant(absolute_expires)),
+                            )
+                            conn.execute(
+                                "UPDATE sessions SET session_token_hash = %s, expires_at = %s WHERE id = %s",
+                                (hash_session_credential(access), serialize_instant(access_expires), session["id"]),
+                            )
+                            result = body
+        finally:
+            conn.close()
+
+        if error_status:
+            raise HTTPException(status_code=error_status, detail="Invalid or expired refresh credential")
+        return JSONResponse(content=result, headers={"Cache-Control": "no-store", "X-Request-ID": request_id})
+
+
+    router.add_api_route(
+        "/api/auth/native/refresh", native_refresh, methods=["POST"],
+        response_model=NativeRefreshResponse,
+        responses={401: {"description": "Invalid, expired, or replayed refresh credential"},
+                   422: {"description": "Invalid request or missing request ID"},
+                   503: {"description": "Native refresh is unavailable"}},
+    )
 
 
     @router.get("/api/auth/sessions")
@@ -817,6 +982,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         native_login,
         methods=["POST"],
         response_model=NativeLoginResponse,
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/auth/native/refresh",
+        native_refresh,
+        methods=["POST"],
+        response_model=NativeRefreshResponse,
         include_in_schema=True,
     )
     router.add_api_route(

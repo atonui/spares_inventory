@@ -426,6 +426,7 @@ app.include_router(create_auth_router(
     limiter=limiter,
     logger=logger,
     cookie_secure=lambda: settings.COOKIE_SECURE,
+    native_refresh_encryption_key=settings.NATIVE_REFRESH_ENCRYPTION_KEY,
 ))
 
 

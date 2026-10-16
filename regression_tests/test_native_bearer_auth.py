@@ -35,7 +35,7 @@ def test_openapi_documents_cookie_and_opaque_bearer_auth_without_protecting_logi
     native_schema = native_login["responses"]["200"]["content"]["application/json"]["schema"]
     assert native_schema["$ref"].endswith("NativeLoginResponse")
     native_fields = document["components"]["schemas"]["NativeLoginResponse"]["properties"]
-    assert {"token_type", "access_token", "expires_at", "user"} <= native_fields.keys()
+    assert {"token_type", "access_token", "refresh_token", "expires_at", "user"} <= native_fields.keys()
     assert "BearerAuth" not in repr(native_login.get("security", []))
 
     assert document["paths"]["/api/auth/login"]["post"].get("security") in (None, [])
@@ -97,6 +97,7 @@ def native_auth_api(postgres_schema):
         limiter=NoLimiter(),
         logger=SimpleNamespace(info=lambda *args, **kwargs: None, error=lambda *args, **kwargs: None),
         cookie_secure=lambda: True,
+        native_refresh_encryption_key="MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
     )
 
     def endpoint(path):
@@ -169,6 +170,7 @@ def test_native_login_issues_one_bearer_and_stores_only_its_hash(native_auth_api
     assert "set-cookie" not in response.headers
     assert payload["token_type"] == "Bearer"
     assert payload["access_token"]
+    assert payload["refresh_token"]
     assert payload["expires_at"].endswith("Z")
     assert payload["user"] == {
         "id": api.user_id,
@@ -178,14 +180,25 @@ def test_native_login_issues_one_bearer_and_stores_only_its_hash(native_auth_api
         "territory": "East",
     }
     stored = api.connection.execute(
-        "SELECT session_token_hash, expires_at FROM sessions WHERE user_id = %s",
+        "SELECT id, session_token_hash, expires_at, absolute_expires_at FROM sessions WHERE user_id = %s",
         (api.user_id,),
     ).fetchone()
     assert stored["session_token_hash"] == hash_session_credential(payload["access_token"])
     assert payload["access_token"] not in stored["session_token_hash"]
     assert stored["expires_at"] == payload["expires_at"]
+    assert stored["absolute_expires_at"]
     remaining = datetime.fromisoformat(stored["expires_at"].replace("Z", "+00:00")) - datetime.now(timezone.utc)
-    assert timedelta(days=29) < remaining <= timedelta(days=30)
+    assert timedelta(minutes=14) < remaining <= timedelta(minutes=15)
+    absolute_remaining = datetime.fromisoformat(stored["absolute_expires_at"].replace("Z", "+00:00")) - datetime.now(timezone.utc)
+    assert timedelta(days=29) < absolute_remaining <= timedelta(days=30)
+
+    refresh = api.connection.execute(
+        "SELECT token_hash, expires_at FROM session_refresh_credentials WHERE session_id = %s",
+        (stored["id"],),
+    ).fetchone()
+    assert refresh["token_hash"] == hash_session_credential(payload["refresh_token"])
+    assert payload["refresh_token"] not in refresh["token_hash"]
+    assert refresh["expires_at"] == stored["absolute_expires_at"]
 
     from backend.services.session_authentication import authenticate_session
     principal = authenticate_session(payload["access_token"], api.get_connection)
@@ -210,6 +223,91 @@ def test_web_login_keeps_cookie_contract_and_does_not_return_bearer(native_auth_
     assert "access_token" not in payload
     assert "token_type" not in payload
     assert set(payload) == {"success", "user"}
+
+
+def test_native_refresh_rotates_credentials_and_same_request_retry_returns_same_result(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+    from backend.services.session_credentials import hash_session_credential
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    original_session_hash = hash_session_credential(original["access_token"])
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", b"refresh-attempt-0001")],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    first = asyncio.run(api.endpoint("/api/auth/native/refresh")(
+        NativeRefreshRequest(refresh_token=original["refresh_token"]), request,
+        "refresh-attempt-0001",
+    ))
+    rotated = json.loads(first.body)
+    assert first.status_code == 200
+    assert first.headers["cache-control"] == "no-store"
+    assert rotated["access_token"] != original["access_token"]
+    assert rotated["refresh_token"] != original["refresh_token"]
+
+    retry = asyncio.run(api.endpoint("/api/auth/native/refresh")(
+        NativeRefreshRequest(refresh_token=original["refresh_token"]), request,
+        "refresh-attempt-0001",
+    ))
+    assert retry.body == first.body
+
+    session = api.connection.execute(
+        "SELECT session_token_hash FROM sessions WHERE user_id = %s", (api.user_id,),
+    ).fetchone()
+    assert session["session_token_hash"] == hash_session_credential(rotated["access_token"])
+    credentials = api.connection.execute(
+        "SELECT token_hash, consumed_at FROM session_refresh_credentials ORDER BY id",
+    ).fetchall()
+    assert len(credentials) == 2
+    assert credentials[0]["consumed_at"] is not None
+    assert credentials[1]["token_hash"] == hash_session_credential(rotated["refresh_token"])
+
+
+def test_native_refresh_replay_with_different_request_id_revokes_device_session(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    session_id = api.connection.execute(
+        "SELECT id FROM sessions WHERE user_id = %s", (api.user_id,),
+    ).fetchone()["id"]
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", b"refresh-attempt-0001")],
+        "client": ("127.0.0.1", 1234),
+    })
+    asyncio.run(api.endpoint("/api/auth/native/refresh")(
+        NativeRefreshRequest(refresh_token=original["refresh_token"]), request,
+        "refresh-attempt-0001",
+    ))
+    replay = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", b"different-attempt-0002")],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), replay,
+            "different-attempt-0002",
+        ))
+    assert error.value.status_code == 401
+    session = api.connection.execute(
+        "SELECT is_active FROM sessions WHERE id = %s", (session_id,),
+    ).fetchone()
+    assert session["is_active"] is False
 
 
 def test_valid_bearer_request_is_authenticated_before_csrf_exemption(native_auth_api, monkeypatch):

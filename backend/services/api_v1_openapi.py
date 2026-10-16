@@ -8,6 +8,7 @@ from copy import deepcopy
 _V1_PATHS = {
     "/api/v1/csrf-token",
     "/api/v1/auth/native/login",
+    "/api/v1/auth/native/refresh",
     "/api/v1/me",
     "/api/v1/inventory",
     "/api/v1/auth/logout",
@@ -29,6 +30,7 @@ _ERRORS = {
 _ERRORS_BY_PATH = {
     "/api/v1/csrf-token": ("429", "500", "503"),
     "/api/v1/auth/native/login": ("400", "401", "403", "409", "422", "423", "429", "500", "503"),
+    "/api/v1/auth/native/refresh": ("401", "422", "429", "500", "503"),
     "/api/v1/me": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/inventory": ("400", "401", "403", "404", "422", "429", "500", "503"),
     "/api/v1/auth/logout": ("401", "403", "404", "429", "500", "503"),
@@ -173,6 +175,28 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                             "schema": {"type": "string"},
                         }
                     )
+            if path == "/api/v1/auth/native/refresh" and method.lower() == "post":
+                operation["description"] = (
+                    "Exchange the current refresh token for a new access and refresh token. "
+                    "Use a new X-Request-ID for each refresh operation and reuse that same "
+                    "ID if retrying the exact request within 60 seconds. Reusing an already "
+                    "rotated token with another ID revokes that device session. Responses "
+                    "are not stored by caches. Rate limit: 5 attempts per minute. A 429 "
+                    "response may include the Retry-After header."
+                )
+                parameters = operation.setdefault("parameters", [])
+                if not any(
+                    parameter.get("name") == "X-Request-ID"
+                    and parameter.get("in") == "header"
+                    for parameter in parameters
+                ):
+                    parameters.append({
+                        "name": "X-Request-ID",
+                        "in": "header",
+                        "required": True,
+                        "description": "Stable client-generated ID reused only for retries of this request.",
+                        "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+                    })
             if path == "/api/v1/inventory" and method.lower() == "get":
                 operation["description"] = (
                     operation.get("description", "")
