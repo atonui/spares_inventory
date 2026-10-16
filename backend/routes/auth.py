@@ -703,7 +703,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         try:
             with postgres_transaction(conn):
                 credential = conn.execute(
-                    """SELECT id, session_id, token_hash, consumed_at, retry_request_id,
+                    """SELECT id, session_id, token_hash, expires_at, consumed_at, retry_request_id,
                               retry_response_ciphertext, retry_response_expires_at
                        FROM session_refresh_credentials WHERE token_hash = %s FOR UPDATE""",
                     (refresh_hash,),
@@ -718,7 +718,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     ).fetchone()
                     if session is None or not session["is_active"]:
                         error_status = 401
-                    elif now >= parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at"):
+                    elif (now >= parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at")
+                          or now >= parse_native_refresh_instant(credential["expires_at"], "refresh_expires_at")):
                         conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
                         error_status = 401
                     else:
