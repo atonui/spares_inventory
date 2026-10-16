@@ -1,5 +1,6 @@
 function inventoryApp() {
     return composeInventoryFeatures(inventoryCoreFeature(),
+        inventoryDialogFocusFeature(),
         consumptionReportsFeature(),
         replenishmentFeature(),
         stockCountsFeature(),
