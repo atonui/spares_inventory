@@ -177,7 +177,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             )
 
             # Deactivate all sessions for this user i.e. force logout from all devices
-            execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (actor_id,))
+            execute_cursor(conn, cursor, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (actor_id,))
 
 
             logger.info(f"Password changed successfully for user {actor_id}")
