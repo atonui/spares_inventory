@@ -1,6 +1,6 @@
 # Versioned Native API Contract
 
-**Status:** Approved; implementation in progress
+**Status:** Approved; implementation complete
 **Date:** 2026-10-16
 **Scope:** API contract foundation for future iOS and Android clients. This spec does not implement the native app or store release work.
 

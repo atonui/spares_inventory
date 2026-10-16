@@ -119,9 +119,9 @@
 - Exercise v1 endpoints through `TestClient` with valid bearer sessions; do not assert tenant isolation by directly calling endpoint functions.
 
 - [x] **Step 1: Add PostgreSQL integration tests** named `test_v1_inventory_is_scoped_to_authenticated_company`, `test_v1_cursor_replay_cannot_cross_company_scope`, `test_v1_client_tenant_hints_do_not_expand_scope`, `test_v1_platform_admin_without_membership_cannot_read_inventory`, and `test_v1_errors_redact_internal_details`.
-- [ ] **Step 2: Run the PostgreSQL integration tests** in `.github/workflows/postgres-tests.yml`, which provisions PostgreSQL 17 and runs `pytest regression_tests -q`. For local targeted runs, provide `TEST_DATABASE_URL` pointing to a disposable database whose name ends in `_test`; the fixture rejects other database names.
-- [ ] **Step 3: Fix only demonstrated contract defects** in route transaction setup or error/cursor handling; preserve the authenticated principal and transaction-local RLS as the only tenant authority.
-- [ ] **Step 4: Rerun tenant integration tests** and existing `regression_tests/test_tenant_isolation_matrix.py`, `regression_tests/test_tenant_rls.py`, and `regression_tests/test_authenticated_transactions.py`.
+- [x] **Step 2: Run the PostgreSQL integration tests** in `.github/workflows/postgres-tests.yml`, which provisions PostgreSQL 17 and runs `pytest regression_tests -q`. For local targeted runs, provide `TEST_DATABASE_URL` pointing to a disposable database whose name ends in `_test`; the fixture rejects other database names.
+- [x] **Step 3: Fix only demonstrated contract defects** in route transaction setup or error/cursor handling; preserve the authenticated principal and transaction-local RLS as the only tenant authority.
+- [x] **Step 4: Rerun tenant integration tests** and existing `regression_tests/test_tenant_isolation_matrix.py`, `regression_tests/test_tenant_rls.py`, and `regression_tests/test_authenticated_transactions.py`.
 - [x] **Step 5: Commit** as `test: verify v1 tenant isolation and cursor safety`.
 
 ## Task 5: V1 OpenAPI Document and Full Verification
@@ -140,8 +140,8 @@
 - [x] **Step 1: Write failing OpenAPI tests** named `test_v1_openapi_is_filtered_and_versioned`, `test_v1_openapi_documents_bearer_and_login_csrf`, and `test_v1_openapi_includes_pagination_and_standard_errors`. Assert excluded platform/admin and legacy paths are absent and all v1 paths are present.
 - [x] **Step 2: Run the focused OpenAPI tests and verify failure** with `pytest regression_tests/test_api_v1_contract.py -k openapi -q`.
 - [x] **Step 3: Implement the filtered OpenAPI builder and route** in `backend/services/api_v1_openapi.py` and `main.py`. Preserve the current app OpenAPI output and make only the v1 document's cache behavior explicit (`Cache-Control: no-cache`).
-- [ ] **Step 4: Run the complete verification suite**: `pytest -q`, plus the repository's PostgreSQL CI test command. Confirm legacy route schemas, login, CSRF, and inventory array tests pass unchanged.
-- [ ] **Step 5: Run `git diff --check`, inspect the final diff, and commit** as `docs: publish versioned native api contract`.
+- [x] **Step 4: Run the complete verification suite**: `pytest -q`, plus the repository's PostgreSQL CI test command. Confirm legacy route schemas, login, CSRF, and inventory array tests pass unchanged.
+- [x] **Step 5: Run `git diff --check`, inspect the final diff, and commit** as `docs: publish versioned native api contract`.
 
 ## Completion Check
 
@@ -149,5 +149,5 @@
 - [x] V1 errors use the documented envelope and request IDs; legacy route error contracts are unchanged.
 - [x] Inventory pagination meets the exact bounds, ordering, cursor, and tenant rules in the spec.
 - [x] The v1 OpenAPI document contains only the allowlisted paths and accurately documents auth, errors, and pagination.
-- [ ] PostgreSQL tests prove tenant isolation, cross-company cursor replay safety, and no platform-admin inventory access.
-- [ ] Existing browser and regression tests pass; no mobile app source changes are included.
+- [x] PostgreSQL tests prove tenant isolation, cross-company cursor replay safety, and no platform-admin inventory access.
+- [x] Existing browser and regression tests pass; no mobile app source changes are included.
