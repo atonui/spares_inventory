@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     CSRF_SECRET: str
     COOKIE_SECURE: bool = True
     MAIL_PAYLOAD_ENCRYPTION_KEY: str | None = None
+    NATIVE_REFRESH_ENCRYPTION_KEY: str | None = None
     RESEND_API_KEY: str | None = None
     RESEND_FROM_EMAIL: str | None = None
     INVITATION_BASE_URL: str | None = None

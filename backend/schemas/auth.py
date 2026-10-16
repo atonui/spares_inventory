@@ -58,4 +58,19 @@ class NativeLoginResponse(BaseModel):
         description="Opaque server-managed session credential; not a JWT. Store only in platform-protected storage."
     )
     expires_at: datetime
+    refresh_token: str = Field(
+        description="Opaque single-use credential used to renew the native access token. Store only in platform-protected storage."
+    )
     user: NativeLoginUserResponse
+
+
+class NativeRefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=20, max_length=200)
+
+
+class NativeRefreshResponse(BaseModel):
+    success: bool
+    token_type: Literal["Bearer"]
+    access_token: str
+    refresh_token: str
+    expires_at: datetime

@@ -184,11 +184,13 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
     assert set(routes) == {
         "/api/v1/csrf-token",
         "/api/v1/auth/native/login",
+        "/api/v1/auth/native/refresh",
         "/api/v1/me",
         "/api/v1/auth/logout",
     }
     assert routes["/api/v1/csrf-token"].methods == {"GET"}
     assert routes["/api/v1/auth/native/login"].methods == {"POST"}
+    assert routes["/api/v1/auth/native/refresh"].methods == {"POST"}
     assert routes["/api/v1/me"].methods == {"GET"}
     assert routes["/api/v1/auth/logout"].methods == {"POST"}
 
@@ -204,6 +206,7 @@ def test_v1_auth_aliases_reuse_legacy_handler_callables():
     for versioned, legacy in (
         ("/api/v1/csrf-token", "/api/csrf-token"),
         ("/api/v1/auth/native/login", "/api/auth/native/login"),
+        ("/api/v1/auth/native/refresh", "/api/auth/native/refresh"),
         ("/api/v1/me", "/api/me"),
         ("/api/v1/auth/logout", "/api/auth/logout"),
     ):
@@ -283,6 +286,7 @@ def test_v1_openapi_is_filtered_and_versioned():
     assert set(document["paths"]) == {
         "/api/v1/csrf-token",
         "/api/v1/auth/native/login",
+        "/api/v1/auth/native/refresh",
         "/api/v1/me",
         "/api/v1/inventory",
         "/api/v1/auth/logout",
@@ -307,12 +311,15 @@ def test_v1_openapi_documents_bearer_and_login_csrf():
     assert document["paths"]["/api/v1/inventory"]["get"]["security"] == [{"BearerAuth": []}]
     assert document["paths"]["/api/v1/auth/logout"]["post"]["security"] == [{"BearerAuth": []}]
     assert document["paths"]["/api/v1/auth/native/login"]["post"].get("security", []) == []
+    assert document["paths"]["/api/v1/auth/native/refresh"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/csrf-token"]["get"].get("security", []) == []
     login_parameters = document["paths"]["/api/v1/auth/native/login"]["post"].get("parameters", [])
     assert any(
         parameter["name"] == "X-CSRF-Token" and parameter["in"] == "header"
         for parameter in login_parameters
     )
+    refresh_parameters = document["paths"]["/api/v1/auth/native/refresh"]["post"].get("parameters", [])
+    assert any(parameter["name"] == "X-Request-ID" and parameter["required"] for parameter in refresh_parameters)
     csrf_schema = document["paths"]["/api/v1/csrf-token"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
     logout_schema = document["paths"]["/api/v1/auth/logout"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
     assert csrf_schema["$ref"].endswith("CsrfTokenResponse")
@@ -329,6 +336,10 @@ def test_v1_openapi_documents_login_rate_limit_and_retry_after():
     assert "5 attempts per minute" in login["description"].lower()
     retry_after = login["responses"]["429"]["headers"]["Retry-After"]
     assert retry_after["schema"]["type"] == "string"
+    refresh = document["paths"]["/api/v1/auth/native/refresh"]["post"]
+    assert "5 attempts per minute" in refresh["description"].lower()
+    assert "within 60 seconds" in refresh["description"].lower()
+    assert refresh["responses"]["429"]["headers"]["Retry-After"]["schema"]["type"] == "string"
 
 
 def test_v1_openapi_includes_pagination_and_standard_errors():
