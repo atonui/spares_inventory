@@ -3,7 +3,9 @@
 from datetime import datetime, timedelta, timezone
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -268,6 +270,84 @@ def test_native_refresh_rotates_credentials_and_same_request_retry_returns_same_
     assert len(credentials) == 2
     assert credentials[0]["consumed_at"] is not None
     assert credentials[1]["token_hash"] == hash_session_credential(rotated["refresh_token"])
+
+
+def test_concurrent_native_refresh_same_request_id_rotates_only_once(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    request_id = "concurrent-same-request-0001"
+    barrier = Barrier(2)
+
+    def refresh():
+        request = Request({
+            "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+            "headers": [(b"x-request-id", request_id.encode())],
+            "client": ("127.0.0.1", 1234),
+        })
+        barrier.wait()
+        return asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id,
+        ))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(refresh)
+        second = pool.submit(refresh)
+        responses = [first.result(), second.result()]
+
+    assert [response.status_code for response in responses] == [200, 200]
+    assert responses[0].body == responses[1].body
+    credentials = api.connection.execute(
+        "SELECT consumed_at FROM session_refresh_credentials ORDER BY id",
+    ).fetchall()
+    assert len(credentials) == 2
+    assert credentials[0]["consumed_at"] is not None
+    assert credentials[1]["consumed_at"] is None
+    assert api.connection.execute(
+        "SELECT is_active FROM sessions WHERE user_id = %s", (api.user_id,),
+    ).fetchone()["is_active"] is True
+
+
+def test_concurrent_native_refresh_different_request_ids_revokes_session(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    barrier = Barrier(2)
+
+    def refresh(request_id):
+        request = Request({
+            "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+            "headers": [(b"x-request-id", request_id.encode())],
+            "client": ("127.0.0.1", 1234),
+        })
+        barrier.wait()
+        try:
+            response = asyncio.run(api.endpoint("/api/auth/native/refresh")(
+                NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id,
+            ))
+            return response.status_code
+        except HTTPException as error:
+            return error.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(refresh, "concurrent-attempt-0001")
+        second = pool.submit(refresh, "concurrent-attempt-0002")
+        statuses = sorted((first.result(), second.result()))
+
+    assert statuses == [200, 401]
+    assert api.connection.execute(
+        "SELECT is_active FROM sessions WHERE user_id = %s", (api.user_id,),
+    ).fetchone()["is_active"] is False
 
 
 def test_native_refresh_replay_with_different_request_id_revokes_device_session(native_auth_api):
