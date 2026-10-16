@@ -216,3 +216,10 @@ test('mobile movement history cards label every data cell', () => {
         'Date / time', 'Type', 'Part', 'Quantity', 'From store', 'To store', 'Work order', 'Recorded by', 'Transfer status'
     ]);
 });
+
+test('dialogs remain scrollable within the mobile viewport', () => {
+    const css = read('mystyle.css');
+    assert.ok(/\.modal-content\s*\{[^}]*max-height:\s*calc\(100dvh\s*-\s*2rem\)/s.test(css), 'Dialog should fit the dynamic viewport height');
+    assert.equal(declaration(css, '.modal-content', 'overflow-y'), 'auto');
+    assert.equal(declaration(css, '.modal-content', 'overscroll-behavior'), 'contain');
+});
