@@ -909,7 +909,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             token_value = hash_session_credential(credential) if is_postgres(conn) else credential
             execute(
                 conn,
-                f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} = ?",
+                f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} = ?",
                 (actor_id, token_value),
             )
 
