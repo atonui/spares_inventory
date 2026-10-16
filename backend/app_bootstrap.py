@@ -4,12 +4,18 @@ import sqlite3
 from typing import Sequence
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import PlainTextResponse
+
+from backend.services.api_v1_errors import api_v1_error_response
 
 
 class RevalidatingHtmlStaticFiles(StaticFiles):
@@ -29,6 +35,8 @@ async def database_integrity_error(request: Request, exc):
         sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
     ):
         raise exc
+    if request.url.path.startswith("/api/v1/"):
+        return api_v1_error_response(request, 409)
     return JSONResponse(
         status_code=409,
         content={"detail": "Invalid database reference or duplicate record; no changes saved"},
@@ -49,9 +57,41 @@ def create_inventory_app(
 
     app.add_exception_handler(sqlite3.IntegrityError, database_integrity_error)
 
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        if request.url.path.startswith("/api/v1/"):
+            return api_v1_error_response(
+                request,
+                exc.status_code,
+                headers=exc.headers,
+            )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
+
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        if request.url.path.startswith("/api/v1/"):
+            return api_v1_error_response(request, 422)
+        return await request_validation_exception_handler(request, exc)
+
+    async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
+        if request.url.path.startswith("/api/v1/"):
+            return api_v1_error_response(request, 429, headers=exc.headers)
+        return _rate_limit_exceeded_handler(request, exc)
+
+    async def unhandled_exception_handler(request: Request, _exc: Exception):
+        if request.url.path.startswith("/api/v1/"):
+            return api_v1_error_response(request, 500)
+        return PlainTextResponse("Internal Server Error", status_code=500)
+
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
+
     limiter = Limiter(key_func=get_remote_address)
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
 
     app.add_middleware(
         CORSMiddleware,

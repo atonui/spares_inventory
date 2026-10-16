@@ -89,6 +89,7 @@ def test_inventory_read_route_only_returns_session_company_rows(postgres_schema,
         get_connection=scoped_connection,
         current_user=lambda: None,
         transfer_permission=lambda *_args: (False, False),
+        cursor_secret="test-only-cursor-secret",
     )
     endpoint = next(route.endpoint for route in router.routes if route.path == "/api/inventory")
     request = type("RequestStub", (), {"cookies": {"session_token": token}, "client": None, "headers": {}})()

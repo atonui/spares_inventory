@@ -12,6 +12,7 @@ from backend.schemas.auth import (
     UserProfileUpdate, PasswordChange, ForgotPasswordRequest, ResetPasswordRequest,
     UserLogin, UserResponse, NativeLoginResponse,
 )
+from backend.schemas.api_v1 import CsrfTokenResponse, SuccessResponse
 from backend.services.session_credentials import hash_session_credential
 from backend.database_sql import execute, execute_cursor, is_postgres
 
@@ -747,8 +748,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             )
 
             response = JSONResponse(content={"success": True})
-            # Clear the cookie
-            response.delete_cookie(key="session_token")
+            # Browser logout clears its ambient cookie; native logout uses only
+            # the explicit bearer credential and must not mutate cookie state.
+            if request.url.path != "/api/v1/auth/logout":
+                response.delete_cookie(key="session_token")
 
             _result = response
 
@@ -792,6 +795,46 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=404, detail="User not found")
 
         return dict(user)
+
+    async def require_native_bearer(
+        request: Request,
+        _user=Depends(get_current_user),
+    ):
+        """Require the explicit Bearer transport on protected v1 routes."""
+        credential = get_request_credential(request)
+        if credential.transport != "bearer":
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+    router.add_api_route(
+        "/api/v1/csrf-token",
+        get_csrf_token,
+        methods=["GET"],
+        response_model=CsrfTokenResponse,
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/auth/native/login",
+        native_login,
+        methods=["POST"],
+        response_model=NativeLoginResponse,
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/me",
+        get_current_user_info,
+        methods=["GET"],
+        response_model=UserResponse,
+        dependencies=[Depends(require_native_bearer)],
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/auth/logout",
+        logout,
+        methods=["POST"],
+        response_model=SuccessResponse,
+        dependencies=[Depends(require_native_bearer)],
+        include_in_schema=True,
+    )
 
 
     return router

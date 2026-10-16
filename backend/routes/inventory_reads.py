@@ -3,20 +3,122 @@ from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from typing import List
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from backend.database_sql import execute, is_postgres
 from backend.schemas.inventory_reads import InventoryResponse, StatsResponse
+from backend.schemas.api_v1 import InventoryPageResponse
+from backend.services.api_v1_pagination import (
+    decode_inventory_cursor,
+    encode_inventory_cursor,
+)
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.services.principals import AuthenticatedPrincipal
 
 
 def create_inventory_read_router(*, get_connection, current_user,
-                                 transfer_permission) -> APIRouter:
+                                 transfer_permission, cursor_secret: str) -> APIRouter:
     """Keep transfer policy and database ownership shared with stock writes."""
     router = APIRouter()
     get_db_connection = get_connection
     get_current_user = current_user
     transfer_permissions = transfer_permission
+
+    @router.get("/api/v1/inventory", response_model=InventoryPageResponse)
+    @instant_response
+    async def get_inventory_v1(
+        request: Request,
+        limit: int = Query(
+            default=50,
+            ge=1,
+            le=100,
+            description="Page size. Defaults to 50 and must be between 1 and 100.",
+        ),
+        cursor: str | None = Query(
+            default=None,
+            max_length=2048,
+            description="Opaque continuation cursor returned by this endpoint.",
+        ),
+        user_id: int = Depends(get_current_user),
+    ):
+        """Get one authenticated tenant's inventory page using a signed cursor."""
+        credential = get_request_credential(request)
+        if credential.transport != "bearer":
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        try:
+            continuation = (
+                decode_inventory_cursor(cursor_secret, cursor) if cursor is not None else None
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid inventory cursor") from None
+
+        where = "WHERE p.archived_at IS NULL AND s.archived_at IS NULL"
+        params = []
+        cursor_cte = ""
+        cursor_join = ""
+        if continuation is not None:
+            cursor_cte = """
+                WITH cursor_key AS (
+                    SELECT cp.part_number, cs.name AS store_name
+                    FROM inventory cursor_inventory
+                    JOIN parts cp ON cursor_inventory.part_id = cp.id
+                    JOIN stores cs ON cursor_inventory.store_id = cs.id
+                    WHERE cursor_inventory.id = ?
+                      AND cp.archived_at IS NULL
+                      AND cs.archived_at IS NULL
+                )
+            """
+            cursor_join = "CROSS JOIN cursor_key"
+            where += " AND (p.part_number, s.name, i.id) > (cursor_key.part_number, cursor_key.store_name, ?)"
+            params.extend([continuation.inventory_id, continuation.inventory_id])
+        query = f"""
+            {cursor_cte}
+            SELECT
+                i.id,
+                i.store_id,
+                i.part_id,
+                (i.work_order_id IS NOT NULL) AS is_allocated,
+                p.part_number,
+                p.description,
+                s.name AS store_name,
+                s.type AS store_type,
+                s.assigned_user_id AS store_owner,
+                i.quantity,
+                i.min_threshold,
+                wo.work_order_number AS work_order
+            FROM inventory i
+            JOIN parts p ON i.part_id = p.id
+            JOIN stores s ON i.store_id = s.id
+            LEFT JOIN work_orders wo ON i.work_order_id = wo.id
+            {cursor_join}
+            {where}
+            ORDER BY p.part_number, s.name, i.id
+            LIMIT ?
+        """
+        params.append(limit + 1)
+
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=credential.value,
+            readonly=True,
+        ) as (conn, _principal):
+            if not is_postgres(conn):
+                register_instant_comparison(conn)
+            rows = execute(conn, query, tuple(params)).fetchall()
+
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        next_cursor = None
+        if has_more and page_rows:
+            last = page_rows[-1]
+            next_cursor = encode_inventory_cursor(
+                cursor_secret,
+                last["id"],
+            )
+        return {
+            "items": [dict(row) for row in page_rows],
+            "page": {"limit": limit, "next_cursor": next_cursor},
+        }
 
     @router.get("/api/inventory", response_model=List[InventoryResponse])
     @instant_response
