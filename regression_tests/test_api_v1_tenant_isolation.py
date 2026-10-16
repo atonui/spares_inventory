@@ -159,7 +159,8 @@ def test_v1_cursor_replay_cannot_cross_company_scope(v1_postgres_api):
     )
 
     assert replay.status_code == 200, replay.text
-    assert [row["part_number"] for row in replay.json()["items"]] == ["BBB-1"]
+    # The cursor's row ID is absent in tenant B's RLS view.
+    assert replay.json()["items"] == []
 
 
 def test_v1_client_tenant_hints_do_not_expand_scope(v1_postgres_api):
