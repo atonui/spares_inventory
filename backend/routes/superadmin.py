@@ -263,14 +263,15 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
             cur = conn.cursor()
-            cur.execute("SELECT name, email FROM users WHERE id = ?", (body.user_id,))
+            from backend.database_sql import execute_cursor
+            execute_cursor(conn, cur, "SELECT name, email FROM users WHERE id = ?", (body.user_id,))
             target = cur.fetchone()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
 
-            cur.execute("""
-                UPDATE sessions SET is_active = 0
-                WHERE user_id = ? AND is_active = 1
+            execute_cursor(conn, cur, """
+                UPDATE sessions SET is_active = FALSE
+                WHERE user_id = ? AND is_active = TRUE
             """, (body.user_id,))
             killed = cur.rowcount
 
