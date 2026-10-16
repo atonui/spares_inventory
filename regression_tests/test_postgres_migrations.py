@@ -6,13 +6,22 @@ import psycopg
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
+def test_native_refresh_migration_is_registered():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    assert [(migration.version, migration.name) for migration in MIGRATIONS][-1] == (
+        6,
+        "native_refresh_credentials",
+    )
+
+
 def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -74,6 +83,125 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     } <= constraints
 
 
+def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
+    postgres_schema, monkeypatch
+):
+    from datetime import timedelta
+    from uuid import uuid4
+
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.temporal import serialize_instant, utc_now
+
+    connection, _ = postgres_schema
+    all_migrations = registry.MIGRATIONS
+    monkeypatch.setattr(registry, "MIGRATIONS", all_migrations[:5])
+    apply_postgres_migrations(connection)
+    user_id = connection.execute(
+        "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s) RETURNING id",
+        (f"renewal-{uuid4().hex}@example.test", "Renewal test", "unused"),
+    ).fetchone()["id"]
+    session_expiry = serialize_instant(utc_now() + timedelta(hours=1))
+    connection.execute(
+        "INSERT INTO sessions(user_id, session_token_hash, expires_at) VALUES (%s, %s, %s)",
+        (user_id, f"access-hash-{uuid4().hex}", session_expiry),
+    )
+    connection.commit()
+
+    monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
+    status = apply_postgres_migrations(connection)
+
+    session_columns = {
+        row["column_name"]
+        for row in connection.execute(
+            """SELECT column_name FROM information_schema.columns
+               WHERE table_schema = current_schema() AND table_name = 'sessions'"""
+        ).fetchall()
+    }
+    refresh_columns = {
+        row["column_name"]
+        for row in connection.execute(
+            """SELECT column_name FROM information_schema.columns
+               WHERE table_schema = current_schema()
+                 AND table_name = 'session_refresh_credentials'"""
+        ).fetchall()
+    }
+    session_id = connection.execute(
+        "SELECT id FROM sessions WHERE user_id = %s", (user_id,)
+    ).fetchone()["id"]
+    migrated_expiry = connection.execute(
+        "SELECT absolute_expires_at FROM sessions WHERE id = %s", (session_id,)
+    ).fetchone()["absolute_expires_at"]
+    connection.execute(
+        """INSERT INTO session_refresh_credentials
+           (session_id, token_hash, issued_at, expires_at)
+           VALUES (%s, %s, %s, %s)""",
+        (
+            session_id,
+            f"{uuid4().hex}{uuid4().hex}",
+            serialize_instant(utc_now()),
+            serialize_instant(utc_now() + timedelta(hours=24)),
+        ),
+    )
+
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
+    assert "absolute_expires_at" in session_columns
+    assert migrated_expiry == session_expiry
+    assert {
+        "session_id",
+        "token_hash",
+        "issued_at",
+        "expires_at",
+        "consumed_at",
+        "retry_request_id",
+        "retry_response_ciphertext",
+        "retry_response_expires_at",
+    } <= refresh_columns
+
+
+def test_native_refresh_migration_allows_only_one_active_credential_per_session(postgres_schema):
+    from datetime import timedelta
+    from uuid import uuid4
+
+    from psycopg.errors import UniqueViolation
+
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.temporal import serialize_instant, utc_now
+
+    connection, _ = postgres_schema
+    apply_postgres_migrations(connection)
+    user_id = connection.execute(
+        "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s) RETURNING id",
+        (f"rotation-{uuid4().hex}@example.test", "Rotation test", "unused"),
+    ).fetchone()["id"]
+    session_id = connection.execute(
+        """INSERT INTO sessions(user_id, session_token_hash, expires_at)
+           VALUES (%s, %s, %s) RETURNING id""",
+        (
+            user_id,
+            f"access-hash-{uuid4().hex}",
+            serialize_instant(utc_now() + timedelta(minutes=15)),
+        ),
+    ).fetchone()["id"]
+    values = (
+        session_id,
+        serialize_instant(utc_now()),
+        serialize_instant(utc_now() + timedelta(hours=24)),
+    )
+    connection.execute(
+        """INSERT INTO session_refresh_credentials
+           (session_id, token_hash, issued_at, expires_at) VALUES (%s, %s, %s, %s)""",
+        (values[0], f"{uuid4().hex}{uuid4().hex}", values[1], values[2]),
+    )
+
+    with pytest.raises(UniqueViolation):
+        connection.execute(
+            """INSERT INTO session_refresh_credentials
+               (session_id, token_hash, issued_at, expires_at) VALUES (%s, %s, %s, %s)""",
+            (values[0], f"{uuid4().hex}{uuid4().hex}", values[1], values[2]),
+        )
+
+
 def test_reapplying_postgres_migrations_is_idempotent(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations
 
@@ -125,7 +253,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=6,
+        version=7,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -140,7 +268,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 6"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 7"
     ).fetchone()["count"] == 0
 
 
@@ -151,7 +279,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == (1, 2, 3, 4, 5)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -202,7 +330,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
     session_columns = {
         row["column_name"]
         for row in connection.execute(
