@@ -257,7 +257,7 @@
         }
         
         .btn {
-            background: #007bff;
+            background: #0056b3;
             color: white;
             border: none;
             padding: 0.5rem 1rem;
@@ -267,11 +267,13 @@
         }
         
         .btn:hover {
-            background: #0056b3;
+            background: #004494;
         }
         
         .btn:disabled {
-            background: #ccc;
+            background: #e5e7eb;
+            color: #243746;
+            opacity: 1;
             cursor: not-allowed;
         }
         
@@ -281,16 +283,21 @@
         }
         
         .btn-success {
-            background: #28a745;
+            background: #155724;
         }
         
         .btn-success:hover {
-            background: #1e7e34;
+            background: #0f401b;
         }
         
         .btn-warning {
             background: #ffc107;
             color: #000;
+        }
+
+        .btn-warning:hover {
+            background: #e5ac00;
+            color: #243746;
         }
         
         .inventory-table {
@@ -582,7 +589,7 @@ body > [x-data="inventoryApp()"] > .card { margin-inline: auto; }
 .stock-table td { overflow-wrap: anywhere; }
 .stock-table td[data-label="Quantity"] { font-variant-numeric: tabular-nums; }
 .stock-table td[data-label="Actions"] .btn { margin: 0.2rem 0; }
-.inventory-controls .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.inventory-controls .btn:disabled { opacity: 1; cursor: not-allowed; }
 .inventory-controls :focus-visible, .store-search :focus-visible, .stock-table .btn:focus-visible {
     outline: 3px solid #005ab8; outline-offset: 3px;
 }
@@ -950,7 +957,7 @@ label.btn {
 .replenishment-panel .table-responsive { overflow-x: auto; }
 .replenishment-panel .btn { background: #005ab8; }
 .replenishment-panel .btn:hover { background: #004a96; }
-.replenishment-panel .btn:disabled { opacity: .55; cursor: not-allowed; }
+.replenishment-panel .btn:disabled { opacity: 1; cursor: not-allowed; }
 .replenishment-panel .btn:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
 .replenishment-copy { max-width: 72ch; line-height: 1.55; }
 .minimum-settings { margin: 1.5rem 0 2rem; padding: 1rem 0; border-block: 1px solid #cbd5e1; }
