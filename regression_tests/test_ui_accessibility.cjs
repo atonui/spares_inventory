@@ -224,6 +224,19 @@ test('dialogs remain scrollable within the mobile viewport', () => {
     assert.equal(declaration(css, '.modal-content', 'overscroll-behavior'), 'contain');
 });
 
+test('all date and date-time fields share mobile sizing', () => {
+    const html = read('index.html');
+    const adminHtml = read('superadmin.html');
+    assert.equal([...html.matchAll(/type="date"/g)].length, 6, 'Inventory page should expose all six date filters');
+    assert.equal([...adminHtml.matchAll(/type="date"/g)].length, 2, 'Platform audit should expose both date filters');
+    assert.equal([...adminHtml.matchAll(/type="datetime-local"/g)].length, 2, 'Announcement controls should expose both date-time fields');
+
+    const css = read('mystyle.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?input\[type="date"\]\s*,\s*input\[type="datetime-local"\]\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*48px;[^}]*font-size:\s*16px;/s.test(css), 'Date controls should share full-width, touch-sized mobile rules');
+    const adminCss = read('superadmin.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.audit-filters\s+input\[type="date"\]\s*\{[^}]*min-height:\s*48px;[^}]*font-size:\s*16px;/s.test(adminCss), 'Platform audit date filters should keep the shared mobile touch size');
+});
+
 test('platform organization table becomes labeled cards on mobile', () => {
     const html = read('superadmin.html');
     const start = html.indexOf('<table class="organizations-table">');
