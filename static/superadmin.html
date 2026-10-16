@@ -361,7 +361,7 @@
             </div>
             <p x-show="panelReady('sessions')" class="list-count" role="status" x-text="filteredSessions.length + ' of ' + sessions.length + ' sessions'"></p>
           <div x-show="panelReady('sessions')" style="overflow-x:auto;">
-            <table class="tbl">
+            <table class="tbl sessions-table">
               <thead>
                 <tr>
                   <th>User</th>
@@ -376,16 +376,16 @@
               <tbody>
                 <template x-for="s in filteredSessions" :key="s.id">
                   <tr>
-                    <td>
+                    <td data-label="User">
                       <div style="font-weight:600;" x-text="s.name"></div>
                       <div style="font-size:0.75rem;color:#666;" x-text="s.email"></div>
                     </td>
-                    <td><span class="tag tag-grey" x-text="s.role"></span></td>
-                    <td style="font-size:0.8rem;font-family:monospace;" x-text="s.ip_address||'—'"></td>
-                    <td style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
-                    <td style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
-                    <td style="font-size:0.75rem;color:#666;" x-text="parseUA(s.user_agent)"></td>
-                    <td><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Terminate</button></td>
+                    <td data-label="Role"><span class="tag tag-grey" x-text="s.role"></span></td>
+                    <td data-label="IP Address" style="font-size:0.8rem;font-family:monospace;" x-text="s.ip_address||'—'"></td>
+                    <td data-label="Last Activity" style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
+                    <td data-label="Expires" style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
+                    <td data-label="Browser" style="font-size:0.75rem;color:#666;" x-text="parseUA(s.user_agent)"></td>
+                    <td data-label="Action"><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Terminate</button></td>
                   </tr>
                 </template>
               </tbody>

@@ -238,6 +238,21 @@ test('platform organization table becomes labeled cards on mobile', () => {
     assert.ok(/\.organizations-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile values should retain visible field labels');
 });
 
+test('active session table becomes labeled cards on mobile', () => {
+    const html = read('superadmin.html');
+    const sessionsTab = html.indexOf("<div x-show=\"tab==='sessions'\">");
+    const start = html.indexOf('<table class="tbl sessions-table">', sessionsTab);
+    const end = html.indexOf('</table>', start);
+    assert.ok(sessionsTab >= 0 && start > sessionsTab && end > start, 'Missing active sessions table');
+    const table = html.slice(start, end);
+    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
+        'User', 'Role', 'IP Address', 'Last Activity', 'Expires', 'Browser', 'Action'
+    ]);
+    const css = read('superadmin.css');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.sessions-table[^}]*display:\s*block/s.test(css), 'Active sessions should switch to a mobile card layout');
+    assert.ok(/\.sessions-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile session values should retain visible field labels');
+});
+
 test('platform audit entries become labeled cards on mobile', () => {
     const html = read('superadmin.html');
     const section = html.slice(html.indexOf("x-show=\"tab==='audit'\""), html.indexOf('class="audit-pagination"'));
