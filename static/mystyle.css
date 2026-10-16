@@ -1072,3 +1072,33 @@ label.btn {
 .timezone-settings label { display: block; margin: .75rem 0 .35rem; }
 .timezone-settings select { display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; margin-bottom: 1rem; padding: .7rem; }
 .timezone-settings button { max-width: 100%; white-space: normal; }
+
+/* Keep every native date control usable in narrow mobile form layouts. */
+@media (max-width: 768px) {
+    input[type="date"], input[type="datetime-local"] {
+        -webkit-appearance: none;
+        appearance: none;
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 48px;
+        padding: .65rem .75rem;
+        border: 1px solid #b8c4d1;
+        border-radius: .5rem;
+        background-color: #fff;
+        color: #1f2937;
+        font: inherit;
+        font-size: 16px;
+    }
+    input[type="date"]:focus-visible, input[type="datetime-local"]:focus-visible {
+        outline: 3px solid #1d4ed8;
+        outline-offset: 2px;
+    }
+    input[type="date"]::-webkit-datetime-edit,
+    input[type="datetime-local"]::-webkit-datetime-edit { min-width: 0; }
+    input[type="date"]::-webkit-date-and-time-value,
+    input[type="datetime-local"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator { margin: 0; padding: .15rem; cursor: pointer; }
+}
