@@ -310,6 +310,110 @@ def test_native_refresh_replay_with_different_request_id_revokes_device_session(
     assert session["is_active"] is False
 
 
+def test_native_refresh_rejects_expired_refresh_credential(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+    from backend.temporal import serialize_instant, utc_now
+    from fastapi import HTTPException
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    session_id = api.connection.execute(
+        "SELECT id FROM sessions WHERE user_id = %s", (api.user_id,),
+    ).fetchone()["id"]
+    api.connection.execute(
+        "UPDATE session_refresh_credentials SET expires_at = %s WHERE session_id = %s",
+        (serialize_instant(utc_now() - timedelta(seconds=1)), session_id),
+    )
+    api.connection.commit()
+    request_id = "expired-refresh-0001"
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", request_id.encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id,
+        ))
+
+    assert error.value.status_code == 401
+    session = api.connection.execute(
+        "SELECT is_active FROM sessions WHERE id = %s", (session_id,),
+    ).fetchone()
+    assert session["is_active"] is False
+
+
+def test_native_refresh_revokes_session_when_membership_is_inactive(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+    from fastapi import HTTPException
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    session_id = api.connection.execute(
+        "SELECT id FROM sessions WHERE user_id = %s", (api.user_id,),
+    ).fetchone()["id"]
+    api.connection.execute(
+        "UPDATE organization_memberships SET is_active = FALSE WHERE user_id = %s",
+        (api.user_id,),
+    )
+    api.connection.commit()
+    request_id = "inactive-membership-0001"
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", request_id.encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id,
+        ))
+
+    assert error.value.status_code == 401
+    assert api.connection.execute(
+        "SELECT is_active FROM sessions WHERE id = %s", (session_id,),
+    ).fetchone()["is_active"] is False
+
+
+def test_native_refresh_is_allowed_after_access_credential_expires(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+    from backend.temporal import serialize_instant, utc_now
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    api.connection.execute(
+        "UPDATE sessions SET expires_at = %s WHERE user_id = %s",
+        (serialize_instant(utc_now() - timedelta(seconds=1)), api.user_id),
+    )
+    api.connection.commit()
+    request_id = "after-access-expiry-0001"
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", request_id.encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    response = asyncio.run(api.endpoint("/api/auth/native/refresh")(
+        NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id,
+    ))
+
+    assert response.status_code == 200
+    assert json.loads(response.body)["access_token"] != original["access_token"]
+
+
 def test_valid_bearer_request_is_authenticated_before_csrf_exemption(native_auth_api, monkeypatch):
     import main
     from fastapi import HTTPException

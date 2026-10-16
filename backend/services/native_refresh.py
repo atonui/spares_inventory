@@ -10,6 +10,10 @@ from backend.temporal_manifest import TemporalField
 
 
 _INSTANT_FIELDS = {
+    "refresh_expires_at": TemporalField(
+        "session_refresh_credentials", "expires_at", "instant", "utc",
+        "Native refresh credentials expire at the absolute session deadline.",
+    ),
     "absolute_expires_at": TemporalField(
         "sessions", "absolute_expires_at", "instant", "utc",
         "Version 6 backfills the session bound from expires_at; native auth writes serialize_instant values.",
