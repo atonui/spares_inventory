@@ -131,7 +131,7 @@ test('visible form labels are programmatically associated with controls', () => 
 test('inventory dialogs expose accessible names and modal semantics', () => {
     const tags = htmlTags(read('index.html'));
     const dialogs = tags.filter(tag => !tag.closing && tag.name === 'div' && tag.attrs.class?.split(/\s+/).includes('modal'));
-    assert.equal(dialogs.length, 7, 'Expected the seven inventory dialogs');
+    assert.equal(dialogs.length, 12, 'Expected all twelve inventory dialogs');
     for (const dialog of dialogs) {
         assert.equal(dialog.attrs.role, 'dialog');
         assert.equal(dialog.attrs['aria-modal'], 'true');
@@ -227,7 +227,7 @@ test('dialogs remain scrollable within the mobile viewport', () => {
 test('all date and date-time fields share mobile sizing', () => {
     const html = read('index.html');
     const adminHtml = read('superadmin.html');
-    assert.equal([...html.matchAll(/type="date"/g)].length, 6, 'Inventory page should expose all six date filters');
+    assert.equal([...html.matchAll(/type="date"/g)].length, 10, 'Inventory page should expose six history filters and four equipment dates');
     assert.equal([...adminHtml.matchAll(/type="date"/g)].length, 2, 'Platform audit should expose both date filters');
     assert.equal([...adminHtml.matchAll(/type="datetime-local"/g)].length, 2, 'Announcement controls should expose both date-time fields');
 

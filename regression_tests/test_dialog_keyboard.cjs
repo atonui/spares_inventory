@@ -6,11 +6,11 @@ const vm = require('node:vm');
 
 const staticDir = path.join(__dirname, '..', 'static');
 const html = fs.readFileSync(path.join(staticDir, 'index.html'), 'utf8');
-const core = fs.readFileSync(path.join(staticDir, 'js/inventory/application-core.js'), 'utf8');
+const focus = fs.readFileSync(path.join(staticDir, 'js/inventory/dialog-focus.js'), 'utf8');
 
 function createFeature() {
     const context = {};
-    vm.runInNewContext(`${core}\nthis.feature = inventoryCoreFeature();`, context);
+    vm.runInNewContext(`${focus}\nthis.feature = inventoryDialogFocusFeature();`, context);
     return context.feature;
 }
 
@@ -69,7 +69,7 @@ test('Tab and Shift+Tab stay within inventory dialogs', () => {
 
 test('every inventory dialog wires Escape and Tab handling', () => {
     const dialogs = [...html.matchAll(/<div\b[^>]*class="modal"[^>]*>/g)].map(match => match[0]);
-    assert.equal(dialogs.length, 7);
+    assert.equal(dialogs.length, 12);
     for (const dialog of dialogs) {
         assert.match(dialog, /x-init="initDialogFocus\(\$el, 'show\w+'\)"/);
         assert.match(dialog, /@keydown\.tab="trapDialogFocus\(\$event\)"/);

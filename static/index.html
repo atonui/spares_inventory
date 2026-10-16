@@ -13,6 +13,7 @@
 <script src="js/shared/time-context.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/features.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/application-core.js?v=20261014-remember-me" defer></script>
+<script src="js/inventory/dialog-focus.js?v=20261016-dialog-focus" defer></script>
 <script src="js/inventory/reports.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/replenishment.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/stock-counts.js?v=20261014-frontend-21" defer></script>
@@ -135,7 +136,7 @@
                     <summary>Management</summary>
                     <div class="management-actions">
                     <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archived records</button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#users"></use></svg>
+                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel'); loadUsers(); loadInvitations()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#users"></use></svg>
                         <span>Manage Users</span>
                     </button>
                     <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#store"></use></svg>
@@ -194,6 +195,10 @@
                                     @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                                 Movement History
                             </button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportUsersCSV(); showExportMenu = false">Users</button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
                             <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;" 
                                     @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg>
                                 Comprehensive Report
@@ -675,6 +680,266 @@
                 </table></div>
             </section>
 
+            <!-- My Parts Panel -->
+            <div x-show="showMyPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">My Parts Inventory</h3>
+                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                </div>
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Store</th>
+                            <th>Quantity</th>
+                            <th>Work Order</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in myPartsView" :key="item.id">
+                            <tr>
+                                <td data-label="Part Number"><strong x-text="item.part_number"></strong></td>
+                                <td x-text="item.description" data-label="Description"></td>
+                                <td data-label="Store"><span class="store-tag store-mine" x-text="item.store_name"></span></td>
+                                <td data-label="Quantity"><strong x-text="item.quantity"></strong></td>
+                                <td data-label="Work Order">
+                                    <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
+                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
+                                </td>
+                                <td data-label="Actions">
+                                    <button class="btn btn-sm"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg>
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-warning"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg>
+                                        Transfer
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            style="background: #ff9800; color: white;"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
+                                        Consume
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="myPartsView.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    You don't have any parts in your assigned stores yet.
+                </div>
+            </div>
+
+            <!-- User Management Panel (Admin Only) -->
+            <div x-show="!loading && showUsersPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">User Management</h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-success"
+                                @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                            Add User
+                        </button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    </div>
+                </div>
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Territory</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="user in users" :key="user.id">
+                            <tr>
+                                <td x-text="user.name" data-label="Name"></td>
+                                <td x-text="user.email" data-label="Email"></td>
+                                <td data-label="Role">
+                                    <span class="wo-tag" x-text="user.role"></span>
+                                </td>
+                                <td x-text="user.territory || 'N/A'" data-label="Territory"></td>
+                                <td data-label="Actions">
+                                    <button class="btn btn-sm" @click="editUser(user)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
+                                    <button class="btn btn-sm"
+                                            style="background: #dc3545; color: white;"
+                                            x-show="user.id !== currentUser.id"
+                                            @click="deleteUser(user.id, user.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archive</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <section x-show="currentUser?.saas_mode" aria-labelledby="pending-invitations-heading" style="padding: 1rem; border-top: 1px solid #ddd;">
+                    <h4 id="pending-invitations-heading">Pending invitations</h4>
+                    <p x-show="invitationsLoading" role="status">Loading invitations…</p>
+                    <p x-show="!invitationsLoading && invitations.length === 0">No pending invitations.</p>
+                    <div class="report-table-wrap" x-show="invitations.length"><table class="stock-table">
+                        <thead><tr><th>Email</th><th>Role</th><th>Expires</th><th>Actions</th></tr></thead>
+                        <tbody><template x-for="invitation in invitations" :key="invitation.id"><tr>
+                            <td data-label="Email" x-text="invitation.email"></td>
+                            <td data-label="Role" x-text="invitation.role"></td>
+                            <td data-label="Expires" x-text="formatInstant(invitation.expires_at)"></td>
+                            <td data-label="Actions"><button type="button" class="btn btn-sm" @click="resendInvitation(invitation.id)" :disabled="loading">Resend</button> <button type="button" class="btn btn-sm" @click="cancelInvitation(invitation.id)" :disabled="loading">Cancel</button></td>
+                        </tr></template></tbody>
+                    </table></div>
+                </section>
+            </div>
+
+            <!-- Equipment Management Panel -->
+            <div x-show="!loading && showEquipmentPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <h3 style="margin: 0;">Equipment Management</h3>
+                        <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                            <span>Total: <strong x-text="equipmentStats.total_equipment || 0"></strong></span>
+                            <span>Mine: <strong x-text="equipmentStats.my_equipment || 0"></strong></span>
+                            <span style="color: #f59e0b;">Due Soon: <strong x-text="equipmentStats.due_soon || 0"></strong></span>
+                            <span style="color: #dc2626;">Overdue: <strong x-text="equipmentStats.overdue || 0"></strong></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-sm" @click="downloadEquipmentTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
+                        <button class="btn btn-sm btn-success" @click="exportEquipmentCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Export CSV</button>
+                        <button x-show="['owner','admin'].includes(currentUser?.role)" class="btn btn-success"
+                                @click="editingEquipment = null; equipmentForm = { equipment_name: '', make: '', model: '', serial_number: '', assigned_user_id: '', calibration_cert_number: '', calibration_authority: '', calibration_date: '', next_calibration_date: '', notes: '' }; showEquipmentModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                            Add Equipment
+                        </button>
+                        <button x-show="['owner','admin'].includes(currentUser?.role)" class="btn" @click="showCalibrationSettingsModal = true; loadCalibrationSettings()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#settings"></use></svg>
+                            <span>Calibration Settings</span>
+                        </button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    </div>
+                </div>
+
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>Equipment Name</th>
+                            <th>Make/Model</th>
+                            <th>Serial #</th>
+                            <th>Assigned To</th>
+                            <th>Last Calibration</th>
+                            <th>Next Calibration</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="eq in equipment" :key="eq.id">
+                            <tr :class="getCalibrationStatus(eq).class">
+                                <td data-label="Equipment Name"><strong x-text="eq.equipment_name"></strong></td>
+                                <td x-text="`${eq.make} ${eq.model}`" data-label="Make / model"></td>
+                                <td x-text="eq.serial_number" style="font-family: monospace; font-size: 0.9em;" data-label="Serial number"></td>
+                                <td data-label="Assigned to">
+                                    <span class="wo-tag" x-text="eq.assigned_user_name || 'Unassigned'"></span>
+                                </td>
+                                <td x-text="eq.calibration_date ? formatDate(eq.calibration_date) : '-'" data-label="Last calibration"></td>
+                                <td x-text="eq.next_calibration_date ? formatDate(eq.next_calibration_date) : '-'" data-label="Next calibration"></td>
+                                <td data-label="Status">
+                                    <span class="wo-tag"
+                                        :style="`background: ${getCalibrationStatus(eq).status === 'overdue' ? '#fee2e2' : getCalibrationStatus(eq).status === 'urgent' ? '#fed7aa' : getCalibrationStatus(eq).status === 'soon' ? '#fef3c7' : '#d1fae5'}; color: ${getCalibrationStatus(eq).status === 'overdue' ? '#991b1b' : getCalibrationStatus(eq).status === 'urgent' ? '#9a3412' : getCalibrationStatus(eq).status === 'soon' ? '#92400e' : '#065f46'};`"
+                                        x-text="getCalibrationStatus(eq).text">
+                                    </span>
+                                </td>
+                                <td data-label="Actions">
+                                    <button class="btn btn-sm"
+                                            @click="openCalibrationModal(eq)"
+                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#tools"></use></svg>
+                                        Calibrate
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="openTransferEquipmentModal(eq)"
+                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg>
+                                        Transfer
+                                    </button>
+                                    <button class="btn btn-sm" @click="viewEquipmentHistory(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#history"></use></svg> History</button>
+                                    <button class="btn btn-sm"
+                                            x-show="['owner','admin'].includes(currentUser?.role)"
+                                            @click="editEquipment(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg>
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            style="background: #dc3545; color: white;"
+                                            x-show="['owner','admin'].includes(currentUser?.role)"
+                                            @click="deleteEquipment(eq.id, eq.equipment_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg>
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+
+                <div x-show="equipment.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No equipment found.
+                </div>
+            </div>
+
+            <!-- Store Types Management Panel (Admin Only) -->
+            <div x-show="!loading && showStoreTypesPanel && ['owner','admin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Store Types Management</h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-sm" @click="downloadStoreTypeTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
+                        <button class="btn btn-sm" @click="exportStoreTypesCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Export CSV</button>
+                        <button class="btn btn-success"
+                                @click="editingStoreType = null; storeTypeForm = { type_code: '', type_name: '', description: '', display_order: 0, is_active: true }; showStoreTypeModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                            Add Store Type
+                        </button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    </div>
+                </div>
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Type Code</th>
+                            <th>Type Name</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>In Use</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="storeType in storeTypes" :key="storeType.id">
+                            <tr :style="!storeType.is_active ? 'opacity: 0.5;' : ''">
+                                <td x-text="storeType.display_order" data-label="Order"></td>
+                                <td data-label="Type code"><code x-text="storeType.type_code" style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"></code></td>
+                                <td data-label="Type name"><strong x-text="storeType.type_name"></strong></td>
+                                <td x-text="storeType.description || '-'" data-label="Description"></td>
+                                <td data-label="Status">
+                                    <span class="wo-tag"
+                                        :style="storeType.is_active ? 'background: #d1fae5; color: #065f46;' : 'background: #fee2e2; color: #991b1b;'"
+                                        x-text="storeType.is_active ? 'Active' : 'Inactive'">
+                                    </span>
+                                </td>
+                                <td x-text="stores.filter(s = data-label="In use"> s.type === storeType.type_code).length + ' stores'"></td>
+                                <td data-label="Actions">
+                                    <button class="btn btn-sm" @click="editStoreType(storeType)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
+                                    <button class="btn btn-sm"
+                                            style="background: #dc3545; color: white;"
+                                            @click="deleteStoreType(storeType.id, storeType.type_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg>
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="storeTypes.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    No store types configured. Click "Add Store Type" to create one.
+                </div>
+            </div>
+
             <!-- Transfer Stock Modal -->
             <div x-show="showTransferModal" class="modal" x-init="initDialogFocus($el, 'showTransferModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showTransferModal')" role="dialog" aria-modal="true" aria-labelledby="transfer-stock-title" tabindex="-1" @click.outside="showTransferModal = false">
                 <div class="modal-content">
@@ -772,6 +1037,240 @@
                             <button type="submit" class="btn" style="background: #ff9800; color: #243746;" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
                                 <span x-show="!loading">Consume Part</span>
                                 <span x-show="loading">Processing...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Equipment Modal -->
+            <div x-show="showEquipmentModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showEquipmentModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showEquipmentModal')" role="dialog" aria-modal="true" aria-labelledby="equipment-modal-title" tabindex="-1" @click.outside="closeDialog('showEquipmentModal')">
+                <div class="modal-content" style="max-width: 600px;">
+                    <h3 id="equipment-modal-title" x-text="editingEquipment ? 'Edit Equipment' : 'Add New Equipment'"></h3>
+                    <form @submit.prevent="editingEquipment ? updateEquipment() : createEquipment()">
+                        <div class="form-group">
+                            <label for="equipment-name">Equipment Name *</label>
+                            <input id="equipment-name" type="text" x-model="equipmentForm.equipment_name" required>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label for="equipment-make">Make *</label>
+                                <input id="equipment-make" type="text" x-model="equipmentForm.make" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="equipment-model">Model *</label>
+                                <input id="equipment-model" type="text" x-model="equipmentForm.model" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="equipment-serial">Serial Number *</label>
+                            <input id="equipment-serial" type="text" x-model="equipmentForm.serial_number" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="equipment-assigned-user">Assigned To</label>
+                            <select id="equipment-assigned-user" x-model="equipmentForm.assigned_user_id">
+                                <option value="">Unassigned</option>
+                                <template x-for="user in users" :key="user.id">
+                                    <option :value="user.id" x-text="user.name"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
+                        <h4 style="margin-bottom: 1rem; color: #667eea;">Calibration Information</h4>
+
+                        <div class="form-group">
+                            <label for="equipment-certificate">Calibration Certificate Number</label>
+                            <input id="equipment-certificate" type="text" x-model="equipmentForm.calibration_cert_number">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="equipment-authority">Calibration Authority</label>
+                            <input id="equipment-authority" type="text" x-model="equipmentForm.calibration_authority">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label for="equipment-calibration-date">Calibration Date</label>
+                                <input id="equipment-calibration-date" type="date" x-model="equipmentForm.calibration_date">
+                            </div>
+                            <div class="form-group">
+                                <label for="equipment-next-calibration-date">Next Calibration Date</label>
+                                <input id="equipment-next-calibration-date" type="date" x-model="equipmentForm.next_calibration_date">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="equipment-notes">Notes</label>
+                            <textarea id="equipment-notes" x-model="equipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showEquipmentModal = false; editingEquipment = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                                <span x-show="!loading" x-text="editingEquipment ? 'Update Equipment' : 'Create Equipment'"></span>
+                                <span x-show="loading">Saving...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Calibration Update Modal -->
+            <div x-show="showCalibrationModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showCalibrationModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showCalibrationModal')" role="dialog" aria-modal="true" aria-labelledby="calibration-modal-title" tabindex="-1" @click.outside="closeDialog('showCalibrationModal')">
+                <div class="modal-content">
+                    <h3 id="calibration-modal-title">Update Calibration</h3>
+                    <p style="margin-bottom: 1rem; color: #666;">
+                        <strong x-text="selectedEquipment?.equipment_name"></strong>
+                        (<span x-text="selectedEquipment?.serial_number"></span>)
+                    </p>
+                    <form @submit.prevent="updateCalibration()">
+                        <div class="form-group">
+                            <label for="calibration-certificate">Calibration Certificate Number *</label>
+                            <input id="calibration-certificate" type="text" x-model="calibrationForm.calibration_cert_number" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="calibration-authority">Calibration Authority *</label>
+                            <input id="calibration-authority" type="text" x-model="calibrationForm.calibration_authority" required>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label for="calibration-date">Calibration Date *</label>
+                                <input id="calibration-date" type="date" x-model="calibrationForm.calibration_date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="next-calibration-date">Next Calibration Date *</label>
+                                <input id="next-calibration-date" type="date" x-model="calibrationForm.next_calibration_date" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="calibration-notes">Notes</label>
+                            <textarea id="calibration-notes" x-model="calibrationForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showCalibrationModal = false; selectedEquipment = null;">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                                <span x-show="!loading">Update Calibration</span>
+                                <span x-show="loading">Updating...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Transfer Equipment Modal -->
+            <div x-show="showTransferEquipmentModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showTransferEquipmentModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showTransferEquipmentModal')" role="dialog" aria-modal="true" aria-labelledby="transfer-equipment-modal-title" tabindex="-1" @click.outside="closeDialog('showTransferEquipmentModal')">
+                <div class="modal-content">
+                    <h3 id="transfer-equipment-modal-title">Transfer Equipment</h3>
+                    <p style="margin-bottom: 1rem; color: #666;">
+                        <strong x-text="selectedEquipment?.equipment_name"></strong>
+                        (<span x-text="selectedEquipment?.serial_number"></span>)
+                    </p>
+                    <form @submit.prevent="transferEquipmentToUser()">
+                        <div class="form-group">
+                            <label for="equipment-transfer-user">Transfer To</label>
+                            <select id="equipment-transfer-user" x-model="transferEquipmentForm.to_user_id" required>
+                                <option value="">Select User</option>
+                                <template x-for="user in users" :key="user.id">
+                                    <option :value="user.id" x-text="user.name"></option>
+                                </template>
+                                <option value="">Unassign (Return to Admin)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="equipment-transfer-notes">Notes</label>
+                            <textarea id="equipment-transfer-notes" x-model="transferEquipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="Reason for transfer..."></textarea>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showTransferEquipmentModal = false; selectedEquipment = null;">Cancel</button>
+                            <button type="submit" class="btn btn-warning" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg>
+                                <span x-show="!loading">Transfer Equipment</span>
+                                <span x-show="loading">Transferring...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Equipment History Modal -->
+            <div x-show="showEquipmentHistoryModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showEquipmentHistoryModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showEquipmentHistoryModal')" role="dialog" aria-modal="true" aria-labelledby="equipment-history-modal-title" tabindex="-1" @click.outside="closeDialog('showEquipmentHistoryModal')">
+                <div class="modal-content" style="max-width: 700px;">
+                    <h3 id="equipment-history-modal-title">Equipment History</h3>
+                    <p style="margin-bottom: 1rem; color: #666;">
+                        <strong x-text="selectedEquipment?.equipment_name"></strong>
+                        (<span x-text="selectedEquipment?.serial_number"></span>)
+                    </p>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                                <th>By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="history in equipmentHistory" :key="history.id">
+                                <tr>
+                                    <td x-text="formatInstant(history.created_at)" style="white-space: nowrap;"></td>
+                                    <td>
+                                        <span class="wo-tag" x-text="history.action"></span>
+                                    </td>
+                                    <td>
+                                        <span x-show="history.action === 'transferred'">
+                                            From: <span x-text="history.from_user_name || 'Unassigned'"></span> →
+                                            To: <span x-text="history.to_user_name || 'Unassigned'"></span>
+                                        </span>
+                                        <span x-show="history.action === 'calibrated'" x-text="history.calibration_date"></span>
+                                        <div x-show="history.notes" style="font-size: 0.85em; color: #666; margin-top: 0.25rem;" x-text="history.notes"></div>
+                                    </td>
+                                    <td x-text="history.created_by_name"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+
+                    <div x-show="equipmentHistory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                        No history available.
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+                        <button type="button" class="btn ui-icon-only" @click="showEquipmentHistoryModal = false; selectedEquipment = null;" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calibration Settings Modal -->
+            <div x-show="showCalibrationSettingsModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showCalibrationSettingsModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showCalibrationSettingsModal')" role="dialog" aria-modal="true" aria-labelledby="calibration-settings-modal-title" tabindex="-1" @click.outside="closeDialog('showCalibrationSettingsModal')">
+                <div class="modal-content">
+                    <h3 id="calibration-settings-modal-title">Calibration Reminder Settings</h3>
+                    <p style="margin-bottom: 1rem; color: #666;">
+                        Configure when to send calibration due reminders
+                    </p>
+                    <form @submit.prevent="updateCalibrationReminderDays()">
+                        <div class="form-group">
+                            <label for="calibration-reminder-days">Send reminder (days before due date)</label>
+                            <input id="calibration-reminder-days" type="number" x-model="calibrationReminderDays" min="1" max="365" required>
+                            <small style="color: #666; display: block; margin-top: 0.5rem;">
+                                Equipment due within this many days will trigger email reminders
+                            </small>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showCalibrationSettingsModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                                <span x-show="!loading">Save Settings</span>
+                                <span x-show="loading">Saving...</span>
                             </button>
                         </div>
                     </form>
