@@ -534,9 +534,9 @@
             </div>
 
             <!-- Edit Stock Modal -->
-            <div x-show="showEditModal" class="modal" @click.outside="showEditModal = false">
+            <div x-show="showEditModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-stock-title" tabindex="-1" @click.outside="showEditModal = false">
                 <div class="modal-content">
-                    <h3>Edit Stock Quantity</h3>
+                    <h3 id="edit-stock-title">Edit Stock Quantity</h3>
                     <form @submit.prevent="updateStock()">
                         <div class="form-group">
                             <label for="edit-stock-new-quantity">New Quantity</label>
@@ -676,9 +676,9 @@
             </section>
 
             <!-- Transfer Stock Modal -->
-            <div x-show="showTransferModal" class="modal" @click.outside="showTransferModal = false">
+            <div x-show="showTransferModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="transfer-stock-title" tabindex="-1" @click.outside="showTransferModal = false">
                 <div class="modal-content">
-                    <h3>Dispatch Stock</h3>
+                    <h3 id="transfer-stock-title">Dispatch Stock</h3>
                     <p x-show="transferForm.replenishment">Replenishment transfer: the server will recheck the plan and protect the source minimum before dispatch.</p>
                     <p>The destination can use these parts only after confirming physical receipt.</p>
                     <form @submit.prevent="transferStock()">
@@ -707,9 +707,9 @@
             </div>
 
             <!-- Consume Stock Modal -->
-            <div x-show="showConsumeModal" class="modal" @click.outside="showConsumeModal = false">
+            <div x-show="showConsumeModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="consume-stock-title" tabindex="-1" @click.outside="showConsumeModal = false">
                 <div class="modal-content">
-                    <h3>Consume Part for Work Order</h3>
+                    <h3 id="consume-stock-title">Consume Part for Work Order</h3>
                     
                     <div x-show="consumeForm.part_number" style="background: #fff3cd; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #ffc107;">
                         <div style="font-weight: 600; margin-bottom: 0.5rem;">Consuming:</div>
@@ -779,9 +779,9 @@
             </div>
 
             <!-- User Management Modal -->
-            <div x-show="showUserModal" class="modal" @click.outside="showUserModal = false">
+            <div x-show="showUserModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title" tabindex="-1" @click.outside="showUserModal = false">
                 <div class="modal-content">
-                    <h3 x-text="editingUser ? 'Edit User' : (currentUser?.saas_mode ? 'Invite User' : 'Create New User')"></h3>
+                    <h3 id="user-modal-title" x-text="editingUser ? 'Edit User' : (currentUser?.saas_mode ? 'Invite User' : 'Create New User')"></h3>
                     <form @submit.prevent="editingUser ? updateUser() : (currentUser?.saas_mode ? inviteUser() : createUser())">
                         <div class="form-group">
                             <label for="user-email">Email</label>
@@ -820,9 +820,9 @@
             </div>
 
             <!-- Store Management Modal -->
-            <div x-show="showStoreModal" class="modal" @click.outside="showStoreModal = false">
+            <div x-show="showStoreModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="store-modal-title" tabindex="-1" @click.outside="showStoreModal = false">
                 <div class="modal-content">
-                    <h3 x-text="editingStore ? 'Edit Store' : 'Create New Store'"></h3>
+                    <h3 id="store-modal-title" x-text="editingStore ? 'Edit Store' : 'Create New Store'"></h3>
                     <form @submit.prevent="editingStore ? updateStore() : createStore()">
                         <div class="form-group">
                             <label for="store-name">Store Name</label>
@@ -863,9 +863,9 @@
             </div>
 
             <!-- Store Type Management Modal -->
-            <div x-show="showStoreTypeModal" class="modal" @click.outside="showStoreTypeModal = false">
+            <div x-show="showStoreTypeModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="store-type-modal-title" tabindex="-1" @click.outside="showStoreTypeModal = false">
                 <div class="modal-content">
-                    <h3 x-text="editingStoreType ? 'Edit Store Type' : 'Create New Store Type'"></h3>
+                    <h3 id="store-type-modal-title" x-text="editingStoreType ? 'Edit Store Type' : 'Create New Store Type'"></h3>
                     <form @submit.prevent="editingStoreType ? updateStoreType() : createStoreType()">
                         <div class="form-group">
                             <label for="store-type-code">Type Code *</label>
@@ -928,9 +928,9 @@
             </div>
 
             <!-- Part Management Modal -->
-            <div x-show="showPartModal" class="modal" @click.outside="showPartModal = false">
+            <div x-show="showPartModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="part-modal-title" tabindex="-1" @click.outside="showPartModal = false">
                 <div class="modal-content">
-                    <h3 x-text="editingPart ? 'Edit Part' : 'Create New Part'"></h3>
+                    <h3 id="part-modal-title" x-text="editingPart ? 'Edit Part' : 'Create New Part'"></h3>
                     <form @submit.prevent="editingPart ? updatePart() : createPart()">
                         <div class="form-group">
                             <label for="part-number">Part Number</label>
