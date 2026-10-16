@@ -623,6 +623,14 @@ body > [x-data="inventoryApp()"] > .card { margin-inline: auto; }
     .in-transit-transfers-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
     .in-transit-transfers-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #465561; }
     .in-transit-transfers-table td[data-label="Action"] .btn { width: 100%; min-height: 44px; white-space: normal; }
+    .parts-management-table, .parts-management-table tbody { display: block; width: 100%; min-width: 0; }
+    .parts-management-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .parts-management-table tr { display: block; padding: .5rem .75rem; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; margin-bottom: .75rem; }
+    .parts-management-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+    .parts-management-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #465561; }
+    .parts-management-table td[data-label="Actions"] { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .parts-management-table td[data-label="Actions"]::before { flex-basis: 100%; }
+    .parts-management-table td[data-label="Actions"] .btn { flex: 1 1 100px; min-height: 44px; }
 }
 
 /* Tablet improvements */

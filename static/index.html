@@ -325,7 +325,7 @@
                         <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
                     </div>
                 </div>
-                <table>
+                <table class="parts-management-table">
                     <thead>
                         <tr>
                             <th>Part Number</th>
@@ -338,13 +338,13 @@
                     <tbody>
                         <template x-for="part in parts" :key="part.id">
                             <tr>
-                                <td><strong x-text="part.part_number"></strong></td>
-                                <td x-text="part.description"></td>
-                                <td>
+                                <td data-label="Part Number"><strong x-text="part.part_number"></strong></td>
+                                <td data-label="Description" x-text="part.description"></td>
+                                <td data-label="Category">
                                     <span class="wo-tag" x-text="part.category"></span>
                                 </td>
-                                <td x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
-                                <td>
+                                <td data-label="Unit Cost" x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
+                                <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editPart(part)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
                                     <button class="btn btn-sm" 
                                             style="background: #dc3545; color: white;"

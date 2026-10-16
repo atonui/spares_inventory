@@ -378,3 +378,21 @@ test('shipped catalog administration forms remain independent', () => {
     assert.equal(second.editingPart, null);
     assert.equal(second.showPartModal, false);
 });
+
+test('parts management table becomes labeled mobile cards and keeps edit/archive actions', () => {
+    const html = fs.readFileSync('static/index.html', 'utf8');
+    const section = html.indexOf('<!-- Parts Management Panel (Admin Only) -->');
+    const start = html.indexOf('<table class="parts-management-table">', section);
+    const end = html.indexOf('</table>', start);
+    assert.ok(section >= 0 && start > section && end > start, 'Missing parts management table');
+    const table = html.slice(start, end);
+    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
+        'Part Number', 'Description', 'Category', 'Unit Cost', 'Actions'
+    ]);
+    assert.match(table, /@click="editPart\(part\)"/, 'Edit action should remain available');
+    assert.match(table, /@click="deletePart\(part\.id, part\.part_number\)"/, 'Archive action should remain available');
+    const css = fs.readFileSync('static/mystyle.css', 'utf8');
+    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.parts-management-table[^}]*display:\s*block/s.test(css), 'Parts management should switch to a mobile card layout');
+    assert.ok(/\.parts-management-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile part values should retain visible field labels');
+    assert.ok(/\.parts-management-table\s+td\[data-label="Actions"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Part actions should retain mobile touch size');
+});
