@@ -5,6 +5,24 @@ import json
 import secrets
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from backend.temporal import parse_storage_instant
+from backend.temporal_manifest import TemporalField
+
+
+_INSTANT_FIELDS = {
+    "absolute_expires_at": TemporalField(
+        "sessions", "absolute_expires_at", "instant", "utc",
+        "Version 6 backfills the session bound from expires_at; native auth writes serialize_instant values.",
+    ),
+    "retry_response_expires_at": TemporalField(
+        "session_refresh_credentials", "retry_response_expires_at", "instant", "utc",
+        "Native refresh writes the 60-second retry deadline with serialize_instant.",
+    ),
+}
+
+
+def parse_native_refresh_instant(value: str, column: str):
+    return parse_storage_instant(value, field=_INSTANT_FIELDS[column])
 
 
 def _key(value: str | None) -> bytes:

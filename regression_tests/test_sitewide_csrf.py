@@ -4,12 +4,18 @@ import main
 from regression_tests.test_auth_router import auth_api
 from regression_tests.test_stock_safety import api
 
+TOKEN_AUTHENTICATED_MUTATIONS = {
+    ('/api/auth/native/refresh', frozenset({'POST'})),
+    ('/api/v1/auth/native/refresh', frozenset({'POST'})),
+}
+
 def dependencies(dependant):
     return {d.call for d in dependant.dependencies} | {call for d in dependant.dependencies for call in dependencies(d)}
 
 def test_every_mutation_route_requires_csrf():
     missing=[(route.path, sorted(route.methods)) for route in main.app.routes
              if isinstance(route,APIRoute) and route.methods & {'POST','PUT','PATCH','DELETE'}
+             and (route.path, frozenset(route.methods)) not in TOKEN_AUTHENTICATED_MUTATIONS
              and not ({main.verify_csrf, main.verify_authenticated_csrf} & dependencies(route.dependant))]
     assert missing == []
 
@@ -71,6 +77,7 @@ def test_unsafe_routes_keep_csrf_and_only_protected_writes_get_authenticated_var
         for route in main.app.routes
         if isinstance(route, APIRoute)
         and route.methods & {'POST', 'PUT', 'PATCH', 'DELETE'}
+        and (route.path, frozenset(route.methods)) not in TOKEN_AUTHENTICATED_MUTATIONS
         and not ({main.verify_csrf, main.verify_authenticated_csrf} & dependencies(route.dependant))
     ]
     assert missing == []

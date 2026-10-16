@@ -678,7 +678,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         """Rotate a native credential pair with a bounded exact-request retry."""
         from backend.database_sql import is_postgres
         from backend.postgres_database import postgres_transaction
-        from backend.services.native_refresh import encrypt_retry_response, decrypt_retry_response
+        from backend.services.native_refresh import (
+            encrypt_retry_response, decrypt_retry_response, parse_native_refresh_instant,
+        )
 
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", request_id):
             raise HTTPException(status_code=422, detail="Invalid X-Request-ID")
@@ -716,7 +718,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     ).fetchone()
                     if session is None or not session["is_active"]:
                         error_status = 401
-                    elif now >= stored_instant(session["absolute_expires_at"], "absolute_expires_at"):
+                    elif now >= parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at"):
                         conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
                         error_status = 401
                     else:
@@ -734,7 +736,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                             error_status = 401
                         elif credential["consumed_at"] is not None:
                             retry_expires = (
-                                stored_instant(credential["retry_response_expires_at"], "retry_response_expires_at")
+                                parse_native_refresh_instant(credential["retry_response_expires_at"], "retry_response_expires_at")
                                 if credential["retry_response_expires_at"] else None
                             )
                             if (credential["retry_request_id"] == request_id
@@ -751,7 +753,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                                 conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
                                 error_status = 401
                         else:
-                            absolute_expires = stored_instant(session["absolute_expires_at"], "absolute_expires_at")
+                            absolute_expires = parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at")
                             access = secrets.token_urlsafe(32)
                             refresh = secrets.token_urlsafe(32)
                             access_expires = min(now + timedelta(minutes=15), absolute_expires)
