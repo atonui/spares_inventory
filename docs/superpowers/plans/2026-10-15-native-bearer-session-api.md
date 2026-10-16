@@ -4,6 +4,8 @@
 
 **Goal:** Add opaque native bearer authentication backed by PostgreSQL server-side sessions, preserving the existing browser cookie + CSRF contract and deriving all tenant and role context server-side.
 
+**Follow-on:** The API-auth slice is merged in PR #138. Native route versioning and secure token renewal were intentionally deferred here; the current client signs in again after expiry. Track those prerequisites, account/data deletion, privacy, review access, and store gates in [`2026-10-16-saas-mobile-store-readiness.md`](2026-10-16-saas-mobile-store-readiness.md).
+
 **Architecture:** Hash PostgreSQL session credentials at rest and resolve either a cookie or bearer credential through the existing principal/session lifecycle. Add a PostgreSQL-only native login endpoint; use a shared request credential helper for authentication and transaction-time revalidation. Keep cookie-authenticated writes behind CSRF and permit bearer-authenticated writes to omit CSRF only after the bearer credential has been validated. Document the contract in OpenAPI and add regression/integration coverage. SQLite behavior and client applications remain unchanged.
 
 **Tech Stack:** Python, FastAPI, psycopg, PostgreSQL 17 migrations, pytest, existing JavaScript regression suite.
