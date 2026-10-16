@@ -40,7 +40,7 @@ def v1_postgres_api(postgres_schema, monkeypatch):
             connection.execute(
                 "INSERT INTO platform_admins(user_id) VALUES (%s)", (user_id,)
             )
-        token = f"api-v1-{label}-{uuid4().hex}"
+        token = f"api-v1-{label.lower().replace(' ', '-')}-{uuid4().hex}"
         connection.execute(
             "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
             (
