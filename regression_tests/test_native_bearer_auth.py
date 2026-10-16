@@ -49,6 +49,7 @@ def test_openapi_documents_cookie_and_opaque_bearer_auth_without_protecting_logi
 def native_auth_api(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations
     from backend.routes.auth import create_auth_router
+    from backend.services.authenticated_transactions import authenticated_write_transaction
     from backend.temporal import serialize_instant, utc_now
 
     connection, schema = postgres_schema
@@ -78,7 +79,9 @@ def native_auth_api(postgres_schema):
 
     router = create_auth_router(
         get_connection=get_connection,
-        authenticated_writer=lambda *args, **kwargs: pytest.fail("not used by login"),
+        authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(
+            get_connection, user_id=user_id, session_token=session_token,
+        ),
         stock_writer=lambda: pytest.fail("PostgreSQL login must not use the SQLite writer"),
         current_user=lambda: None,
         csrf_dependency=lambda: None,
@@ -492,6 +495,42 @@ def test_native_refresh_is_allowed_after_access_credential_expires(native_auth_a
 
     assert response.status_code == 200
     assert json.loads(response.body)["access_token"] != original["access_token"]
+
+
+def test_native_logout_revokes_refresh_credential_without_setting_cookie(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+    from fastapi import HTTPException
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    logout_request = Request({
+        "type": "http", "method": "POST", "path": "/api/v1/auth/logout",
+        "headers": [(b"authorization", f"Bearer {original['access_token']}".encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    response = asyncio.run(api.endpoint("/api/v1/auth/logout")(
+        user_id=api.user_id, request=logout_request, csrf_valid=True,
+    ))
+
+    assert response.status_code == 200
+    assert "set-cookie" not in response.headers
+    request_id = "after-native-logout-0001"
+    refresh_request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", request_id.encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), refresh_request, request_id,
+        ))
+
+    assert error.value.status_code == 401
 
 
 def test_valid_bearer_request_is_authenticated_before_csrf_exemption(native_auth_api, monkeypatch):
