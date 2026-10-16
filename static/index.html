@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 21189)
-Total output lines: 977
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -487,7 +484,72 @@ Total output lines: 977
             </div>
             </div>
             <div class="store-search">
-                <label for="store-stoc…1189 tokens truncated…        </form>
+                <label for="store-stock-search">…19946 tokens truncated…="row.currentQuantity !== null">
+                                            <select :disabled="loading" :value="storeConflicts.find(c=>c.partNumber===row.partNumber).action"
+                                                @change="storeConflicts.find(c=>c.partNumber===row.partNumber).action=$event.target.value">
+                                                <option value="replace">Set CSV balance</option>
+                                                <option value="skip">Skip</option>
+                                            </select>
+                                        </template>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+
+                    <!-- Action Summary -->
+                    <div style="background: #f0f9ff; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; border-left: 4px solid #3b82f6;">
+                        <h4 style="margin-bottom: 0.5rem;"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg> Import Summary</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; font-size: 0.9em;">
+                            <div>Will Add: <strong x-text="getResolutionSummary().willAdd"></strong></div>
+                            <div>Will Update: <strong x-text="getResolutionSummary().willUpdate"></strong></div>
+                            <div>Will Skip: <strong x-text="getResolutionSummary().willSkip"></strong></div>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div style="display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" class="btn btn-sm" @click="setAllCsvDuplicates('tally')" :disabled="loading">
+                                Tally All CSV
+                            </button>
+                            <button type="button" class="btn btn-sm" @click="setAllStoreConflicts('replace')" :disabled="loading">
+                                Set All Balances
+                            </button>
+                            <button type="button" class="btn btn-sm" @click="setAllActions('skip')" :disabled="loading">
+                                Skip All
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" class="btn" @click="cancelDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg>
+                                Cancel Import
+                            </button>
+                            <button type="button" class="btn btn-success" @click="processDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg>
+                                <span x-show="!loading">Proceed with Import</span>
+                                <span x-show="loading">Processing...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Stock Modal -->
+            <div x-show="showEditModal" class="modal" @click.outside="showEditModal = false">
+                <div class="modal-content">
+                    <h3>Edit Stock Quantity</h3>
+                    <form @submit.prevent="updateStock()">
+                        <div class="form-group">
+                            <label for="edit-stock-new-quantity">New Quantity</label>
+                            <input id="edit-stock-new-quantity" type="number" x-model="editForm.new_quantity" min="0" required>
+                        </div>
+                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" @click="showEditModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                                <span x-show="!loading">Update</span>
+                                <span x-show="loading">Updating...</span>
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
