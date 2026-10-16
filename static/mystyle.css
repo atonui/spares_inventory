@@ -387,6 +387,10 @@
             border-radius: 8px;
             width: 90%;
             max-width: 500px;
+            max-height: calc(100vh - 2rem);
+            max-height: calc(100dvh - 2rem);
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
         
         .form-group {
