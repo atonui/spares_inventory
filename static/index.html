@@ -662,15 +662,15 @@
                 <div class="report-table-wrap" x-show="movements.length"><table class="stock-table">
                     <thead><tr><th>Date / time</th><th>Type</th><th>Part</th><th>Quantity</th><th>From store</th><th>To store</th><th>Work order</th><th>Recorded by</th><th>Transfer status</th></tr></thead>
                     <tbody><template x-for="movement in movements" :key="movement.id"><tr>
-                        <td x-text="formatBusinessInstant(movement.created_at, movementTimeContext)"></td>
-                        <td x-text="movement.movement_type"></td>
-                        <td><strong x-text="movement.part_number"></strong></td>
-                        <td x-text="movement.quantity"></td>
-                        <td x-text="movement.from_store_name || '—'"></td>
-                        <td x-text="movement.to_store_name || '—'"></td>
-                        <td x-text="movement.work_order || '—'"></td>
-                        <td x-text="movement.created_by_name"></td>
-                        <td x-text="movement.transfer_status || '—'"></td>
+                        <td data-label="Date / time" x-text="formatBusinessInstant(movement.created_at, movementTimeContext)"></td>
+                        <td data-label="Type" x-text="movement.movement_type"></td>
+                        <td data-label="Part"><strong x-text="movement.part_number"></strong></td>
+                        <td data-label="Quantity" x-text="movement.quantity"></td>
+                        <td data-label="From store" x-text="movement.from_store_name || '—'"></td>
+                        <td data-label="To store" x-text="movement.to_store_name || '—'"></td>
+                        <td data-label="Work order" x-text="movement.work_order || '—'"></td>
+                        <td data-label="Recorded by" x-text="movement.created_by_name"></td>
+                        <td data-label="Transfer status" x-text="movement.transfer_status || '—'"></td>
                     </tr></template></tbody>
                 </table></div>
             </section>

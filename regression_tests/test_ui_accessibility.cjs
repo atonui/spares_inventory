@@ -204,3 +204,15 @@ test('platform-admin inline helper copy keeps readable contrast', () => {
     const lowContrast = [...adminHtml.matchAll(/color\s*:\s*#(?:888|aaa)\b/gi)];
     assert.equal(lowContrast.length, 0, `Found ${lowContrast.length} low-contrast inline helper colors`);
 });
+
+test('mobile movement history cards label every data cell', () => {
+    const html = read('index.html');
+    const heading = html.indexOf('id="movement-history-heading"');
+    const tableStart = html.indexOf('<table', heading);
+    const tableEnd = html.indexOf('</table>', tableStart);
+    assert.ok(heading >= 0 && tableStart > heading && tableEnd > tableStart, 'Missing movement history table');
+    const cells = [...html.slice(tableStart, tableEnd).matchAll(/<td\b([^>]*)>/g)];
+    assert.deepEqual(cells.map(([, attrs]) => attributes(attrs)['data-label']), [
+        'Date / time', 'Type', 'Part', 'Quantity', 'From store', 'To store', 'Work order', 'Recorded by', 'Transfer status'
+    ]);
+});
