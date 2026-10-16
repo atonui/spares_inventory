@@ -507,6 +507,7 @@ app.include_router(create_inventory_read_router(
     get_connection=lambda: get_db_connection(),
     current_user=get_current_user,
     transfer_permission=lambda *args, **kwargs: transfer_permissions(*args, **kwargs),
+    cursor_secret=SECRET_KEY,
 ))
 
 
@@ -698,6 +699,18 @@ register_stock_count_routes(
     require_active=require_active_record, require_access=require_stock_access,
     current_user=get_current_user, verify_csrf=verify_authenticated_csrf, secret=SECRET_KEY,
 )
+
+from fastapi.responses import JSONResponse
+from backend.services.api_v1_openapi import build_v1_openapi_document
+
+
+@app.get("/api/v1/openapi.json", include_in_schema=False)
+async def api_v1_openapi_document():
+    """Serve the filtered, versioned native API contract."""
+    return JSONResponse(
+        content=build_v1_openapi_document(app.openapi()),
+        headers={"Cache-Control": "no-cache"},
+    )
 
 if __name__ == "__main__":
     import uvicorn

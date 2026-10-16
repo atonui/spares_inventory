@@ -322,10 +322,11 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('PUT', '/api/platform/admins/{target_user_id}'),
         ('DELETE', '/api/platform/admins/{target_user_id}'),
     })
-    exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
+    exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/v1/auth/native/login','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
+    bearer_only={('POST', '/api/v1/auth/logout')}
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
     assert len(protected)==62
-    assert registered==protected|exempt
+    assert registered==protected|exempt|bearer_only
 
 
 def test_initial_auth_holds_lock_through_activity_update(session_api,monkeypatch):
