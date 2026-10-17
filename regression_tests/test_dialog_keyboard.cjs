@@ -69,7 +69,7 @@ test('Tab and Shift+Tab stay within inventory dialogs', () => {
 
 test('every inventory dialog wires Escape and Tab handling', () => {
     const dialogs = [...html.matchAll(/<div\b[^>]*class="modal"[^>]*>/g)].map(match => match[0]);
-    assert.equal(dialogs.length, 12);
+    assert.equal(dialogs.length, 13);
     for (const dialog of dialogs) {
         assert.match(dialog, /x-init="initDialogFocus\(\$el, 'show\w+'\)"/);
         assert.match(dialog, /@keydown\.tab="trapDialogFocus\(\$event\)"/);

@@ -132,7 +132,7 @@ test('visible form labels are programmatically associated with controls', () => 
 test('inventory dialogs expose accessible names and modal semantics', () => {
     const tags = htmlTags(read('index.html'));
     const dialogs = tags.filter(tag => !tag.closing && tag.name === 'div' && tag.attrs.class?.split(/\s+/).includes('modal'));
-    assert.equal(dialogs.length, 12, 'Expected all twelve inventory dialogs');
+    assert.equal(dialogs.length, 13, 'Expected all thirteen inventory dialogs');
     for (const dialog of dialogs) {
         assert.equal(dialog.attrs.role, 'dialog');
         assert.equal(dialog.attrs['aria-modal'], 'true');
