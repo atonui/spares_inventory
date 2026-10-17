@@ -53,6 +53,75 @@ def test_reset_email_service_builds_and_sends_reset_message(monkeypatch):
     assert "https://inventory.example.test/reset_password.html?token=reset-token" in message.as_string()
 
 
+def test_reset_email_logging_does_not_include_email_or_reset_token(monkeypatch):
+    from backend.email_service import send_password_reset_email
+
+    records = []
+
+    class RecordingLogger:
+        def info(self, message):
+            records.append(message)
+
+        def error(self, message):
+            records.append(message)
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def starttls(self): pass
+        def login(self, *args): pass
+        def send_message(self, message): pass
+
+    monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+    send_password_reset_email(
+        email="private-user@example.test",
+        token="private-reset-token",
+        frontend_url="https://inventory.example.test",
+        smtp_server="smtp.example.test",
+        smtp_port=587,
+        smtp_username="sender@example.test",
+        smtp_password="secret",
+        logger=RecordingLogger(),
+    )
+
+    assert records
+    assert all("private-user@example.test" not in record for record in records)
+    assert all("private-reset-token" not in record for record in records)
+
+
+def test_reset_email_logging_does_not_include_provider_exception(monkeypatch):
+    from backend.email_service import send_password_reset_email
+
+    records = []
+
+    class RecordingLogger:
+        def info(self, message): records.append(message)
+        def error(self, message): records.append(message)
+
+    class FailingSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): raise RuntimeError("private-user@example.test private-reset-token")
+        def __exit__(self, *args): return False
+
+    monkeypatch.setattr(smtplib, "SMTP", FailingSMTP)
+    with pytest.raises(HTTPException):
+        send_password_reset_email(
+            email="private-user@example.test",
+            token="private-reset-token",
+            frontend_url="https://inventory.example.test",
+            smtp_server="smtp.example.test",
+            smtp_port=587,
+            smtp_username="sender@example.test",
+            smtp_password="secret",
+            logger=RecordingLogger(),
+        )
+
+    assert records
+    assert all("private-user@example.test" not in record for record in records)
+    assert all("private-reset-token" not in record for record in records)
+
+
 @pytest.mark.parametrize(
     "error,detail",
     [

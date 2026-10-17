@@ -238,16 +238,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         # Log the attempt (even if email doesn't exist, for security monitoring)
         if user:
             user_id = user["id"]
-            user_name = user["name"]
         else:
-            user_id = 0
-            user_name = request_data.email
+            user_id = None
 
         log_activity(
             user_id=user_id,
-            username=user_name,
+            username="account_holder" if user else "unmatched_account",
             action="password_reset_request",
-            details={"email": request_data.email},
+            details={"account_match": bool(user)},
             status="success",
             ip_address=ip_address,
             user_agent=user_agent,
@@ -278,9 +276,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         # Send email
         try:
             send_reset_email(request_data.email, token)
-            logger.info(f"Password reset email sent to {request_data.email}")
-        except Exception as e:
-            logger.error(f"Failed to send password reset email: {e}")
+            logger.info("Password reset email sent")
+        except Exception:
+            logger.error("Failed to send password reset email")
             # Don't reveal email send failure to prevent information disclosure
 
         return {"message": "If the email exists, a reset link has been sent"}
