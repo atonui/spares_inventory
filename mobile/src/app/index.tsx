@@ -14,9 +14,44 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
-import {ApiError, api, type InventoryRow, type NativeUser} from '../api/client';
+import {ApiError, createApiClient, type InventoryRow, type NativeSession, type NativeUser} from '../api/client';
 
 const SESSION_KEY = 'native-session-token';
+
+const sessionStore = {
+  async getSession(): Promise<NativeSession | null> {
+    const stored = await SecureStore.getItemAsync(SESSION_KEY);
+    if (!stored) return null;
+    try {
+      const value: unknown = JSON.parse(stored);
+      if (value && typeof value === 'object'
+        && 'access_token' in value && typeof value.access_token === 'string'
+        && 'refresh_token' in value && typeof value.refresh_token === 'string'
+        && 'expires_at' in value && typeof value.expires_at === 'string') {
+        return {
+          access_token: value.access_token,
+          refresh_token: value.refresh_token,
+          expires_at: value.expires_at,
+        };
+      }
+    } catch {
+      // The previous mobile build stored only an access token under this key.
+    }
+    await SecureStore.deleteItemAsync(SESSION_KEY);
+    return null;
+  },
+  async setSession(session: NativeSession) {
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
+  },
+  async clearSession() {
+    await SecureStore.deleteItemAsync(SESSION_KEY);
+  },
+};
+
+const api = createApiClient({
+  baseUrl: process.env.EXPO_PUBLIC_API_URL || '',
+  sessionStore,
+});
 
 function responseMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -24,7 +59,7 @@ function responseMessage(error: unknown): string {
 }
 
 export default function InventoryScreen() {
-  const [token, setToken] = useState<string | null>(null);
+  const [hasSession, setHasSession] = useState(false);
   const [user, setUser] = useState<NativeUser | null>(null);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [isReady, setIsReady] = useState(false);
@@ -36,8 +71,8 @@ export default function InventoryScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [search, setSearch] = useState('');
 
-  const loadInventory = useCallback(async (activeToken: string) => {
-    const rows = await api.getInventory(activeToken);
+  const loadInventory = useCallback(async () => {
+    const rows = await api.getInventory();
     setInventory(rows);
   }, []);
 
@@ -45,20 +80,20 @@ export default function InventoryScreen() {
     setError('');
     setLoading(true);
     try {
-      const savedToken = await SecureStore.getItemAsync(SESSION_KEY);
-      if (!savedToken) {
-        setToken(null);
+      const savedSession = await api.getSession();
+      if (!savedSession) {
+        setHasSession(false);
         setUser(null);
         return;
       }
-      setToken(savedToken);
-      const currentUser = await api.getMe(savedToken);
+      setHasSession(true);
+      const currentUser = await api.getMe();
       setUser(currentUser);
-      await loadInventory(savedToken);
+      await loadInventory();
     } catch (reason) {
       if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
-        await SecureStore.deleteItemAsync(SESSION_KEY);
-        setToken(null);
+        await api.clearSession();
+        setHasSession(false);
         setUser(null);
         setInventory([]);
         setError(reason.status === 401
@@ -88,20 +123,20 @@ export default function InventoryScreen() {
     }
     setError('');
     setLoading(true);
-    let issuedToken: string | null = null;
+    let issuedSession = false;
     try {
       const session = await api.login({email, password, rememberMe});
-      issuedToken = session.access_token;
-      await SecureStore.setItemAsync(SESSION_KEY, session.access_token);
-      setToken(session.access_token);
+      await api.saveSession(session);
+      issuedSession = true;
+      setHasSession(true);
       setPassword('');
-      const currentUser = await api.getMe(session.access_token);
+      const currentUser = await api.getMe();
       setUser(currentUser);
-      await loadInventory(session.access_token);
+      await loadInventory();
     } catch (reason) {
-      if (issuedToken && reason instanceof ApiError && [401, 403].includes(reason.status)) {
-        await SecureStore.deleteItemAsync(SESSION_KEY);
-        setToken(null);
+      if (issuedSession && reason instanceof ApiError && [401, 403].includes(reason.status)) {
+        await api.clearSession();
+        setHasSession(false);
         setUser(null);
       }
       setError(responseMessage(reason));
@@ -112,17 +147,24 @@ export default function InventoryScreen() {
   }
 
   async function signOut() {
-    if (!token) return;
+    if (!hasSession) return;
     setError('');
     setLoading(true);
     try {
-      await api.logout(token);
-      await SecureStore.deleteItemAsync(SESSION_KEY);
-      setToken(null);
+      const result = await api.logout();
+      if (!result.success) throw new ApiError('The server could not confirm sign out.', 0);
+      setHasSession(false);
       setUser(null);
       setInventory([]);
       setSearch('');
     } catch (reason) {
+      if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+        await api.clearSession();
+        setHasSession(false);
+        setUser(null);
+        setInventory([]);
+        setSearch('');
+      }
       setError(`Sign out failed: ${responseMessage(reason)}`);
     } finally {
       setLoading(false);
@@ -130,15 +172,15 @@ export default function InventoryScreen() {
   }
 
   async function refresh() {
-    if (!token) return;
+    if (!hasSession) return;
     setRefreshing(true);
     setError('');
     try {
-      await loadInventory(token);
+      await loadInventory();
     } catch (reason) {
       if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
-        await SecureStore.deleteItemAsync(SESSION_KEY);
-        setToken(null);
+        await api.clearSession();
+        setHasSession(false);
         setUser(null);
         setInventory([]);
         setError(reason.status === 401
@@ -160,11 +202,11 @@ export default function InventoryScreen() {
     );
   }, [inventory, search]);
 
-  if (!isReady || (loading && !user && token)) {
+  if (!isReady || (loading && !user && hasSession)) {
     return <LoadingScreen message="Checking your session…" />;
   }
 
-  if (user && token) {
+  if (user && hasSession) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.screen}>
@@ -254,7 +296,7 @@ export default function InventoryScreen() {
           <View style={styles.loginCard}>
             <Text style={styles.loginTitle}>Welcome back</Text>
             <Text style={styles.loginSubtitle}>Sign in to manage your inventory.</Text>
-            {!!error && <ErrorNotice message={error} onRetry={token ? restoreSession : undefined} />}
+            {!!error && <ErrorNotice message={error} onRetry={hasSession ? restoreSession : undefined} />}
             <Text style={styles.inputLabel}>Email address</Text>
             <TextInput
               accessibilityLabel="Email address"

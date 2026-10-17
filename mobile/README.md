@@ -21,20 +21,31 @@ environment values.
 
 ## Session handling
 
-- Native login requests a CSRF token, then calls `/api/auth/native/login`.
-- The opaque bearer credential is stored with `expo-secure-store` and sent only
-  in the `Authorization` header. The app does not use browser cookies.
-- Startup validates the stored session through `/api/me`; PostgreSQL remains
-  authoritative for tenant membership, expiry, and revocation.
-- Logout calls `/api/auth/logout` before deleting the local credential. If the
-  server cannot confirm logout, the app keeps the credential and reports the
-  failure so the user can retry.
+- The client uses the versioned `/api/v1` native API. Login first requests a
+  CSRF token, then calls `/api/v1/auth/native/login`.
+- The opaque access and refresh credentials are stored together as one value
+  with `expo-secure-store`; both are sent only through the appropriate HTTPS
+  request (`Authorization: Bearer` for protected calls, refresh token in the
+  refresh request body). The app does not use browser cookies.
+- On a protected request's `401`, the client rotates the credential pair at
+  `/api/v1/auth/native/refresh`, persists the new pair, then retries the
+  protected request once. A lost refresh response is retried with the same
+  `X-Request-ID` so the server can return its cached rotation response.
+- Expired or revoked refresh credentials clear the local session. Transient
+  errors keep it available for a retry.
+- Startup validates the session through `/api/v1/me`; PostgreSQL remains
+  authoritative for tenant membership, expiry, and revocation. Inventory
+  loading follows `next_cursor` until all pages are read.
+- Logout calls `/api/v1/auth/logout` before clearing local credentials. If the
+  server cannot confirm logout, the app keeps the credential pair and reports
+  the failure so the user can retry.
 
 ## Verify
 
 ```sh
 npm run test:api
 npm run typecheck
+npm run lint
 npx expo-doctor
 ```
 
