@@ -162,6 +162,23 @@ def test_platform_web_role_cannot_read_mail_outbox_rows(platform_api):
         connection.close()
 
 
+@pytest.mark.parametrize("columns", ["encrypted_payload", "id, status"])
+def test_platform_web_role_cannot_read_mail_outbox_sensitive_columns(platform_api, columns):
+    from psycopg.errors import InsufficientPrivilege
+
+    api = platform_api
+    connection = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+    try:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(api.schema)))
+        connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(api.runtime_role)))
+        connection.commit()
+
+        with pytest.raises(InsufficientPrivilege):
+            connection.execute(f"SELECT {columns} FROM mail_outbox").fetchall()
+    finally:
+        connection.close()
+
+
 def test_platform_web_role_can_idempotently_enqueue_mail(platform_api):
     from backend.services.mail_outbox import enqueue_mail
 
