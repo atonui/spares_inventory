@@ -150,12 +150,43 @@ still require product-owner approval:
 
 | Decision | Needed before | Current state |
 | --- | --- | --- |
-| Account-deletion completion target after verification | Request status and support workflow | Unset |
-| Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | Not documented in the SaaS runbook |
-| Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | Unset; requires a verified business/legal basis |
-| Export format, availability window, and download expiry | Tenant deletion request flow | Unset |
+| Account-deletion completion target after verification | Request status and support workflow | Recommend 30 calendar days after verification; approval pending |
+| Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | Provider configuration, restore procedure, and owner not verified; no public duration proposed |
+| Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | No schedule approved; requires a verified business/legal basis |
+| Export format, availability window, and download expiry | Tenant deletion request flow | Recommend ZIP of CSVs plus manifest, available for 30 days; approval pending |
 | Invitation handling when its inviter is removed | Member-removal flow | Existing invitations remain active and retain the inviter's global identity; company admins may continue to manage them. |
-| Notification channels and support contact | Request lifecycle | Unset |
+| Notification channels and support contact | Request lifecycle | Recommend email and in-app status; public support contact and approval pending |
+
+## Recommended defaults for owner review
+
+These are implementation-planning recommendations only. They are not approved
+policy, public promises, or authorization to build deletion operations.
+
+- **Account deletion target:** After account control is verified and any owner
+  transfer is complete, aim to finish account deletion or anonymization within
+  30 calendar days. Revoke sessions and block sign-in when execution begins.
+  Let the requester cancel until execution begins; do not imply that the
+  account-deletion request shares the tenant's 30-day cancellation window.
+- **Tenant export:** Generate one access-controlled ZIP containing a CSV for
+  each exported tenant table and a JSON manifest with the export schema
+  version and UTC generation time. Keep it available until the same UTC
+  deadline as the selected 30-day tenant-deletion cancellation window, then
+  expire the download. The tenant remains usable during that window.
+- **Notices:** Send email to the verified owner/requester when a request is
+  accepted, verification is needed or complete, an export is ready, a request
+  is canceled, and deletion completes. Show authenticated request status in
+  the app where the requester still has access. Configure a real support
+  contact before publishing the public request page.
+- **Retained records:** Do not choose data classes or retention durations
+  without a verified business or legal basis. The working default should be
+  to remove direct account identifiers and anonymize actor display fields;
+  retain only the minimum stable references required to preserve company
+  record integrity. Any extra retention needs a named basis, duration, and
+  approver before implementation.
+- **Backups:** Do not publish a backup-retention duration until the selected
+  PostgreSQL provider's actual backup schedule, expiry, restore procedure, and
+  owner have been verified. A deletion ledger must survive restore of an older
+  backup and reapply completed deletions before restored service is exposed.
 
 Account deletion and tenant deletion endpoints, UI, schedulers, migrations,
 retention promises, and production operations remain blocked until their
@@ -165,3 +196,19 @@ revokes the member's sessions, and preserves the global identity and company
 history. It does not delete an account or tenant. Existing invitations issued
 by the removed member remain active and retain that inviter's global identity;
 company admins may continue to manage them.
+
+## Current platform guidance
+
+Apple requires an in-app account-deletion option for apps that support account
+creation and requires the privacy policy to explain data retention/deletion.
+Google Play requires an in-app deletion path plus a web resource, and says
+developers should tell users what to expect and complete requests within a
+reasonably quick period while checking applicable legal requirements. These
+platform requirements do not set the product's numeric completion or backup
+retention periods; the 30-day account target above remains a proposed internal
+service target pending owner and legal review.
+
+- Apple App Review Guidelines, sections 5.1.1 and 5.1.1(v):
+  <https://developer.apple.com/app-store/review/guidelines/>
+- Google Play account deletion requirements:
+  <https://support.google.com/googleplay/android-developer/answer/13327111>
