@@ -9,7 +9,7 @@
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261014-announcement-controls" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
-<script src="js/pages/profile.js?v=20261013-frontend-1" defer></script>
+<script src="js/pages/profile.js?v=20261017-email-change" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -38,8 +38,25 @@
 <button id="profile-tab-password" type="button" role="tab" aria-controls="profile-panel-password" :aria-selected="activeTab === 'password'" :tabindex="activeTab === 'password' ? 0 : -1" @click="setActiveTab('password')" @keydown.arrow-right.prevent="setActiveTab('profile', true)" @keydown.arrow-left.prevent="setActiveTab('profile', true)" @keydown.home.prevent="setActiveTab('profile', true)" @keydown.end.prevent="setActiveTab('password', true)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#lock"></use></svg> Change password</button>
 </div>
 <section id="profile-panel-profile" role="tabpanel" aria-labelledby="profile-tab-profile" x-show="activeTab === 'profile'">
-<h2>Account details</h2><p class="profile-help">Contact your administrator to update these details.</p>
+<h2>Account details</h2><p class="profile-help">Contact your administrator to update your name, role, or territory.</p>
 <dl class="profile-details"><div><dt>Name</dt><dd x-text="profile.name || '—'"></dd></div><div><dt>Email address</dt><dd x-text="profile.email || '—'"></dd></div><div><dt>Role</dt><dd x-text="profile.role || '—'"></dd></div><div><dt>Territory</dt><dd x-text="profile.territory || '—'"></dd></div></dl>
+<section class="profile-email-change" x-show="profile.saas_mode" aria-labelledby="email-change-title">
+<h2 id="email-change-title">Change email address</h2>
+<p class="profile-help">Your current verified address remains active until you confirm the link sent to the new address.</p>
+<form class="profile-setting" @submit.prevent="requestEmailChange()" :aria-busy="emailChangeSaving">
+<label for="new-account-email">New email address</label>
+<input id="new-account-email" type="email" x-model="emailChangeDraft" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" required :disabled="emailChangeSaving">
+<div class="profile-actions"><button type="submit" :disabled="emailChangeSaving || emailChangeStatusLoading || saving || timezoneSaving || csrfLoading || !csrfToken || !emailChangeDraft.trim()"><span x-text="emailChangeSaving ? 'Sending…' : 'Send confirmation link'"></span></button></div>
+<p role="alert" class="error" x-show="emailChangeError" x-text="emailChangeError"></p>
+<p role="status" class="success" aria-live="polite" x-show="emailChangeMessage" x-text="emailChangeMessage"></p>
+</form>
+<div class="profile-setting" x-show="pendingEmailChange" x-cloak>
+<h3>Confirmation pending</h3><p role="status" class="profile-help">If the address can be used, check <strong x-text="pendingEmailChange?.proposed_email"></strong> for a confirmation link. The request expires <time x-text="pendingEmailChange?.expires_at"></time>. Your current sign-in address remains active until confirmation.</p>
+<button type="button" class="profile-secondary" @click="cancelEmailChange()" :disabled="emailChangeSaving || saving || timezoneSaving || csrfLoading || !csrfToken"><span x-text="emailChangeSaving ? 'Canceling…' : 'Cancel email change'"></span></button>
+</div>
+<p role="status" class="profile-help" x-show="emailChangeStatusLoading">Checking for a pending email change…</p>
+<div role="alert" x-show="emailChangeStatusError" x-cloak><p x-text="emailChangeStatusError"></p><button type="button" class="profile-secondary" @click="loadEmailChangeStatus()" :disabled="emailChangeStatusLoading">Retry email-change status</button></div>
+</section>
 <h2>Timezones</h2><p role="status" x-show="timezoneLoading">Loading timezone settings…</p>
 <div role="alert" x-show="timezoneError"><p x-text="timezoneError"></p><button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg> Retry timezone settings</button></div>
 <div class="profile-preferences" :class="{ 'profile-preferences-personal': !canManageBusinessTimezone }">

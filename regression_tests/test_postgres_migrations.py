@@ -6,13 +6,69 @@ import psycopg
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
-def test_password_reset_mail_migration_is_registered():
+def test_password_reset_mail_migration_remains_registered_at_version_eight():
     from backend.postgres_migrations.registry import MIGRATIONS
 
-    assert [(migration.version, migration.name) for migration in MIGRATIONS][-1] == (
+    assert [(migration.version, migration.name) for migration in MIGRATIONS][-2] == (
         8,
         "password_reset_mail",
     )
+
+
+def test_email_change_verification_migration_is_registered_with_account_schema():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = MIGRATIONS[-1]
+    assert (migration.version, migration.name) == (9, "email_change_verification")
+    sql = "\n".join(migration.statements)
+    assert "CREATE TABLE email_change_requests" in sql
+    assert "user_id BIGINT NOT NULL REFERENCES users(id)" in sql
+    assert "proposed_email TEXT NOT NULL" in sql
+    assert "token_hash TEXT NOT NULL" in sql
+    assert "delivery_suppressed BOOLEAN NOT NULL DEFAULT FALSE" in sql
+    assert "CREATE UNIQUE INDEX" in sql
+    assert "lower(btrim(email))" in sql
+    assert "ENABLE ROW LEVEL SECURITY" in sql
+    assert "email_change_request_account_scope" in sql
+    assert "app.email_change_user_id" in sql
+    assert "app.email_change_token_hash" in sql
+    assert "organization_id" not in sql
+    assert "UPDATE users SET email" not in sql
+
+
+def test_email_change_request_constraints_are_append_only_and_single_active(postgres_schema):
+    from psycopg.errors import UniqueViolation
+
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from datetime import timedelta
+    from backend.temporal import serialize_instant, utc_now
+
+    connection, _ = postgres_schema
+    status = apply_postgres_migrations(connection)
+    assert status.applied_versions == tuple(range(1, 10))
+    assert status.pending_versions == ()
+
+    user_id = connection.execute(
+        "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s) RETURNING id",
+        ("CaseSensitive@example.test", "Case test", "unused"),
+    ).fetchone()["id"]
+    expiration = serialize_instant(utc_now() + timedelta(hours=1))
+    connection.execute(
+        "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
+        "VALUES (%s, %s, %s, %s)",
+        (user_id, "next@example.test", "token-hash-1", expiration),
+    )
+    with pytest.raises(UniqueViolation):
+        connection.execute(
+            "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
+            "VALUES (%s, %s, %s, %s)",
+            (user_id, "other@example.test", "token-hash-2", expiration),
+        )
+    with pytest.raises(UniqueViolation):
+        connection.execute(
+            "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s)",
+            ("casesensitive@example.test", "Case collision", "unused"),
+        )
 
 
 def test_password_reset_outbox_message_type_is_supported(postgres_schema):
@@ -21,7 +77,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    assert status.applied_versions == tuple(range(1, 10))
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -75,7 +131,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    assert status.applied_versions == tuple(range(1, 10))
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -120,7 +176,8 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     policies = connection.execute(
         """SELECT tablename FROM pg_policies WHERE schemaname = current_schema()"""
     ).fetchall()
-    assert {row["tablename"] for row in policies} == expected
+    assert {row["tablename"] for row in policies} == expected | {"email_change_requests"}
+    assert rls["email_change_requests"] == (True, False)
     constraints = {
         row["conname"]
         for row in connection.execute(
@@ -198,7 +255,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    assert status.applied_versions == tuple(range(1, 10))
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -333,7 +390,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    assert status.applied_versions == tuple(range(1, 10))
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -384,7 +441,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    assert status.applied_versions == tuple(range(1, 10))
     session_columns = {
         row["column_name"]
         for row in connection.execute(

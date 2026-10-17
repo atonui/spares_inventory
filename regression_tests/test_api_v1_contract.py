@@ -174,34 +174,43 @@ def test_v1_unhandled_exception_uses_sanitized_500(error_contract_client):
 def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
     import main
 
-    routes = {
-        route.path: route
+    routes = {}
+    for route in (
+        route
         for route in main.app.routes
         if isinstance(route, APIRoute)
         and route.path.startswith("/api/v1/")
         and route.path not in {"/api/v1/inventory", "/api/v1/openapi.json"}
-    }
+    ):
+        routes.setdefault(route.path, set()).update(route.methods)
     assert set(routes) == {
         "/api/v1/csrf-token",
         "/api/v1/auth/native/login",
         "/api/v1/auth/native/refresh",
         "/api/v1/me",
         "/api/v1/auth/logout",
+        "/api/v1/me/email-change-requests",
+        "/api/v1/me/email-change-request",
+        "/api/v1/auth/email-change/confirm",
     }
-    assert routes["/api/v1/csrf-token"].methods == {"GET"}
-    assert routes["/api/v1/auth/native/login"].methods == {"POST"}
-    assert routes["/api/v1/auth/native/refresh"].methods == {"POST"}
-    assert routes["/api/v1/me"].methods == {"GET"}
-    assert routes["/api/v1/auth/logout"].methods == {"POST"}
+    assert routes["/api/v1/csrf-token"] == {"GET"}
+    assert routes["/api/v1/auth/native/login"] == {"POST"}
+    assert routes["/api/v1/auth/native/refresh"] == {"POST"}
+    assert routes["/api/v1/me"] == {"GET"}
+    assert routes["/api/v1/auth/logout"] == {"POST"}
+    assert routes["/api/v1/me/email-change-requests"] == {"POST"}
+    assert routes["/api/v1/me/email-change-request"] == {"GET", "DELETE"}
+    assert routes["/api/v1/auth/email-change/confirm"] == {"POST"}
 
 
 def test_v1_auth_aliases_reuse_legacy_handler_callables():
     import main
 
     routes = {
-        route.path: route.endpoint
+        (route.path, method): route.endpoint
         for route in main.app.routes
         if isinstance(route, APIRoute)
+        for method in route.methods
     }
     for versioned, legacy in (
         ("/api/v1/csrf-token", "/api/csrf-token"),
@@ -209,8 +218,13 @@ def test_v1_auth_aliases_reuse_legacy_handler_callables():
         ("/api/v1/auth/native/refresh", "/api/auth/native/refresh"),
         ("/api/v1/me", "/api/me"),
         ("/api/v1/auth/logout", "/api/auth/logout"),
+        ("/api/v1/me/email-change-requests", "/api/profile/email-change-requests"),
+        ("/api/v1/auth/email-change/confirm", "/api/auth/email-change/confirm"),
     ):
-        assert routes[versioned] is routes[legacy]
+        assert routes[(versioned, "GET" if versioned.endswith("/me") or versioned.endswith("/email-change-request") or versioned.endswith("/csrf-token") else "POST")] is routes[
+            (legacy, "GET" if legacy.endswith("/me") or legacy.endswith("/email-change-request") or legacy.endswith("/csrf-token") else "POST")
+        ]
+    assert routes[("/api/v1/me/email-change-request", "DELETE")] is routes[("/api/profile/email-change-request", "DELETE")]
 
 
 def test_v1_protected_auth_routes_require_bearer_not_cookie():
@@ -290,6 +304,9 @@ def test_v1_openapi_is_filtered_and_versioned():
         "/api/v1/me",
         "/api/v1/inventory",
         "/api/v1/auth/logout",
+        "/api/v1/me/email-change-requests",
+        "/api/v1/me/email-change-request",
+        "/api/v1/auth/email-change/confirm",
     }
     assert "/api/inventory" not in document["paths"]
     assert not any(path.startswith("/api/superadmin/") for path in document["paths"])
@@ -310,6 +327,10 @@ def test_v1_openapi_documents_bearer_and_login_csrf():
     assert document["paths"]["/api/v1/me"]["get"]["security"] == [{"BearerAuth": []}]
     assert document["paths"]["/api/v1/inventory"]["get"]["security"] == [{"BearerAuth": []}]
     assert document["paths"]["/api/v1/auth/logout"]["post"]["security"] == [{"BearerAuth": []}]
+    assert document["paths"]["/api/v1/me/email-change-requests"]["post"]["security"] == [{"BearerAuth": []}]
+    assert document["paths"]["/api/v1/me/email-change-request"]["get"]["security"] == [{"BearerAuth": []}]
+    assert document["paths"]["/api/v1/me/email-change-request"]["delete"]["security"] == [{"BearerAuth": []}]
+    assert document["paths"]["/api/v1/auth/email-change/confirm"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/auth/native/login"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/auth/native/refresh"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/csrf-token"]["get"].get("security", []) == []
@@ -324,6 +345,18 @@ def test_v1_openapi_documents_bearer_and_login_csrf():
     logout_schema = document["paths"]["/api/v1/auth/logout"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
     assert csrf_schema["$ref"].endswith("CsrfTokenResponse")
     assert logout_schema["$ref"].endswith("SuccessResponse")
+    request_schema = document["paths"]["/api/v1/me/email-change-requests"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"].endswith("EmailChangeRequest")
+    request_responses = document["paths"]["/api/v1/me/email-change-requests"]["post"]["responses"]
+    assert request_responses["202"]["content"]["application/json"]["schema"]["$ref"].endswith("EmailChangeRequestResponse")
+    status_schema = document["paths"]["/api/v1/me/email-change-request"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    assert status_schema["$ref"].endswith("EmailChangeStatus")
+    expiry_schema = document["components"]["schemas"]["EmailChangeStatus"]["properties"]["expires_at"]
+    assert expiry_schema["anyOf"][0]["format"] == "date-time"
+    cancel_schema = document["paths"]["/api/v1/me/email-change-request"]["delete"]["responses"]["200"]["content"]["application/json"]["schema"]
+    assert cancel_schema["$ref"].endswith("EmailChangeCancelResponse")
+    confirmation_schema = document["paths"]["/api/v1/auth/email-change/confirm"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
+    assert confirmation_schema["$ref"].endswith("EmailChangeConfirmationResponse")
 
 
 def test_v1_openapi_documents_login_rate_limit_and_retry_after():
@@ -340,6 +373,10 @@ def test_v1_openapi_documents_login_rate_limit_and_retry_after():
     assert "5 attempts per minute" in refresh["description"].lower()
     assert "within 60 seconds" in refresh["description"].lower()
     assert refresh["responses"]["429"]["headers"]["Retry-After"]["schema"]["type"] == "string"
+    email_request = document["paths"]["/api/v1/me/email-change-requests"]["post"]
+    assert "3 requests per hour per account" in email_request["description"]
+    confirmation = document["paths"]["/api/v1/auth/email-change/confirm"]["post"]
+    assert "5 attempts per minute per ip" in confirmation["description"].lower()
 
 
 def test_v1_openapi_includes_pagination_and_standard_errors():

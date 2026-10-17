@@ -39,6 +39,21 @@ developer does not need to install PostgreSQL locally. Before production
 planning, require the PostgreSQL test workflow and the frontend suite to pass
 on the exact release commit.
 
+Before applying the email-change migration to any shared SaaS database, check
+for existing case-insensitive email collisions. The migration adds a unique
+index on `lower(btrim(email))` and does not rewrite existing addresses:
+
+```sql
+SELECT lower(btrim(email)) AS normalized_email, count(*) AS account_count,
+       array_agg(id ORDER BY id) AS user_ids
+FROM users
+GROUP BY lower(btrim(email))
+HAVING count(*) > 1;
+```
+
+If this returns any rows, stop and review a separate data-remediation change;
+do not apply the migration until the duplicates are resolved.
+
 ## Database roles
 
 Provision three distinct login identities through environment provisioning:
@@ -74,6 +89,17 @@ GRANT SELECT (id, idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
 GRANT UPDATE (idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
 GRANT USAGE ON SEQUENCE mail_outbox_id_seq TO web_runtime_role;
 GRANT SELECT ON platform_mail_outbox_counts TO web_runtime_role;
+
+REVOKE ALL PRIVILEGES ON TABLE email_change_requests FROM web_runtime_role;
+GRANT SELECT (id, user_id, proposed_email, token_hash, delivery_suppressed,
+              created_at, expires_at, consumed_at, canceled_at)
+  ON TABLE email_change_requests TO web_runtime_role;
+GRANT INSERT (user_id, proposed_email, token_hash, delivery_suppressed, expires_at)
+  ON TABLE email_change_requests TO web_runtime_role;
+GRANT UPDATE (consumed_at, canceled_at)
+  ON TABLE email_change_requests TO web_runtime_role;
+GRANT USAGE ON SEQUENCE email_change_requests_id_seq TO web_runtime_role;
+GRANT UPDATE (email) ON TABLE users TO web_runtime_role;
 
 GRANT USAGE ON SCHEMA public TO mail_worker_role;
 GRANT SELECT (id, organization_id, message_type, recipient_email, encrypted_payload,

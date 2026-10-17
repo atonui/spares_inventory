@@ -408,6 +408,7 @@ async def verify_authenticated_csrf(
 
 
 from backend.routes.auth import create_auth_router
+from backend.services.authenticated_account_transactions import authenticated_account_transaction
 
 app.include_router(create_auth_router(
     get_connection=lambda: get_db_connection(),
@@ -436,6 +437,11 @@ app.include_router(create_auth_router(
     logger=logger,
     cookie_secure=lambda: settings.COOKIE_SECURE,
     native_refresh_encryption_key=settings.NATIVE_REFRESH_ENCRYPTION_KEY,
+    mail_payload_encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+    frontend_url=FRONTEND_URL,
+    authenticated_account_writer=lambda user_id, session_token: authenticated_account_transaction(
+        get_db_connection, principal_or_user=user_id, session_token=session_token
+    ),
 ))
 
 

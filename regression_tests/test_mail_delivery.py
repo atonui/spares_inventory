@@ -61,6 +61,50 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     assert timeout > 0
 
 
+def test_resend_adapter_sends_email_change_verification():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {
+            "message_type": "email_change_verification",
+            "recipient_email": "new@example.test",
+            "payload": {
+                "verification_url": "https://inventory.example.test/email_change_confirmation.html?token=one-time-token",
+                "expires_at": "2030-01-02T03:04:05.000000Z",
+            },
+        },
+        api_key="resend-secret",
+        from_address="SparesFlow <mail@example.test>",
+        http_transport=transport,
+    )
+    _url, body, _headers, _timeout = transport.calls[0]
+    assert body["to"] == ["new@example.test"]
+    assert "verify" in body["subject"].lower()
+    assert "one-time-token" in body["html"]
+
+
+def test_old_email_notice_contains_new_address_without_verification_link():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {
+            "message_type": "email_changed_notice",
+            "recipient_email": "old@example.test",
+            "payload": {"new_email": "new@example.test"},
+        },
+        api_key="resend-secret",
+        from_address="SparesFlow <mail@example.test>",
+        http_transport=transport,
+    )
+    _url, body, _headers, _timeout = transport.calls[0]
+    assert body["to"] == ["old@example.test"]
+    assert "new@example.test" in body["html"]
+    assert "href=" not in body["html"]
+    assert "token=" not in body["html"]
+
+
 def test_default_urllib_transport_accepts_success_status(monkeypatch):
     import backend.services.mail_delivery as delivery
 
@@ -193,6 +237,44 @@ def test_expired_password_reset_is_not_sent_and_is_terminally_failed(monkeypatch
     assert failed[0]["terminal"] is True
     assert failed[0]["error_code"] == "password_reset_link_expired"
     assert failed[0]["mail_id"] == 18
+
+
+def test_expired_email_change_verification_is_not_sent(monkeypatch):
+    from datetime import datetime, timezone
+
+    import backend.mail_worker as worker
+    from cryptography.fernet import Fernet
+    from backend.services.mail_payloads import encrypt_mail_payload
+
+    now = datetime(2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    key = Fernet.generate_key().decode("ascii")
+    message = {
+        "id": 19,
+        "message_type": "email_change_verification",
+        "recipient_email": "new@example.test",
+        "encrypted_payload": encrypt_mail_payload(
+            {
+                "verification_url": "https://example.test/email_change_confirmation.html?token=expired-token",
+                "expires_at": "2030-01-02T03:04:04.000000Z",
+            },
+            key,
+        ),
+    }
+    transport = _Transport()
+
+    sent = worker.deliver_claimed_mail(
+        message,
+        encryption_key=key,
+        api_key="provider-key",
+        from_address="SparesFlow <mail@example.test>",
+        http_transport=transport,
+        now=now,
+    )
+
+    assert sent is False
+    assert transport.calls == []
+    assert message["_delivery_terminal"] is True
+    assert message["_delivery_error_code"] == "email_change_link_expired"
 
 
 @pytest.mark.parametrize("worker_url", [None, "   "])

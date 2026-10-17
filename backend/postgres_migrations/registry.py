@@ -12,6 +12,7 @@ from . import (
     v0006_native_refresh_credentials,
     v0007_mail_outbox_counts,
     v0008_password_reset_mail,
+    v0009_email_change_verification,
 )
 
 
@@ -38,6 +39,7 @@ MIGRATIONS = tuple(
         v0006_native_refresh_credentials,
         v0007_mail_outbox_counts,
         v0008_password_reset_mail,
+        v0009_email_change_verification,
     )
 )
 

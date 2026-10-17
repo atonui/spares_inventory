@@ -15,6 +15,14 @@ from backend.schemas.auth import (
     NativeRefreshRequest, NativeRefreshResponse,
 )
 from backend.schemas.api_v1 import CsrfTokenResponse, SuccessResponse
+from backend.schemas.email_change import (
+    EmailChangeCancelResponse,
+    EmailChangeConfirmation,
+    EmailChangeConfirmationResponse,
+    EmailChangeRequest,
+    EmailChangeRequestResponse,
+    EmailChangeStatus,
+)
 from backend.services.session_credentials import hash_session_credential
 from backend.database_sql import execute, execute_cursor, is_postgres
 
@@ -30,11 +38,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                        queue_reset_email,
                        activity_log, endpoint_log, mutation_activity,
                        limiter, logger, cookie_secure,
-                       native_refresh_encryption_key=None) -> APIRouter:
+                       native_refresh_encryption_key=None,
+                       mail_payload_encryption_key=None, frontend_url=None,
+                       authenticated_account_writer=None) -> APIRouter:
     """Register existing HTTP flows without owning application infrastructure."""
     router = APIRouter()
     get_db_connection = get_connection
     authenticated_write_transaction = authenticated_writer
+    authenticated_account_write_transaction = authenticated_account_writer or authenticated_writer
     stock_write_transaction = stock_writer
     get_current_user = current_user
     verify_csrf = authenticated_csrf_dependency
@@ -50,6 +61,45 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
     def authenticated_user_id(user):
         return getattr(user, "user_id", user)
+
+    def email_change_account_key(request: Request) -> str:
+        user_id = getattr(request.state, "email_change_user_id", None)
+        if user_id is not None:
+            return f"email-change-user:{user_id}"
+        return request.client.host if request.client else "unknown"
+
+    def account_rate_limit(rule):
+        # SlowAPI supports a route-level key function; small test limiters may not.
+        try:
+            return limiter.limit(rule, key_func=email_change_account_key)
+        except TypeError:
+            return limiter.limit(rule)
+
+    async def email_change_user(
+        request: Request, user=Depends(get_current_user),
+    ):
+        request.state.email_change_user_id = authenticated_user_id(user)
+        return user
+
+    def require_postgres(conn):
+        if not is_postgres(conn):
+            raise HTTPException(status_code=503, detail="Email change is unavailable")
+
+    def set_email_change_user_scope(conn, user_id):
+        conn.execute(
+            "SELECT set_config('app.email_change_user_id', %s, true)",
+            (str(user_id),),
+        )
+
+    def email_change_http_error(exc):
+        messages = {
+            "same_email": (422, "The new email must differ from the current email."),
+            "email_change_unavailable": (409, "That email address is unavailable."),
+            "invalid_email_change_token": (400, "The confirmation link is invalid or expired."),
+            "account_unavailable": (404, "The account is unavailable."),
+        }
+        status, message = messages.get(exc.code, (400, "The email change could not be completed."))
+        return HTTPException(status_code=status, detail=message)
 
     @router.get("/api/csrf-token")
     @instant_response
@@ -82,6 +132,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 raise HTTPException(status_code=404, detail="User not found")
             return dict(user) | {
                 "role": principal.company_role or "platform_admin",
+                "saas_mode": True,
             }
         execute_cursor(conn, cursor,
             "SELECT id, email, name, role, territory, created_at, display_timezone FROM users WHERE id = ?",
@@ -114,6 +165,11 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 raise HTTPException(status_code=404, detail="User not found")
 
             if profile_update.email:
+                if is_postgres(conn):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Email addresses must be changed through verification.",
+                    )
                 # Check if email already exists
                 execute_cursor(conn, cursor,
                     "SELECT id FROM users WHERE email = ? AND id != ?",
@@ -137,6 +193,134 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             return {"message": "Profile updated successfully", "email": user["email"],
                     "display_timezone":user['display_timezone']}
+
+
+    @router.post(
+        "/api/profile/email-change-requests",
+        status_code=202,
+        response_model=EmailChangeRequestResponse,
+        responses={409: {"description": "Email address is unavailable"}, 422: {"description": "Invalid request"}},
+    )
+    @account_rate_limit("3/hour")
+    async def request_profile_email_change(
+        data: EmailChangeRequest,
+        request: Request,
+        user=Depends(email_change_user),
+        _csrf=Depends(verify_csrf),
+    ):
+        from backend.services.email_change import EmailChangeFailure, request_email_change
+
+        try:
+            with authenticated_account_write_transaction(
+                user, get_request_credential(request).value
+            ) as conn:
+                require_postgres(conn)
+                set_email_change_user_scope(conn, authenticated_user_id(user))
+                request_email_change(
+                    conn,
+                    user_id=authenticated_user_id(user),
+                    proposed_email=str(data.email),
+                    frontend_url=frontend_url or "",
+                    encryption_key=mail_payload_encryption_key,
+                )
+        except EmailChangeFailure as exc:
+            raise email_change_http_error(exc) from None
+        except ValueError:
+            raise HTTPException(status_code=503, detail="Email change is unavailable") from None
+        # The response is intentionally identical for an available or occupied address.
+        return JSONResponse(
+            status_code=202,
+            content={
+                "success": True,
+                "message": "If the address can be used, a confirmation email has been sent.",
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+    @router.get(
+        "/api/profile/email-change-request",
+        response_model=EmailChangeStatus,
+    )
+    @instant_response
+    async def get_profile_email_change(
+        request: Request,
+        user=Depends(email_change_user),
+    ):
+        from backend.services.email_change import get_pending_email_change
+
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as conn:
+            require_postgres(conn)
+            set_email_change_user_scope(conn, authenticated_user_id(user))
+            result = get_pending_email_change(conn, user_id=authenticated_user_id(user))
+        return JSONResponse(
+            content=result or {"status": "none"},
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+    @router.delete(
+        "/api/profile/email-change-request",
+        response_model=EmailChangeCancelResponse,
+    )
+    @account_rate_limit("10/hour")
+    async def cancel_profile_email_change(
+        request: Request,
+        user=Depends(email_change_user),
+        _csrf=Depends(verify_csrf),
+    ):
+        from backend.services.email_change import cancel_email_change
+
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as conn:
+            require_postgres(conn)
+            set_email_change_user_scope(conn, authenticated_user_id(user))
+            cancel_email_change(conn, user_id=authenticated_user_id(user))
+        return JSONResponse(
+            content={"success": True, "message": "Pending email change canceled."},
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+    @router.post(
+        "/api/auth/email-change/confirm",
+        response_model=EmailChangeConfirmationResponse,
+        responses={400: {"description": "Invalid or expired confirmation"}, 409: {"description": "Email address unavailable"}},
+    )
+    @limiter.limit("5/minute")
+    async def confirm_profile_email_change(
+        data: EmailChangeConfirmation,
+        request: Request,
+    ):
+        from backend.services.email_change import EmailChangeFailure, confirm_email_change
+        from backend.postgres_database import postgres_transaction
+        import psycopg
+
+        conn = get_db_connection()
+        try:
+            require_postgres(conn)
+            with postgres_transaction(conn):
+                confirm_email_change(
+                    conn,
+                    token=data.token,
+                    encryption_key=mail_payload_encryption_key,
+                )
+        except EmailChangeFailure as exc:
+            raise email_change_http_error(exc) from None
+        except psycopg.errors.UniqueViolation:
+            raise HTTPException(status_code=409, detail="That email address is unavailable.") from None
+        finally:
+            conn.close()
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": "Email address updated. A notice will be sent to the previous address.",
+            },
+            headers={"Cache-Control": "no-store"},
+        )
 
 
     @router.post("/api/profile/change-password")
@@ -1014,6 +1198,38 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         methods=["POST"],
         response_model=SuccessResponse,
         dependencies=[Depends(require_native_bearer)],
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/me/email-change-requests",
+        request_profile_email_change,
+        methods=["POST"],
+        status_code=202,
+        response_model=EmailChangeRequestResponse,
+        dependencies=[Depends(require_native_bearer)],
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/me/email-change-request",
+        get_profile_email_change,
+        methods=["GET"],
+        response_model=EmailChangeStatus,
+        dependencies=[Depends(require_native_bearer)],
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/me/email-change-request",
+        cancel_profile_email_change,
+        methods=["DELETE"],
+        response_model=EmailChangeCancelResponse,
+        dependencies=[Depends(require_native_bearer)],
+        include_in_schema=True,
+    )
+    router.add_api_route(
+        "/api/v1/auth/email-change/confirm",
+        confirm_profile_email_change,
+        methods=["POST"],
+        response_model=EmailChangeConfirmationResponse,
         include_in_schema=True,
     )
 
