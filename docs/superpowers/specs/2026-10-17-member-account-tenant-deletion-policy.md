@@ -1,8 +1,9 @@
 # Member, Account, and Tenant Deletion Policy Proposal
 
-**Status:** Proposed policy for owner review. The tenant-deletion window below
-has been selected by the product owner; the remaining decisions are not yet
-approved for implementation.
+**Status:** The product owner approved the account-deletion target, tenant
+deletion/export timing, and notification channels on 2026-10-17. Backup
+retention/recovery, retained-record schedules, and the public support contact
+remain unresolved. This approval does not authorize production data changes.
 
 ## Purpose and scope
 
@@ -143,40 +144,39 @@ without a deliberate retention rule.
 
 ## Decisions required before implementation
 
-The tenant-deletion cancellation period and access rule have been selected:
-30 calendar days with the tenant usable until the deadline, and owner
-cancellation allowed before it expires. The following values and behaviors
-still require product-owner approval:
+The product owner approved these defaults on 2026-10-17:
+
+- Account deletion should complete within 30 calendar days after verification;
+  the requester may cancel until execution begins.
+- For tenant deletion, keep the tenant usable through a 30-calendar-day
+  cancellation period that starts when the export is ready and the owner is
+  notified. The owner may cancel before the deadline.
+- Export the tenant as an access-controlled ZIP of CSV files plus a JSON
+  manifest, available through the cancellation deadline.
+- Send lifecycle notices by email and show authenticated in-app status where
+  the requester still has access.
+
+These decisions do not set a backup-retention promise or authorize deletion
+code. The following facts and policy decisions remain open:
 
 | Decision | Needed before | Current state |
 | --- | --- | --- |
-| Account-deletion completion target after verification | Request status and support workflow | Recommend 30 calendar days after verification; approval pending |
-| Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | As of 2026-10-17, the existing Railway service is SQLite-backed on its persistent volume and no SaaS PostgreSQL service is provisioned; PostgreSQL backup schedule, restore procedure, and owner cannot yet be verified. No public duration proposed. |
-| Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | No schedule approved; requires a verified business/legal basis |
-| Export format, availability window, and download expiry | Tenant deletion request flow | Recommend ZIP of CSVs plus manifest, available for 30 days; approval pending |
-| Invitation handling when its inviter is removed | Member-removal flow | Existing invitations remain active and retain the inviter's global identity; company admins may continue to manage them. |
-| Notification channels and support contact | Request lifecycle | Recommend email and in-app status; public support contact and approval pending |
+| Account-deletion completion target after verification | Request status and support workflow | Approved: target completion within 30 calendar days after verification; requester may cancel until execution begins. |
+| Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | Unresolved. As of 2026-10-17, the existing Railway service is SQLite-backed on its persistent volume and no SaaS PostgreSQL service is provisioned; PostgreSQL backup schedule, restore procedure, and owner cannot yet be verified. Do not publish a duration. |
+| Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | Unresolved. No schedule approved; requires a verified business/legal basis and named approver. |
+| Export format, availability window, and download expiry | Tenant deletion request flow | Approved: access-controlled ZIP of per-table CSV files plus JSON manifest; available until the 30-calendar-day tenant-deletion deadline. |
+| Invitation handling when its inviter is removed | Member-removal flow | Existing behavior: invitations remain active and retain the inviter's global identity; company admins may continue to manage them. |
+| Notification channels and support contact | Request lifecycle | Approved: email notices and authenticated in-app status. Public support contact remains unresolved and is required before publishing the public request page. |
 
-## Recommended defaults for owner review
+## Approved defaults and implementation limits
 
-These are implementation-planning recommendations only. They are not approved
-policy, public promises, or authorization to build deletion operations.
+The timing, export, and notification defaults listed above are approved product
+policy. They are not a published backup-retention promise or authorization to
+perform production deletion.
 
-- **Account deletion target:** After account control is verified and any owner
-  transfer is complete, aim to finish account deletion or anonymization within
-  30 calendar days. Revoke sessions and block sign-in when execution begins.
-  Let the requester cancel until execution begins; do not imply that the
-  account-deletion request shares the tenant's 30-day cancellation window.
-- **Tenant export:** Generate one access-controlled ZIP containing a CSV for
-  each exported tenant table and a JSON manifest with the export schema
-  version and UTC generation time. Keep it available until the same UTC
-  deadline as the selected 30-day tenant-deletion cancellation window, then
-  expire the download. The tenant remains usable during that window.
-- **Notices:** Send email to the verified owner/requester when a request is
-  accepted, verification is needed or complete, an export is ready, a request
-  is canceled, and deletion completes. Show authenticated request status in
-  the app where the requester still has access. Configure a real support
-  contact before publishing the public request page.
+- **Support contact:** Configure and publish the real support contact before
+  exposing a public request path. The approved email and in-app notices do not
+  substitute for this contact.
 - **Retained records:** Do not choose data classes or retention durations
   without a verified business or legal basis. The working default should be
   to remove direct account identifiers and anonymize actor display fields;
@@ -189,8 +189,10 @@ policy, public promises, or authorization to build deletion operations.
   backup and reapply completed deletions before restored service is exposed.
 
 Account deletion and tenant deletion endpoints, UI, schedulers, migrations,
-retention promises, and production operations remain blocked until their
-respective decisions are resolved and the final policy is approved. Company
+retention promises, and production operations remain blocked until the backup
+retention/recovery facts, retained-record schedule and approver, and public
+support contact are resolved. The approved defaults above may guide planning
+and non-destructive implementation preparation only. Company
 member removal is a separate membership operation: it removes company access,
 revokes the member's sessions, and preserves the global identity and company
 history. It does not delete an account or tenant. Existing invitations issued
