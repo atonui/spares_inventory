@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Management - MVP</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261016-mobile-inventory-tables">
-    <link rel="stylesheet" href="login.css?v=20261014-recovery-style">
+    <title>SparesFlow — Inventory Management</title>
+    <link rel="stylesheet" href="mystyle.css?v=20261017-sparesflow-brand">
+    <link rel="stylesheet" href="login.css?v=20261017-sparesflow-brand">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
 <script src="audit.js?v=20261014-frontend-21" defer></script>
@@ -37,7 +37,9 @@
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
-<link rel="stylesheet" href="icons.css?v=20261014-icons">
+<link rel="stylesheet" href="icons.css?v=20261017-sparesflow-brand">
+    <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="brand/generated/favicon.ico">
 </head>
 <body class="with-site-announcement">
 <section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
@@ -52,8 +54,8 @@
         <section x-show="!isAuthenticated" class="login-screen" aria-labelledby="login-title" x-cloak>
             <div class="login-intro">
                 <div class="login-brand">
-                    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="m16 3 12 7v13l-12 7-12-7V10L16 3Z" stroke="currentColor" stroke-width="1.7"/><path d="m4 10 12 7 12-7M16 17v13M10 6.5l12 7" stroke="currentColor" stroke-width="1.7"/></svg>
-                    <span>Inventory Management</span>
+                    <svg viewBox="0 0 128 128" aria-hidden="true" focusable="false"><path fill="currentColor" d="M22 16h8v96h-8zM98 16h8v96h-8zM26 42h76v7H26zM26 72h76v7H26zM26 102h76v7H26zM39 23h22v16H39zM67 23h22v16H67zM39 53h22v16H39zM67 53h22v16H67zM39 83h22v16H39zM67 83h22v16H67z"/><path fill="var(--brand-amber)" d="M67 53h22v16H67z"/></svg>
+                    <span>SparesFlow</span>
                 </div>
                 <div class="login-intro-copy">
                     <p class="login-eyebrow">SPARE PARTS &amp; EQUIPMENT</p>
@@ -108,7 +110,7 @@
                              @click="window.location.href='/static/superadmin.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#settings"></use></svg>
                                 Superadmin
                             </button>
-                            
+
                 </div>
             </div>
 
@@ -176,34 +178,34 @@
                         <button class="btn" @click="showExportMenu = !showExportMenu"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                             Export CSV ▼
                         </button>
-                        <div x-show="showExportMenu" 
+                        <div x-show="showExportMenu"
                             @click.outside="showExportMenu = false"
-                            style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                            style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid var(--brand-border); border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
                                     @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                                 Current View
                             </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
                                     @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                                 All Parts Catalog
                             </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
                                     @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                                 All Stores
                             </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" 
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
                                     @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                                 Movement History
                             </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportUsersCSV(); showExportMenu = false">Users</button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid #eee;" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
-                            <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;" 
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportUsersCSV(); showExportMenu = false">Users</button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
+                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
+                            <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;"
                                     @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg>
                                 Comprehensive Report
                             </button>
-                            
+
                         </div>
                     </div>
 
@@ -268,7 +270,7 @@
 
             <!-- All Parts Panel -->
             <div x-show="showAllPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">All Parts Catalog</h3>
                     <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
                 </div>
@@ -315,7 +317,7 @@
 
             <!-- Parts Management Panel (Admin Only) -->
             <div x-show="!loading && showPartsPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Parts Management</h3>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="btn btn-sm" @click="downloadPartTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
@@ -323,7 +325,7 @@
                             <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg> Import CSV
                             <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
                         </label>
-                        <button class="btn btn-success" 
+                        <button class="btn btn-success"
                                 @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
                             Add Part
                         </button>
@@ -351,7 +353,7 @@
                                 <td data-label="Unit Cost" x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editPart(part)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
-                                    <button class="btn btn-sm" 
+                                    <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
                                             @click="deletePart(part.id, part.part_number)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg>
                                             Archive
@@ -365,7 +367,7 @@
 
             <!-- Store Management Panel (Admin Only) -->
             <div x-show="!loading && showStoresPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Store Management</h3>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="btn btn-sm" @click="downloadStoreTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
@@ -373,7 +375,7 @@
                             <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg> Import CSV
                             <input type="file" accept=".csv" @change="importStores($event)" style="display: none;">
                         </label>
-                        <button class="btn btn-success" 
+                        <button class="btn btn-success"
                                 @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
                             Add Store
                         </button>
@@ -394,7 +396,7 @@
                             <tr>
                                 <td data-label="Name" x-text="store.name"></td>
                                 <td data-label="Type">
-                                    <span class="wo-tag" x-text="store.type" 
+                                    <span class="wo-tag" x-text="store.type"
                                         x-text="storeTypes.find(t => t.type_code === store.type)?.type_name || store.type">
                                     </span>
                                 </td>
@@ -402,7 +404,7 @@
                                 <td data-label="Assigned To" x-text="getUserName(store.assigned_user_id)"></td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editStore(store)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
-                                    <button class="btn btn-sm" 
+                                    <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
                                             @click="deleteStore(store.id, store.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archive</button>
                                 </td>
@@ -414,7 +416,7 @@
 
             <!-- All Stores Panel -->
             <div x-show="showAllStoresPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">All Stores</h3>
                     <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
                 </div>
@@ -441,8 +443,8 @@
                                 <td data-label="Assigned To" x-text="getUserName(store.assigned_user_id)"></td>
                                 <td data-label="Total Items" x-text="inventory.filter(i => i.store_id === store.id).length"></td>
                                 <td data-label="Actions">
-                                    <button class="btn btn-sm btn-success" 
-                                        
+                                    <button class="btn btn-sm btn-success"
+
                                             @click="viewStoreInventory(store)">
                                         View Inventory
                                     </button>
@@ -455,28 +457,28 @@
 
            <!-- Store Inventory Management Panel -->
             <div x-show="showStoreInventoryPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-            <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                 <div>
                     <h3 style="margin: 0;" x-text="selectedStore?.name + ' Inventory'"></h3>
-                    <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;" x-text="storeInventory.length + ' items in stock'"></p>
+                    <p style="margin: 0.5rem 0 0 0; color: var(--brand-navy); font-size: 0.9rem;" x-text="storeInventory.length + ' items in stock'"></p>
                 </div>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="btn btn-sm" 
-                            
+                    <button class="btn btn-sm"
+
                             @click="downloadStoreImportTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
                         Download Template
                     </button>
                     <label x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" class="btn btn-sm"
                         style="cursor: pointer;">
-                        
+
                         <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg> Import CSV
-                        <input type="file" 
-                            accept=".csv" 
-                            @change="importPartsToStore($event, selectedStore?.id)" 
+                        <input type="file"
+                            accept=".csv"
+                            @change="importPartsToStore($event, selectedStore?.id)"
                             style="display: none;">
                     </label>
-                    <button class="btn btn-success" 
-                            
+                    <button class="btn btn-success"
+
                             x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" @click="addStockToStore(selectedStore)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
                         Add Single Part
                     </button>
@@ -682,7 +684,7 @@
 
             <!-- My Parts Panel -->
             <div x-show="showMyPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">My Parts Inventory</h3>
                     <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
                 </div>
@@ -720,7 +722,7 @@
                                         Transfer
                                     </button>
                                     <button class="btn btn-sm"
-                                            style="background: #ff9800; color: white;"
+                                            style="background: var(--brand-amber); color: var(--brand-navy);"
                                             x-show="canEdit(item.store_owner, item.store_type)"
                                             @click="consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
                                         Consume
@@ -730,14 +732,14 @@
                         </template>
                     </tbody>
                 </table>
-                <div x-show="myPartsView.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                <div x-show="myPartsView.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
                     You don't have any parts in your assigned stores yet.
                 </div>
             </div>
 
             <!-- User Management Panel (Admin Only) -->
             <div x-show="!loading && showUsersPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">User Management</h3>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-success"
@@ -780,7 +782,7 @@
                         </template>
                     </tbody>
                 </table>
-                <section x-show="currentUser?.saas_mode" aria-labelledby="pending-invitations-heading" style="padding: 1rem; border-top: 1px solid #ddd;">
+                <section x-show="currentUser?.saas_mode" aria-labelledby="pending-invitations-heading" style="padding: 1rem; border-top: 1px solid var(--brand-border);">
                     <h4 id="pending-invitations-heading">Pending invitations</h4>
                     <p x-show="invitationsLoading" role="status">Loading invitations…</p>
                     <p x-show="!invitationsLoading && invitations.length === 0">No pending invitations.</p>
@@ -798,7 +800,7 @@
 
             <!-- Equipment Management Panel -->
             <div x-show="!loading && showEquipmentPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <div>
                         <h3 style="margin: 0;">Equipment Management</h3>
                         <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
@@ -881,14 +883,14 @@
                     </tbody>
                 </table>
 
-                <div x-show="equipment.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                <div x-show="equipment.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
                     No equipment found.
                 </div>
             </div>
 
             <!-- Store Types Management Panel (Admin Only) -->
             <div x-show="!loading && showStoreTypesPanel && ['owner','admin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">Store Types Management</h3>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-sm" @click="downloadStoreTypeTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
@@ -916,7 +918,7 @@
                         <template x-for="storeType in storeTypes" :key="storeType.id">
                             <tr :style="!storeType.is_active ? 'opacity: 0.5;' : ''">
                                 <td x-text="storeType.display_order" data-label="Order"></td>
-                                <td data-label="Type code"><code x-text="storeType.type_code" style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"></code></td>
+                                <td data-label="Type code"><code x-text="storeType.type_code" style="background: var(--brand-page); padding: 2px 6px; border-radius: 3px;"></code></td>
                                 <td data-label="Type name"><strong x-text="storeType.type_name"></strong></td>
                                 <td x-text="storeType.description || '-'" data-label="Description"></td>
                                 <td data-label="Status">
@@ -938,7 +940,7 @@
                         </template>
                     </tbody>
                 </table>
-                <div x-show="storeTypes.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                <div x-show="storeTypes.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
                     No store types configured. Click "Add Store Type" to create one.
                 </div>
             </div>
@@ -978,66 +980,66 @@
             <div x-show="showConsumeModal" class="modal" x-init="initDialogFocus($el, 'showConsumeModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showConsumeModal')" role="dialog" aria-modal="true" aria-labelledby="consume-stock-title" tabindex="-1" @click.outside="showConsumeModal = false">
                 <div class="modal-content">
                     <h3 id="consume-stock-title">Consume Part for Work Order</h3>
-                    
+
                     <div x-show="consumeForm.part_number" style="background: #fff3cd; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #ffc107;">
                         <div style="font-weight: 600; margin-bottom: 0.5rem;">Consuming:</div>
                         <div>
-                            <strong x-text="consumeForm.part_number"></strong> - 
+                            <strong x-text="consumeForm.part_number"></strong> -
                             <span x-text="consumeForm.description"></span>
                         </div>
                         <div style="margin-top: 0.5rem; font-size: 0.9em; color: #4b3b08;">
-                            From: <strong x-text="consumeForm.store_name"></strong> 
+                            From: <strong x-text="consumeForm.store_name"></strong>
                             (Available: <strong x-text="consumeForm.available_quantity"></strong>)
                         </div>
                     </div>
-                    
+
                     <form @submit.prevent="consumeStock()">
                         <div class="form-group">
                             <label for="consume-work-order-number">Work Order Number *</label>
                             <input id="consume-work-order-number"
-                                type="text" 
-                                x-model="consumeForm.work_order_number" 
+                                type="text"
+                                x-model="consumeForm.work_order_number"
                                 placeholder="e.g., WO-2024-001 or 12345"
                                 required
                                 pattern="[A-Za-z0-9\-]+"
                                 title="Alphanumeric characters and dashes only"
                                 autofocus>
-                            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            <small style="color: var(--brand-slate); display: block; margin-top: 0.25rem;">
                                 Enter the work order number for this consumption
                             </small>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="consume-quantity">Quantity to Consume *</label>
                             <input id="consume-quantity"
-                                type="number" 
-                                x-model="consumeForm.quantity" 
+                                type="number"
+                                x-model="consumeForm.quantity"
                                 :max="consumeForm.available_quantity"
-                                min="1" 
+                                min="1"
                                 required>
-                            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            <small style="color: var(--brand-slate); display: block; margin-top: 0.25rem;">
                                 Maximum available: <strong x-text="consumeForm.available_quantity"></strong>
                             </small>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="consume-notes">Notes (Optional)</label>
                             <textarea id="consume-notes"
-                                x-model="consumeForm.notes" 
-                                rows="3" 
+                                x-model="consumeForm.notes"
+                                rows="3"
                                 placeholder="e.g., Replaced faulty component, Customer site installation, etc."
-                                style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                                style="width: 100%; padding: 0.5rem; border: 1px solid var(--brand-border); border-radius: 4px;"></textarea>
                         </div>
-                        
+
                         <div style="background: #e3f2fd; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9em;">
                             <strong>ℹ️ Note:</strong> This action will deduct the quantity from inventory and record it against the work order.
                         </div>
-                        
+
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showConsumeModal = false; consumeForm = {};">
                                 Cancel
                             </button>
-                            <button type="submit" class="btn" style="background: #ff9800; color: #243746;" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
+                            <button type="submit" class="btn" style="background: var(--brand-amber); color: var(--brand-navy);" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
                                 <span x-show="!loading">Consume Part</span>
                                 <span x-show="loading">Processing...</span>
                             </button>
@@ -1083,7 +1085,7 @@
                         </div>
 
                         <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
-                        <h4 style="margin-bottom: 1rem; color: #667eea;">Calibration Information</h4>
+                        <h4 style="margin-bottom: 1rem; color: var(--brand-navy);">Calibration Information</h4>
 
                         <div class="form-group">
                             <label for="equipment-certificate">Calibration Certificate Number</label>
@@ -1108,7 +1110,7 @@
 
                         <div class="form-group">
                             <label for="equipment-notes">Notes</label>
-                            <textarea id="equipment-notes" x-model="equipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                            <textarea id="equipment-notes" x-model="equipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--brand-border); border-radius: 4px;"></textarea>
                         </div>
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
@@ -1126,7 +1128,7 @@
             <div x-show="showCalibrationModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showCalibrationModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showCalibrationModal')" role="dialog" aria-modal="true" aria-labelledby="calibration-modal-title" tabindex="-1" @click.outside="closeDialog('showCalibrationModal')">
                 <div class="modal-content">
                     <h3 id="calibration-modal-title">Update Calibration</h3>
-                    <p style="margin-bottom: 1rem; color: #666;">
+                    <p style="margin-bottom: 1rem; color: var(--brand-slate);">
                         <strong x-text="selectedEquipment?.equipment_name"></strong>
                         (<span x-text="selectedEquipment?.serial_number"></span>)
                     </p>
@@ -1154,7 +1156,7 @@
 
                         <div class="form-group">
                             <label for="calibration-notes">Notes</label>
-                            <textarea id="calibration-notes" x-model="calibrationForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                            <textarea id="calibration-notes" x-model="calibrationForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--brand-border); border-radius: 4px;"></textarea>
                         </div>
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
@@ -1172,7 +1174,7 @@
             <div x-show="showTransferEquipmentModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showTransferEquipmentModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showTransferEquipmentModal')" role="dialog" aria-modal="true" aria-labelledby="transfer-equipment-modal-title" tabindex="-1" @click.outside="closeDialog('showTransferEquipmentModal')">
                 <div class="modal-content">
                     <h3 id="transfer-equipment-modal-title">Transfer Equipment</h3>
-                    <p style="margin-bottom: 1rem; color: #666;">
+                    <p style="margin-bottom: 1rem; color: var(--brand-slate);">
                         <strong x-text="selectedEquipment?.equipment_name"></strong>
                         (<span x-text="selectedEquipment?.serial_number"></span>)
                     </p>
@@ -1190,7 +1192,7 @@
 
                         <div class="form-group">
                             <label for="equipment-transfer-notes">Notes</label>
-                            <textarea id="equipment-transfer-notes" x-model="transferEquipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="Reason for transfer..."></textarea>
+                            <textarea id="equipment-transfer-notes" x-model="transferEquipmentForm.notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--brand-border); border-radius: 4px;" placeholder="Reason for transfer..."></textarea>
                         </div>
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
@@ -1208,7 +1210,7 @@
             <div x-show="showEquipmentHistoryModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showEquipmentHistoryModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showEquipmentHistoryModal')" role="dialog" aria-modal="true" aria-labelledby="equipment-history-modal-title" tabindex="-1" @click.outside="closeDialog('showEquipmentHistoryModal')">
                 <div class="modal-content" style="max-width: 700px;">
                     <h3 id="equipment-history-modal-title">Equipment History</h3>
-                    <p style="margin-bottom: 1rem; color: #666;">
+                    <p style="margin-bottom: 1rem; color: var(--brand-slate);">
                         <strong x-text="selectedEquipment?.equipment_name"></strong>
                         (<span x-text="selectedEquipment?.serial_number"></span>)
                     </p>
@@ -1235,7 +1237,7 @@
                                             To: <span x-text="history.to_user_name || 'Unassigned'"></span>
                                         </span>
                                         <span x-show="history.action === 'calibrated'" x-text="history.calibration_date"></span>
-                                        <div x-show="history.notes" style="font-size: 0.85em; color: #666; margin-top: 0.25rem;" x-text="history.notes"></div>
+                                        <div x-show="history.notes" style="font-size: 0.85em; color: var(--brand-slate); margin-top: 0.25rem;" x-text="history.notes"></div>
                                     </td>
                                     <td x-text="history.created_by_name"></td>
                                 </tr>
@@ -1243,7 +1245,7 @@
                         </tbody>
                     </table>
 
-                    <div x-show="equipmentHistory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                    <div x-show="equipmentHistory.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
                         No history available.
                     </div>
 
@@ -1257,14 +1259,14 @@
             <div x-show="showCalibrationSettingsModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showCalibrationSettingsModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showCalibrationSettingsModal')" role="dialog" aria-modal="true" aria-labelledby="calibration-settings-modal-title" tabindex="-1" @click.outside="closeDialog('showCalibrationSettingsModal')">
                 <div class="modal-content">
                     <h3 id="calibration-settings-modal-title">Calibration Reminder Settings</h3>
-                    <p style="margin-bottom: 1rem; color: #666;">
+                    <p style="margin-bottom: 1rem; color: var(--brand-slate);">
                         Configure when to send calibration due reminders
                     </p>
                     <form @submit.prevent="updateCalibrationReminderDays()">
                         <div class="form-group">
                             <label for="calibration-reminder-days">Send reminder (days before due date)</label>
                             <input id="calibration-reminder-days" type="number" x-model="calibrationReminderDays" min="1" max="365" required>
-                            <small style="color: #666; display: block; margin-top: 0.5rem;">
+                            <small style="color: var(--brand-slate); display: block; margin-top: 0.5rem;">
                                 Equipment due within this many days will trigger email reminders
                             </small>
                         </div>
@@ -1372,52 +1374,52 @@
                         <div class="form-group">
                             <label for="store-type-code">Type Code *</label>
                             <input id="store-type-code" type="text"
-                                x-model="storeTypeForm.type_code" 
+                                x-model="storeTypeForm.type_code"
                                 :disabled="!!editingStoreType"
                                 pattern="[a-z_]+"
                                 placeholder="e.g., office, warehouse, customer_site"
                                 required>
-                            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            <small style="color: var(--brand-slate); display: block; margin-top: 0.25rem;">
                                 Lowercase letters and underscores only. Cannot be changed after creation.
                             </small>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="store-type-name">Type Name *</label>
                             <input id="store-type-name" type="text"
-                                x-model="storeTypeForm.type_name" 
+                                x-model="storeTypeForm.type_name"
                                 placeholder="e.g., Office/Warehouse"
                                 required>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="store-type-description">Description</label>
                             <textarea id="store-type-description" x-model="storeTypeForm.description"
-                                    rows="2" 
+                                    rows="2"
                                     placeholder="Optional description"
-                                    style="width: 100%;padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                                    style="width: 100%;padding: 0.5rem; border: 1px solid var(--brand-border); border-radius: 4px;"></textarea>
             </div>
             <div class="form-group">
                         <label for="store-type-display-order">Display Order</label>
                         <input id="store-type-display-order" type="number"
-                            x-model="storeTypeForm.display_order" 
+                            x-model="storeTypeForm.display_order"
                             min="0"
                             placeholder="0">
-                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                        <small style="color: var(--brand-slate); display: block; margin-top: 0.25rem;">
                             Lower numbers appear first in dropdowns
                         </small>
                     </div>
-                    
+
                     <div class="form-group" x-show="editingStoreType">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                             <input type="checkbox" x-model="storeTypeForm.is_active">
                             <span>Active</span>
                         </label>
-                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                        <small style="color: var(--brand-slate); display: block; margin-top: 0.25rem;">
                             Inactive types won't appear in dropdowns but existing stores keep their type
                         </small>
                     </div>
-                    
+
                     <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
                         <button type="button" class="btn" @click="showStoreTypeModal = false; editingStoreType = null;">Cancel</button>
                         <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
@@ -1461,7 +1463,7 @@
                 </div>
             </div>
 
-            
+
             <div>
                 <table>
                     <tbody>
