@@ -174,5 +174,30 @@ function usersAdminFeature() {
             }
         },
 
+        async removeUser(userId, userName) {
+            if (!confirm(`Remove ${userName} from this company? Their account and company history will remain.`)) {
+                return;
+            }
+
+            this.loading = true;
+            this.error = '';
+            this.successMessage = '';
+
+            try {
+                const result = await this.apiCall(`/users/${userId}/remove`, {
+                    method: 'POST'
+                });
+
+                this.successMessage = result.message;
+                await this.loadUsers();
+                setTimeout(() => this.successMessage = '', 3000);
+
+            } catch (error) {
+                this.error = 'Failed to remove company member: ' + error.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
     };
 }

@@ -154,11 +154,14 @@ still require product-owner approval:
 | Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | Not documented in the SaaS runbook |
 | Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | Unset; requires a verified business/legal basis |
 | Export format, availability window, and download expiry | Tenant deletion request flow | Unset |
-| Invitation handling when its inviter is removed | Member-removal flow | Unset |
+| Invitation handling when its inviter is removed | Member-removal flow | Existing invitations remain active and retain the inviter's global identity; company admins may continue to manage them. |
 | Notification channels and support contact | Request lifecycle | Unset |
 
-No deletion endpoint, UI, scheduler, migration, retention promise, or production
-operation should be implemented until these decisions are resolved and the
-final policy is approved. The follow-on implementation should be split into
-independently reviewable member removal, account deletion, and tenant deletion
-work if the data-model changes make one combined change too broad.
+Account deletion and tenant deletion endpoints, UI, schedulers, migrations,
+retention promises, and production operations remain blocked until their
+respective decisions are resolved and the final policy is approved. Company
+member removal is a separate membership operation: it removes company access,
+revokes the member's sessions, and preserves the global identity and company
+history. It does not delete an account or tenant. Existing invitations issued
+by the removed member remain active and retain that inviter's global identity;
+company admins may continue to manage them.

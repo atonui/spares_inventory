@@ -251,6 +251,62 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
             return _result
 
 
+    @router.post("/api/users/{target_user_id}/remove")
+    @log_endpoint(action="remove_user", resource_type="user", transactional=True)
+    async def remove_user(
+        target_user_id: int,
+        user_id: int = Depends(get_current_user),
+        csrf_valid: bool = Depends(verify_csrf),
+        request: Request = None,
+    ):
+        """Remove a company membership while retaining the global identity and history."""
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+            if is_postgres(conn):
+                require_company_admin(user_id)
+                organization = execute(
+                    conn,
+                    "SELECT id FROM organizations WHERE id = ? AND is_active = TRUE FOR UPDATE",
+                    (user_id.organization_id,),
+                ).fetchone()
+                if organization is None:
+                    raise HTTPException(status_code=403, detail="Active company membership required")
+                actor_membership = execute(
+                    conn,
+                    """SELECT company_role FROM organization_memberships
+                       WHERE organization_id = ? AND user_id = ? AND is_active = TRUE FOR UPDATE""",
+                    (user_id.organization_id, user_id.user_id),
+                ).fetchone()
+                if actor_membership is None or actor_membership["company_role"] not in {"owner", "admin"}:
+                    raise HTTPException(status_code=403, detail="Company administrator access required")
+                current_actor = AuthenticatedPrincipal(
+                    user_id.user_id,
+                    user_id.organization_id,
+                    actor_membership["company_role"],
+                    user_id.is_platform_admin,
+                )
+                target = execute(
+                    conn,
+                    """SELECT company_role FROM organization_memberships
+                       WHERE organization_id = ? AND user_id = ? FOR UPDATE""",
+                    (current_actor.organization_id, target_user_id),
+                ).fetchone()
+                if target is None:
+                    raise HTTPException(status_code=404, detail="Company member not found")
+                if target["company_role"] == "owner":
+                    raise HTTPException(status_code=403, detail="Transfer ownership before removing the owner")
+                if target["company_role"] == "admin" and current_actor.company_role != "owner":
+                    raise HTTPException(status_code=403, detail="Only the owner can remove an admin")
+                execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
+                execute(
+                    conn,
+                    "DELETE FROM organization_memberships WHERE organization_id = ? AND user_id = ?",
+                    (current_actor.organization_id, target_user_id),
+                )
+                result = {"success": True, "message": "Company membership removed"}
+                _record_mutation_activity(conn, current_actor, "remove_user", "user", result, request)
+                return result
+            raise HTTPException(status_code=501, detail="Company member removal is available in SaaS mode")
+
 
     @router.delete("/api/users/{target_user_id}")
     @log_endpoint(action="archive_user", resource_type="user", transactional=True)

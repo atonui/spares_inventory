@@ -25,7 +25,7 @@ for (const [page,files] of Object.entries(expected)) {
     files.push('js/shared/announcements.js');
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
         const scripts=pageScripts(page);
-        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/inventory/dialog-focus.js' ? '20261016-dialog-focus' : f==='js/inventory/application-core.js' ? '20261014-remember-me' : f==='js/pages/superadmin.js' || f==='js/shared/announcement-time.js' || f==='js/shared/announcements.js' || f==='js/inventory/application-core.js' || (page==='profile.html' && f==='js/shared/csrf.js') ? '20261014-announcement-controls' : f==='js/shared/announcements.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
+        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/inventory/dialog-focus.js' ? '20261016-dialog-focus' : f==='js/inventory/application-core.js' ? '20261014-remember-me' : f==='js/inventory/users-admin.js' ? '20261017-company-member-removal' : f==='js/pages/superadmin.js' || f==='js/shared/announcement-time.js' || f==='js/shared/announcements.js' || f==='js/inventory/application-core.js' || (page==='profile.html' && f==='js/shared/csrf.js') ? '20261014-announcement-controls' : f==='js/shared/announcements.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
         assert.equal(scripts.length,files.length+1);
         assert.equal(scripts.at(-1).src,'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js');
         assert.ok(scripts.every(s=>s.defer));
@@ -48,7 +48,7 @@ test('inventory and profile retain lazy getters and method receivers',()=>{
         const current=loadPageScripts(page,context())[factory]();
         const getter=factory==='inventoryApp'?'replenishmentRows':'displayTimezoneDirty';
         assert.equal(typeof Object.getOwnPropertyDescriptor(current,getter).get,'function');
-        if(factory==='inventoryApp') assert.equal(Object.keys(current).length,274);
+        if(factory==='inventoryApp') assert.equal(Object.keys(current).length,275);
         if(factory==='inventoryApp') {
             current.replenishmentPlan={rows:[{store_id:1},{store_id:2}]};current.replenishmentStoreFilter='2';
             assert.equal(current.replenishmentRows.length,1);assert.equal(current.replenishmentRows[0].store_id,2);
