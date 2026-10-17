@@ -1,6 +1,8 @@
 # Member, Account, and Tenant Deletion Policy Proposal
 
-**Status:** Proposed policy for owner review; not approved for implementation.
+**Status:** Proposed policy for owner review. The tenant-deletion window below
+has been selected by the product owner; the remaining decisions are not yet
+approved for implementation.
 
 ## Purpose and scope
 
@@ -71,13 +73,22 @@ without a deliberate retention rule.
   reauthentication and an explicit confirmation that describes the company-wide
   impact. A user's account deletion is never a tenant deletion request.
 - Before scheduling deletion, make a tenant data export available to the owner
-  and record when it was requested and made available. Keep the tenant available
-  or restrict it during the cancellation period according to an explicit
-  product decision; do not silently choose that behavior in the implementation.
-- Provide a defined cancellation period. During it, an authorized owner can
-  cancel the request. At its end, revoke all tenant sessions and invitations,
-  remove the tenant's operational data, and anonymize any minimal records that
-  must remain for platform operations or audit purposes.
+  and record when it was requested and made available. Once the export is ready
+  and the owner is notified, set a cancellation deadline exactly 30 calendar
+  days later using UTC timestamps. Keep the tenant usable until that deadline;
+  do not start destructive deletion during the cancellation period.
+- An authorized owner can cancel the request before the recorded UTC deadline.
+  Accept cancellation only when a transaction locks the request, verifies the
+  deadline has not passed, and commits the canceled state; return success only
+  after that commit. At or after the deadline, the deletion job must lock the
+  same request and atomically confirm it remains active and no retention hold
+  applies before marking deletion started. These serialized state transitions
+  decide deadline races: a committed cancellation prevents deletion, and a
+  request already marked for deletion cannot be canceled. Then revoke all
+  tenant sessions and invitations, remove the tenant's operational data, and
+  anonymize any minimal records that must remain for platform operations or
+  audit purposes. Record the export-ready notice, cancellation deadline,
+  cancellation (if any), and deletion start/completion times.
 - Remove all memberships for the deleted tenant so its former members can be
   invited to another company. Retain their global identities for future
   invitations; tenant deletion does not delete individual accounts or remove
@@ -132,13 +143,13 @@ without a deliberate retention rule.
 
 ## Decisions required before implementation
 
-The following values and behaviors require product-owner approval; this
-proposal deliberately does not invent them:
+The tenant-deletion cancellation period and access rule have been selected:
+30 calendar days with the tenant usable until the deadline, and owner
+cancellation allowed before it expires. The following values and behaviors
+still require product-owner approval:
 
 | Decision | Needed before | Current state |
 | --- | --- | --- |
-| Tenant-deletion cancellation period | Scheduling tenant deletion | Unset |
-| Whether a tenant remains usable during that period | Tenant request UI and access control | Unset |
 | Account-deletion completion target after verification | Request status and support workflow | Unset |
 | Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | Not documented in the SaaS runbook |
 | Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | Unset; requires a verified business/legal basis |
