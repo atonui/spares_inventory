@@ -151,7 +151,7 @@ still require product-owner approval:
 | Decision | Needed before | Current state |
 | --- | --- | --- |
 | Account-deletion completion target after verification | Request status and support workflow | Recommend 30 calendar days after verification; approval pending |
-| Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | Provider configuration, restore procedure, and owner not verified; no public duration proposed |
+| Backup retention duration and restore procedure owner | Public deletion disclosure and deletion guarantees | As of 2026-10-17, the existing Railway service is SQLite-backed on its persistent volume and no SaaS PostgreSQL service is provisioned; PostgreSQL backup schedule, restore procedure, and owner cannot yet be verified. No public duration proposed. |
 | Records that must be retained, reason, duration, and approver | Account and tenant deletion jobs | No schedule approved; requires a verified business/legal basis |
 | Export format, availability window, and download expiry | Tenant deletion request flow | Recommend ZIP of CSVs plus manifest, available for 30 days; approval pending |
 | Invitation handling when its inviter is removed | Member-removal flow | Existing invitations remain active and retain the inviter's global identity; company admins may continue to manage them. |
