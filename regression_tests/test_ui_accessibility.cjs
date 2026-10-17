@@ -202,6 +202,29 @@ test('primary, success, warning, and consume actions meet WCAG AA contrast', () 
     }
 });
 
+test('dark SparesFlow action buttons explicitly use a light foreground', () => {
+    const mainCss = read('mystyle.css');
+    const adminCss = read('superadmin.css');
+    const loginCss = read('login.css');
+    const darkButtons = [
+        ['Primary button', declaration(mainCss, '.btn', 'color'), declaration(mainCss, '.btn', 'background')],
+        ['Success button', declaration(mainCss, '.btn-success', 'color'), declaration(mainCss, '.btn-success', 'background')],
+        ['Inventory controls', declaration(mainCss, '.inventory-controls .btn', 'color'), declaration(mainCss, '.inventory-controls .btn', 'background')],
+        ['Stock row actions', declaration(mainCss, '.stock-table .btn:not(.btn-warning):not(.btn-consume)', 'color'), declaration(mainCss, '.stock-table .btn:not(.btn-warning):not(.btn-consume)', 'background')],
+        ['Replenishment actions', declaration(mainCss, '.replenishment-panel .btn', 'color'), declaration(mainCss, '.replenishment-panel .btn', 'background')],
+        ['Profile actions', declaration(read('profile.css'), '.profile-page button', 'color'), declaration(read('profile.css'), '.profile-page button', 'background')],
+        ['Selected inventory tab', declaration(mainCss, '.inventory-nav .btn.is-active', 'color'), declaration(mainCss, '.inventory-nav .btn.is-active', 'background')],
+        ['Login submit', declaration(loginCss, '.login-submit', 'color'), declaration(loginCss, '.login-submit', 'background')],
+        ['Platform admin red action', declaration(adminCss, '.btn-red', 'color'), declaration(adminCss, '.btn-red', 'background')],
+        ['Platform admin green action', declaration(adminCss, '.btn-green', 'color'), declaration(adminCss, '.btn-green', 'background')],
+        ['Platform admin amber action', declaration(adminCss, '.btn-amber', 'color'), declaration(adminCss, '.btn-amber', 'background')],
+    ];
+    for (const [name, foreground, background] of darkButtons) {
+        assert.ok(foreground, `${name} should explicitly define its text color`);
+        assertAa(name, foreground, background);
+    }
+});
+
 test('platform-admin inline helper copy keeps readable contrast', () => {
     const adminHtml = read('superadmin.html');
     const lowContrast = [...adminHtml.matchAll(/color\s*:\s*#(?:888|aaa)\b/gi)];
@@ -355,5 +378,5 @@ test('remaining fixed inventory tables become labeled mobile cards and keep row 
     assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
     assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
     assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
-    assert.match(html, /href="mystyle\.css\?v=20261017-sparesflow-brand"/, 'Mobile stylesheet changes should use a fresh cache version');
+    assert.match(html, /href="mystyle\.css\?v=20261017-sparesflow-button-contrast"/, 'Mobile stylesheet changes should use a fresh cache version');
 });

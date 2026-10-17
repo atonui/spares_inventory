@@ -9,9 +9,9 @@
 .profile-page h2 { margin: 24px 0 8px; font-size: 21px; }
 .profile-page h3 { margin: 8px 0; font-size: 18px; }
 .profile-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid var(--brand-border); }
-.profile-page button { background: var(--brand-navy); color: white; border: 1px solid transparent; border-radius: 6px; padding: 10px 16px; font: inherit; cursor: pointer; max-width: 100%; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+.profile-page button { background: var(--brand-navy); color: #ffffff; border: 1px solid transparent; border-radius: 6px; padding: 10px 16px; font: inherit; cursor: pointer; max-width: 100%; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
 .profile-tabs button, .profile-page .profile-secondary { color: var(--brand-navy); background: var(--brand-page); border: 1px solid var(--brand-border); }
-.profile-tabs button[aria-selected="true"] { background: var(--brand-navy); color: white; }
+.profile-tabs button[aria-selected="true"] { background: var(--brand-navy); color: #ffffff; }
 .profile-page :is(button, a, input, select):focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
 .profile-help { color: var(--brand-slate); line-height: 1.6; font-size: 14px; }
 .profile-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding: 20px; border: 1px solid var(--brand-border); border-radius: 10px; background: var(--brand-page); }
