@@ -33,12 +33,14 @@ integer counts. The worker role has schema `USAGE`, column-level `SELECT` on
 `last_error_code`, and `available_at`. It has no access to other application
 tables and no outbox `INSERT`, `DELETE`, or DDL privileges.
 
-Invitation delivery also requires `MAIL_PAYLOAD_ENCRYPTION_KEY`, `RESEND_API_KEY`,
-`RESEND_FROM_EMAIL`, and `INVITATION_BASE_URL`. Store these as service secrets.
-Generate the encryption key with the application's Fernet key generator,
-keep it separate from `SECRET_KEY`, and retain a protected recovery copy. The
-mail worker requires `MAIL_WORKER_DATABASE_URL`; it does not fall back to
-`DATABASE_URL`:
+PostgreSQL SaaS password-reset and invitation delivery require
+`MAIL_PAYLOAD_ENCRYPTION_KEY`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL`.
+Invitation delivery also requires `INVITATION_BASE_URL`. Store these as service
+secrets. Generate the encryption key with the application's Fernet key
+generator, keep it separate from `SECRET_KEY`, and retain a protected recovery
+copy. Password-reset delivery uses `FRONTEND_URL`; legacy SQLite mode retains
+the synchronous SMTP password-reset path. The mail worker requires
+`MAIL_WORKER_DATABASE_URL`; it does not fall back to `DATABASE_URL`:
 
 ```bash
 python -m backend.mail_worker

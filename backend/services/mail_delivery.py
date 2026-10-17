@@ -43,21 +43,33 @@ class _UrllibTransport:
 def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:
     if not api_key or not from_address:
         raise MailDeliveryError("mail_configuration_missing")
-    if message.get("message_type") != "organization_invitation":
-        raise MailDeliveryError("unsupported_message_type")
+    message_type = message.get("message_type")
     recipient = message.get("recipient_email")
     payload = message.get("payload")
-    invitation_url = payload.get("invitation_url") if isinstance(payload, dict) else None
-    parsed = urlsplit(invitation_url) if isinstance(invitation_url, str) else None
-    if (not isinstance(recipient, str) or "@" not in recipient or parsed is None
-            or parsed.scheme not in ("https", "http") or not parsed.netloc):
-        raise MailDeliveryError("invalid_invitation_message")
+    if message_type == "organization_invitation":
+        link = payload.get("invitation_url")
+        subject = "You are invited to Inventory"
+        html = "<p>You have been invited to Inventory.</p>"
+        link_label = "Accept invitation"
+        invalid_code = "invalid_invitation_message"
+    elif message_type == "password_reset":
+        link = payload.get("reset_url")
+        subject = "Password reset request - Inventory System"
+        html = "<p>You requested to reset your Inventory account password.</p>"
+        link_label = "Reset password"
+        invalid_code = "invalid_password_reset_message"
+    else:
+        raise MailDeliveryError("unsupported_message_type")
+    if not isinstance(recipient, str) or "@" not in recipient or not isinstance(payload, dict):
+        raise MailDeliveryError(invalid_code)
+    parsed = urlsplit(link) if isinstance(link, str) else None
+    if (parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc):
+        raise MailDeliveryError(invalid_code)
     body = {
         "from": from_address,
         "to": [recipient],
-        "subject": "You are invited to Inventory",
-        "html": "<p>You have been invited to Inventory.</p>"
-                f'<p><a href="{escape(invitation_url, quote=True)}">Accept invitation</a></p>',
+        "subject": subject,
+        "html": html + f'<p><a href="{escape(link, quote=True)}">{link_label}</a></p>',
     }
     transport = http_transport or _UrllibTransport()
     try:

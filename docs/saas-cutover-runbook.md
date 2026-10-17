@@ -27,6 +27,9 @@ later migration project, not a runtime toggle.
   `MAIL_PAYLOAD_ENCRYPTION_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and
   `INVITATION_BASE_URL` as service secrets. Do not reuse another product's
   mail credentials or encryption keys.
+- PostgreSQL password-reset messages use the encrypted transactional outbox
+  and Resend worker; `FRONTEND_URL` supplies the reset-link origin. Legacy
+  SQLite mode continues to use its existing SMTP path.
 - Verify the invitation sender domain, HTTPS origin, cookie security, exact
   CORS origins, database network access, and worker health before inviting
   customers.

@@ -6,13 +6,34 @@ import psycopg
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
-def test_native_refresh_migration_is_registered():
+def test_password_reset_mail_migration_is_registered():
     from backend.postgres_migrations.registry import MIGRATIONS
 
     assert [(migration.version, migration.name) for migration in MIGRATIONS][-1] == (
-        7,
-        "mail_outbox_counts",
+        8,
+        "password_reset_mail",
     )
+
+
+def test_password_reset_outbox_message_type_is_supported(postgres_schema):
+    from psycopg.errors import CheckViolation
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection, _ = postgres_schema
+    status = apply_postgres_migrations(connection)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    connection.execute(
+        "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
+        "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
+    )
+    assert connection.execute(
+        "SELECT organization_id, message_type FROM mail_outbox WHERE idempotency_key = 'password-reset-test'"
+    ).fetchone() == {"organization_id": None, "message_type": "password_reset"}
+    with pytest.raises(CheckViolation):
+        connection.execute(
+            "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
+            "VALUES ('unsupported', 'person@example.test', 'ciphertext', 'unsupported-test')"
+        )
 
 
 def test_mail_outbox_counts_view_is_one_row_with_only_integer_counts(postgres_schema):
@@ -54,7 +75,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -177,7 +198,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -312,7 +333,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -363,7 +384,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
     session_columns = {
         row["column_name"]
         for row in connection.execute(
