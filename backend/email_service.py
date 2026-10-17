@@ -60,25 +60,25 @@ def send_password_reset_email(
 
     try:
         if logger:
-            logger.info(f"Attempting to send password reset email to {email}")
+            logger.info("Attempting to send password reset email")
         with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(smtp_username, smtp_password)
             server.send_message(msg)
         if logger:
-            logger.info(f"Password reset email sent successfully to {email}")
-    except smtplib.SMTPAuthenticationError as e:
+            logger.info("Password reset email sent successfully")
+    except smtplib.SMTPAuthenticationError:
         if logger:
-            logger.error(f"SMTP Authentication failed: {e}")
+            logger.error("SMTP authentication failed while sending password reset email")
         raise HTTPException(
             status_code=500,
             detail="Email configuration error. Please contact administrator.",
         )
-    except smtplib.SMTPException as e:
+    except smtplib.SMTPException:
         if logger:
-            logger.error(f"SMTP error sending email: {e}")
+            logger.error("SMTP error while sending password reset email")
         raise HTTPException(status_code=500, detail="Failed to send reset email.")
-    except Exception as e:
+    except Exception:
         if logger:
-            logger.error(f"Unexpected error sending email: {e}")
+            logger.error("Unexpected error while sending password reset email")
         raise HTTPException(status_code=500, detail="Failed to send reset email.")

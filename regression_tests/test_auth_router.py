@@ -1,4 +1,5 @@
 """Authentication extraction contracts, using disposable application configuration."""
+import json
 import pytest
 from pydantic import ValidationError
 import main
@@ -99,6 +100,33 @@ def test_auth_runtime_collaborators_are_late_bound(auth_api, tmp_path, monkeypat
     assert hashed == ['new-password']
     with sqlite3.connect(db) as conn:
         assert conn.execute('SELECT password_hash FROM users WHERE id=1').fetchone()[0] == 'replacement-hash'
+
+
+def test_forgot_password_failure_log_omits_email_and_provider_error(auth_api, monkeypatch, caplog):
+    client, db, _ = auth_api
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE users SET email='private-user@example.com' WHERE id=1")
+    monkeypatch.setattr(
+        main,
+        'send_reset_email',
+        lambda email, token: (_ for _ in ()).throw(
+            RuntimeError(f'{email} {token} private provider diagnostic')
+        ),
+    )
+
+    response = client.post('/api/forgot-password', json={'email': 'private-user@example.com'})
+
+    assert response.status_code == 200
+    assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
+    assert caplog.records
+    assert all('private-user@example.com' not in record.getMessage() for record in caplog.records)
+    assert all('private provider diagnostic' not in record.getMessage() for record in caplog.records)
+    with sqlite3.connect(db) as conn:
+        username, details = conn.execute(
+            "SELECT username, details FROM activity_logs WHERE action='password_reset_request' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert username == 'account_holder'
+    assert json.loads(details) == {'account_match': True}
 
 
 @pytest.mark.parametrize('path,payload,limit,initial_status', [
