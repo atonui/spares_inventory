@@ -43,9 +43,7 @@ def create_platform_organizations_router(
             ).fetchone()["total"]
             admins = conn.execute("SELECT count(*) AS total FROM platform_admins").fetchone()["total"]
             mail = conn.execute(
-                """SELECT count(*) FILTER (WHERE status = 'pending') AS pending,
-                          count(*) FILTER (WHERE status = 'failed') AS failed
-                   FROM mail_outbox"""
+                "SELECT pending, failed FROM platform_mail_outbox_counts"
             ).fetchone()
             return {
                 "organizations_total": organizations["total"],

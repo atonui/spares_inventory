@@ -83,7 +83,7 @@ def claim_and_deliver_once(
 
 
 def run(*, once: bool = False) -> None:
-    database_url = os.environ.get("DATABASE_URL")
+    database_url = os.environ.get("MAIL_WORKER_DATABASE_URL")
     encryption_key = os.environ.get("MAIL_PAYLOAD_ENCRYPTION_KEY")
     api_key = os.environ.get("RESEND_API_KEY")
     from_address = os.environ.get("RESEND_FROM_EMAIL")
@@ -92,8 +92,8 @@ def run(*, once: bool = False) -> None:
     validate_mail_encryption_key(encryption_key)
     if not api_key or not from_address:
         raise RuntimeError("RESEND_API_KEY and RESEND_FROM_EMAIL are required")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is required")
+    if not database_url or not database_url.strip():
+        raise RuntimeError("MAIL_WORKER_DATABASE_URL is required")
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         while True:
             did_work = claim_and_deliver_once(

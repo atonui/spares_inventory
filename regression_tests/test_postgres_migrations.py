@@ -10,9 +10,42 @@ def test_native_refresh_migration_is_registered():
     from backend.postgres_migrations.registry import MIGRATIONS
 
     assert [(migration.version, migration.name) for migration in MIGRATIONS][-1] == (
-        6,
-        "native_refresh_credentials",
+        7,
+        "mail_outbox_counts",
     )
+
+
+def test_mail_outbox_counts_view_is_one_row_with_only_integer_counts(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection, _ = postgres_schema
+    apply_postgres_migrations(connection)
+    empty = connection.execute(
+        "SELECT pending, failed FROM platform_mail_outbox_counts"
+    ).fetchall()
+    assert empty == [{"pending": 0, "failed": 0}]
+
+    connection.execute(
+        """INSERT INTO mail_outbox
+           (message_type, recipient_email, encrypted_payload, idempotency_key, status, sent_at)
+           VALUES ('organization_invitation', 'a@example.test', 'cipher-a', 'a', 'pending', NULL),
+                  ('organization_invitation', 'b@example.test', 'cipher-b', 'b', 'failed', NULL),
+                  ('organization_invitation', 'c@example.test', 'cipher-c', 'c', 'sent', '2026-10-17T00:00:00Z')"""
+    )
+    counts = connection.execute(
+        "SELECT pending, failed FROM platform_mail_outbox_counts"
+    ).fetchall()
+    columns = connection.execute(
+        """SELECT column_name, data_type FROM information_schema.columns
+           WHERE table_schema = current_schema()
+             AND table_name = 'platform_mail_outbox_counts'
+           ORDER BY ordinal_position"""
+    ).fetchall()
+    assert counts == [{"pending": 1, "failed": 1}]
+    assert columns == [
+        {"column_name": "pending", "data_type": "integer"},
+        {"column_name": "failed", "data_type": "integer"},
+    ]
 
 
 def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
@@ -21,7 +54,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -144,7 +177,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -253,7 +286,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=7,
+        version=8,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -268,7 +301,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 7"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 8"
     ).fetchone()["count"] == 0
 
 
@@ -279,7 +312,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -330,7 +363,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == (1, 2, 3, 4, 5, 6)
+    assert status.applied_versions == (1, 2, 3, 4, 5, 6, 7)
     session_columns = {
         row["column_name"]
         for row in connection.execute(

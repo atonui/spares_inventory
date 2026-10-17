@@ -60,7 +60,14 @@ def invitation_api(postgres_schema):
             sql.Identifier(table), sql.Identifier(runtime_role)
         ))
     admin.execute(sql.SQL(
-        "GRANT SELECT, INSERT, UPDATE ON organization_invitations, mail_outbox TO {}"
+        "GRANT SELECT, INSERT, UPDATE ON organization_invitations TO {}"
+    ).format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL(
+        "GRANT INSERT (organization_id, message_type, recipient_email, encrypted_payload, idempotency_key), "
+        "SELECT (id, idempotency_key), UPDATE (idempotency_key) ON mail_outbox TO {}"
+    ).format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL(
+        "GRANT SELECT ON platform_mail_outbox_counts TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT USAGE, SELECT ON SEQUENCE organization_invitations_id_seq, mail_outbox_id_seq TO {}"

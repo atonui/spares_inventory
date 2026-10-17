@@ -10,6 +10,7 @@ from . import (
     v0004_tenant_administration,
     v0005_hashed_sessions,
     v0006_native_refresh_credentials,
+    v0007_mail_outbox_counts,
 )
 
 
@@ -34,6 +35,7 @@ MIGRATIONS = tuple(
         v0004_tenant_administration,
         v0005_hashed_sessions,
         v0006_native_refresh_credentials,
+        v0007_mail_outbox_counts,
     )
 )
 
