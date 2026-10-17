@@ -42,7 +42,7 @@ This inventory records data flows evidenced in the repository and a read-only re
 
 - **Database fields:** actor ID and username, action/resource, details, IP, user-agent, status/error and timestamp in activity records; system-log level/component/message/details/timestamp; platform-audit actor, optional organization, action/result/details/timestamp.
 - **Purpose:** application history, security review, support and platform administration (inferred from routes and consumers). Activity details may contain additional record values, so their exact contents depend on the action.
-- **Retention/deletion:** an administrator-triggered activity cleanup defaults to 90 days and preserves protected actions; this is not an automatic retention job. Superadmin cleanup can purge eligible activity/system logs. Platform audit retention is unspecified. Local application/audit/error files rotate by size and count (10 MiB, 10 files per log), not by age. Railway/platform log retention and access controls are unverified.
+- **Retention/deletion:** an administrator-triggered activity cleanup defaults to 90 days and preserves protected actions; this is not an automatic retention job. Superadmin cleanup can purge eligible activity/system logs. Platform audit retention is unspecified. Local application/audit/error files rotate at 10 MiB with 10 rotated backups per log, not by age. Railway/platform log retention and access controls are unverified.
 
 ### Imports, exports and backups
 
