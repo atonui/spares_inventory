@@ -96,6 +96,7 @@ def native_auth_api(postgres_schema):
             "remember_me_duration_days": 30,
         },
         reset_email=lambda *args: None,
+        queue_reset_email=lambda *args, **kwargs: None,
         activity_log=lambda **kwargs: None,
         endpoint_log=lambda **kwargs: (lambda function: function),
         mutation_activity=lambda *args: None,
