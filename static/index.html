@@ -491,8 +491,121 @@
             </div>
             </div>
             <div class="store-search">
-                <label for="store-stock-search">…19946 tokens truncated…="row.currentQuantity !== null">
-                                            <select :disabled="loading" :value="storeConflicts.find(c=>c.partNumber===row.partNumber).action"
+                <label for="store-stock-search">Find stock in this store</label>
+                <input id="store-stock-search" type="search" x-model="storeSearchTerm" placeholder="Part number, description or work order">
+                <p role="status" aria-live="polite" x-text="filteredStoreInventory.length + ' of ' + storeInventory.length + ' stock entries'"></p>
+            </div>
+            <table class="stock-table" role="table">
+                <thead>
+                    <tr>
+                        <th>Part Number</th>
+                        <th>Description</th>
+                        <th>Quantity</th>
+                        <th>Work Order</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="item in filteredStoreInventory" :key="item.id">
+                        <tr role="row" :class="isLowStock(item) ? 'low-stock' : ''">
+                            <td role="cell" data-label="Part number"><div class="stock-cell-value"><strong x-text="item.part_number"></strong></div></td>
+                            <td role="cell" data-label="Description" x-text="item.description"></td>
+                            <td role="cell" data-label="Quantity"><div class="stock-cell-value">
+                                <strong x-text="item.quantity"></strong>
+                                <span x-show="isLowStock(item)" role="img" aria-label="Low stock" title="Low stock">⚠️</span>
+                            </div></td>
+                            <td role="cell" data-label="Work order"><div class="stock-cell-value">
+                                <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
+                                <span x-show="!item.work_order" class="wo-tag">Original</span>
+                            </div></td>
+                            <td role="cell" data-label="Actions"><div class="stock-cell-value">
+                                <button class="btn btn-sm"
+
+                                        x-show="canEdit(item.store_owner, item.store_type)" @click="editItem(item)">
+                                    Adjust
+                                </button>
+                                <button class="btn btn-sm btn-warning"
+
+                                        x-show="canEdit(item.store_owner, item.store_type)" @click="transferItem(item)">
+                                    Transfer
+                                </button>
+                                <button class="btn btn-sm btn-consume"
+
+                                        x-show="canEdit(item.store_owner, item.store_type)" @click="consumeItem(item)">
+                                    Consume
+                                </button>
+                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                                </div></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <p x-show="!inventoryLoadFailed && storeInventory.length > 0 && filteredStoreInventory.length === 0" class="stock-empty">No stock matches this search. <button class="btn btn-sm" @click="storeSearchTerm=''">Clear search</button></p>
+            <div x-show="!inventoryLoadFailed && storeInventory.length === 0" style="padding: 2rem; text-align: center; color: #666;">
+                No stock is recorded in this store. Authorized staff can add stock or confirm incoming transfers.
+            </div>
+            </div>
+
+            <!-- Duplicate Resolution Modal -->
+            <div x-show="showDuplicateResolutionModal" class="modal" x-cloak x-init="initDialogFocus($el, 'showDuplicateResolutionModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showDuplicateResolutionModal')" role="dialog" aria-modal="true" aria-labelledby="duplicate-resolution-title" tabindex="-1" @click.outside="closeDialog('showDuplicateResolutionModal')">
+                <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                    <h3 id="duplicate-resolution-title">Preview Stock Balance Import</h3>
+                    <p style="color: #666; margin-bottom: 1.5rem;">
+                        CSV quantities set the selected parts’ stock balances. Parts omitted from this file stay unchanged.
+                        Review all changes before saving.
+                    </p>
+
+                    <!-- CSV Duplicates Section -->
+                    <div x-show="csvDuplicates.length > 0" style="margin-bottom: 2rem;">
+                        <h4 style="color: #f59e0b; margin-bottom: 1rem;">📄 Duplicates in CSV File</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 1rem;">
+                            These parts appear multiple times in your CSV file.
+                        </p>
+
+                        <table style="margin-bottom: 1rem;">
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Occurrences</th>
+                                    <th>Individual Quantities</th>
+                                    <th>Total if Tallied</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="dup in csvDuplicates" :key="dup.partNumber">
+                                    <tr>
+                                        <td><strong x-text="dup.partNumber"></strong></td>
+                                        <td x-text="dup.count"></td>
+                                        <td x-text="dup.quantities.join(' + ')"></td>
+                                        <td><strong x-text="dup.totalQuantity"></strong></td>
+                                        <td>
+                                            <select x-model="dup.action" aria-label="Action for duplicate CSV part" :disabled="loading" style="width: 100%; padding: 0.4rem;">
+                                                <option value="">Choose an action</option>
+                                                <option value="first">Use first row</option>
+                                                <option value="tally">Sum rows into one balance</option>
+                                                <option value="skip">✗ Skip All</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p x-show="error" x-text="error" role="alert" style="color:#b91c1c;"></p>
+                    <table style="margin-bottom:1rem;">
+                        <thead><tr><th>Part Number</th><th>Current Qty</th><th>New Balance</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <template x-for="row in getImportPreview()" :key="row.partNumber">
+                                <tr>
+                                    <td x-text="row.partNumber"></td>
+                                    <td x-text="row.currentQuantity === null ? 'New stock' : row.currentQuantity"></td>
+                                    <td x-text="row.action === 'resolve' ? 'Choose duplicate action' : row.action === 'skip' ? (row.currentQuantity ?? 'No change') : row.quantity"></td>
+                                    <td>
+                                        <span x-show="row.currentQuantity === null" x-text="row.action === 'create' ? 'Create' : row.action"></span>
+                                        <template x-if="row.currentQuantity !== null">
+                                            <select aria-label="Import action for existing stock" :disabled="loading" :value="storeConflicts.find(c=>c.partNumber===row.partNumber).action"
                                                 @change="storeConflicts.find(c=>c.partNumber===row.partNumber).action=$event.target.value">
                                                 <option value="replace">Set CSV balance</option>
                                                 <option value="skip">Skip</option>
@@ -885,6 +998,70 @@
 
                 <div x-show="equipment.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
                     No equipment found.
+                </div>
+            </div>
+
+            <!-- Inventory Panel -->
+            <div x-show="showInventoryPanel" class="inventory-table">
+                <table class="stock-table" role="table">
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Description</th>
+                            <th>Store</th>
+                            <th>Quantity</th>
+                            <th>Work Order</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in filteredInventory" :key="item.id">
+                            <tr role="row" :class="isLowStock(item) ? 'low-stock' : ''">
+                                <td role="cell" data-label="Part number" x-text="item.part_number"></td>
+                                <td role="cell" data-label="Description" x-text="item.description"></td>
+                                <td role="cell" data-label="Store"><div class="stock-cell-value">
+                                    <span class="store-tag"
+                                          :class="getStoreClass(item.store_type, item.store_owner)"
+                                          x-text="item.store_name">
+                                    </span>
+                                </div></td>
+                                <td role="cell" data-label="Quantity"><div class="stock-cell-value">
+                                    <strong x-text="item.quantity"></strong>
+                                    <span x-show="isLowStock(item)" role="img" aria-label="Low stock" title="Low stock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#alert"></use></svg></span>
+                                </div></td>
+                                <td role="cell" data-label="Work order"><div class="stock-cell-value">
+                                    <span x-show="item.work_order"
+                                          class="wo-tag"
+                                          x-text="item.work_order">
+                                    </span>
+                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
+                                </div></td>
+                                <td role="cell" data-label="Actions"><div class="stock-cell-value">
+                                    <button class="btn btn-sm"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="editItem(item)">
+                                        Adjust
+                                    </button>
+                                    <button class="btn btn-sm btn-warning"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="transferItem(item)">
+                                        Transfer
+                                    </button>
+                                    <button class="btn btn-sm btn-consume"
+                                            x-show="canEdit(item.store_owner, item.store_type)"
+                                            @click="consumeItem(item)">
+                                        Consume
+                                    </button>
+                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                                </div></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+
+                <div x-show="!inventoryLoadFailed && !loading && filteredInventory.length === 0" class="stock-empty">
+                    <p x-text="inventory.length === 0 ? 'No stock is recorded yet. Add stock to get started.' : 'No stock matches these filters.'"></p>
+                    <button class="btn btn-sm" x-show="inventory.length > 0" @click="clearInventoryFilters()">Clear filters</button>
                 </div>
             </div>
 
