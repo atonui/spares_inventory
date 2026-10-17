@@ -1,6 +1,6 @@
 # Mail Worker Database Role Isolation
 
-**Status:** Design approved in chat; awaiting review of this written specification.
+**Status:** Spec approved in chat on 2026-10-17; implementation plan awaiting review.
 
 ## Goal
 
