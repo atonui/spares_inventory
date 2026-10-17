@@ -41,6 +41,8 @@ PostgreSQL migration chain. The runtime login is not a table owner, superuser,
 or `BYPASSRLS` role. Revoke public schema creation, grant the runtime login
 schema usage, the required table DML rights, and sequence usage. Apply matching
 default privileges for tables and sequences created by the migration login.
+The runtime role must have `DELETE` on `organization_memberships` for the
+owner-authorized company-member removal operation.
 Do not grant database ownership or DDL rights to the runtime login.
 
 The runtime role needs access to global identity/session and platform tables

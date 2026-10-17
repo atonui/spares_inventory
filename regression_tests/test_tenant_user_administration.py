@@ -65,6 +65,7 @@ def tenant_user_api(postgres_schema):
         connection.execute(sql.SQL("GRANT SELECT, UPDATE ON {} TO {}").format(
             sql.Identifier(table), sql.Identifier(role)
         ))
+    connection.execute(sql.SQL("GRANT DELETE ON organization_memberships TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT SELECT ON platform_admins TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE activity_logs_id_seq TO {}").format(
@@ -164,6 +165,81 @@ def test_member_deactivation_revokes_sessions(tenant_user_api):
     assert api.connection.execute(
         "SELECT is_active FROM sessions WHERE user_id=%s", (api.manager_id,)
     ).fetchone()["is_active"] is False
+
+
+def test_member_removal_deletes_only_membership_and_revokes_sessions(tenant_user_api):
+    api = tenant_user_api
+    activity_id = api.connection.execute(
+        """INSERT INTO activity_logs(user_id, username, action, organization_id)
+           VALUES (%s, 'manager', 'existing-company-history', %s) RETURNING id""",
+        (api.manager_id, api.org_a),
+    ).fetchone()["id"]
+    remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
+    result = asyncio.run(remove(
+        target_user_id=api.manager_id,
+        user_id=api.principal(api.owner_id), csrf_valid=True, request=_request(api.owner_token),
+    ))
+
+    assert result == {"success": True, "message": "Company membership removed"}
+    assert api.connection.execute(
+        "SELECT count(*) AS count FROM organization_memberships WHERE user_id=%s", (api.manager_id,)
+    ).fetchone()["count"] == 0
+    assert api.connection.execute(
+        "SELECT count(*) AS count FROM users WHERE id=%s", (api.manager_id,)
+    ).fetchone()["count"] == 1
+    assert api.connection.execute(
+        "SELECT is_active FROM sessions WHERE user_id=%s", (api.manager_id,)
+    ).fetchone()["is_active"] is False
+    assert api.connection.execute(
+        "SELECT user_id, action FROM activity_logs WHERE id=%s", (activity_id,)
+    ).fetchone() == {"user_id": api.manager_id, "action": "existing-company-history"}
+
+
+def test_member_removal_is_tenant_scoped_and_protects_owner(tenant_user_api):
+    api = tenant_user_api
+    remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
+    for target_user_id, status in ((api.foreign_id, 404), (api.owner_id, 403)):
+        with pytest.raises(HTTPException) as error:
+            asyncio.run(remove(
+                target_user_id=target_user_id,
+                user_id=api.principal(api.owner_id), csrf_valid=True, request=_request(api.owner_token),
+            ))
+        assert error.value.status_code == status
+
+
+def test_admin_cannot_remove_another_admin(tenant_user_api):
+    api = tenant_user_api
+    api.connection.execute(
+        "UPDATE organization_memberships SET company_role='admin' WHERE organization_id=%s AND user_id=%s",
+        (api.org_a, api.manager_id),
+    )
+    remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(remove(
+            target_user_id=api.admin_id,
+            user_id=api.principal(api.manager_id, company_role="admin"), csrf_valid=True,
+            request=_request(api.manager_token),
+        ))
+    assert error.value.status_code == 403
+
+
+def test_member_removal_uses_current_actor_role_after_ownership_transfer(tenant_user_api):
+    api = tenant_user_api
+    api.connection.execute(
+        "UPDATE organization_memberships SET company_role='admin' WHERE organization_id=%s AND user_id=%s",
+        (api.org_a, api.owner_id),
+    )
+    remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(remove(
+            target_user_id=api.admin_id,
+            user_id=api.principal(api.owner_id, company_role="owner"), csrf_valid=True,
+            request=_request(api.owner_token),
+        ))
+    assert error.value.status_code == 403
+    assert api.connection.execute(
+        "SELECT count(*) AS count FROM organization_memberships WHERE user_id=%s", (api.admin_id,)
+    ).fetchone()["count"] == 1
 
 
 def test_admin_cannot_modify_owner_or_admin_membership(tenant_user_api):

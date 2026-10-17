@@ -24,7 +24,7 @@
 <script src="js/inventory/stock-consumption.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/parts-admin.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/stores-admin.js?v=20261014-frontend-21" defer></script>
-<script src="js/inventory/users-admin.js?v=20261014-frontend-21" defer></script>
+<script src="js/inventory/users-admin.js?v=20261017-company-member-removal" defer></script>
 <script src="js/inventory/store-types-admin.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/equipment.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/activity-logs.js?v=20261014-frontend-21" defer></script>
@@ -772,6 +772,9 @@
                                             style="background: #dc3545; color: white;"
                                             x-show="user.id !== currentUser.id"
                                             @click="deleteUser(user.id, user.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archive</button>
+                                    <button class="btn btn-sm"
+                                            x-show="currentUser?.saas_mode && user.id !== currentUser.id"
+                                            @click="removeUser(user.id, user.name)">Remove from company</button>
                                 </td>
                             </tr>
                         </template>

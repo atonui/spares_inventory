@@ -52,6 +52,18 @@ test('archive decline retains feedback, session and selection',async()=>{
  const prompts=[];const {a,timers}=setup({confirm(m){prompts.push(m);return false;}});a.error='old';a.successMessage='keep';a.selectedStore={id:42};const user=a.currentUser,selected=a.selectedStore;
  a.apiCall=async()=>assert.fail('no write');await a.deleteUser(42,'Target');assert.deepEqual(prompts,['Archive user Target? History will be preserved.']);assert.equal(a.error,'old');assert.equal(a.successMessage,'keep');assert.equal(a.currentUser,user);assert.equal(a.selectedStore,selected);assert.equal(timers.length,0);
 });
+test('remove member has a distinct confirmation and scoped mutation',async()=>{
+ const calls=[];const {a,timers}=setup({confirm(m){calls.push(m);return true;}});
+ a.apiCall=async(path,opts)=>{calls.push([path,opts.method]);return {message:'Company membership removed'};};
+ a.loadUsers=async()=>calls.push('users');
+ await a.removeUser(42,'Target');
+ assert.deepEqual(calls,['Remove Target from this company? Their account and company history will remain.',['/users/42/remove','POST'],'users']);
+ assert.equal(a.successMessage,'Company membership removed');assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);
+});
+test('user actions expose separate reversible archive and company removal controls',()=>{
+ const source=html();assert.match(source,/@click="deleteUser\(user\.id, user\.name\)"[^>]*>.*?Archive/s);
+ assert.match(source,/@click="removeUser\(user\.id, user\.name\)"[^>]*>.*?Remove from company/s);
+});
 for(const open of [false,true])test('archive preserves session/selection and refresh order, panel '+open,async()=>{
  const calls=[];const {a,timers}=setup({confirm(m){calls.push(m);return true;}});a.showArchivedPanel=open;a.selectedStore={id:42};const selected=a.selectedStore,user=a.currentUser;
  a.apiCall=async(path,opts)=>{assert.equal(a.loading,true);calls.push([path,opts.method]);return {message:'Server archived'};};
@@ -75,6 +87,16 @@ for(const stage of ['inventory','archived'])test('core '+stage+' refresh failure
 });
 for(const role of ['owner','admin','superadmin','engineer'])test('core loadUsers preserves role check '+role,async()=>{
  const {a}=setup();a.currentUser.role=role;const calls=[];a.apiCall=async(path)=>{calls.push(path);return [{id:2}];};await a.loadUsers();assert.deepEqual(calls,role==='engineer'?[]:['/users']);assert.equal(a.users.length,role==='engineer'?0:1);
+});
+test('remove member uses the real JSON API and CSRF-protected POST',async()=>{
+ const calls=[];const {a,timers}=setup({fetch:async(url,opts)=>{
+  calls.push([url,opts.method]);
+  if(url==='/api/csrf-token')return response(200,{csrf_token:'fresh'});
+  assert.equal(url,'/api/users/42/remove');assert.equal(opts.method,'POST');assert.equal(opts.headers.get('Content-Type'),'application/json');
+  assert.equal(opts.headers.get('X-CSRF-Token'),'fresh');return response(200,{message:'Company membership removed'});
+ }});a.loadUsers=async()=>calls.push(['users']);
+ await a.removeUser(42,'Target');assert.deepEqual(calls,[['/api/csrf-token',undefined],['/api/users/42/remove','POST'],['users']]);
+ assert.equal(a.successMessage,'Company membership removed');assert.equal(a.loading,false);assert.equal(timers.length,1);
 });
 for(const mode of ['initial','retry','permission','token','retry_rejected'])test('real JSON API/CSRF user write '+mode,async()=>{
  const calls=[];let writes=0;const {a,timers}=setup({fetch:async(url,opts)=>{
