@@ -21,7 +21,7 @@ def enqueue_mail(
     conn, *, organization_id, message_type: str, recipient_email: str,
     encrypted_payload: str, idempotency_key: str,
 ) -> int:
-    if message_type != "organization_invitation":
+    if message_type not in {"organization_invitation", "password_reset"}:
         raise ValueError("Unsupported mail message type.")
     if not all(isinstance(value, str) and value.strip() for value in
                (recipient_email, encrypted_payload, idempotency_key)):

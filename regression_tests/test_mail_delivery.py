@@ -122,6 +122,79 @@ def test_worker_logs_never_include_decrypted_invitation_token(caplog):
     assert "provider error" not in caplog.text
 
 
+def test_worker_logs_never_include_decrypted_password_reset_token(caplog):
+    from backend.mail_worker import deliver_claimed_mail
+
+    caplog.set_level(logging.INFO)
+    transport = _Transport(error=RuntimeError("provider error"))
+    deliver_claimed_mail(
+        {"id": 18, "message_type": "password_reset", "recipient_email": "person@example.test",
+         "encrypted_payload": "ciphertext"},
+        encryption_key="unused",
+        api_key="secret",
+        from_address="Inventory <no-reply@example.test>",
+        http_transport=transport,
+        decrypt=lambda _ciphertext, _key: {
+            "reset_url": "https://example.test/reset_password.html?token=raw-reset-secret",
+            "expires_at": "2099-01-02T03:04:05.000000Z",
+        },
+    )
+    assert "raw-reset-secret" not in caplog.text
+    assert "provider error" not in caplog.text
+
+
+def test_expired_password_reset_is_not_sent_and_is_terminally_failed(monkeypatch):
+    from cryptography.fernet import Fernet
+    from datetime import datetime, timezone
+    import backend.mail_worker as worker
+    from backend.services.mail_payloads import encrypt_mail_payload
+
+    class _Transaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Connection:
+        def transaction(self):
+            return _Transaction()
+
+    now = datetime(2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    encryption_key = Fernet.generate_key().decode("ascii")
+    message = {
+        "id": 18,
+        "message_type": "password_reset",
+        "recipient_email": "person@example.test",
+        "encrypted_payload": encrypt_mail_payload({
+            "reset_url": "https://example.test/reset_password.html?token=expired-secret",
+            "expires_at": "2030-01-02T03:04:04.000000Z",
+        }, encryption_key),
+        "attempt_count": 1,
+        "claim_token": "claim-token",
+    }
+    failed = []
+    monkeypatch.setattr(worker, "claim_pending_mail", lambda _conn, *, now: message)
+    monkeypatch.setattr(worker, "mark_mail_sent", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(worker, "mark_mail_failed", lambda _conn, **kwargs: failed.append(kwargs))
+    transport = _Transport()
+
+    worker.claim_and_deliver_once(
+        _Connection(),
+        encryption_key=encryption_key,
+        api_key="provider-key",
+        from_address="SparesFlow <mail@example.test>",
+        http_transport=transport,
+        now=now,
+    )
+
+    assert transport.calls == []
+    assert len(failed) == 1
+    assert failed[0]["terminal"] is True
+    assert failed[0]["error_code"] == "password_reset_link_expired"
+    assert failed[0]["mail_id"] == 18
+
+
 @pytest.mark.parametrize("worker_url", [None, "   "])
 def test_worker_requires_its_own_database_url_before_connecting(monkeypatch, worker_url):
     from cryptography.fernet import Fernet

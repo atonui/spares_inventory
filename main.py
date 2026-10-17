@@ -29,6 +29,7 @@ from backend.app_activity import (
     record_mutation_activity as _record_mutation_activity_service,
 )
 from backend.email_service import send_password_reset_email
+from backend.services.password_reset_mail import enqueue_password_reset_mail
 
 
 configured_loggers = setup_logging()
@@ -420,6 +421,14 @@ app.include_router(create_auth_router(
     password_verify=lambda plain, hashed: verify_password(plain, hashed),
     security_config=lambda: get_security_config(),
     reset_email=lambda email, token: send_reset_email(email, token),
+    queue_reset_email=lambda conn, email, token, expires_at: enqueue_password_reset_mail(
+        conn,
+        email=email,
+        token=token,
+        frontend_url=FRONTEND_URL,
+        encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+        expires_at=expires_at,
+    ),
     activity_log=lambda **kwargs: log_activity(**kwargs),
     endpoint_log=log_endpoint,
     mutation_activity=lambda *args: _record_mutation_activity(*args),
