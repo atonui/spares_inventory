@@ -10,14 +10,14 @@ This inventory records data flows evidenced in the repository and a read-only re
 ### Accounts and authentication
 
 - **Fields:** user email, display name, password hash, territory, timezone, account/archive timestamps, login and lockout state, and password-reset token plus expiry. PostgreSQL SaaS schema: `backend/postgres_migrations/v0001_core_schema.py`; legacy SQLite schema: `backend/migrations/v0001_core_schema.py`.
-- **Purpose:** account sign-in, account recovery, profile display, authorization, and locale/timezone behavior (inferred from routes and use). Passwords are stored as hashes; the native client submits the password to the authenticated API over HTTPS.
+- **Purpose:** account sign-in, account recovery, profile display, authorization, and locale/timezone behavior (inferred from routes and use). Passwords are stored as hashes; the native client submits the password to the sign-in endpoint over HTTPS.
 - **Access and lifecycle:** profile requires authentication; company user-management is role-checked. Reset tokens have a one-hour expiry and are cleared after successful reset. No general account-erasure flow or user-row retention schedule exists. SaaS account deletion remains unimplemented.
 
 ### Company membership and organization records
 
 - **Fields:** organization name and settings; membership user/organization IDs, company role, active status, and timestamps; platform-admin assignment and platform-audit events.
 - **Purpose:** tenant isolation, company authorization and configuration, and platform administration.
-- **Access and lifecycle:** company records are scoped through server-derived membership and PostgreSQL RLS. Removing a member removes the membership and revokes their sessions while preserving the global account and company history. This is not account or tenant deletion. No organization-deletion operation or tenant retention schedule is implemented.
+- **Access and lifecycle:** operational tenant tables listed in the PostgreSQL RLS policies are scoped by server-derived organization context. The `organizations` and `organization_memberships` tables are not in that RLS list; request access relies on backend principal and role authorization. Removing a member removes the membership and revokes their sessions while preserving the global account and company history. This is not account or tenant deletion. No organization-deletion operation or tenant retention schedule is implemented.
 
 ### Operational inventory and work history
 
@@ -36,7 +36,7 @@ This inventory records data flows evidenced in the repository and a read-only re
 - **Invitation fields:** organization, normalized invited email, role, inviter, token hash, creation/expiry/accepted/canceled times and accepting user. Invitation links expire after seven days.
 - **Outbox fields:** recipient email, encrypted message payload containing the invitation URL/token, idempotency key, status, attempt and scheduling/lease timestamps, and sanitized error code.
 - **Purpose and recipients:** invitation and password-reset delivery. Invitation mail is sent by backend code to Resend's email API; this is a code-level integration, not confirmation that production is configured to use it. Password-reset mail uses a configured SMTP relay; the actual provider is unknown from the repository/runtime review.
-- **Retention/deletion:** invitation and outbox records can remain after expiry or delivery; no routine purge or retention period was found. Organization deletion would cascade to invitations/outbox if performed, but no tenant deletion flow exists. Reset-email logs may include the submitted email; SMTP exception text is logged.
+- **Retention/deletion:** invitation and outbox records can remain after expiry or delivery; no routine purge or retention period was found. Organization deletion would cascade to invitations/outbox if performed, but no tenant deletion flow exists. The outbox is not in the PostgreSQL tenant RLS list; verify its database-role access before SaaS rollout. Reset-email logs may include the submitted email; SMTP exception text is logged.
 
 ### Activity, audit and application logs
 
@@ -46,7 +46,7 @@ This inventory records data flows evidenced in the repository and a read-only re
 
 ### Imports, exports and backups
 
-- Inventory CSV exports are generated in the browser and downloaded to the user's device; export code does not upload the generated file. A comprehensive export can include current-user name/email, catalog/store/inventory data, and recent movement rows with actor names. The application cannot establish how a user's device stores or shares a download.
+- CSV exports are generated in the browser and downloaded to the user's device; export code does not upload the generated file. Exports include inventory/catalog/store data; the users export contains names, email addresses, roles and territories; activity-log export contains usernames, IP addresses, error messages and activity details. A comprehensive report can include current-user name/email and recent movement rows with actor names. The application cannot establish how a user's device stores or shares a download.
 - CSV imports are read in browser memory and submitted to the API for validation and persistence; no external import processor is evidenced.
 - The existing Railway application is SQLite-backed on a persistent volume. A read-only Railway check found no SaaS PostgreSQL service provisioned. The future SaaS PostgreSQL backup schedule, backup expiry, restore owner, and deletion-ledger recovery process therefore cannot yet be verified. The legacy SQLite restore flow creates a pre-restore database copy; no cleanup/retention period for those copies was found.
 
