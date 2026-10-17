@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Superadmin Panel</title>
-<link rel="stylesheet" href="mystyle.css?v=20261016-mobile-dialog-scroll">
-<link rel="stylesheet" href="superadmin.css?v=20261016-mobile-audit-cards">
+<link rel="stylesheet" href="mystyle.css?v=20261017-sparesflow-brand">
+<link rel="stylesheet" href="superadmin.css?v=20261017-sparesflow-brand">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261013-frontend-1" defer></script>
@@ -15,7 +15,9 @@
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
-<link rel="stylesheet" href="icons.css?v=20261014-icons">
+<link rel="stylesheet" href="icons.css?v=20261017-sparesflow-brand">
+    <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="brand/generated/favicon.ico">
 </head>
 
 <body x-data="superPanel()" x-init="init()">
@@ -54,7 +56,7 @@
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <h2>Inventory Management</h2>
+      <h2>SparesFlow</h2>
       <p x-text="me?.saas_mode ? 'Platform Administration' : 'Superadmin Panel'">Superadmin Panel</p>
     </div>
 
@@ -187,8 +189,8 @@
           <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:2rem;">
             <template x-for="[role, count] in Object.entries(dashboard.users_by_role||{})">
               <div style="text-align:center;">
-                <div style="font-size:1.6rem;font-weight:700;color:#007bff;" x-text="count"></div>
-                <div style="font-size:0.75rem;color:#666;text-transform:capitalize;" x-text="role"></div>
+                <div style="font-size:1.6rem;font-weight:700;color:var(--brand-navy);" x-text="count"></div>
+                <div style="font-size:0.75rem;color:var(--brand-slate);text-transform:capitalize;" x-text="role"></div>
               </div>
             </template>
           </div>
@@ -310,7 +312,7 @@
                   <tr>
                     <td data-label="Select"><input type="checkbox" :value="u.id" x-model="selectedLocked" :aria-label="'Select account for ' + u.name" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
                     <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
-                    <td data-label="Email" style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
+                    <td data-label="Email" style="font-size:0.8rem;color:var(--brand-slate);" x-text="u.email"></td>
                     <td data-label="Role"><span class="tag tag-grey" x-text="u.role"></span></td>
                     <td data-label="Failed Attempts"><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
                     <td data-label="Locked Until" style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
@@ -323,8 +325,8 @@
 
           <!-- bulk action bar -->
           <div x-show="selectedLocked.length>0"
-               style="padding:0.75rem 1rem;border-top:1px solid #eee;display:flex;align-items:center;gap:0.75rem;background:#f8f9fa;">
-            <span style="font-size:0.8rem;color:#666;" x-text="selectedLocked.length + ' selected'"></span>
+               style="padding:0.75rem 1rem;border-top:1px solid var(--brand-border);display:flex;align-items:center;gap:0.75rem;background:var(--brand-page);">
+            <span style="font-size:0.8rem;color:var(--brand-navy);" x-text="selectedLocked.length + ' selected'"></span>
             <button class="btn btn-sm btn-green" @click="unlockSelected()" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#unlock"></use></svg> Unlock Selected</button>
           </div>
         </div>
@@ -378,13 +380,13 @@
                   <tr>
                     <td data-label="User">
                       <div style="font-weight:600;" x-text="s.name"></div>
-                      <div style="font-size:0.75rem;color:#666;" x-text="s.email"></div>
+                      <div style="font-size:0.75rem;color:var(--brand-slate);" x-text="s.email"></div>
                     </td>
                     <td data-label="Role"><span class="tag tag-grey" x-text="s.role"></span></td>
                     <td data-label="IP Address" style="font-size:0.8rem;font-family:monospace;" x-text="s.ip_address||'—'"></td>
                     <td data-label="Last Activity" style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
                     <td data-label="Expires" style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
-                    <td data-label="Browser" style="font-size:0.75rem;color:#666;" x-text="parseUA(s.user_agent)"></td>
+                    <td data-label="Browser" style="font-size:0.75rem;color:var(--brand-slate);" x-text="parseUA(s.user_agent)"></td>
                     <td data-label="Action"><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Terminate</button></td>
                   </tr>
                 </template>
@@ -410,7 +412,7 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Security Parameters</span>
-            <span style="font-size:0.75rem;color:#666;">Changes apply to new logins immediately</span>
+            <span style="font-size:0.75rem;color:var(--brand-slate);">Changes apply to new logins immediately</span>
           </div>
           <div class="panel-body">
             <template x-for="[key, meta] in Object.entries(cfgMeta)">
@@ -438,7 +440,7 @@
             <button class="btn btn-sm btn-outline ui-icon-only" @click="loadConfig()" :disabled="panelLoads.config.loading" aria-label="Refresh security configuration" title="Refresh security configuration"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
           </div>
           <div class="panel-body" x-show="panelReady('config')">
-            <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:#666;font-size:0.875rem;">
+            <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:var(--brand-slate);font-size:0.875rem;">
               No values saved yet — save a parameter above to create them.
             </div>
             <template x-for="[key, row] in Object.entries(secConfig)">
@@ -501,9 +503,9 @@
                 <template x-for="u in filteredUsers" :key="u.id">
                   <tr>
                     <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
-                    <td data-label="Email" style="font-size:0.8rem;color:#555;" x-text="u.email"></td>
+                    <td data-label="Email" style="font-size:0.8rem;color:var(--brand-slate);" x-text="u.email"></td>
                     <td data-label="Role">
-                      <select style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;background:white;"
+                      <select style="padding:3px 6px;border:1px solid var(--brand-border);border-radius:4px;font-size:0.8rem;background:white;"
                               x-model="u._role" :disabled="u._saving" :aria-label="'Role for ' + u.name">
                         <option value="engineer">engineer</option>
                         <option value="manager">manager</option>
@@ -639,10 +641,10 @@
           <div class="panel" style="margin-bottom:0;">
             <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Database Backup</span></div>
             <div class="panel-body">
-              <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Download a consistent SQLite snapshot of the live database.</p>
+              <p style="font-size:0.875rem;color:var(--brand-slate);margin-bottom:1rem;">Download a consistent SQLite snapshot of the live database.</p>
               <div style="margin-bottom:1rem;">
-                <div style="font-size:0.75rem;color:#666;">Current size</div>
-                <div style="font-size:1.4rem;font-weight:700;color:#333;" x-text="fmtBytes(dashboard.database_size_bytes)"></div>
+                <div style="font-size:0.75rem;color:var(--brand-slate);">Current size</div>
+                <div style="font-size:1.4rem;font-weight:700;color:var(--brand-navy);" x-text="fmtBytes(dashboard.database_size_bytes)"></div>
               </div>
               <button class="btn btn-success" @click="backupDB()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Backup</button>
             </div>
@@ -661,7 +663,7 @@
           <div class="panel" style="margin-bottom:0;">
             <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#database"></use></svg> Vacuum Database</span></div>
             <div class="panel-body">
-              <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Reclaim unused space and defragment. The app stays online.</p>
+              <p style="font-size:0.875rem;color:var(--brand-slate);margin-bottom:1rem;">Reclaim unused space and defragment. The app stays online.</p>
               <button class="btn btn-warning" @click="vacuumDB()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#database"></use></svg> Run VACUUM</button>
               <div x-show="vacuumResult"
                    style="margin-top:1rem;padding:0.75rem;background:#d4edda;border-radius:6px;font-size:0.85rem;color:#155724;">
@@ -675,7 +677,7 @@
           <div class="panel" style="margin-bottom:0;">
             <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg> Purge Logs</span></div>
             <div class="panel-body">
-              <p style="font-size:0.875rem;color:#666;margin-bottom:1rem;">Delete old activity and system log entries to free up space.</p>
+              <p style="font-size:0.875rem;color:var(--brand-slate);margin-bottom:1rem;">Delete old activity and system log entries to free up space.</p>
               <div class="form-group">
                 <label for="purge-days">Older than (days) — 0 deletes all general logs; stock audit evidence is retained</label>
                 <input id="purge-days" type="number" x-model="purgeDays" min="0" placeholder="90">
@@ -706,11 +708,11 @@
             <p x-show="announcementReady">Saved status: <strong x-text="announcementStatus"></strong></p>
             <!-- Current banner preview -->
             <div x-show="announcement" style="margin-bottom:1.25rem;">
-              <div style="font-size:0.75rem;color:#666;margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
+              <div style="font-size:0.75rem;color:var(--brand-slate);margin-bottom:0.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
                 Saved announcement
               </div>
               <div class="ann-bar" :class="'ann-'+(announcement?.level||'info')"
-                   style="border-radius:6px;border:1px solid #ddd;">
+                   style="border-radius:6px;border:1px solid var(--brand-border);">
                 <span x-text="announcement?.message"></span>
                 <button class="btn btn-sm btn-outline" style="margin-left:auto;flex-shrink:0;"
                         @click="clearAnnouncement()" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg> Remove</button>
@@ -719,7 +721,7 @@
 
             <div class="form-group">
               <label for="announcement-message">Message</label>
-              <textarea id="announcement-message" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
+              <textarea id="announcement-message" style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;font-family:inherit;resize:vertical;min-height:70px;"
                         maxlength="2000" x-model="annForm.message" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"
                         placeholder="e.g. Scheduled maintenance this evening…"></textarea>
             </div>
@@ -824,7 +826,7 @@
      @keydown.escape.stop="if (!actionPending.reset) { resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''; }">
   <div class="confirm-box">
     <h3 id="reset-title">Reset Password</h3>
-    <p style="color:#666;font-size:0.875rem;margin-bottom:1rem;">
+    <p style="color:var(--brand-slate);font-size:0.875rem;margin-bottom:1rem;">
       Setting a new password for <strong x-text="resetModal.userName"></strong>.
       Their active sessions will be terminated.
     </p>
@@ -832,13 +834,13 @@
       <label for="reset-password">New Password</label>
       <input id="reset-password" type="password" x-model="resetModal.password" :disabled="actionPending.reset"
              placeholder="Minimum 8 characters"
-             style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
+             style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;">
     </div>
     <div class="form-group">
       <label for="reset-confirm">Confirm Password</label>
       <input id="reset-confirm" type="password" x-model="resetModal.confirm" :disabled="actionPending.reset"
              placeholder="Repeat new password"
-             style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:4px;font-size:.875rem;">
+             style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;">
     </div>
     <div x-show="resetModal.error || actionErrors.reset" role="alert"
          style="background:#f8d7da;color:#721c24;padding:.5rem .75rem;border-radius:4px;font-size:.85rem;margin-bottom:.75rem;"

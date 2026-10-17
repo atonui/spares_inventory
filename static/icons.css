@@ -28,7 +28,7 @@ button.ui-icon-only {
 }
 button.ui-icon-only .ui-icon { margin: 0; }
 button.ui-icon-only:focus-visible {
-    outline: 3px solid #173d70;
+    outline: 3px solid var(--brand-focus);
     outline-offset: 3px;
     box-shadow: 0 0 0 2px #fff;
 }

@@ -91,7 +91,8 @@ function unlabelledControls(source, filename) {
 function hexRgb(color) {
     const value = color.trim().toLowerCase();
     const named = {white: '#ffffff', black: '#000000'};
-    const hex = named[value] || value;
+    const tokens = {'var(--brand-navy)': '#15263b', 'var(--brand-amber)': '#e9a23b', 'var(--brand-slate)': '#64748b', 'var(--brand-page)': '#f5f7fa', 'var(--brand-surface)': '#ffffff', 'var(--brand-border)': '#d8e0e8', 'var(--brand-focus)': '#15263b'};
+    const hex = named[value] || tokens[value] || value;
     const short = /^#([0-9a-f]{3})$/i.exec(hex);
     const full = short ? [...short[1]].map(ch => ch + ch).join('') : /^#([0-9a-f]{6})$/i.exec(hex)?.[1];
     assert.ok(full, `Unsupported test color: ${color}`);
@@ -143,6 +144,8 @@ test('inventory dialogs expose accessible names and modal semantics', () => {
 });
 
 test('primary, success, warning, and consume actions meet WCAG AA contrast', () => {
+    assertAa('Brand navy text on pale neutral', '#15263B', '#F5F7FA');
+    assertAa('Brand slate text on white', '#64748B', '#FFFFFF');
     const mainCss = read('mystyle.css');
     const adminCss = read('superadmin.css');
     const primaryBg = declaration(mainCss, '.btn', 'background');
@@ -352,5 +355,5 @@ test('remaining fixed inventory tables become labeled mobile cards and keep row 
     assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
     assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
     assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
-    assert.match(html, /href="mystyle\.css\?v=20261016-mobile-inventory-tables"/, 'Mobile stylesheet changes should use a fresh cache version');
+    assert.match(html, /href="mystyle\.css\?v=20261017-sparesflow-brand"/, 'Mobile stylesheet changes should use a fresh cache version');
 });

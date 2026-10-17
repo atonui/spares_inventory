@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Inventory Management",
+    "name": "SparesFlow",
     "slug": "inventory-management-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
     "android": {
       "package": "com.atonui.inventory",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#15263B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
