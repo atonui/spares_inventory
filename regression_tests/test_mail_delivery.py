@@ -120,3 +120,55 @@ def test_worker_logs_never_include_decrypted_invitation_token(caplog):
     )
     assert "raw-secret" not in caplog.text
     assert "provider error" not in caplog.text
+
+
+@pytest.mark.parametrize("worker_url", [None, "   "])
+def test_worker_requires_its_own_database_url_before_connecting(monkeypatch, worker_url):
+    from cryptography.fernet import Fernet
+
+    import backend.mail_worker as worker
+
+    valid_key = Fernet.generate_key().decode()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://web-role/example")
+    monkeypatch.setenv("MAIL_PAYLOAD_ENCRYPTION_KEY", valid_key)
+    monkeypatch.setenv("RESEND_API_KEY", "provider-key")
+    monkeypatch.setenv("RESEND_FROM_EMAIL", "SparesFlow <mail@example.test>")
+    if worker_url is None:
+        monkeypatch.delenv("MAIL_WORKER_DATABASE_URL", raising=False)
+    else:
+        monkeypatch.setenv("MAIL_WORKER_DATABASE_URL", worker_url)
+
+    def unexpected_connect(*_args, **_kwargs):
+        raise AssertionError("database connection opened before worker URL validation")
+
+    monkeypatch.setattr(worker.psycopg, "connect", unexpected_connect)
+    with pytest.raises(RuntimeError, match="MAIL_WORKER_DATABASE_URL"):
+        worker.run(once=True)
+
+
+def test_worker_connects_with_mail_worker_database_url(monkeypatch):
+    from cryptography.fernet import Fernet
+
+    import backend.mail_worker as worker
+
+    valid_key = Fernet.generate_key().decode()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://web-role/example")
+    monkeypatch.setenv("MAIL_WORKER_DATABASE_URL", "postgresql://worker-role/example")
+    monkeypatch.setenv("MAIL_PAYLOAD_ENCRYPTION_KEY", valid_key)
+    monkeypatch.setenv("RESEND_API_KEY", "provider-key")
+    monkeypatch.setenv("RESEND_FROM_EMAIL", "SparesFlow <mail@example.test>")
+    calls = []
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(worker.psycopg, "connect", lambda url, **_kwargs: (calls.append(url) or Connection()))
+    monkeypatch.setattr(worker, "claim_and_deliver_once", lambda *_args, **_kwargs: True)
+
+    worker.run(once=True)
+
+    assert calls == ["postgresql://worker-role/example"]

@@ -55,9 +55,13 @@ def platform_api(postgres_schema):
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_memberships TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT ON organizations TO {}").format(sql.Identifier(runtime_role)))
-    admin.execute(sql.SQL("GRANT INSERT ON organization_settings, organization_invitations, mail_outbox, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT INSERT ON organization_settings, organization_invitations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_invitations TO {}").format(sql.Identifier(runtime_role)))
-    admin.execute(sql.SQL("GRANT SELECT, UPDATE ON mail_outbox TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL(
+        "GRANT INSERT (organization_id, message_type, recipient_email, encrypted_payload, idempotency_key), "
+        "SELECT (id, idempotency_key), UPDATE (idempotency_key) ON mail_outbox TO {}"
+    ).format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_mail_outbox_counts TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT USAGE, SELECT ON SEQUENCE organization_invitations_id_seq, mail_outbox_id_seq, platform_audit_events_id_seq TO {}"
     ).format(sql.Identifier(runtime_role)))
@@ -82,7 +86,8 @@ def platform_api(postgres_schema):
     request = SimpleNamespace(cookies={"session_token": token})
     principal = AuthenticatedPrincipal(admin_id, None, None, True)
     yield SimpleNamespace(admin=admin, endpoint=endpoint, request=request, principal=principal,
-                          org_id=org_id, member_id=member_id)
+                          org_id=org_id, member_id=member_id, runtime_role=runtime_role,
+                          schema=schema, runtime_connection=get_connection)
     admin.rollback()
     admin.execute("RESET ROLE")
     admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(runtime_role)))
@@ -111,6 +116,72 @@ def test_platform_provisions_tenant_and_encrypted_owner_invitation(platform_api)
     assert len(invitation["token_hash"]) == 64
     assert api.admin.execute("SELECT count(*) AS n FROM mail_outbox").fetchone()["n"] == 1
     assert api.admin.execute("SELECT count(*) AS n FROM platform_audit_events").fetchone()["n"] == 1
+
+
+def test_platform_dashboard_preserves_mail_count_fields_from_counts_view(platform_api):
+    api = platform_api
+    dashboard = api.endpoint("GET", "/api/platform/dashboard")
+    result = asyncio.run(dashboard(request=api.request, actor=api.principal))
+
+    assert result["mail_pending"] == 0
+    assert result["mail_failed"] == 0
+    assert {
+        "organizations_total",
+        "organizations_active",
+        "identities_active",
+        "platform_admins",
+        "mail_pending",
+        "mail_failed",
+    } == set(result)
+
+
+def test_platform_web_role_cannot_read_mail_outbox_rows(platform_api):
+    from psycopg.errors import InsufficientPrivilege
+
+    api = platform_api
+    connection = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+    try:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(api.schema)))
+        connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(api.runtime_role)))
+        connection.commit()
+        assert connection.execute("SELECT count(*) AS total FROM users").fetchone()["total"] >= 2
+        table_privileges = connection.execute(
+            """SELECT has_table_privilege(current_user, 'mail_outbox', 'SELECT') AS can_select,
+                      has_table_privilege(current_user, 'mail_outbox', 'UPDATE') AS can_update,
+                      has_table_privilege(current_user, 'mail_outbox', 'DELETE') AS can_delete"""
+        ).fetchone()
+        assert table_privileges == {"can_select": False, "can_update": False, "can_delete": False}
+        with pytest.raises(InsufficientPrivilege):
+            connection.execute("SELECT recipient_email FROM mail_outbox").fetchall()
+        connection.rollback()
+        connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(api.runtime_role)))
+        connection.commit()
+        with pytest.raises(InsufficientPrivilege):
+            connection.execute("SELECT * FROM mail_outbox").fetchall()
+    finally:
+        connection.close()
+
+
+def test_platform_web_role_can_idempotently_enqueue_mail(platform_api):
+    from backend.services.mail_outbox import enqueue_mail
+
+    api = platform_api
+    connection = api.runtime_connection()
+    try:
+        first = enqueue_mail(
+            connection, organization_id=api.org_id,
+            message_type="organization_invitation", recipient_email="owner@example.test",
+            encrypted_payload="ciphertext", idempotency_key="platform-owner-invite",
+        )
+        second = enqueue_mail(
+            connection, organization_id=api.org_id,
+            message_type="organization_invitation", recipient_email="owner@example.test",
+            encrypted_payload="ciphertext", idempotency_key="platform-owner-invite",
+        )
+        assert first == second
+    finally:
+        connection.rollback()
+        connection.close()
 
 
 def test_platform_role_update_requires_explicit_tenant_path(platform_api):

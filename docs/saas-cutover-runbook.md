@@ -16,10 +16,13 @@ later migration project, not a runtime toggle.
 
 - Use a PostgreSQL 17 server and the exact reviewed application release.
 - Keep the current Railway SQLite service and volume unchanged until cutover.
-- `DATABASE_URL` connects as the restricted runtime role.
+- `DATABASE_URL` connects as the restricted web runtime role.
+- `MAIL_WORKER_DATABASE_URL` connects as a separate mail-worker role to the
+  same PostgreSQL database. The worker requires this setting and never falls
+  back to `DATABASE_URL`.
 - `MIGRATION_DATABASE_URL` connects as the migration owner and is used only
-  during application startup migrations. The API uses `DATABASE_URL` for
-  requests and the mail worker.
+  during application startup migrations. API requests use `DATABASE_URL`;
+  mail delivery uses `MAIL_WORKER_DATABASE_URL`.
 - Configure independent `SECRET_KEY` and `CSRF_SECRET` values, plus
   `MAIL_PAYLOAD_ENCRYPTION_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and
   `INVITATION_BASE_URL` as service secrets. Do not reuse another product's
@@ -35,23 +38,56 @@ on the exact release commit.
 
 ## Database roles
 
-Create two distinct login roles using the hosting provider's secret manager.
-The migration login owns the application schema and runs the append-only
-PostgreSQL migration chain. The runtime login is not a table owner, superuser,
-or `BYPASSRLS` role. Revoke public schema creation, grant the runtime login
-schema usage, the required table DML rights, and sequence usage. Apply matching
-default privileges for tables and sequences created by the migration login.
+Provision three distinct login identities through environment provisioning:
+web runtime, mail worker, and migration owner. Role creation, passwords, and
+connection credentials are not performed by application migrations. The
+migration identity owns the application schema and runs the append-only
+PostgreSQL migration chain. Web and worker roles are not table owners,
+superusers, or `BYPASSRLS` roles. Revoke public schema creation, grant only
+required schema usage and table privileges, and apply matching default
+privileges for tables and sequences created by the migration identity.
 The runtime role must have `DELETE` on `organization_memberships` for the
 owner-authorized company-member removal operation.
 Do not grant database ownership or DDL rights to the runtime login.
 
-The runtime role needs access to global identity/session and platform tables
-as well as tenant tables. RLS policies and server-derived transaction-local
-organization context are the tenant boundary; broad SQL grants do not bypass
-those policies. Verify the role with the restricted-role PostgreSQL tests,
+The web role needs access to global identity/session and platform tables as
+well as tenant tables. RLS policies and server-derived transaction-local
+organization context are the tenant boundary; SQL grants do not replace those
+policies. Verify the web role with the restricted-role PostgreSQL tests,
 including missing context, wrong-tenant context, and connection reuse after
-rollback. Keep migration credentials unavailable to workers that only need
-to send mail.
+rollback.
+
+For `mail_outbox`, revoke any prior broad grants from the web role, then grant
+only the permissions needed for transactional enqueueing and aggregate health
+counts. Substitute the provisioned role names for `web_runtime_role` and
+`mail_worker_role`; these are SQL grant examples, not role-creation or secret
+commands:
+
+```sql
+REVOKE ALL PRIVILEGES ON TABLE mail_outbox FROM web_runtime_role;
+GRANT INSERT (organization_id, message_type, recipient_email, encrypted_payload, idempotency_key)
+  ON TABLE mail_outbox TO web_runtime_role;
+GRANT SELECT (id, idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
+GRANT UPDATE (idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
+GRANT USAGE ON SEQUENCE mail_outbox_id_seq TO web_runtime_role;
+GRANT SELECT ON platform_mail_outbox_counts TO web_runtime_role;
+
+GRANT USAGE ON SCHEMA public TO mail_worker_role;
+GRANT SELECT (id, organization_id, message_type, recipient_email, encrypted_payload,
+              status, attempt_count, available_at, lease_expires_at, claim_token)
+  ON TABLE mail_outbox TO mail_worker_role;
+GRANT UPDATE (status, claim_token, lease_expires_at, attempt_count, updated_at,
+              sent_at, last_error_code, available_at)
+  ON TABLE mail_outbox TO mail_worker_role;
+```
+
+The worker receives no rights on identity, sessions, invitations, platform, or
+inventory tables, and no outbox `INSERT`, `DELETE`, ownership, or DDL rights.
+The API process receives the migration identity only for startup migrations;
+request handling uses the web runtime identity. The worker must not receive
+the migration identity.
+The `platform_mail_outbox_counts` view returns exactly one row containing only
+integer `pending` and `failed` counts; the view is not a per-message API.
 
 ## Rehearsal
 
@@ -142,9 +178,10 @@ cause and repeat the entire rehearsal with a fresh disposable target.
    yet.
 4. Run the importer with `--apply` against the final snapshot. Preserve the
    sanitized report and compare every reconciliation gate to the rehearsal.
-5. Start the application with runtime `DATABASE_URL` and the separate
-   `MIGRATION_DATABASE_URL`. Verify migration status, runtime role access,
-   readiness, first-owner login, platform-admin separation, invitation
+5. Start the API with web `DATABASE_URL` and migration-only
+   `MIGRATION_DATABASE_URL`; configure the mail worker separately with
+   `MAIL_WORKER_DATABASE_URL`. Verify migration status, web and worker role
+   access, readiness, first-owner login, platform-admin separation, invitation
    delivery/acceptance, and tenant isolation.
 6. Switch traffic only after every check passes. Keep the old SQLite snapshot
    and old service stopped and read-only for the agreed rollback window.
