@@ -27,6 +27,7 @@ def register_sqlite_instant_comparison(conn):
 def create_auth_router(*, get_connection, authenticated_writer, stock_writer, current_user,
                        csrf_dependency, authenticated_csrf_dependency, csrf_token_factory, password_hash,
                        password_verify, security_config, reset_email,
+                       queue_reset_email,
                        activity_log, endpoint_log, mutation_activity,
                        limiter, logger, cookie_secure,
                        native_refresh_encryption_key=None) -> APIRouter:
@@ -270,16 +271,25 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             (token, serialize_instant(expires_at), user_id),
         )
 
-        conn.commit()
-        conn.close()
-
-        # Send email
-        try:
-            send_reset_email(request_data.email, token)
-            logger.info("Password reset email sent")
-        except Exception:
-            logger.error("Failed to send password reset email")
-            # Don't reveal email send failure to prevent information disclosure
+        if is_postgres(conn):
+            try:
+                queue_reset_email(conn, request_data.email, token, expires_at)
+                conn.commit()
+                logger.info("Password reset email queued")
+            except Exception:
+                conn.rollback()
+                logger.error("Failed to queue password reset email")
+            finally:
+                conn.close()
+        else:
+            conn.commit()
+            conn.close()
+            try:
+                send_reset_email(request_data.email, token)
+                logger.info("Password reset email sent")
+            except Exception:
+                logger.error("Failed to send password reset email")
+                # Don't reveal email send failure to prevent information disclosure
 
         return {"message": "If the email exists, a reset link has been sent"}
 

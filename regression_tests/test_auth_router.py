@@ -129,6 +129,58 @@ def test_forgot_password_failure_log_omits_email_and_provider_error(auth_api, mo
     assert json.loads(details) == {'account_match': True}
 
 
+def test_postgres_forgot_password_queues_mail_in_the_token_transaction(auth_api, monkeypatch):
+    client, db, _ = auth_api
+    import backend.routes.auth as auth_routes
+
+    with sqlite3.connect(db) as conn:
+        conn.execute('CREATE TABLE reset_mail_outbox (recipient TEXT, token TEXT)')
+
+    observed = []
+
+    def enqueue(conn, email, token, expires_at, *, frontend_url, encryption_key):
+        assert frontend_url == main.FRONTEND_URL
+        assert encryption_key == main.settings.MAIL_PAYLOAD_ENCRYPTION_KEY
+        assert expires_at is not None
+        observed.append(conn.in_transaction)
+        conn.execute('INSERT INTO reset_mail_outbox VALUES (?, ?)', (email, token))
+        return 1
+
+    monkeypatch.setattr(auth_routes, 'is_postgres', lambda _conn: True)
+    monkeypatch.setattr(main, 'enqueue_password_reset_mail', enqueue)
+
+    response = client.post('/api/forgot-password', json={'email': 'user1@example.com'})
+
+    assert response.status_code == 200
+    assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
+    assert observed == [True]
+    with sqlite3.connect(db) as conn:
+        stored_token = conn.execute('SELECT reset_token FROM users WHERE id=1').fetchone()[0]
+        queued = conn.execute('SELECT recipient, token FROM reset_mail_outbox').fetchone()
+    assert queued == ('user1@example.com', stored_token)
+
+
+def test_postgres_forgot_password_rolls_back_token_when_enqueue_fails(auth_api, monkeypatch):
+    client, db, _ = auth_api
+    import backend.routes.auth as auth_routes
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE users SET reset_token='previous-token' WHERE id=1")
+
+    def fail_enqueue(_conn, _email, _token, _expires_at):
+        raise RuntimeError('private queue diagnostic')
+
+    monkeypatch.setattr(auth_routes, 'is_postgres', lambda _conn: True)
+    monkeypatch.setattr(main, 'enqueue_password_reset_mail', fail_enqueue)
+
+    response = client.post('/api/forgot-password', json={'email': 'user1@example.com'})
+
+    assert response.status_code == 200
+    assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT reset_token FROM users WHERE id=1').fetchone()[0] == 'previous-token'
+
+
 @pytest.mark.parametrize('path,payload,limit,initial_status', [
     ('/api/auth/login', {'email': 'absent@example.com', 'password': 'wrong'}, 5, 401),
     ('/api/forgot-password', {'email': 'absent@example.com'}, 3, 200),

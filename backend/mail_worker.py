@@ -17,17 +17,30 @@ from backend.services.mail_outbox import (
     mark_mail_sent,
 )
 from backend.services.mail_payloads import decrypt_mail_payload, validate_mail_encryption_key
-from backend.temporal import utc_now
+from backend.temporal import parse_api_instant, utc_now
 
 logger = logging.getLogger("backend.mail_worker")
 
 
 def deliver_claimed_mail(
     message: dict, *, encryption_key: str, api_key: str, from_address: str,
-    http_transport=None, decrypt=decrypt_mail_payload,
+    http_transport=None, decrypt=decrypt_mail_payload, now=None,
 ) -> bool:
     try:
         payload = decrypt(message["encrypted_payload"], encryption_key)
+        if message.get("message_type") == "password_reset":
+            try:
+                expires_at = parse_api_instant(payload.get("expires_at"))
+            except ValueError:
+                message["_delivery_error_code"] = "invalid_password_reset_message"
+                message["_delivery_terminal"] = True
+                logger.warning("mail delivery failed code=invalid_password_reset_message")
+                return False
+            if (now or utc_now()) >= expires_at:
+                message["_delivery_error_code"] = "password_reset_link_expired"
+                message["_delivery_terminal"] = True
+                logger.warning("mail delivery failed code=password_reset_link_expired")
+                return False
         send_mail(
             {**message, "payload": payload},
             api_key=api_key,
@@ -63,13 +76,14 @@ def claim_and_deliver_once(
         api_key=api_key,
         from_address=from_address,
         http_transport=http_transport,
+        now=current,
     )
     with conn.transaction():
         if sent:
             mark_mail_sent(conn, mail_id=message["id"], claim_token=str(message["claim_token"]))
         else:
             attempt = int(message["attempt_count"])
-            terminal = attempt >= len(RETRY_DELAYS_SECONDS) + 1
+            terminal = message.get("_delivery_terminal", False) or attempt >= len(RETRY_DELAYS_SECONDS) + 1
             retry_delay = RETRY_DELAYS_SECONDS[min(attempt - 1, len(RETRY_DELAYS_SECONDS) - 1)]
             mark_mail_failed(
                 conn,
