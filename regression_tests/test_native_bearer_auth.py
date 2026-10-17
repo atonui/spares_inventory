@@ -467,6 +467,92 @@ def test_native_refresh_revokes_session_when_membership_is_inactive(native_auth_
     ).fetchone()["is_active"] is False
 
 
+def test_company_membership_deactivation_revokes_native_refresh_credential(native_auth_api):
+    from backend.routes.users import create_users_router
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+    from backend.services.authenticated_transactions import authenticated_write_transaction
+    from backend.services.principals import AuthenticatedPrincipal
+    from fastapi import HTTPException
+
+    api = native_auth_api
+    target_id = api.connection.execute(
+        """INSERT INTO users(email,name,password_hash,territory)
+           VALUES ('membership-revoked@example.test','Revoked Member','stored-hash','West')
+           RETURNING id"""
+    ).fetchone()["id"]
+    api.connection.execute(
+        "UPDATE organization_memberships SET company_role = 'owner' WHERE user_id = %s",
+        (api.user_id,),
+    )
+    api.connection.execute(
+        "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'engineer')",
+        (api.organization_id, target_id),
+    )
+    api.connection.commit()
+
+    login = api.endpoint("/api/auth/native/login")
+    actor = json.loads(asyncio.run(login(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    )).body)
+    target = json.loads(asyncio.run(login(
+        UserLogin(email="membership-revoked@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    )).body)
+
+    users_router = create_users_router(
+        get_connection=api.get_connection,
+        authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(
+            api.get_connection, user_id=user_id, session_token=session_token,
+        ),
+        current_user=lambda: None,
+        csrf_dependency=lambda: None,
+        user_management_guard=lambda *args, **kwargs: None,
+        archive_admin_guard=lambda *args, **kwargs: None,
+        archive_service=lambda *args, **kwargs: None,
+        password_hash=lambda value: "hashed:" + value,
+        endpoint_log=lambda *args, **kwargs: (lambda function: function),
+        mutation_activity=lambda *args, **kwargs: None,
+    )
+    deactivate = next(
+        route.endpoint for route in users_router.routes
+        if route.path == "/api/users/{target_user_id}" and "DELETE" in route.methods
+    )
+    admin_request = Request({
+        "type": "http", "method": "DELETE", "path": f"/api/users/{target_id}",
+        "headers": [(b"authorization", f"Bearer {actor['access_token']}".encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+
+    result = asyncio.run(deactivate(
+        target_user_id=target_id,
+        user_id=AuthenticatedPrincipal(api.user_id, api.organization_id, "owner", False),
+        csrf_valid=True, request=admin_request,
+    ))
+
+    assert result == {"success": True, "message": "Company membership deactivated"}
+    assert api.connection.execute(
+        "SELECT is_active FROM organization_memberships WHERE organization_id = %s AND user_id = %s",
+        (api.organization_id, target_id),
+    ).fetchone()["is_active"] is False
+    assert api.connection.execute(
+        "SELECT is_active FROM sessions WHERE user_id = %s", (target_id,),
+    ).fetchone()["is_active"] is False
+
+    request_id = "after-membership-revocation-0001"
+    refresh_request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", request_id.encode())],
+        "client": ("127.0.0.1", 1234),
+    })
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=target["refresh_token"]),
+            refresh_request, request_id,
+        ))
+    assert error.value.status_code == 401
+
+
 def test_native_refresh_is_allowed_after_access_credential_expires(native_auth_api):
     from backend.schemas.auth import NativeRefreshRequest, UserLogin
     from backend.temporal import serialize_instant, utc_now
