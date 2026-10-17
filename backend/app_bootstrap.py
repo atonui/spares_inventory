@@ -24,7 +24,11 @@ class RevalidatingHtmlStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
         if path.lower().endswith(".html") and response.status_code in (200, 206, 304):
-            response.headers["Cache-Control"] = "no-cache"
+            if path.lower() == "email_change_confirmation.html":
+                response.headers["Cache-Control"] = "no-store"
+                response.headers["Referrer-Policy"] = "no-referrer"
+            else:
+                response.headers["Cache-Control"] = "no-cache"
         return response
 
 
@@ -111,6 +115,20 @@ def create_inventory_app(
             response = JSONResponse(status_code=503,content={'detail':'Announcements are temporarily unavailable'})
         if request.url.path.startswith('/api/superadmin/announcement'):
             response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @app.middleware("http")
+    async def prevent_email_change_caching(request, call_next):
+        response = await call_next(request)
+        if request.url.path in {
+            "/api/profile/email-change-requests",
+            "/api/profile/email-change-request",
+            "/api/auth/email-change/confirm",
+            "/api/v1/me/email-change-requests",
+            "/api/v1/me/email-change-request",
+            "/api/v1/auth/email-change/confirm",
+        }:
+            response.headers["Cache-Control"] = "no-store"
         return response
 
     app.mount("/static", RevalidatingHtmlStaticFiles(directory=static_directory), name="static")

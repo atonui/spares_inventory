@@ -12,6 +12,9 @@ _V1_PATHS = {
     "/api/v1/me",
     "/api/v1/inventory",
     "/api/v1/auth/logout",
+    "/api/v1/me/email-change-requests",
+    "/api/v1/me/email-change-request",
+    "/api/v1/auth/email-change/confirm",
 }
 
 _ERRORS = {
@@ -34,6 +37,9 @@ _ERRORS_BY_PATH = {
     "/api/v1/me": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/inventory": ("400", "401", "403", "404", "422", "429", "500", "503"),
     "/api/v1/auth/logout": ("401", "403", "404", "429", "500", "503"),
+    "/api/v1/me/email-change-requests": ("401", "403", "409", "422", "429", "500", "503"),
+    "/api/v1/me/email-change-request": ("401", "403", "404", "429", "500", "503"),
+    "/api/v1/auth/email-change/confirm": ("400", "409", "422", "429", "500", "503"),
 }
 
 _ERROR_SCHEMA = {
@@ -150,7 +156,10 @@ def build_v1_openapi_document(full_document: dict) -> dict:
         for method, operation in path_item.items():
             if method.lower() not in {"get", "post", "put", "patch", "delete", "options", "head"}:
                 continue
-            if path in {"/api/v1/me", "/api/v1/inventory", "/api/v1/auth/logout"}:
+            if path in {
+                "/api/v1/me", "/api/v1/inventory", "/api/v1/auth/logout",
+                "/api/v1/me/email-change-requests", "/api/v1/me/email-change-request",
+            }:
                 operation["security"] = [{"BearerAuth": []}]
             else:
                 operation["security"] = []
@@ -204,6 +213,32 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                     "as a tie-breaker. Pages are scoped to the authenticated company and "
                     "include no total count. Continue with `next_cursor` until it is null."
                 ).strip()
+            if path == "/api/v1/me/email-change-requests" and method.lower() == "post":
+                operation["description"] = (
+                    "Request a verified email change. The current email remains active until "
+                    "the one-time link is confirmed. Response is generic to avoid revealing "
+                    "whether an address is registered. Responses use Cache-Control: no-store. "
+                    "Rate limit: 3 requests per hour per account."
+                )
+            if path == "/api/v1/me/email-change-request":
+                if method.lower() == "get":
+                    operation["description"] = (
+                        "Read the caller's pending email change. The proposed address is masked; "
+                        "expires_at is an ISO 8601 UTC instant. Status is intentionally generic "
+                        "and responses use Cache-Control: no-store."
+                    )
+                elif method.lower() == "delete":
+                    operation["description"] = (
+                        "Cancel the caller's pending email change. The response is stable whether "
+                        "or not a request is pending. Responses use Cache-Control: no-store. "
+                        "Rate limit: 10 requests per hour per account."
+                    )
+            if path == "/api/v1/auth/email-change/confirm" and method.lower() == "post":
+                operation["description"] = (
+                    "Confirm a one-time email-change token. This public capability endpoint "
+                    "does not require a session or CSRF token. The request body carries the token; "
+                    "responses use Cache-Control: no-store. Rate limit: 5 attempts per minute per IP."
+                )
             responses = operation.setdefault("responses", {})
             for status in _ERRORS_BY_PATH[path]:
                 responses[status] = _error_response(status)

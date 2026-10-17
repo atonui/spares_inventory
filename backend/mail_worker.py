@@ -28,18 +28,22 @@ def deliver_claimed_mail(
 ) -> bool:
     try:
         payload = decrypt(message["encrypted_payload"], encryption_key)
-        if message.get("message_type") == "password_reset":
+        message_type = message.get("message_type")
+        if message_type in {"password_reset", "email_change_verification"}:
+            error_prefix = (
+                "password_reset" if message_type == "password_reset" else "email_change"
+            )
             try:
                 expires_at = parse_api_instant(payload.get("expires_at"))
             except ValueError:
-                message["_delivery_error_code"] = "invalid_password_reset_message"
+                message["_delivery_error_code"] = f"invalid_{error_prefix}_message"
                 message["_delivery_terminal"] = True
-                logger.warning("mail delivery failed code=invalid_password_reset_message")
+                logger.warning("mail delivery failed code=%s", message["_delivery_error_code"])
                 return False
             if (now or utc_now()) >= expires_at:
-                message["_delivery_error_code"] = "password_reset_link_expired"
+                message["_delivery_error_code"] = f"{error_prefix}_link_expired"
                 message["_delivery_terminal"] = True
-                logger.warning("mail delivery failed code=password_reset_link_expired")
+                logger.warning("mail delivery failed code=%s", message["_delivery_error_code"])
                 return False
         send_mail(
             {**message, "payload": payload},

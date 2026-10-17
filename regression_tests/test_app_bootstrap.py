@@ -72,3 +72,31 @@ def test_html_cache_policy_leaves_assets_api_and_missing_files_unchanged(tmp_pat
             response = client.get(path)
             assert "cache-control" not in response.headers
         assert client.get("/static/missing.html").status_code == 404
+
+
+def test_email_change_confirmation_page_is_not_cached_and_suppresses_referrers(tmp_path):
+    from backend.app_bootstrap import create_inventory_app
+
+    (tmp_path / "email_change_confirmation.html").write_text("<!doctype html><title>Confirm</title>")
+    app, _ = create_inventory_app(lifespan=None, cors_allowed_origins=[], static_directory=str(tmp_path))
+    with TestClient(app) as client:
+        response = client.get("/static/email_change_confirmation.html")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+
+
+def test_email_change_api_errors_are_marked_no_store(tmp_path):
+    from fastapi import HTTPException
+    from backend.app_bootstrap import create_inventory_app
+
+    app, _ = create_inventory_app(lifespan=None, cors_allowed_origins=[], static_directory=str(tmp_path))
+
+    @app.get("/api/profile/email-change-request")
+    def email_change_status():
+        raise HTTPException(status_code=401, detail="Sign in")
+
+    with TestClient(app) as client:
+        response = client.get("/api/profile/email-change-request")
+    assert response.status_code == 401
+    assert response.headers["cache-control"] == "no-store"

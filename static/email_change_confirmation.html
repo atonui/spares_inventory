@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="Cache-Control" content="no-store">
+    <title>Confirm email change · SparesFlow</title>
+    <link rel="stylesheet" href="mystyle.css?v=20261017-sparesflow-button-contrast">
+    <link rel="stylesheet" href="login.css?v=20261017-sparesflow-button-contrast">
+    <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="brand/generated/favicon.ico">
+    <script src="js/pages/email-change-confirmation.js?v=20261017-email-change" defer></script>
+</head>
+<body>
+<main class="login-screen recovery-screen" aria-labelledby="email-change-title">
+    <div class="login-intro">
+        <div class="login-brand">
+            <svg viewBox="0 0 128 128" aria-hidden="true" focusable="false"><path fill="currentColor" d="M22 16h8v96h-8zM98 16h8v96h-8zM26 42h76v7H26zM26 72h76v7H26zM26 102h76v7H26zM39 23h22v16H39zM67 23h22v16H67zM39 53h22v16H39zM67 53h22v16H67zM39 83h22v16H39zM67 83h22v16H67z"/><path fill="var(--brand-amber)" d="M67 53h22v16H67z"/></svg>
+            <span>SparesFlow</span>
+        </div>
+        <div class="login-intro-copy"><p class="login-eyebrow">ACCOUNT SECURITY</p><h1>Confirm your email.</h1><p>Verify the new address before it becomes your sign-in email.</p></div>
+        <div class="login-intro-footer"><span class="login-accent-line" aria-hidden="true"></span>Stores. Sites. Engineers.</div>
+    </div>
+    <section class="login-panel" aria-live="polite">
+        <p class="login-eyebrow">EMAIL CHANGE</p>
+        <h2 id="email-change-title">Confirm email address</h2>
+        <div id="email-change-pending">
+            <p>Choose confirm to update your account email. Your current address stays active until this step succeeds.</p>
+            <button id="confirm-email-change" class="login-submit" type="button">Confirm email change</button>
+        </div>
+        <div id="email-change-success" class="recovery-success" role="status" hidden>
+            <h3>Email address updated</h3><p id="email-change-message"></p>
+            <a href="/static/index.html">Continue to sign in</a>
+        </div>
+        <p id="email-change-error" class="login-error" role="alert" hidden></p>
+        <p><a href="/static/index.html">Back to sign in</a></p>
+    </section>
+</main>
+</body>
+</html>

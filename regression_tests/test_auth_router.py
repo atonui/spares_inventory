@@ -20,6 +20,10 @@ AUTH_OPERATIONS = {
     ('GET', '/api/verify-reset-token/{token}'), ('POST', '/api/auth/login'),
     ('GET', '/api/auth/sessions'), ('DELETE', '/api/auth/sessions/{session_id}'),
     ('POST', '/api/auth/sessions/revoke-all'), ('POST', '/api/auth/logout'),
+    ('POST', '/api/profile/email-change-requests'),
+    ('GET', '/api/profile/email-change-request'),
+    ('DELETE', '/api/profile/email-change-request'),
+    ('POST', '/api/auth/email-change/confirm'),
     ('POST', '/api/auth/native/login'),
     ('GET', '/api/me'),
 }
@@ -42,7 +46,7 @@ def set_reset_token(db, token='auth-reset', expired=False):
 def test_auth_routes_owned_once_by_extracted_router():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)]
     scoped = [r for r in routes if any((m, r.path) in AUTH_OPERATIONS for m in r.methods)]
-    assert len(scoped) == 15
+    assert len(scoped) == len(AUTH_OPERATIONS)
     assert {(m, r.path) for r in scoped for m in r.methods} == AUTH_OPERATIONS
     assert all(r.endpoint.__module__ == 'backend.routes.auth' for r in scoped)
     assert next(r for r in routes if r.path == '/api/inventory/add' and 'POST' in r.methods).endpoint.__module__ == 'backend.routes.inventory_writes'

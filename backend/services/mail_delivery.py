@@ -46,6 +46,8 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
     message_type = message.get("message_type")
     recipient = message.get("recipient_email")
     payload = message.get("payload")
+    if not isinstance(payload, dict):
+        raise MailDeliveryError("invalid_mail_message")
     if message_type == "organization_invitation":
         link = payload.get("invitation_url")
         subject = "You are invited to Inventory"
@@ -58,18 +60,41 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         html = "<p>You requested to reset your Inventory account password.</p>"
         link_label = "Reset password"
         invalid_code = "invalid_password_reset_message"
+    elif message_type == "email_change_verification":
+        link = payload.get("verification_url")
+        subject = "Verify your new SparesFlow email address"
+        html = "<p>Confirm this email address for your SparesFlow account.</p>"
+        link_label = "Verify email address"
+        invalid_code = "invalid_email_change_message"
+    elif message_type == "email_changed_notice":
+        new_email = payload.get("new_email")
+        if not isinstance(new_email, str) or "@" not in new_email:
+            raise MailDeliveryError("invalid_email_changed_notice")
+        subject = "Your SparesFlow email address changed"
+        html = (
+            "<p>The email address on your SparesFlow account was changed.</p>"
+            f"<p>New address: {escape(new_email)}</p>"
+            "<p>If you did not make this change, contact your company administrator.</p>"
+        )
+        link = None
+        link_label = None
+        invalid_code = "invalid_email_changed_notice"
     else:
         raise MailDeliveryError("unsupported_message_type")
-    if not isinstance(recipient, str) or "@" not in recipient or not isinstance(payload, dict):
+    if not isinstance(recipient, str) or "@" not in recipient:
         raise MailDeliveryError(invalid_code)
-    parsed = urlsplit(link) if isinstance(link, str) else None
-    if (parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc):
-        raise MailDeliveryError(invalid_code)
+    if link is not None:
+        parsed = urlsplit(link) if isinstance(link, str) else None
+        if (parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc):
+            raise MailDeliveryError(invalid_code)
     body = {
         "from": from_address,
         "to": [recipient],
         "subject": subject,
-        "html": html + f'<p><a href="{escape(link, quote=True)}">{link_label}</a></p>',
+        "html": html + (
+            f'<p><a href="{escape(link, quote=True)}">{link_label}</a></p>'
+            if link is not None else ""
+        ),
     }
     transport = http_transport or _UrllibTransport()
     try:
