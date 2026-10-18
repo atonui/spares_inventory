@@ -23,6 +23,7 @@ function inventoryCoreFeature() {
         businessToday() { return InventoryTime.today(this.timezoneContext?.business_timezone); },
         // Authentication state
         isAuthenticated: false,
+        authState: 'checking',
         currentUser: null,
         token: null,
 
@@ -65,6 +66,7 @@ function inventoryCoreFeature() {
         async checkAuth() {
             const request = Symbol();
             inventoryAuthRequests.set(this, request);
+            this.authState = 'checking';
             this.error = '';
             // The HTTPOnly session cookie is authoritative; user storage is only a cache.
             try {
@@ -72,14 +74,16 @@ function inventoryCoreFeature() {
                 if (inventoryAuthRequests.get(this) !== request) return;
                 this.currentUser = user;
                 this.isAuthenticated = true;
+                this.authState = 'authenticated';
                 try { localStorage.setItem('currentUser', JSON.stringify(this.currentUser)); }
                 catch (_) { /* Storage availability must not invalidate a session. */ }
             } catch (error) {
                 if (inventoryAuthRequests.get(this) !== request) return;
                 this.currentUser = null;
                 this.isAuthenticated = false;
+                this.authState = error.status === 401 ? 'anonymous' : 'error';
                 try { localStorage.removeItem('currentUser'); } catch (_) {}
-                if (error.status !== 401) this.error = 'Unable to check your session. Retry or reload the page.';
+                if (error.status !== 401) this.error = 'Unable to check your session. Retry.';
                 return;
             }
             try { await this.getCsrfToken(); }
@@ -114,6 +118,7 @@ function inventoryCoreFeature() {
                 // No longer store token in localStorage
                 this.currentUser = data.user;
                 this.isAuthenticated = true;
+                this.authState = 'authenticated';
 
                 // Store user info (but not token)
                 try { localStorage.setItem('currentUser', JSON.stringify(data.user)); } catch (_) {}
@@ -158,6 +163,7 @@ function inventoryCoreFeature() {
             // Clear local state
             this.currentUser = null;
             this.isAuthenticated = false;
+            this.authState = 'anonymous';
             try { localStorage.removeItem('currentUser'); } catch (_) {}
             if(typeof notifyAnnouncementIdentityChange==='function')notifyAnnouncementIdentityChange();
 

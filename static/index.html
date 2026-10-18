@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SparesFlow — Inventory Management</title>
     <link rel="stylesheet" href="mystyle.css?v=20261017-sparesflow-button-contrast">
-    <link rel="stylesheet" href="login.css?v=20261017-sparesflow-button-contrast">
+    <link rel="stylesheet" href="login.css?v=20261018-auth-bootstrap">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/features.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/back-to-top.js?v=20261018-back-to-top" defer></script>
-<script src="js/inventory/application-core.js?v=20261014-remember-me" defer></script>
+<script src="js/inventory/application-core.js?v=20261018-auth-bootstrap" defer></script>
 <script src="js/inventory/dialog-focus.js?v=20261016-dialog-focus" defer></script>
 <script src="js/inventory/reports.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/replenishment.js?v=20261014-frontend-21" defer></script>
@@ -52,8 +52,16 @@
 </section>
 
     <div x-data="inventoryApp()" x-init="checkAuth()">
+        <div class="auth-bootstrap" x-show="authState === 'checking'" x-cloak role="status" aria-live="polite">
+            <span class="auth-bootstrap-indicator" aria-hidden="true"></span>
+            <span>Checking your session…</span>
+        </div>
+        <div class="auth-bootstrap auth-bootstrap-error" x-show="authState === 'error'" x-cloak role="alert">
+            <p x-text="error || 'Unable to check your session.'"></p>
+            <button type="button" class="auth-retry" @click="checkAuth()" :disabled="authState === 'checking'">Retry session check</button>
+        </div>
         <!-- Login Screen -->
-        <section x-show="!isAuthenticated" class="login-screen" aria-labelledby="login-title" x-cloak>
+        <section x-show="authState === 'anonymous'" class="login-screen" aria-labelledby="login-title" x-cloak>
             <div class="login-intro">
                 <div class="login-brand">
                     <svg viewBox="0 0 128 128" aria-hidden="true" focusable="false"><path fill="currentColor" d="M22 16h8v96h-8zM98 16h8v96h-8zM26 42h76v7H26zM26 72h76v7H26zM26 102h76v7H26zM39 23h22v16H39zM67 23h22v16H67zM39 53h22v16H39zM67 53h22v16H67zM39 83h22v16H39zM67 83h22v16H67z"/><path fill="var(--brand-amber)" d="M67 53h22v16H67z"/></svg>
