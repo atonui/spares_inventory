@@ -6,10 +6,12 @@
 <title>Superadmin Panel</title>
 <link rel="stylesheet" href="mystyle.css?v=20261017-sparesflow-button-contrast">
 <link rel="stylesheet" href="superadmin.css?v=20261017-sparesflow-button-contrast">
+<link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
+<script src="js/shared/back-to-top.js?v=20261018-back-to-top" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
 <script src="js/pages/superadmin.js?v=20261014-announcement-controls" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
@@ -852,5 +854,9 @@
   </div>
 </div>
 
+<button id="back-to-top" class="back-to-top" type="button" aria-label="Back to top" hidden>
+  <span class="back-to-top-arrow" aria-hidden="true">↑</span>
+  <span>Back to top</span>
+</button>
 </body>
 </html>
