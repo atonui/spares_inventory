@@ -1,5 +1,42 @@
 /* Shared sign-in and account-recovery styles, scoped to the auth screens. */
 .login-screen[x-cloak], .login-screen [x-cloak] { display: none !important; }
+.auth-bootstrap {
+    box-sizing: border-box;
+    width: min(calc(100% - 32px), 520px);
+    margin: clamp(32px, 16vh, 160px) auto;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--brand-border);
+    border-radius: 12px;
+    background: var(--brand-surface);
+    color: var(--brand-slate);
+    box-shadow: 0 12px 32px -20px rgba(18, 40, 63, .3);
+    font-size: 14px;
+}
+.auth-bootstrap-indicator {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+    background: var(--brand-amber);
+}
+.auth-bootstrap-error { align-items: flex-start; flex-direction: column; }
+.auth-bootstrap-error p { margin: 0; line-height: 1.6; }
+.auth-retry {
+    min-height: 44px;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--brand-navy);
+    color: var(--brand-surface);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.auth-retry:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
+.auth-retry:disabled { background: var(--brand-slate); cursor: wait; }
 .login-screen {
     width: min(100%, 960px);
     margin: clamp(16px, 6vh, 64px) auto;
