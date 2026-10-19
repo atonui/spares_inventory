@@ -54,12 +54,34 @@ test('offset icon accents use the Spares Tracker amber layer and fresh sprite UR
   for (const file of fs.readdirSync('static').filter(name => name.endsWith('.html'))) {
     const html = read(file);
     for (const reference of html.matchAll(/icons\.svg\?v=[^"#]+#(?:[\w-]+)/g)) {
-      assert.match(reference[0], /^icons\.svg\?v=20261019-offset-icons#/, `${file} must request the updated icon sprite`);
+      assert.match(reference[0], /^icons\.svg\?v=20261019-expanded-offset-icons#/, `${file} must request the updated icon sprite`);
     }
   }
   const inventory = read('index.html');
-  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-offset-icons#search"><\/use><\/svg>\s*Find stock<\/label>/);
-  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-offset-icons#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
+  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-expanded-offset-icons#search"><\/use><\/svg>\s*Find stock<\/label>/);
+  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-expanded-offset-icons#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
+});
+
+test('the updated icon pack has dedicated icons for matching equipment and platform navigation', () => {
+  const sprite = read('icons.svg');
+  for (const id of ['download', 'unlock', 'sessions', 'secconfig', 'broadcast', 'console', 'audit', 'equipment', 'history']) {
+    const symbol = sprite.match(new RegExp(`<symbol\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/symbol>`));
+    assert.ok(symbol, `missing updated ${id} icon`);
+    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1\.6 1\.6\)"/, `${id} needs its offset amber layer`);
+  }
+
+  const index = read('index.html');
+  const admin = read('superadmin.html');
+  assert.match(index, new RegExp('#equipment"><\\/use><\\/svg> Equipment'));
+  assert.match(index, new RegExp('#history"><\\/use><\\/svg> Movement history'));
+  assert.match(index, new RegExp('#audit"><\\/use><\\/svg> Activity log'));
+  assert.match(admin, new RegExp('#sessions"><\\/use><\\/svg><\\/span> Active Sessions'));
+  assert.match(admin, new RegExp('#secconfig"><\\/use><\\/svg><\\/span> Security Config'));
+  assert.match(admin, new RegExp('#console"><\\/use><\\/svg><\\/span> SQL Console'));
+  assert.match(admin, new RegExp('#audit"><\\/use><\\/svg><\\/span> Audit Log'));
+  for (const file of ['index.html', 'profile.html', 'superadmin.html']) {
+    assert.match(read(file), /icons\.svg\?v=20261019-expanded-offset-icons/);
+  }
 });
 
 // Icon-only actions need contextual names, mouse tooltips and touch/keyboard affordances.
