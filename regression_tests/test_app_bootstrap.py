@@ -1,4 +1,7 @@
 import sqlite3
+from pathlib import Path
+from urllib.parse import urljoin, urlparse
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -103,6 +106,30 @@ def test_static_frontend_path_on_custom_domain_still_serves_the_page(tmp_path):
 
     assert response.status_code == 200
     assert "Inventory UI" in response.text
+
+
+def test_root_frontend_resolves_its_relative_assets_from_the_static_mount():
+    from backend.app_bootstrap import create_inventory_app
+
+    static_dir = Path(__file__).resolve().parents[1] / "static"
+    app, _ = create_inventory_app(
+        lifespan=None,
+        cors_allowed_origins=[],
+        static_directory=str(static_dir),
+    )
+
+    with TestClient(app, base_url="https://www.sparestracker.com") as client:
+        page = client.get("/")
+        base_href = "/static/index.html"
+        resolved_stylesheet = urljoin(f"{page.url.scheme}://{page.url.netloc}{base_href}", "mystyle.css")
+        stylesheet = client.get(urlparse(resolved_stylesheet).path)
+        resolved_script = urljoin(f"{page.url.scheme}://{page.url.netloc}{base_href}", "js/inventory/application-core.js")
+        script = client.get(urlparse(resolved_script).path)
+
+    assert page.status_code == 200
+    assert '<base href="/static/index.html">' in page.text
+    assert stylesheet.status_code == 200
+    assert script.status_code == 200
 
 
 @pytest.mark.parametrize("page", ["index.html", "profile.html", "superadmin.html", "forgot_password.html", "reset_password.html"])
