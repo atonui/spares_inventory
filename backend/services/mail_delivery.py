@@ -62,17 +62,17 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         invalid_code = "invalid_password_reset_message"
     elif message_type == "email_change_verification":
         link = payload.get("verification_url")
-        subject = "Verify your new SparesFlow email address"
-        html = "<p>Confirm this email address for your SparesFlow account.</p>"
+        subject = "Verify your new Spares Tracker email address"
+        html = "<p>Confirm this email address for your Spares Tracker account.</p>"
         link_label = "Verify email address"
         invalid_code = "invalid_email_change_message"
     elif message_type == "email_changed_notice":
         new_email = payload.get("new_email")
         if not isinstance(new_email, str) or "@" not in new_email:
             raise MailDeliveryError("invalid_email_changed_notice")
-        subject = "Your SparesFlow email address changed"
+        subject = "Your Spares Tracker email address changed"
         html = (
-            "<p>The email address on your SparesFlow account was changed.</p>"
+            "<p>The email address on your Spares Tracker account was changed.</p>"
             f"<p>New address: {escape(new_email)}</p>"
             "<p>If you did not make this change, contact your company administrator.</p>"
         )

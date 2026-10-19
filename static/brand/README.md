@@ -1,6 +1,6 @@
-# SparesFlow brand assets
+# Spares Tracker brand assets
 
-The name is a provisional product wordmark. Repository, package, bundle, and URL identifiers remain unchanged.
+Spares Tracker is the current public-facing product name. Repository, package, bundle, and URL identifiers remain unchanged.
 
 ## Editable SVG sources
 
@@ -16,6 +16,7 @@ The wordmark shown in the web UI is HTML text next to an inline SVG icon. App ic
 
 - `generated/app-icon-1024.png` and `generated/app-icon-512.png` — raster exports from `app-icon-square.svg`.
 - `generated/favicon-{16,32,48}.png` and `generated/favicon.ico` — web favicon exports.
+- `generated/apple-touch-icon.png` — iOS home-screen icon.
 - `mobile/assets/icon.png` — iOS and general app icon.
 - `mobile/assets/android-icon-foreground.png`, `android-icon-background.png`, and `android-icon-monochrome.png` — Android adaptive icon layers.
 - `mobile/assets/favicon.png` — Expo web favicon.

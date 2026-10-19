@@ -21,7 +21,7 @@ def send_password_reset_email(
     reset_link = f"{frontend_url}/reset_password.html?token={token}"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Password Reset Request - Inventory System"
+    msg["Subject"] = "Password Reset Request - Spares Tracker"
     msg["From"] = smtp_username
     msg["To"] = email
 
@@ -30,7 +30,7 @@ def send_password_reset_email(
       <body style="font-family: Arial, sans-serif; padding: 20px;">
         <div style="max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 30px; border-radius: 8px;">
             <h2 style="color: #333;">Password Reset Request</h2>
-            <p>You requested to reset your password for the Inventory Management System.</p>
+            <p>You requested to reset your password for Spares Tracker.</p>
             <p>Click the button below to reset your password:</p>
             <div style="text-align: center; margin: 30px 0;">
                 <a href="{reset_link}"
