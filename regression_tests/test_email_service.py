@@ -47,10 +47,11 @@ def test_reset_email_service_builds_and_sends_reset_message(monkeypatch):
         ("login", "sender@example.test", "secret"),
     ]
     message = sent[3][1]
-    assert message["Subject"] == "Password Reset Request - Inventory System"
+    assert message["Subject"] == "Password Reset Request - Spares Tracker"
     assert message["From"] == "sender@example.test"
     assert message["To"] == "user@example.test"
     assert "https://inventory.example.test/reset_password.html?token=reset-token" in message.as_string()
+    assert "reset your password for Spares Tracker" in message.as_string()
 
 
 def test_reset_email_logging_does_not_include_email_or_reset_token(monkeypatch):

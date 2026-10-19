@@ -438,3 +438,16 @@ button, select, input, textarea, a { touch-action: manipulation; }
 
 .action-feedback { padding: .5rem 1rem; font-size: .85rem; }
 .cfg-ctrl .action-error { flex-basis: 100%; }
+.sidebar-brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    min-height: 36px;
+    color: var(--brand-navy);
+    font-size: 1rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+.sidebar-brand-link img { width: 28px; height: 28px; }
+.sidebar-brand-link:hover { text-decoration: underline; text-decoration-color: var(--brand-amber); text-underline-offset: 3px; }
+.sidebar-brand-link:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; border-radius: 3px; }

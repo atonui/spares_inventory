@@ -1145,3 +1145,20 @@ label.btn {
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="datetime-local"]::-webkit-calendar-picker-indicator { margin: 0; padding: .15rem; cursor: pointer; }
 }
+
+/* Linked Spares Tracker wordmark in the application header. */
+.header-brand-heading { margin: 0 0 .25rem; font-size: inherit; line-height: 1.2; }
+.header-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: .65rem;
+    min-height: 44px;
+    color: var(--brand-navy);
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    text-decoration: none;
+}
+.header-brand img { display: block; width: 36px; height: 36px; flex: 0 0 36px; }
+.header-brand:hover { text-decoration: underline; text-decoration-color: var(--brand-amber); text-underline-offset: 4px; }
+.header-brand:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; border-radius: 3px; }

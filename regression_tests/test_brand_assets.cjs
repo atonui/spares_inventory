@@ -17,12 +17,22 @@ test('brand palette tokens and source logo variants are present', () => {
   })) assert.match(css, new RegExp(`${token}:\\s*${value}`, 'i'));
 
   const horizontal = read('static/brand/source/logo-horizontal.svg');
-  assert.match(horizontal, /<text\b[^>]*>SparesFlow<\/text>/);
+  assert.match(horizontal, /<text\b[^>]*>Spares Tracker<\/text>/);
   const icon = read('static/brand/source/logo-icon.svg');
   assert.doesNotMatch(icon, /<text\b/i);
   assert.match(icon, /#E9A23B/i);
-  assert.match(read('static/index.html'), /<span>SparesFlow<\/span>/);
-  assert.match(read('static/superadmin.html'), /<h2>SparesFlow<\/h2>/);
+  const index = read('static/index.html');
+  assert.match(index, /<title>Spares Tracker/);
+  assert.match(index, /<a[^>]*class="header-brand"[^>]*href="\/"[^>]*>[\s\S]*?<span>Spares Tracker<\/span>[\s\S]*?<\/a>/);
+  assert.match(index, /rel="icon" type="image\/png" sizes="32x32" href="brand\/generated\/favicon-32\.png"/);
+  assert.match(read('static/superadmin.html'), /Spares Tracker/);
+  assert.match(read('static/brand/source/favicon.svg'), /<title id="title">Spares Tracker<\/title>/);
+  for (const page of ['forgot_password.html', 'reset_password.html', 'email_change_confirmation.html', 'profile.html', 'accept_invitation.html']) {
+    assert.match(read('static/' + page), /Spares Tracker/);
+  }
+  for (const page of ['index.html', 'forgot_password.html', 'reset_password.html', 'email_change_confirmation.html', 'superadmin.html', 'profile.html', 'accept_invitation.html']) {
+    assert.match(read('static/' + page), /brand\/generated\/favicon-32\.png/);
+  }
 });
 
 test('favicon and platform icons are exported at expected sizes', () => {
@@ -31,6 +41,7 @@ test('favicon and platform icons are exported at expected sizes', () => {
   assert.deepEqual(pngSize('static/brand/generated/favicon-16.png'), [16, 16]);
   assert.deepEqual(pngSize('static/brand/generated/favicon-32.png'), [32, 32]);
   assert.deepEqual(pngSize('static/brand/generated/favicon-48.png'), [48, 48]);
+  assert.deepEqual(pngSize('static/brand/generated/apple-touch-icon.png'), [180, 180]);
   assert.deepEqual(pngSize('mobile/assets/icon.png'), [1024, 1024]);
   for (const name of ['android-icon-foreground.png', 'android-icon-background.png', 'android-icon-monochrome.png']) {
     assert.deepEqual(pngSize(`mobile/assets/${name}`), [432, 432]);
