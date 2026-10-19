@@ -52,7 +52,7 @@
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
   <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
   <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
-  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg> Retry</button></p>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg> Retry</button></p>
 </section>
 
     <div x-data="inventoryApp()" x-init="checkAuth()">
@@ -114,14 +114,14 @@
                 <div class="user-info">
                     <div>
                         <h1 class="header-brand-heading"><a class="header-brand" href="/" aria-label="Spares Tracker home"><img src="brand/source/logo-icon.svg" alt=""><span>Spares Tracker</span></a></h1>
-                        <p class="timezone-note" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg> Retry timezone settings</button></p>
+                        <p class="timezone-note" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg> Retry timezone settings</button></p>
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
                     <div class="header-actions" role="group" aria-label="Account actions">
-                            <button class="btn" @click="logout()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#logout"></use></svg> Logout</button>
-                            <button class="btn" @click="$el.ownerDocument.location.href='/static/profile.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#user"></use></svg> Profile</button>
+                            <button class="btn" @click="logout()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#logout"></use></svg> Logout</button>
+                            <button class="btn" @click="$el.ownerDocument.location.href='/static/profile.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#user"></use></svg> Profile</button>
                             <button x-show="(currentUser?.is_platform_admin || currentUser?.role === 'superadmin')" class="btn" style="background:#dc3545;"
-                             @click="window.location.href='/static/superadmin.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#settings"></use></svg>
+                             @click="window.location.href='/static/superadmin.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#settings"></use></svg>
                                 Superadmin
                             </button>
 
@@ -137,39 +137,39 @@
             <section class="controls inventory-controls" aria-label="Inventory navigation and filters">
                 <div class="view-heading">
                     <h2 x-text="currentViewLabel"></h2>
-                    <button class="btn btn-sm ui-icon-only" @click="loadInventory()" :disabled="loading" aria-label="Refresh inventory" title="Refresh inventory"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
+                    <button class="btn btn-sm ui-icon-only" @click="loadInventory()" :disabled="loading" aria-label="Refresh inventory" title="Refresh inventory"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg></button>
                 </div>
                 <nav class="inventory-nav" aria-label="Main navigation">
-                    <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#box"></use></svg> Inventory</button>
-                    <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#store"></use></svg> Stores</button>
-                    <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg> Replenishment</button>
-                    <button class="btn" :class="showReportsPanel ? 'is-active' : ''" :aria-current="showReportsPanel ? 'page' : null" @click="openPanel('showReportsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg> Reports</button>
-                    <button class="btn" :class="showAllPartsPanel ? 'is-active' : ''" @click="openPanel('showAllPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#box"></use></svg> Parts catalog</button>
-                    <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#tools"></use></svg> Equipment</button>
-                    <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#history"></use></svg> Movement history</button>
+                    <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#box"></use></svg> Inventory</button>
+                    <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#store"></use></svg> Stores</button>
+                    <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg> Replenishment</button>
+                    <button class="btn" :class="showReportsPanel ? 'is-active' : ''" :aria-current="showReportsPanel ? 'page' : null" @click="openPanel('showReportsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#chart"></use></svg> Reports</button>
+                    <button class="btn" :class="showAllPartsPanel ? 'is-active' : ''" @click="openPanel('showAllPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#box"></use></svg> Parts catalog</button>
+                    <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#tools"></use></svg> Equipment</button>
+                    <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#history"></use></svg> Movement history</button>
                 </nav>
                 <details class="management-menu" x-show="['owner','admin','superadmin'].includes(currentUser?.role)">
                     <summary>Management</summary>
                     <div class="management-actions">
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archived records</button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel'); loadUsers(); loadInvitations()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#users"></use></svg>
+                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#archive"></use></svg> Archived records</button>
+                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel'); loadUsers(); loadInvitations()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#users"></use></svg>
                         <span>Manage Users</span>
                     </button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#store"></use></svg>
+                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#store"></use></svg>
                         <span>Manage Stores</span>
                     </button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#box"></use></svg>
+                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#box"></use></svg>
                         <span>Manage Parts</span>
                     </button>
-                    <button class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#clipboard"></use></svg> Activity log</button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#store"></use></svg>
+                    <button class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#clipboard"></use></svg> Activity log</button>
+                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#store"></use></svg>
                         <span>Store Types</span>
                     </button>
                     </div>
                 </details>
                 <div x-show="showInventoryPanel" class="inventory-filters">
                     <div class="filter-field">
-                        <label for="inventory-search">Find stock</label>
+                        <label for="inventory-search"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#search"></use></svg> Find stock</label>
                         <input id="inventory-search" type="search" placeholder="Part number, description or work order" class="search-box"
                                x-model="searchTerm" @input.debounce.150ms="filterInventory()">
                     </div>
@@ -180,35 +180,35 @@
                             <template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name + ' — ' + store.type + (store.location ? ', ' + store.location : '')"></option></template>
                         </select>
                     </div>
-                    <button class="btn" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#filter"></use></svg> Clear filters</button>
+                    <button class="btn" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#filter"></use></svg> Clear filters</button>
                     <button class="btn" @click="viewStoreInventory(stores.find(store=>store.id===Number(storeFilter)))" :disabled="!storeFilter">Open store</button>
                 </div>
                 <div x-show="showInventoryPanel" class="inventory-toolbar">
                     <p role="status" aria-live="polite" x-text="filteredInventory.length + ' of ' + inventory.length + ' stock entries'"></p>
                     <div class="toolbar-actions">
-                        <button class="btn btn-success" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg> Add Stock</button>
+                        <button class="btn btn-success" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg> Add Stock</button>
                     <!-- UPDATED: Export dropdown button -->
                     <div style="position: relative;" x-data="{ showExportMenu: false }">
-                        <button class="btn" @click="showExportMenu = !showExportMenu"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                        <button class="btn" @click="showExportMenu = !showExportMenu"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                             Export CSV ▼
                         </button>
                         <div x-show="showExportMenu"
                             @click.outside="showExportMenu = false"
                             style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid var(--brand-border); border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                                    @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                                 Current View
                             </button>
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                                    @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                                 All Parts Catalog
                             </button>
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                                    @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                                 All Stores
                             </button>
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                                    @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                                 Movement History
                             </button>
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportUsersCSV(); showExportMenu = false">Users</button>
@@ -216,7 +216,7 @@
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
                             <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
                             <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;"
-                                    @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg>
+                                    @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#chart"></use></svg>
                                 Comprehensive Report
                             </button>
 
@@ -257,7 +257,7 @@
                         <p style="margin:0.5rem 0;">Stock becomes available at the destination after physical receipt is confirmed.</p>
                         <span>Units in transit: <strong x-text="stats.in_transit_quantity || 0"></strong></span>
                     </div>
-                    <button class="btn btn-sm ui-icon-only" @click="refreshTransfers()" :disabled="loading" aria-label="Refresh transfers" title="Refresh transfers"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
+                    <button class="btn btn-sm ui-icon-only" @click="refreshTransfers()" :disabled="loading" aria-label="Refresh transfers" title="Refresh transfers"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg></button>
                 </div>
                 <div style="overflow-x:auto;" x-show="pendingTransfers.length > 0">
                     <table class="in-transit-transfers-table">
@@ -270,8 +270,8 @@
                                     <td data-label="Source store" x-text="transfer.from_store_name"></td><td data-label="Destination store" x-text="transfer.to_store_name"></td>
                                     <td data-label="Sent by" x-text="transfer.created_by_name"></td><td data-label="Work order" x-text="transfer.work_order || '-'"></td>
                                     <td data-label="Action">
-                                        <button class="btn btn-sm btn-success" x-show="transfer.can_receive" @click="confirmTransfer(transfer,'receive')" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#check"></use></svg> Confirm receipt</button>
-                                        <button class="btn btn-sm" x-show="transfer.can_return" @click="confirmTransfer(transfer,'return')" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#check"></use></svg> Confirm returned to source</button>
+                                        <button class="btn btn-sm btn-success" x-show="transfer.can_receive" @click="confirmTransfer(transfer,'receive')" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#check"></use></svg> Confirm receipt</button>
+                                        <button class="btn btn-sm" x-show="transfer.can_return" @click="confirmTransfer(transfer,'return')" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#check"></use></svg> Confirm returned to source</button>
                                         <span x-show="!transfer.can_receive && !transfer.can_return">Awaiting recipient or sender</span>
                                     </td>
                                 </tr>
@@ -286,7 +286,7 @@
             <div x-show="showAllPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">All Parts Catalog</h3>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                 </div>
                 <table class="inventory-reference-table">
                     <thead>
@@ -315,8 +315,8 @@
             <section x-show="showArchivedPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom:1.5rem;">
                 <div style="padding:1rem; display:flex; justify-content:space-between; gap:1rem;">
                     <div><h3>Archived records</h3><p>History is preserved. Restore a record before using it again.</p></div>
-                    <div><button class="btn btn-sm ui-icon-only" @click="loadArchivedRecords()" :disabled="loading" aria-label="Refresh data" title="Refresh data"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button></div>
+                    <div><button class="btn btn-sm ui-icon-only" @click="loadArchivedRecords()" :disabled="loading" aria-label="Refresh data" title="Refresh data"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg></button>
+                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button></div>
                 </div>
                 <p x-show="archivedRecords.length === 0" style="padding:1rem;">No archived records.</p>
                 <div style="overflow-x:auto;" x-show="archivedRecords.length > 0">
@@ -324,7 +324,7 @@
                     <tbody><template x-for="record in archivedRecords" :key="record.kind + '-' + record.id">
                         <tr><td data-label="Type" x-text="record.kind"></td><td data-label="Record" x-text="record.label"></td>
                         <td data-label="Archived" x-text="formatInstant(record.archived_at)"></td>
-                        <td data-label="Action"><button class="btn btn-sm" @click="restoreArchivedRecord(record)" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#history"></use></svg> Restore</button></td></tr>
+                        <td data-label="Action"><button class="btn btn-sm" @click="restoreArchivedRecord(record)" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#history"></use></svg> Restore</button></td></tr>
                     </template></tbody></table>
                 </div>
             </section>
@@ -334,16 +334,16 @@
                 <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Parts Management</h3>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="btn btn-sm" @click="downloadPartTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
+                        <button class="btn btn-sm" @click="downloadPartTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Download Template</button>
                         <label class="btn btn-sm" style="cursor: pointer;">
-                            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg> Import CSV
+                            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#upload"></use></svg> Import CSV
                             <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
                         </label>
                         <button class="btn btn-success"
-                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                                @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg>
                             Add Part
                         </button>
-                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                     </div>
                 </div>
                 <table class="parts-management-table">
@@ -366,10 +366,10 @@
                                 </td>
                                 <td data-label="Unit Cost" x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
                                 <td data-label="Actions">
-                                    <button class="btn btn-sm" @click="editPart(part)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
+                                    <button class="btn btn-sm" @click="editPart(part)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#edit"></use></svg> Edit</button>
                                     <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
-                                            @click="deletePart(part.id, part.part_number)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg>
+                                            @click="deletePart(part.id, part.part_number)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#archive"></use></svg>
                                             Archive
                                     </button>
                                 </td>
@@ -384,13 +384,13 @@
                 <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3 style="margin: 0;">Store Management</h3>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="btn btn-sm" @click="downloadStoreTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
+                        <button class="btn btn-sm" @click="downloadStoreTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Download Template</button>
                         <label class="btn btn-sm" style="cursor: pointer;">
-                            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg> Import CSV
+                            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#upload"></use></svg> Import CSV
                             <input type="file" accept=".csv" @change="importStores($event)" style="display: none;">
                         </label>
                         <button class="btn btn-success"
-                                @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                                @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg>
                             Add Store
                         </button>
                     </div>
@@ -417,10 +417,10 @@
                                 <td data-label="Location" x-text="store.location || 'N/A'"></td>
                                 <td data-label="Assigned To" x-text="getUserName(store.assigned_user_id)"></td>
                                 <td data-label="Actions">
-                                    <button class="btn btn-sm" @click="editStore(store)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
+                                    <button class="btn btn-sm" @click="editStore(store)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#edit"></use></svg> Edit</button>
                                     <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
-                                            @click="deleteStore(store.id, store.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archive</button>
+                                            @click="deleteStore(store.id, store.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#archive"></use></svg> Archive</button>
                                 </td>
                             </tr>
                         </template>
@@ -432,7 +432,7 @@
             <div x-show="showAllStoresPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">All Stores</h3>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                 </div>
                 <table class="inventory-reference-table">
                     <thead>
@@ -479,13 +479,13 @@
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button class="btn btn-sm"
 
-                            @click="downloadStoreImportTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                            @click="downloadStoreImportTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                         Download Template
                     </button>
                     <label x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" class="btn btn-sm"
                         style="cursor: pointer;">
 
-                        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg> Import CSV
+                        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#upload"></use></svg> Import CSV
                         <input type="file"
                             accept=".csv"
                             @change="importPartsToStore($event, selectedStore?.id)"
@@ -493,19 +493,19 @@
                     </label>
                     <button class="btn btn-success"
 
-                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" @click="addStockToStore(selectedStore)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                            x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" @click="addStockToStore(selectedStore)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg>
                         Add Single Part
                     </button>
-                    <button class="btn btn-sm" @click="exportStoreInventoryCSV(selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg>
+                    <button class="btn btn-sm" @click="exportStoreInventoryCSV(selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg>
                         Export CSV
                     </button>
                     <button class="btn btn-sm" @click="startStockCount(selectedStore, $event.currentTarget)" :disabled="stockCountBusy"
-                            x-show="editableStores.some(store=>store.id===selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#clipboard"></use></svg> Count Stock</button>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                            x-show="editableStores.some(store=>store.id===selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#clipboard"></use></svg> Count Stock</button>
+                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
             </div>
             </div>
             <div class="store-search">
-                <label for="store-stock-search">Find stock in this store</label>
+                <label for="store-stock-search"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#search"></use></svg> Find stock in this store</label>
                 <input id="store-stock-search" type="search" x-model="storeSearchTerm" placeholder="Part number, description or work order">
                 <p role="status" aria-live="polite" x-text="filteredStoreInventory.length + ' of ' + storeInventory.length + ' stock entries'"></p>
             </div>
@@ -633,7 +633,7 @@
 
                     <!-- Action Summary -->
                     <div style="background: #f0f9ff; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; border-left: 4px solid #3b82f6;">
-                        <h4 style="margin-bottom: 0.5rem;"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#chart"></use></svg> Import Summary</h4>
+                        <h4 style="margin-bottom: 0.5rem;"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#chart"></use></svg> Import Summary</h4>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; font-size: 0.9em;">
                             <div>Will Add: <strong x-text="getResolutionSummary().willAdd"></strong></div>
                             <div>Will Update: <strong x-text="getResolutionSummary().willUpdate"></strong></div>
@@ -655,10 +655,10 @@
                             </button>
                         </div>
                         <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" @click="cancelDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg>
+                            <button type="button" class="btn" @click="cancelDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#upload"></use></svg>
                                 Cancel Import
                             </button>
-                            <button type="button" class="btn btn-success" @click="processDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#upload"></use></svg>
+                            <button type="button" class="btn btn-success" @click="processDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#upload"></use></svg>
                                 <span x-show="!loading">Proceed with Import</span>
                                 <span x-show="loading">Processing...</span>
                             </button>
@@ -678,7 +678,7 @@
                         </div>
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showEditModal = false">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading">Update</span>
                                 <span x-show="loading">Updating...</span>
                             </button>
@@ -697,13 +697,13 @@
                         <div class="form-group"><label for="minimum-store">Store</label><select id="minimum-store" x-model="minimumForm.store_id" @change="selectMinimum()" :disabled="minimumBusy" required><option value="">Choose store</option><template x-for="store in editableStores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
                         <div class="form-group"><label for="minimum-part">Part</label><select id="minimum-part" x-model="minimumForm.part_id" @change="selectMinimum()" :disabled="minimumBusy" required><option value="">Choose part</option><template x-for="part in parts" :key="part.id"><option :value="part.id" x-text="part.part_number + ' — ' + part.description"></option></template></select></div>
                         <div class="form-group"><label for="minimum-quantity">Minimum quantity</label><input id="minimum-quantity" type="number" min="0" max="2147483647" step="1" x-model="minimumForm.min_threshold" :disabled="minimumBusy" required></div>
-                        <div class="minimum-actions"><button type="submit" class="btn btn-primary" :disabled="minimumBusy || inventoryLoadFailed"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg> <span x-text="minimumBusy ? 'Saving…' : 'Save minimum'"></span></button><button type="button" class="btn" @click="reloadMinimum()" :disabled="minimumBusy || loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg> Reload current minimum</button></div>
+                        <div class="minimum-actions"><button type="submit" class="btn btn-primary" :disabled="minimumBusy || inventoryLoadFailed"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg> <span x-text="minimumBusy ? 'Saving…' : 'Save minimum'"></span></button><button type="button" class="btn" @click="reloadMinimum()" :disabled="minimumBusy || loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg> Reload current minimum</button></div>
                     </form>
                 </details>
                 <div class="replenishment-toolbar">
                     <div><label for="replenishment-store">Show shortages for</label><select id="replenishment-store" x-model="replenishmentStoreFilter"><option value="">All stores</option><template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
-                    <button class="btn ui-icon-only" @click="loadReplenishment()" :disabled="replenishmentBusy || minimumBusy" aria-label="Refresh plan" title="Refresh plan"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button>
-                    <button class="btn btn-primary" @click="exportProcurementCSV()" :disabled="replenishmentBusy || minimumBusy || !replenishmentPlan"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Export purchases CSV</button>
+                    <button class="btn ui-icon-only" @click="loadReplenishment()" :disabled="replenishmentBusy || minimumBusy" aria-label="Refresh plan" title="Refresh plan"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg></button>
+                    <button class="btn btn-primary" @click="exportProcurementCSV()" :disabled="replenishmentBusy || minimumBusy || !replenishmentPlan"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Export purchases CSV</button>
                 </div>
                 <p class="replenishment-copy">Suggestions are shared across all stores and are not reservations. Purchase quantities assume the suggested internal transfers proceed. Refresh before ordering.</p>
                 <p x-show="replenishmentBusy" role="status">Loading replenishment plan…</p>
@@ -734,7 +734,7 @@
                         <label>Source store <select x-model="reportForm.store_id" @change="markReportDirty()"><option value="">All stores</option><template x-for="s in reportOptions.stores" :key="s.id"><option :value="s.id" x-text="s.name"></option></template></select></label>
                         <label x-show="['owner','admin','superadmin'].includes(currentUser?.role)">Recorded by <select x-model="reportForm.engineer_id" @change="markReportDirty()"><option value="">All engineers</option><template x-for="u in reportOptions.engineers" :key="u.id"><option :value="u.id" x-text="u.name"></option></template></select></label>
                         <label>Exact work-order number <input type="text" maxlength="200" x-model="reportForm.work_order_number" @input="markReportDirty()" placeholder="Leave blank for all work orders"></label>
-                        <button type="submit" class="btn btn-primary"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg> <span x-text="reportBusy ? 'Loading…' : 'Refresh report'"></span></button>
+                        <button type="submit" class="btn btn-primary"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg> <span x-text="reportBusy ? 'Loading…' : 'Refresh report'"></span></button>
                     </fieldset>
                 </form>
                 <p x-show="reportBusy" role="status">Loading consumption history…</p>
@@ -742,7 +742,7 @@
                 <p x-show="reportDirty && consumptionReport" role="status">Filters changed. Refresh the report to update results and enable export.</p>
                 <div x-show="consumptionReport && !reportBusy">
                     <p class="report-summary"><strong x-text="consumptionReport?.totals.quantity || 0"></strong> units consumed across <span x-text="consumptionReport?.totals.parts || 0"></span> parts in <span x-text="consumptionReport?.totals.events || 0"></span> consumption events. Totals include all matching records.</p>
-                    <button class="btn" @click="exportConsumptionReport()" :disabled="reportDirty || reportExportBusy"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> <span x-text="reportExportBusy ? 'Downloading…' : 'Export all matching records (CSV)'"></span></button>
+                    <button class="btn" @click="exportConsumptionReport()" :disabled="reportDirty || reportExportBusy"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> <span x-text="reportExportBusy ? 'Downloading…' : 'Export all matching records (CSV)'"></span></button>
                     <p x-show="consumptionReport?.totals.events === 0">No consumption matches these filters. Try a wider date range or all dates.</p>
                     <h4>Parts used</h4>
                     <div class="report-table-wrap"><table class="consumption-report-table"><thead><tr><th>Part number</th><th>Description</th><th>Quantity</th><th>Events</th></tr></thead><tbody><template x-for="p in consumptionReport?.by_part || []" :key="p.part_id"><tr><td data-label="Part number" x-text="p.part_number || 'Unknown'"></td><td data-label="Description" x-text="p.description || 'Unknown'"></td><td data-label="Quantity" x-text="p.quantity"></td><td data-label="Events" x-text="p.events"></td></tr></template></tbody></table></div>
@@ -764,7 +764,7 @@
                     <div><label for="audit-end">Through date</label><input id="audit-end" type="date" x-model="logFilters.endDate"></div>
                     <div><label for="audit-action">Action</label><select id="audit-action" x-model="logFilters.action"><option value="">All actions</option><option value="add_stock">Add stock</option><option value="consume_stock">Consume stock</option><option value="update_stock">Adjust stock</option><option value="import_stock_balances">Import balances</option><option value="transfer_stock">Dispatch transfer</option><option value="receive_transfer">Receive transfer</option><option value="return_transfer">Return transfer</option><option value="confirm_stock_count">Physical count</option><option value="set_stock_minimum">Set minimum</option></select></div>
                     <div><label for="audit-status">Result</label><select id="audit-status" x-model="logFilters.status"><option value="">All results</option><option value="success">Successful</option><option value="error">Failed attempts</option></select></div>
-                    <button class="btn ui-icon-only" type="submit" :disabled="loading" aria-label="Refresh log" title="Refresh log"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#refresh"></use></svg></button><button class="btn" type="button" @click="exportActivityLogsCSV()" :disabled="loading || !activityLogs.length"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Export displayed entries</button>
+                    <button class="btn ui-icon-only" type="submit" :disabled="loading" aria-label="Refresh log" title="Refresh log"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#refresh"></use></svg></button><button class="btn" type="button" @click="exportActivityLogsCSV()" :disabled="loading || !activityLogs.length"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Export displayed entries</button>
                 </form>
                 <p x-show="loading" role="status">Loading activity…</p>
                 <p x-show="!loading && !activityLogs.length && !error">No entries match these filters.</p>
@@ -813,7 +813,7 @@
             <div x-show="showMyPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
                 <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">My Parts Inventory</h3>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                 </div>
                 <table class="stock-table">
                     <thead>
@@ -840,18 +840,18 @@
                                 <td data-label="Actions">
                                     <button class="btn btn-sm"
                                             x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg>
+                                            @click="editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#edit"></use></svg>
                                         Edit
                                     </button>
                                     <button class="btn btn-sm btn-warning"
                                             x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg>
+                                            @click="transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#transfer"></use></svg>
                                         Transfer
                                     </button>
                                     <button class="btn btn-sm"
                                             style="background: var(--brand-amber); color: var(--brand-navy);"
                                             x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
+                                            @click="consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#minus"></use></svg>
                                         Consume
                                     </button>
                                 </td>
@@ -870,10 +870,10 @@
                     <h3 style="margin: 0;">User Management</h3>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-success"
-                                @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                                @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg>
                             Add User
                         </button>
-                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                     </div>
                 </div>
                 <table class="stock-table">
@@ -896,11 +896,11 @@
                                 </td>
                                 <td x-text="user.territory || 'N/A'" data-label="Territory"></td>
                                 <td data-label="Actions">
-                                    <button class="btn btn-sm" @click="editUser(user)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
+                                    <button class="btn btn-sm" @click="editUser(user)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#edit"></use></svg> Edit</button>
                                     <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
                                             x-show="user.id !== currentUser.id"
-                                            @click="deleteUser(user.id, user.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#archive"></use></svg> Archive</button>
+                                            @click="deleteUser(user.id, user.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#archive"></use></svg> Archive</button>
                                     <button class="btn btn-sm"
                                             x-show="currentUser?.saas_mode && user.id !== currentUser.id"
                                             @click="removeUser(user.id, user.name)">Remove from company</button>
@@ -938,16 +938,16 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="btn btn-sm" @click="downloadEquipmentTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
-                        <button class="btn btn-sm btn-success" @click="exportEquipmentCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Export CSV</button>
+                        <button class="btn btn-sm" @click="downloadEquipmentTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Download Template</button>
+                        <button class="btn btn-sm btn-success" @click="exportEquipmentCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Export CSV</button>
                         <button x-show="['owner','admin'].includes(currentUser?.role)" class="btn btn-success"
-                                @click="editingEquipment = null; equipmentForm = { equipment_name: '', make: '', model: '', serial_number: '', assigned_user_id: '', calibration_cert_number: '', calibration_authority: '', calibration_date: '', next_calibration_date: '', notes: '' }; showEquipmentModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                                @click="editingEquipment = null; equipmentForm = { equipment_name: '', make: '', model: '', serial_number: '', assigned_user_id: '', calibration_cert_number: '', calibration_authority: '', calibration_date: '', next_calibration_date: '', notes: '' }; showEquipmentModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg>
                             Add Equipment
                         </button>
-                        <button x-show="['owner','admin'].includes(currentUser?.role)" class="btn" @click="showCalibrationSettingsModal = true; loadCalibrationSettings()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#settings"></use></svg>
+                        <button x-show="['owner','admin'].includes(currentUser?.role)" class="btn" @click="showCalibrationSettingsModal = true; loadCalibrationSettings()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#settings"></use></svg>
                             <span>Calibration Settings</span>
                         </button>
-                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                     </div>
                 </div>
 
@@ -984,24 +984,24 @@
                                 <td data-label="Actions">
                                     <button class="btn btn-sm"
                                             @click="openCalibrationModal(eq)"
-                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#tools"></use></svg>
+                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#tools"></use></svg>
                                         Calibrate
                                     </button>
                                     <button class="btn btn-sm"
                                             @click="openTransferEquipmentModal(eq)"
-                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg>
+                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#transfer"></use></svg>
                                         Transfer
                                     </button>
-                                    <button class="btn btn-sm" @click="viewEquipmentHistory(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#history"></use></svg> History</button>
+                                    <button class="btn btn-sm" @click="viewEquipmentHistory(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#history"></use></svg> History</button>
                                     <button class="btn btn-sm"
                                             x-show="['owner','admin'].includes(currentUser?.role)"
-                                            @click="editEquipment(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg>
+                                            @click="editEquipment(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#edit"></use></svg>
                                         Edit
                                     </button>
                                     <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
                                             x-show="['owner','admin'].includes(currentUser?.role)"
-                                            @click="deleteEquipment(eq.id, eq.equipment_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg>
+                                            @click="deleteEquipment(eq.id, eq.equipment_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#trash"></use></svg>
                                         Delete
                                     </button>
                                 </td>
@@ -1041,7 +1041,7 @@
                                 </div></td>
                                 <td role="cell" data-label="Quantity"><div class="stock-cell-value">
                                     <strong x-text="item.quantity"></strong>
-                                    <span x-show="isLowStock(item)" role="img" aria-label="Low stock" title="Low stock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#alert"></use></svg></span>
+                                    <span x-show="isLowStock(item)" role="img" aria-label="Low stock" title="Low stock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#alert"></use></svg></span>
                                 </div></td>
                                 <td role="cell" data-label="Work order"><div class="stock-cell-value">
                                     <span x-show="item.work_order"
@@ -1084,13 +1084,13 @@
                 <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">Store Types Management</h3>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-sm" @click="downloadStoreTypeTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Download Template</button>
-                        <button class="btn btn-sm" @click="exportStoreTypesCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#download"></use></svg> Export CSV</button>
+                        <button class="btn btn-sm" @click="downloadStoreTypeTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Download Template</button>
+                        <button class="btn btn-sm" @click="exportStoreTypesCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#download"></use></svg> Export CSV</button>
                         <button class="btn btn-success"
-                                @click="editingStoreType = null; storeTypeForm = { type_code: '', type_name: '', description: '', display_order: 0, is_active: true }; showStoreTypeModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#plus"></use></svg>
+                                @click="editingStoreType = null; storeTypeForm = { type_code: '', type_name: '', description: '', display_order: 0, is_active: true }; showStoreTypeModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#plus"></use></svg>
                             Add Store Type
                         </button>
-                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                     </div>
                 </div>
                 <table class="stock-table">
@@ -1120,10 +1120,10 @@
                                 </td>
                                 <td x-text="stores.filter(s = data-label="In use"> s.type === storeType.type_code).length + ' stores'"></td>
                                 <td data-label="Actions">
-                                    <button class="btn btn-sm" @click="editStoreType(storeType)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#edit"></use></svg> Edit</button>
+                                    <button class="btn btn-sm" @click="editStoreType(storeType)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#edit"></use></svg> Edit</button>
                                     <button class="btn btn-sm"
                                             style="background: #dc3545; color: white;"
-                                            @click="deleteStoreType(storeType.id, storeType.type_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#trash"></use></svg>
+                                            @click="deleteStoreType(storeType.id, storeType.type_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#trash"></use></svg>
                                         Delete
                                     </button>
                                 </td>
@@ -1159,7 +1159,7 @@
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showTransferModal = false">Cancel</button>
                             <button type="submit" class="btn btn-warning" :disabled="loading">
-                                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg> <span x-show="!loading">Dispatch</span>
+                                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#transfer"></use></svg> <span x-show="!loading">Dispatch</span>
                                 <span x-show="loading">Transferring...</span>
                             </button>
                         </div>
@@ -1230,7 +1230,7 @@
                             <button type="button" class="btn" @click="showConsumeModal = false; consumeForm = {};">
                                 Cancel
                             </button>
-                            <button type="submit" class="btn" style="background: var(--brand-amber); color: var(--brand-navy);" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#minus"></use></svg>
+                            <button type="submit" class="btn" style="background: var(--brand-amber); color: var(--brand-navy);" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#minus"></use></svg>
                                 <span x-show="!loading">Consume Part</span>
                                 <span x-show="loading">Processing...</span>
                             </button>
@@ -1306,7 +1306,7 @@
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showEquipmentModal = false; editingEquipment = null;">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading" x-text="editingEquipment ? 'Update Equipment' : 'Create Equipment'"></span>
                                 <span x-show="loading">Saving...</span>
                             </button>
@@ -1352,7 +1352,7 @@
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showCalibrationModal = false; selectedEquipment = null;">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading">Update Calibration</span>
                                 <span x-show="loading">Updating...</span>
                             </button>
@@ -1388,7 +1388,7 @@
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showTransferEquipmentModal = false; selectedEquipment = null;">Cancel</button>
-                            <button type="submit" class="btn btn-warning" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#transfer"></use></svg>
+                            <button type="submit" class="btn btn-warning" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#transfer"></use></svg>
                                 <span x-show="!loading">Transfer Equipment</span>
                                 <span x-show="loading">Transferring...</span>
                             </button>
@@ -1441,7 +1441,7 @@
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
-                        <button type="button" class="btn ui-icon-only" @click="showEquipmentHistoryModal = false; selectedEquipment = null;" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#close"></use></svg></button>
+                        <button type="button" class="btn ui-icon-only" @click="showEquipmentHistoryModal = false; selectedEquipment = null;" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#close"></use></svg></button>
                     </div>
                 </div>
             </div>
@@ -1464,7 +1464,7 @@
 
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showCalibrationSettingsModal = false">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading">Save Settings</span>
                                 <span x-show="loading">Saving...</span>
                             </button>
@@ -1505,7 +1505,7 @@
                         </div>
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showUserModal = false; editingUser = null;">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading" x-text="editingUser ? 'Update User' : (currentUser?.saas_mode ? 'Send Invitation' : 'Create User')"></span>
                                 <span x-show="loading" x-text="editingUser ? 'Updating...' : (currentUser?.saas_mode ? 'Sending…' : 'Creating...')"></span>
                             </button>
@@ -1548,7 +1548,7 @@
                         </div>
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showStoreModal = false; editingStore = null;">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading" x-text="editingStore ? 'Update Store' : 'Create Store'"></span>
                                 <span x-show="loading" x-text="editingStore ? 'Updating...' : 'Creating...'"></span>
                             </button>
@@ -1613,7 +1613,7 @@
 
                     <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
                         <button type="button" class="btn" @click="showStoreTypeModal = false; editingStoreType = null;">Cancel</button>
-                        <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                        <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                             <span x-show="!loading" x-text="editingStoreType ? 'Update Store Type' : 'Create Store Type'"></span>
                             <span x-show="loading" x-text="editingStoreType ? 'Updating...' : 'Creating...'"></span>
                         </button>
@@ -1645,7 +1645,7 @@
                         </div>
                         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                             <button type="button" class="btn" @click="showPartModal = false; editingPart = null;">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261014-icons#save"></use></svg>
+                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-offset-icons#save"></use></svg>
                                 <span x-show="!loading" x-text="editingPart ? 'Update Part' : 'Create Part'"></span>
                                 <span x-show="loading" x-text="editingPart ? 'Updating...' : 'Creating...'"></span>
                             </button>
