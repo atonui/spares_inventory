@@ -22,7 +22,8 @@ test('account menu uses an accessible icon-only mobile trigger and usable touch 
   assert.match(css,/\.account-menu-trigger\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css,/\.account-menu-item\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-label,\s*\.account-menu-chevron\s*\{[^}]*display:\s*none/s);
-  assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-trigger\s*\{[^}]*width:\s*48px/s);
+  assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-trigger\s*\{[^}]*width:\s*48px[^}]*min-height:\s*48px[^}]*border:\s*0[^}]*border-radius:\s*10px[^}]*background:\s*transparent/s);
+  assert.match(css,/\.account-menu-trigger:focus-visible[^}]*\{[^}]*outline:\s*3px/s);
   assert.match(css,/@media\s*\(max-width:\s*768px\)[\s\S]*?\.header-actions\s*\{[^}]*width:\s*auto/s);
   assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-panel\s*\{[^}]*width:\s*min\(280px,\s*calc\(100vw\s*-\s*24px\)\)/s);
   assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-item\s*\{[^}]*min-height:\s*48px/s);
