@@ -60,6 +60,51 @@ def test_root_serves_the_frontend_without_a_static_path(tmp_path):
     assert "Inventory UI" in response.text
 
 
+def test_legacy_railway_frontend_url_redirects_to_the_custom_domain_root(tmp_path):
+    from backend.app_bootstrap import create_inventory_app
+
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    (static_dir / "index.html").write_text("<!doctype html><title>Inventory UI</title>")
+    app, _ = create_inventory_app(
+        lifespan=None,
+        cors_allowed_origins=[],
+        static_directory=str(static_dir),
+    )
+
+    @app.get("/api/example")
+    def example():
+        return {"ok": True}
+
+    with TestClient(app, base_url="https://sparesinventory-production.up.railway.app") as client:
+        frontend = client.get("/static/index.html", follow_redirects=False)
+        api = client.get("/api/example", follow_redirects=False)
+
+    assert frontend.status_code == 301
+    assert frontend.headers["location"] == "https://www.sparestracker.com/"
+    assert api.status_code == 200
+    assert api.json() == {"ok": True}
+
+
+def test_static_frontend_path_on_custom_domain_still_serves_the_page(tmp_path):
+    from backend.app_bootstrap import create_inventory_app
+
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    (static_dir / "index.html").write_text("<!doctype html><title>Inventory UI</title>")
+    app, _ = create_inventory_app(
+        lifespan=None,
+        cors_allowed_origins=[],
+        static_directory=str(static_dir),
+    )
+
+    with TestClient(app, base_url="https://www.sparestracker.com") as client:
+        response = client.get("/static/index.html", follow_redirects=False)
+
+    assert response.status_code == 200
+    assert "Inventory UI" in response.text
+
+
 @pytest.mark.parametrize("page", ["index.html", "profile.html", "superadmin.html", "forgot_password.html", "reset_password.html"])
 def test_html_revalidates_on_get_head_and_conditional_requests(tmp_path, page):
     from backend.app_bootstrap import create_inventory_app
