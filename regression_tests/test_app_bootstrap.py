@@ -36,9 +36,28 @@ def test_create_inventory_app_applies_shared_fastapi_bootstrap(tmp_path):
     assert cors.kwargs["allow_origins"] == ["https://inventory.example"]
     assert cors.kwargs["allow_credentials"] is True
     assert "X-CSRF-Token" in cors.kwargs["allow_headers"]
-
     static_mount = next(route for route in app.routes if route.path == "/static")
     assert isinstance(static_mount.app, StaticFiles)
+
+
+def test_root_serves_the_frontend_without_a_static_path(tmp_path):
+    from backend.app_bootstrap import create_inventory_app
+
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    (static_dir / "index.html").write_text("<!doctype html><title>Inventory UI</title>")
+    app, _ = create_inventory_app(
+        lifespan=None,
+        cors_allowed_origins=[],
+        static_directory=str(static_dir),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Inventory UI" in response.text
 
 
 @pytest.mark.parametrize("page", ["index.html", "profile.html", "superadmin.html", "forgot_password.html", "reset_password.html"])
