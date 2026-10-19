@@ -149,7 +149,7 @@
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                     <span>Menu</span>
                 </button>
-                <nav class="inventory-nav" id="primary-navigation" :class="mobileNavigationOpen ? 'is-open' : ''" @click="mobileNavigationOpen = false; $refs.mobileNavigationTrigger.focus()" aria-label="Main navigation">
+                <nav class="inventory-nav" id="primary-navigation" :class="mobileNavigationOpen ? 'is-open' : ''" @click="if (mobileNavigationOpen) { mobileNavigationOpen = false; $refs.mobileNavigationTrigger.focus() }" aria-label="Main navigation">
                     <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Inventory</button>
                     <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg> Stores</button>
                     <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Replenishment</button>

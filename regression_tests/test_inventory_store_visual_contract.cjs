@@ -24,7 +24,7 @@ test('mobile primary navigation has an accessible toggle and preserves all desti
     assert.match(shell, /x-ref="mobileNavigationTrigger"/);
     assert.match(shell, /@click\.outside="mobileNavigationOpen = false"/);
     assert.match(shell, /id="primary-navigation"/);
-    assert.match(shell, /@click="mobileNavigationOpen = false; \$refs\.mobileNavigationTrigger\.focus\(\)" aria-label="Main navigation"/);
+    assert.match(shell, /@click="if \(mobileNavigationOpen\) \{ mobileNavigationOpen = false; \$refs\.mobileNavigationTrigger\.focus\(\) \}" aria-label="Main navigation"/);
     for (const panel of ['showInventoryPanel', 'showAllStoresPanel', 'showLowStockPanel', 'showReportsPanel', 'showAllPartsPanel', 'showEquipmentPanel', 'showMovementsPanel']) {
         assert.ok(shell.includes(`openPanel('${panel}')`), `navigation must preserve ${panel}`);
     }
@@ -69,4 +69,3 @@ test('mobile stock rows retain labeled fields and provide touch-sized actions', 
     assert.match(storePanel, /x-show="isLowStock\(item\)"[\s\S]{0,120}aria-label="Low stock"/);
     assert.match(css, /\.stock-table\s+\.btn[^{]*\{[^}]*min-height:\s*44px/s);
 });
-
