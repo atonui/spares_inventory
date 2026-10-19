@@ -647,18 +647,6 @@ app.include_router(create_equipment_router(
 ))
 
 
-# System Settings endpoint
-
-
-@app.get("/")
-async def root():
-    """Serve the main application"""
-    return {
-        "message": "Inventory Management API",
-        "docs": "/docs",
-        "frontend": "/static/index.html",
-    }
-
 #-----------------------------------------------------------------------------------
 # super admin routes
 
@@ -732,6 +720,6 @@ if __name__ == "__main__":
     import uvicorn
 
     print("🎯 Starting Inventory Management API...")
-    print("📊 Frontend: http://localhost:8000/static/index.html")
+    print("📊 Frontend: http://localhost:8000/")
     print("📚 API Docs: http://localhost:8000/docs")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
