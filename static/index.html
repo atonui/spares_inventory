@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261019-account-menu-mobile">
+    <link rel="stylesheet" href="mystyle.css?v=20261019-account-menu-icon-only">
     <link rel="stylesheet" href="login.css?v=20261018-auth-bootstrap">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
@@ -119,7 +119,7 @@
                     </div>
                     <div class="header-actions">
                         <div class="account-menu" x-data="{ accountMenuOpen: false }" @click.outside="accountMenuOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) accountMenuOpen = false" @keydown.escape.window="if (accountMenuOpen) { accountMenuOpen = false; $refs.accountMenuTrigger.focus() }">
-                            <button x-ref="accountMenuTrigger" type="button" class="account-menu-trigger" @click="accountMenuOpen = !accountMenuOpen" :aria-expanded="accountMenuOpen" aria-controls="account-menu-panel">
+                            <button x-ref="accountMenuTrigger" type="button" class="account-menu-trigger" aria-label="Account" @click="accountMenuOpen = !accountMenuOpen" :aria-expanded="accountMenuOpen" aria-controls="account-menu-panel">
                                 <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#user"></use></svg>
                                 <span class="account-menu-label">Account</span>
                                 <span class="account-menu-chevron" aria-hidden="true"></span>

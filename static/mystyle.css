@@ -1174,6 +1174,8 @@ label.btn {
     .header-actions { width: auto; justify-content: flex-end; margin-left: auto; }
 }
 @media (max-width: 480px) {
+    .account-menu-label, .account-menu-chevron { display: none; }
+    .account-menu-trigger { width: 48px; min-height: 48px; padding: .6rem; }
     .account-menu-panel {
         box-sizing: border-box;
         width: min(280px, calc(100vw - 24px));
