@@ -44,6 +44,24 @@ test('every decorative icon resolves to a local symbol and stays out of accessib
   }
 });
 
+test('offset icon accents use the Spares Tracker amber layer and fresh sprite URLs', () => {
+  const sprite = read('icons.svg');
+  for (const id of ['box', 'store', 'plus', 'chart', 'filter', 'search']) {
+    const symbol = sprite.match(new RegExp(`<symbol\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/symbol>`));
+    assert.ok(symbol, `missing ${id} icon`);
+    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1\.6 1\.6\)"/, `${id} needs an offset amber accent`);
+  }
+  for (const file of fs.readdirSync('static').filter(name => name.endsWith('.html'))) {
+    const html = read(file);
+    for (const reference of html.matchAll(/icons\.svg\?v=[^"#]+#(?:[\w-]+)/g)) {
+      assert.match(reference[0], /^icons\.svg\?v=20261019-offset-icons#/, `${file} must request the updated icon sprite`);
+    }
+  }
+  const inventory = read('index.html');
+  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-offset-icons#search"><\/use><\/svg>\s*Find stock<\/label>/);
+  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-offset-icons#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
+});
+
 // Icon-only actions need contextual names, mouse tooltips and touch/keyboard affordances.
 test('compact utilities keep accessible names and consequential actions keep visible labels', () => {
   let utilities = 0;
