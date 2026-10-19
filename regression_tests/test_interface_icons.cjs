@@ -54,12 +54,12 @@ test('offset icon accents use the Spares Tracker amber layer and fresh sprite UR
   for (const file of fs.readdirSync('static').filter(name => name.endsWith('.html'))) {
     const html = read(file);
     for (const reference of html.matchAll(/icons\.svg\?v=[^"#]+#(?:[\w-]+)/g)) {
-      assert.match(reference[0], /^icons\.svg\?v=20261019-expanded-offset-icons#/, `${file} must request the updated icon sprite`);
+      assert.match(reference[0], /^icons\.svg\?v=20261019-icon-pack-v3#/, `${file} must request the updated icon sprite`);
     }
   }
   const inventory = read('index.html');
-  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-expanded-offset-icons#search"><\/use><\/svg>\s*Find stock<\/label>/);
-  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-expanded-offset-icons#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
+  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v3#search"><\/use><\/svg>\s*Find stock<\/label>/);
+  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v3#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
 });
 
 test('the updated icon pack has dedicated icons for matching equipment and platform navigation', () => {
@@ -80,8 +80,31 @@ test('the updated icon pack has dedicated icons for matching equipment and platf
   assert.match(admin, new RegExp('#console"><\\/use><\\/svg><\\/span> SQL Console'));
   assert.match(admin, new RegExp('#audit"><\\/use><\\/svg><\\/span> Audit Log'));
   for (const file of ['index.html', 'profile.html', 'superadmin.html']) {
-    assert.match(read(file), /icons\.svg\?v=20261019-expanded-offset-icons/);
+    assert.match(read(file), /icons\.svg\?v=20261019-icon-pack-v3/);
   }
+});
+
+test('profile, clear filters, and open-in-new-window icons retain distinct meanings', () => {
+  const sprite = read('icons.svg');
+  for (const id of ['logout', 'refresh', 'profile', 'clearfilters', 'open']) {
+    const symbol = sprite.match(new RegExp(`<symbol\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/symbol>`));
+    assert.ok(symbol, `missing ${id} icon`);
+    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1\.6 1\.6\)"/, `${id} needs its offset amber layer`);
+  }
+
+  const index = read('index.html');
+  const profile = read('profile.html');
+  const admin = read('superadmin.html');
+  assert.match(index, new RegExp('#profile"><\\/use><\\/svg> Profile'));
+  assert.match(profile, new RegExp('#profile"><\\/use><\\/svg> Profile'));
+  for (const button of buttons(index).concat(buttons(admin))) {
+    if (/Clear filters/.test(button)) assert.match(button, /#clearfilters/);
+  }
+  assert.equal(buttons(index).filter(button => /Clear filters/.test(button)).length, 3);
+  assert.equal(buttons(admin).filter(button => /Clear filters/.test(button)).length, 3);
+  const openStore = buttons(index).find(button => button.includes('Open store'));
+  assert.ok(openStore);
+  assert.doesNotMatch(openStore, /#open/);
 });
 
 // Icon-only actions need contextual names, mouse tooltips and touch/keyboard affordances.
