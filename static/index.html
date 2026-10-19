@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261019-account-menu-icon-button">
-    <link rel="stylesheet" href="login.css?v=20261018-auth-bootstrap">
+    <link rel="stylesheet" href="mystyle.css?v=20261020-inventory-store-ux">
+    <link rel="stylesheet" href="login.css?v=20261020-inventory-store-ux">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -144,7 +144,12 @@
                     <h2 x-text="currentViewLabel"></h2>
                     <button class="btn btn-sm ui-icon-only" @click="loadInventory()" :disabled="loading" aria-label="Refresh inventory" title="Refresh inventory"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
                 </div>
-                <nav class="inventory-nav" aria-label="Main navigation">
+                <div class="primary-navigation-shell" x-data="{ mobileNavigationOpen: false }" @click.outside="mobileNavigationOpen = false" @keydown.escape.window="if (mobileNavigationOpen) { mobileNavigationOpen = false; $refs.mobileNavigationTrigger.focus() }">
+                <button type="button" class="mobile-nav-toggle" x-ref="mobileNavigationTrigger" :aria-label="mobileNavigationOpen ? 'Close main navigation' : 'Open main navigation'" aria-controls="primary-navigation" :aria-expanded="mobileNavigationOpen" @click="mobileNavigationOpen = !mobileNavigationOpen">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <span>Menu</span>
+                </button>
+                <nav class="inventory-nav" id="primary-navigation" :class="mobileNavigationOpen ? 'is-open' : ''" @click="mobileNavigationOpen = false; $refs.mobileNavigationTrigger.focus()" aria-label="Main navigation">
                     <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Inventory</button>
                     <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg> Stores</button>
                     <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Replenishment</button>
@@ -153,6 +158,7 @@
                     <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#equipment"></use></svg> Equipment</button>
                     <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#history"></use></svg> Movement history</button>
                 </nav>
+                </div>
                 <details class="management-menu" x-show="['owner','admin','superadmin'].includes(currentUser?.role)">
                     <summary>Management</summary>
                     <div class="management-actions">
@@ -496,7 +502,7 @@
                             @change="importPartsToStore($event, selectedStore?.id)"
                             style="display: none;">
                     </label>
-                    <button class="btn btn-success"
+                    <button class="btn store-inventory-primary-action"
 
                             x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" @click="addStockToStore(selectedStore)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg>
                         Add Single Part

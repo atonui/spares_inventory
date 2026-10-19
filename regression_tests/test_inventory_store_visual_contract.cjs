@@ -1,0 +1,72 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+const html = fs.readFileSync('static/index.html', 'utf8');
+const css = fs.readFileSync('static/mystyle.css', 'utf8');
+const loginCss = fs.readFileSync('static/login.css', 'utf8');
+
+function sectionBetween(startMarker, endMarker) {
+    const start = html.indexOf(startMarker);
+    assert.notEqual(start, -1, `missing section start: ${startMarker}`);
+    const end = html.indexOf(endMarker, start);
+    assert.notEqual(end, -1, `missing section end: ${endMarker}`);
+    return html.slice(start, end);
+}
+
+test('mobile primary navigation has an accessible toggle and preserves all destinations', () => {
+    const shell = sectionBetween('<!-- Inventory navigation and controls -->', '<!-- Quick Stats -->');
+    assert.match(shell, /class="mobile-nav-toggle"/);
+    assert.match(shell, /aria-label="Main navigation"/);
+    assert.match(shell, /aria-controls="primary-navigation"/);
+    assert.match(shell, /:aria-expanded="mobileNavigationOpen"/);
+    assert.match(shell, /@keydown\.escape\.window=.*mobileNavigationOpen/);
+    assert.match(shell, /x-ref="mobileNavigationTrigger"/);
+    assert.match(shell, /@click\.outside="mobileNavigationOpen = false"/);
+    assert.match(shell, /id="primary-navigation"/);
+    assert.match(shell, /@click="mobileNavigationOpen = false; \$refs\.mobileNavigationTrigger\.focus\(\)" aria-label="Main navigation"/);
+    for (const panel of ['showInventoryPanel', 'showAllStoresPanel', 'showLowStockPanel', 'showReportsPanel', 'showAllPartsPanel', 'showEquipmentPanel', 'showMovementsPanel']) {
+        assert.ok(shell.includes(`openPanel('${panel}')`), `navigation must preserve ${panel}`);
+    }
+});
+
+test('inventory lookup keeps its common controls and stock actions in the shell', () => {
+    const shell = sectionBetween('<!-- Inventory navigation and controls -->', '<!-- Quick Stats -->');
+    for (const contract of [
+        'id="inventory-search"',
+        'id="inventory-store"',
+        'clearInventoryFilters()',
+        'viewStoreInventory(stores.find',
+        'aria-label="Refresh inventory"',
+        'Add Stock',
+        'class="management-menu"',
+    ]) assert.ok(shell.includes(contract), `inventory shell must retain ${contract}`);
+    assert.equal((shell.match(/id="inventory-search"/g) || []).length, 1);
+    assert.equal((shell.match(/id="inventory-store"/g) || []).length, 1);
+    assert.match(css, /\.inventory-toolbar \.toolbar-actions > \.btn:first-child,[\s\S]*?\.store-inventory-primary-action\s*\{[^}]*background:\s*var\(--brand-amber\);[^}]*color:\s*var\(--brand-navy\)/);
+    assert.match(html, /class="btn store-inventory-primary-action"/);
+});
+
+test('shared visual tokens are present without replacing the established palette', () => {
+    for (const [name, value] of Object.entries({
+        '--brand-navy': '#15263B',
+        '--brand-amber': '#E9A23B',
+        '--brand-slate': '#64748B',
+        '--brand-page': '#F5F7FA',
+        '--brand-surface': '#FFFFFF',
+    })) assert.match(css, new RegExp(`${name}:\\s*${value.replace('#', '\\#')}`, 'i'));
+    for (const token of ['--font-sans', '--space-1', '--space-2', '--space-3', '--space-4', '--radius-control', '--radius-surface', '--shadow-surface', '--control-height']) {
+        assert.ok(css.includes(`${token}:`), `shared token ${token} must be defined`);
+    }
+    assert.match(loginCss, /var\(--font-sans(?:,|\))/ , 'sign-in should use the shared font token');
+});
+
+test('mobile stock rows retain labeled fields and provide touch-sized actions', () => {
+    const storePanel = sectionBetween('<!-- Store Inventory Management Panel -->', '<!-- Duplicate Resolution Modal -->');
+    for (const label of ['Part number', 'Description', 'Quantity', 'Work order', 'Actions']) {
+        assert.ok(storePanel.includes(`data-label="${label}"`), `store stock rows must retain ${label}`);
+    }
+    assert.match(storePanel, /x-show="isLowStock\(item\)"[\s\S]{0,120}aria-label="Low stock"/);
+    assert.match(css, /\.stock-table\s+\.btn[^{]*\{[^}]*min-height:\s*44px/s);
+});
+
