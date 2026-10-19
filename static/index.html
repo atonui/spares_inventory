@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261019-spares-tracker-header">
+    <link rel="stylesheet" href="mystyle.css?v=20261019-account-menu">
     <link rel="stylesheet" href="login.css?v=20261018-auth-bootstrap">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
@@ -117,15 +117,20 @@
                         <p class="timezone-note" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry timezone settings</button></p>
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
-                    <div class="header-actions" role="group" aria-label="Account actions">
-                            <button class="btn" @click="logout()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Logout</button>
-                            <button class="btn" @click="$el.ownerDocument.location.href='/static/profile.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#profile"></use></svg> Profile</button>
-                            <button x-show="(currentUser?.is_platform_admin || currentUser?.role === 'superadmin')" class="btn" style="background:#dc3545;"
-                             @click="window.location.href='/static/superadmin.html'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#settings"></use></svg>
-                                Superadmin
+                    <div class="header-actions">
+                        <div class="account-menu" x-data="{ accountMenuOpen: false }" @click.outside="accountMenuOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) accountMenuOpen = false" @keydown.escape.window="if (accountMenuOpen) { accountMenuOpen = false; $refs.accountMenuTrigger.focus() }">
+                            <button x-ref="accountMenuTrigger" type="button" class="account-menu-trigger" @click="accountMenuOpen = !accountMenuOpen" :aria-expanded="accountMenuOpen" aria-controls="account-menu-panel">
+                                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#user"></use></svg>
+                                <span class="account-menu-label">Account</span>
+                                <span class="account-menu-chevron" aria-hidden="true"></span>
                             </button>
-
-                </div>
+                            <div class="account-menu-panel" id="account-menu-panel" x-show="accountMenuOpen" x-cloak role="group" aria-label="Account actions">
+                                <a class="account-menu-item" href="/static/profile.html" @click="accountMenuOpen = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#profile"></use></svg> Profile</a>
+                                <a x-show="(currentUser?.is_platform_admin || currentUser?.role === 'superadmin')" class="account-menu-item" href="/static/superadmin.html" @click="accountMenuOpen = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#settings"></use></svg> Superadmin</a>
+                                <button type="button" class="account-menu-item account-menu-signout" @click="accountMenuOpen = false; logout()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Log out</button>
+                            </div>
+                        </div>
+                    </div>
             </div>
 
             <!-- Loading State -->
