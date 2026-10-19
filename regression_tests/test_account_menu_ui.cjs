@@ -17,9 +17,12 @@ test('header account menu keeps profile, authorized superadmin, and logout actio
   assert.doesNotMatch(html,/class="header-actions"[\s\S]{0,1400}Logout[\s\S]{0,500}Profile[\s\S]{0,500}Superadmin/);
 });
 
-test('account menu has a compact mobile trigger and touch-sized menu actions',()=>{
+test('account menu keeps a discoverable label and usable touch targets on mobile',()=>{
   assert.match(css,/\.account-menu-trigger\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css,/\.account-menu-item\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-label\s*\{[^}]*display:\s*none/s);
+  assert.doesNotMatch(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-label\s*\{[^}]*display:\s*none/s);
+  assert.match(css,/@media\s*\(max-width:\s*768px\)[\s\S]*?\.header-actions\s*\{[^}]*width:\s*auto/s);
+  assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-panel\s*\{[^}]*width:\s*min\(280px,\s*calc\(100vw\s*-\s*24px\)\)/s);
+  assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-item\s*\{[^}]*min-height:\s*48px/s);
   assert.match(css,/\.account-menu-panel\s*\{[^}]*position:\s*absolute/s);
 });
