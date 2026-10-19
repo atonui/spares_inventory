@@ -19,6 +19,13 @@ test('all application navigation uses the shared local icon set', () => {
   }
 });
 
+test('Add Stock uses the brand primary action color, not the success color', () => {
+  const addStock = buttons(read('index.html')).find(button => /Add Stock/.test(button));
+  assert.ok(addStock, 'Add Stock action must exist');
+  assert.match(opening(addStock), /class="btn"/);
+  assert.doesNotMatch(opening(addStock), /btn-success/);
+});
+
 // A broken symbol URL renders an empty icon; a missing aria-hidden creates duplicate names.
 test('every decorative icon resolves to a local symbol and stays out of accessible names', () => {
   assert.ok(fs.existsSync('static/icons.svg'), 'shared sprite must exist');
@@ -44,22 +51,22 @@ test('every decorative icon resolves to a local symbol and stays out of accessib
   }
 });
 
-test('offset icon accents use the Spares Tracker amber layer and fresh sprite URLs', () => {
+test('icon accents use a subtle Spares Tracker amber offset and fresh sprite URLs', () => {
   const sprite = read('icons.svg');
   for (const id of ['box', 'store', 'plus', 'chart', 'filter', 'search']) {
     const symbol = sprite.match(new RegExp(`<symbol\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/symbol>`));
     assert.ok(symbol, `missing ${id} icon`);
-    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1\.6 1\.6\)"/, `${id} needs an offset amber accent`);
+    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1 1\)"[^>]*opacity="\.35"/, `${id} needs a subtle amber accent`);
   }
   for (const file of fs.readdirSync('static').filter(name => name.endsWith('.html'))) {
     const html = read(file);
     for (const reference of html.matchAll(/icons\.svg\?v=[^"#]+#(?:[\w-]+)/g)) {
-      assert.match(reference[0], /^icons\.svg\?v=20261019-icon-pack-v3#/, `${file} must request the updated icon sprite`);
+      assert.match(reference[0], /^icons\.svg\?v=20261019-icon-pack-v4#/, `${file} must request the updated icon sprite`);
     }
   }
   const inventory = read('index.html');
-  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v3#search"><\/use><\/svg>\s*Find stock<\/label>/);
-  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v3#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
+  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v4#search"><\/use><\/svg>\s*Find stock<\/label>/);
+  assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v4#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
 });
 
 test('the updated icon pack has dedicated icons for matching equipment and platform navigation', () => {
@@ -67,7 +74,7 @@ test('the updated icon pack has dedicated icons for matching equipment and platf
   for (const id of ['download', 'unlock', 'sessions', 'secconfig', 'broadcast', 'console', 'audit', 'equipment', 'history']) {
     const symbol = sprite.match(new RegExp(`<symbol\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/symbol>`));
     assert.ok(symbol, `missing updated ${id} icon`);
-    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1\.6 1\.6\)"/, `${id} needs its offset amber layer`);
+    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1 1\)"[^>]*opacity="\.35"/, `${id} needs a subtle amber layer`);
   }
 
   const index = read('index.html');
@@ -80,7 +87,7 @@ test('the updated icon pack has dedicated icons for matching equipment and platf
   assert.match(admin, new RegExp('#console"><\\/use><\\/svg><\\/span> SQL Console'));
   assert.match(admin, new RegExp('#audit"><\\/use><\\/svg><\\/span> Audit Log'));
   for (const file of ['index.html', 'profile.html', 'superadmin.html']) {
-    assert.match(read(file), /icons\.svg\?v=20261019-icon-pack-v3/);
+    assert.match(read(file), /icons\.svg\?v=20261019-icon-pack-v4/);
   }
 });
 
@@ -89,7 +96,7 @@ test('profile, clear filters, and open-in-new-window icons retain distinct meani
   for (const id of ['logout', 'refresh', 'profile', 'clearfilters', 'open']) {
     const symbol = sprite.match(new RegExp(`<symbol\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/symbol>`));
     assert.ok(symbol, `missing ${id} icon`);
-    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1\.6 1\.6\)"/, `${id} needs its offset amber layer`);
+    assert.match(symbol[1], /fill="#E9A23B"[^>]*transform="translate\(1 1\)"[^>]*opacity="\.35"/, `${id} needs a subtle amber layer`);
   }
 
   const index = read('index.html');

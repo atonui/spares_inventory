@@ -30,7 +30,7 @@
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
   <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
   <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
-  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry</button></p>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
 </section>
 
 
@@ -69,60 +69,60 @@
       <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Overview</div>
         <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'" :aria-current="tab==='dashboard' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#chart"></use></svg></span> Dashboard
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg></span> Dashboard
         </button>
       </div>
 
       <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Security</div>
         <button type="button" class="nav-item" :class="tab==='accounts'&&'active'" @click="tab='accounts'; loadLocked()" :aria-current="tab==='accounts' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#lock"></use></svg></span> Locked Accounts
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#lock"></use></svg></span> Locked Accounts
           <span x-show="dashboard.locked_accounts>0" class="nav-badge" x-text="dashboard.locked_accounts"></span>
         </button>
         <button type="button" class="nav-item" :class="tab==='sessions'&&'active'" @click="tab='sessions'; loadSessions()" :aria-current="tab==='sessions' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#sessions"></use></svg></span> Active Sessions
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#sessions"></use></svg></span> Active Sessions
         </button>
         <button type="button" class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()" :aria-current="tab==='config' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#secconfig"></use></svg></span> Security Config
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#secconfig"></use></svg></span> Security Config
         </button>
       </div>
 
       <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Users</div>
         <button type="button" class="nav-item" :class="tab==='users'&&'active'" @click="tab='users'; loadUsers()" :aria-current="tab==='users' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#users"></use></svg></span> All Users
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg></span> All Users
         </button>
       </div>
 
       <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">Database</div>
         <button type="button" class="nav-item" :class="tab==='tables'&&'active'" @click="tab='tables'; loadTables()" :aria-current="tab==='tables' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#database"></use></svg></span> Tables
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#database"></use></svg></span> Tables
         </button>
         <button type="button" class="nav-item" :class="tab==='query'&&'active'" @click="tab='query'" :aria-current="tab==='query' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#console"></use></svg></span> SQL Console
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#console"></use></svg></span> SQL Console
         </button>
         <button type="button" class="nav-item" :class="tab==='maintenance'&&'active'" @click="tab='maintenance'" :aria-current="tab==='maintenance' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#tools"></use></svg></span> Maintenance
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#tools"></use></svg></span> Maintenance
         </button>
       </div>
 
       <div class="nav-section" x-show="!me?.saas_mode">
         <div class="nav-label">System</div>
         <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#broadcast"></use></svg></span> Announcement
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg></span> Announcement
         </button>
         <button type="button" class="nav-item" :class="tab==='audit'&&'active'" @click="tab='audit'; loadAudit()" :aria-current="tab==='audit' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#audit"></use></svg></span> Audit Log
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#audit"></use></svg></span> Audit Log
         </button>
       </div>
       <div class="nav-section" x-show="me?.saas_mode && me?.is_platform_admin">
         <div class="nav-label">Platform</div>
         <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'; loadPlatformDashboard()" :aria-current="tab==='dashboard' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#chart"></use></svg></span> Overview
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg></span> Overview
         </button>
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#store"></use></svg></span> Organizations
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg></span> Organizations
         </button>
       </div>
     </nav>
@@ -130,17 +130,17 @@
     <div class="sidebar-footer">
       <div class="sf-name" x-text="me?.name || '...'"></div>
       <div class="sf-role" x-text="me?.saas_mode ? 'Platform admin' : 'Superadmin'">Superadmin</div>
-      <a href="/static/index.html"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#arrow-left"></use></svg> Back to App</a>
+      <a href="/static/index.html"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to App</a>
     </div>
   </aside>
 
   <!-- ── Main ── -->
   <div class="main-wrap">
-    <div class="timezone-note" style="padding: .6rem 1.5rem;" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button class="btn btn-sm btn-outline" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry timezone settings</button></div>
+    <div class="timezone-note" style="padding: .6rem 1.5rem;" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button class="btn btn-sm btn-outline" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry timezone settings</button></div>
 
     <!-- Announcement banner (visible to all) -->
     <div x-show="announcement" class="ann-bar" :class="'ann-'+(announcement?.level||'info')">
-      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#broadcast"></use></svg>
+      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg>
       <span x-text="announcement?.message"></span>
     </div>
 
@@ -155,8 +155,8 @@
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
         <span x-show="loading || panelLoads[tab]?.loading" class="spin"></span>
-        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg></button>
-        <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#arrow-left"></use></svg> Back to inventory</a>
+        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+        <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
       </div>
     </div>
 
@@ -207,27 +207,27 @@
           <div class="panel-body">
             <div class="qa-grid">
               <button class="qa-btn" @click="tab='accounts'; loadLocked()">
-                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#unlock"></use></svg></span>
+                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg></span>
                 <div class="qa-label">Unlock Accounts</div>
                 <div class="qa-sub">Release locked users</div>
               </button>
               <button class="qa-btn" @click="tab='sessions'; loadSessions()">
-                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#users"></use></svg></span>
+                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg></span>
                 <div class="qa-label">View Sessions</div>
                 <div class="qa-sub">See who's logged in</div>
               </button>
               <button class="qa-btn" @click="backupDB()">
-                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#download"></use></svg></span>
+                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg></span>
                 <div class="qa-label">Download Backup</div>
                 <div class="qa-sub">SQLite snapshot</div>
               </button>
               <button class="qa-btn" @click="tab='config'; loadConfig()">
-                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#settings"></use></svg></span>
+                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#settings"></use></svg></span>
                 <div class="qa-label">Security Config</div>
                 <div class="qa-sub">Login limits &amp; timeouts</div>
               </button>
               <button class="qa-btn" @click="tab='announcement'; openAnnouncement()">
-                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#broadcast"></use></svg></span>
+                <span class="qa-icon"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg></span>
                 <div class="qa-label">Broadcast Message</div>
                 <div class="qa-sub">System-wide banner</div>
               </button>
@@ -288,8 +288,8 @@
               <span x-show="locked.length>0" class="tag tag-red" style="margin-left:6px;" x-text="locked.length"></span>
             </span>
             <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0 || actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#unlock"></use></svg> Unlock All</button>
-              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadLocked()" aria-label="Refresh locked accounts" title="Refresh locked accounts"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg></button>
+              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0 || actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock All</button>
+              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadLocked()" aria-label="Refresh locked accounts" title="Refresh locked accounts"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
             </div>
           </div>
 
@@ -297,7 +297,7 @@
             <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
             <p class="action-error" x-show="actionErrors.unlock" role="alert" x-text="actionErrors.unlock"></p>
           </div>
-          <div x-show="locked.length===0 && !loading" class="empty"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#check"></use></svg> No accounts are currently locked</div>
+          <div x-show="locked.length===0 && !loading" class="empty"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#check"></use></svg> No accounts are currently locked</div>
 
           <div x-show="locked.length>0" style="overflow-x:auto;">
             <table class="tbl locked-accounts-table">
@@ -321,7 +321,7 @@
                     <td data-label="Role"><span class="tag tag-grey" x-text="u.role"></span></td>
                     <td data-label="Failed Attempts"><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
                     <td data-label="Locked Until" style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
-                    <td data-label="Action"><button class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#unlock"></use></svg> Unlock</button></td>
+                    <td data-label="Action"><button class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock</button></td>
                   </tr>
                 </template>
               </tbody>
@@ -332,7 +332,7 @@
           <div x-show="selectedLocked.length>0"
                style="padding:0.75rem 1rem;border-top:1px solid var(--brand-border);display:flex;align-items:center;gap:0.75rem;background:var(--brand-page);">
             <span style="font-size:0.8rem;color:var(--brand-navy);" x-text="selectedLocked.length + ' selected'"></span>
-            <button class="btn btn-sm btn-green" @click="unlockSelected()" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#unlock"></use></svg> Unlock Selected</button>
+            <button class="btn btn-sm btn-green" @click="unlockSelected()" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock Selected</button>
           </div>
         </div>
       </div><!-- /accounts -->
@@ -344,7 +344,7 @@
           <p x-show="panelLoads.sessions.loading" role="status">Loading sessions…</p>
           <div x-show="panelLoads.sessions.error" role="alert">
             <p class="action-error" x-text="panelLoads.sessions.error"></p>
-            <button class="btn btn-sm btn-outline" @click="loadSessions()" :disabled="panelLoads.sessions.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry</button>
+            <button class="btn btn-sm btn-outline" @click="loadSessions()" :disabled="panelLoads.sessions.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button>
           </div>
         </div>
 
@@ -355,8 +355,8 @@
               <span class="tag tag-blue" style="margin-left:6px;" x-show="panelReady('sessions')" x-text="sessions.length"></span>
             </span>
             <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-red" @click="confirmLogoutAll()" :disabled="!panelReady('sessions')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#logout"></use></svg> Logout All</button>
-              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadSessions()" :disabled="panelLoads.sessions.loading" aria-label="Refresh active sessions" title="Refresh active sessions"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg></button>
+              <button class="btn btn-sm btn-red" @click="confirmLogoutAll()" :disabled="!panelReady('sessions')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Logout All</button>
+              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadSessions()" :disabled="panelLoads.sessions.loading" aria-label="Refresh active sessions" title="Refresh active sessions"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
             </div>
           </div>
 
@@ -364,7 +364,7 @@
               <label for="session-search">Search<input id="session-search" type="search" x-model="sessionFilters.search" placeholder="Name, email or IP address"></label>
               <label for="session-role">Role<select id="session-role" x-model="sessionFilters.role"><option value="">All roles</option><option value="engineer">Engineer</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select></label>
               <label for="session-expiry">Expires<select id="session-expiry" x-model="sessionFilters.expiry"><option value="">Any expiry</option><option value="soon">Within 24 hours</option></select></label>
-              <button class="btn btn-sm btn-outline" @click="sessionFilters={ search:'', role:'', expiry:'' }"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#clearfilters"></use></svg> Clear filters</button>
+              <button class="btn btn-sm btn-outline" @click="sessionFilters={ search:'', role:'', expiry:'' }"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
             </div>
             <p x-show="panelReady('sessions')" class="list-count" role="status" x-text="filteredSessions.length + ' of ' + sessions.length + ' sessions'"></p>
           <div x-show="panelReady('sessions')" style="overflow-x:auto;">
@@ -392,7 +392,7 @@
                     <td data-label="Last Activity" style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
                     <td data-label="Expires" style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
                     <td data-label="Browser" style="font-size:0.75rem;color:var(--brand-slate);" x-text="parseUA(s.user_agent)"></td>
-                    <td data-label="Action"><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#logout"></use></svg> Terminate</button></td>
+                    <td data-label="Action"><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Terminate</button></td>
                   </tr>
                 </template>
               </tbody>
@@ -409,7 +409,7 @@
           <p x-show="panelLoads.config.loading" role="status">Loading security settings…</p>
           <div x-show="panelLoads.config.error" role="alert">
             <p class="action-error" x-text="panelLoads.config.error"></p>
-            <button class="btn btn-sm btn-outline" @click="loadConfig()" :disabled="panelLoads.config.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry</button>
+            <button class="btn btn-sm btn-outline" @click="loadConfig()" :disabled="panelLoads.config.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button>
           </div>
         </div>
 
@@ -431,7 +431,7 @@
                          x-model="cfgVals[key]" :disabled="!panelReady('config') || actionPending['config:' + key]" :aria-label="meta.label"
                          @keydown.enter="saveConfig(key)">
                   <span class="cfg-unit" x-text="meta.unit"></span>
-                  <button class="btn btn-sm btn-success" @click="saveConfig(key)" :disabled="!panelReady('config') || actionPending['config:' + key]"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#save"></use></svg> <span x-text="actionPending['config:' + key] ? 'Saving…' : 'Save'"></span></button>
+                  <button class="btn btn-sm btn-success" @click="saveConfig(key)" :disabled="!panelReady('config') || actionPending['config:' + key]"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#save"></use></svg> <span x-text="actionPending['config:' + key] ? 'Saving…' : 'Save'"></span></button>
                   <p class="action-error" x-show="actionErrors['config:' + key]" role="alert" x-text="actionErrors['config:' + key]"></p>
                 </div>
               </div>
@@ -442,7 +442,7 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Current Values (from database)</span>
-            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadConfig()" :disabled="panelLoads.config.loading" aria-label="Refresh security configuration" title="Refresh security configuration"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg></button>
+            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadConfig()" :disabled="panelLoads.config.loading" aria-label="Refresh security configuration" title="Refresh security configuration"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
           </div>
           <div class="panel-body" x-show="panelReady('config')">
             <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:var(--brand-slate);font-size:0.875rem;">
@@ -469,14 +469,14 @@
           <p x-show="panelLoads.users.loading" role="status">Loading users…</p>
           <div x-show="panelLoads.users.error" role="alert">
             <p class="action-error" x-text="panelLoads.users.error"></p>
-            <button class="btn btn-sm btn-outline" @click="loadUsers()" :disabled="panelLoads.users.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry</button>
+            <button class="btn btn-sm btn-outline" @click="loadUsers()" :disabled="panelLoads.users.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button>
           </div>
         </div>
 
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">All Users</span>
-            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadUsers()" :disabled="panelLoads.users.loading" aria-label="Refresh users" title="Refresh users"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg></button>
+            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadUsers()" :disabled="panelLoads.users.loading" aria-label="Refresh users" title="Refresh users"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
           </div>
           <div class="action-feedback">
             <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
@@ -486,7 +486,7 @@
               <label for="user-search">Search<input id="user-search" type="search" x-model="userFilters.search" placeholder="Name or email"></label>
               <label for="user-role">Role<select id="user-role" x-model="userFilters.role"><option value="">All roles</option><option value="engineer">Engineer</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select></label>
               <label for="user-status">Status<select id="user-status" x-model="userFilters.status"><option value="">All statuses</option><option value="active">Active</option><option value="locked">Locked</option></select></label>
-              <button class="btn btn-sm btn-outline" @click="userFilters={ search:'', role:'', status:'' }"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#clearfilters"></use></svg> Clear filters</button>
+              <button class="btn btn-sm btn-outline" @click="userFilters={ search:'', role:'', status:'' }"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
             </div>
             <p x-show="panelReady('users')" class="list-count" role="status" x-text="filteredUsers.length + ' of ' + allUsers.length + ' users'"></p>
           <div x-show="panelReady('users')" style="overflow-x:auto;">
@@ -519,7 +519,7 @@
                       </select>
                       <div class="role-actions" x-show="u._role !== u.role || u._saving">
                         <span class="role-change" x-text="u.role + ' → ' + u._role"></span>
-                        <button class="btn btn-sm" @click="changeRole(u)" :disabled="u._saving"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#save"></use></svg> <span x-text="u._saving ? 'Saving…' : 'Save'"></span></button>
+                        <button class="btn btn-sm" @click="changeRole(u)" :disabled="u._saving"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#save"></use></svg> <span x-text="u._saving ? 'Saving…' : 'Save'"></span></button>
                         <button class="btn btn-sm btn-outline" @click="u._role=u.role; u._error=''" :disabled="u._saving">Cancel</button>
                       </div>
                       <p class="action-error" role="alert" x-show="u._error" x-text="u._error"></p>
@@ -536,12 +536,12 @@
                     </td>
                     <td data-label="Account Actions">
                       <div class="user-admin-actions">
-                        <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock" title="Unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#unlock"></use></svg> Unlock</button>
-                        <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#logout"></use></svg> Force logout</button>
+                        <button x-show="isLocked(u)" class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock" title="Unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock</button>
+                        <button class="btn btn-sm btn-red" @click="forceLogout(u)" title="Force logout"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Force logout</button>
                       </div>
                     </td>
                     <td data-label="Reset Password">
-                      <button class="btn btn-sm btn-amber" @click="openResetModal(u)" title="Reset password"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#lock"></use></svg> Reset password</button>
+                      <button class="btn btn-sm btn-amber" @click="openResetModal(u)" title="Reset password"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#lock"></use></svg> Reset password</button>
                     </td>
                   </tr>
                 </template>
@@ -592,7 +592,7 @@
                       placeholder="SELECT * FROM users LIMIT 10;"
                       @keydown.ctrl.enter="runQuery()"></textarea>
             <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;align-items:center;">
-              <button class="btn btn-success" @click="runQuery()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#play"></use></svg>
+              <button class="btn btn-success" @click="runQuery()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#play"></use></svg>
                 Run <small style="opacity:.7;">(Ctrl+Enter)</small>
               </button>
               <button class="btn btn-sm btn-outline" @click="sqlInput=''">Clear</button>
@@ -644,14 +644,14 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.25rem;">
 
           <div class="panel" style="margin-bottom:0;">
-            <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#download"></use></svg> Database Backup</span></div>
+            <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Database Backup</span></div>
             <div class="panel-body">
               <p style="font-size:0.875rem;color:var(--brand-slate);margin-bottom:1rem;">Download a consistent SQLite snapshot of the live database.</p>
               <div style="margin-bottom:1rem;">
                 <div style="font-size:0.75rem;color:var(--brand-slate);">Current size</div>
                 <div style="font-size:1.4rem;font-weight:700;color:var(--brand-navy);" x-text="fmtBytes(dashboard.database_size_bytes)"></div>
               </div>
-              <button class="btn btn-success" @click="backupDB()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#download"></use></svg> Download Backup</button>
+              <button class="btn btn-success" @click="backupDB()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Download Backup</button>
             </div>
           </div>
 
@@ -661,18 +661,18 @@
               <p>Replace all current data with a SQLite backup. Later changes will be overwritten. Pause inventory work before restoring. A snapshot of the current database is saved first; changes made during restoration may not be in that snapshot. Everyone must sign in again.</p>
               <label for="restore-database-file">Choose database file</label>
               <input id="restore-database-file" type="file" style="display:block; margin:12px 0;" accept=".db,.sqlite,.sqlite3" @change="restoreFile = $event.target.files[0]" :disabled="loading">
-              <button class="btn btn-danger" @click="restoreDB()" :disabled="loading || !restoreFile"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#upload"></use></svg> Upload and Restore</button>
+              <button class="btn btn-danger" @click="restoreDB()" :disabled="loading || !restoreFile"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg> Upload and Restore</button>
             </div>
           </div>
 
           <div class="panel" style="margin-bottom:0;">
-            <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#database"></use></svg> Vacuum Database</span></div>
+            <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#database"></use></svg> Vacuum Database</span></div>
             <div class="panel-body">
               <p style="font-size:0.875rem;color:var(--brand-slate);margin-bottom:1rem;">Reclaim unused space and defragment. The app stays online.</p>
-              <button class="btn btn-warning" @click="vacuumDB()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#database"></use></svg> Run VACUUM</button>
+              <button class="btn btn-warning" @click="vacuumDB()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#database"></use></svg> Run VACUUM</button>
               <div x-show="vacuumResult"
                    style="margin-top:1rem;padding:0.75rem;background:#d4edda;border-radius:6px;font-size:0.85rem;color:#155724;">
-                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#check"></use></svg> Saved <strong x-text="fmtBytes(vacuumResult?.saved_bytes)"></strong>
+                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#check"></use></svg> Saved <strong x-text="fmtBytes(vacuumResult?.saved_bytes)"></strong>
                 (<span x-text="fmtBytes(vacuumResult?.before_bytes)"></span>
                 → <span x-text="fmtBytes(vacuumResult?.after_bytes)"></span>)
               </div>
@@ -680,14 +680,14 @@
           </div>
 
           <div class="panel" style="margin-bottom:0;">
-            <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#trash"></use></svg> Purge Logs</span></div>
+            <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg> Purge Logs</span></div>
             <div class="panel-body">
               <p style="font-size:0.875rem;color:var(--brand-slate);margin-bottom:1rem;">Delete old activity and system log entries to free up space.</p>
               <div class="form-group">
                 <label for="purge-days">Older than (days) — 0 deletes all general logs; stock audit evidence is retained</label>
                 <input id="purge-days" type="number" x-model="purgeDays" min="0" placeholder="90">
               </div>
-              <button class="btn btn-sm btn-red" @click="purgeLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#trash"></use></svg> Purge Logs</button>
+              <button class="btn btn-sm btn-red" @click="purgeLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg> Purge Logs</button>
               <div x-show="purgeResult"
                    style="margin-top:1rem;padding:0.75rem;background:#f8d7da;border-radius:6px;font-size:0.85rem;color:#721c24;">
                 Deleted <strong x-text="purgeResult?.activity_logs_deleted"></strong> activity
@@ -703,13 +703,13 @@
       <!-- ══════════ ANNOUNCEMENT ══════════ -->
       <div x-show="tab==='announcement'">
         <div class="panel">
-          <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#broadcast"></use></svg> System Announcement</span></div>
+          <div class="panel-header"><span class="panel-title"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg> System Announcement</span></div>
           <div class="panel-body">
 
             <p role="status" x-show="announcementLoading">Loading announcement…</p>
-            <p class="action-error" role="alert" x-show="announcementError"><span x-text="announcementError"></span> <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry</button></p>
+            <p class="action-error" role="alert" x-show="announcementError"><span x-text="announcementError"></span> <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
             <p class="action-error" role="alert" x-show="announcementConflict">The saved notice or organisation timezone changed. Reload replaces your draft with the saved notice.</p>
-            <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading || actionPending.announcement"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Reload saved notice</button>
+            <button type="button" @click="loadAnnouncement()" :disabled="announcementLoading || actionPending.announcement"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Reload saved notice</button>
             <p x-show="announcementReady">Saved status: <strong x-text="announcementStatus"></strong></p>
             <!-- Current banner preview -->
             <div x-show="announcement" style="margin-bottom:1.25rem;">
@@ -720,7 +720,7 @@
                    style="border-radius:6px;border:1px solid var(--brand-border);">
                 <span x-text="announcement?.message"></span>
                 <button class="btn btn-sm btn-outline" style="margin-left:auto;flex-shrink:0;"
-                        @click="clearAnnouncement()" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#trash"></use></svg> Remove</button>
+                        @click="clearAnnouncement()" :disabled="actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg> Remove</button>
               </div>
             </div>
 
@@ -756,7 +756,7 @@
               <label><input type="checkbox" x-model="annForm.dismissible"> Allow users to dismiss this notice</label>
               <p>Saving republishes this notice and resets previous dismissals. Public notices are visible without signing in.</p>
             </fieldset>
-            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message.trim() || actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#broadcast"></use></svg>
+            <button class="btn btn-success" @click="saveAnnouncement()" :disabled="!annForm.message.trim() || actionPending.announcement || announcementLoading || !announcementReady || announcementConflict"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg>
               Broadcast
             </button>
             <p x-show="actionPending.announcement" role="status">Updating announcement…</p>
@@ -771,18 +771,18 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Superadmin Audit Log</span>
-            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadAudit()" :disabled="auditLoading" aria-label="Refresh audit log" title="Refresh audit log"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg></button>
+            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadAudit()" :disabled="auditLoading" aria-label="Refresh audit log" title="Refresh audit log"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
           </div>
           <div class="list-filters audit-filters" @change="loadAudit()">
             <label for="audit-from">From<input id="audit-from" type="date" x-model="auditFilters.start_date"></label>
             <label for="audit-through">Through<input id="audit-through" type="date" x-model="auditFilters.end_date"></label>
             <label for="audit-action">Action<select id="audit-action" x-model="auditFilters.action"><option value="">All actions</option><template x-for="action in auditActions" :key="action"><option :value="action" x-text="action"></option></template></select></label>
             <label for="audit-status">Status<select id="audit-status" x-model="auditFilters.status"><option value="">All statuses</option><option value="success">Success</option><option value="error">Error</option></select></label>
-            <button class="btn btn-sm btn-outline" @click="auditFilters={start_date:'',end_date:'',action:'',status:''}; loadAudit()" :disabled="auditLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#clearfilters"></use></svg> Clear filters</button>
+            <button class="btn btn-sm btn-outline" @click="auditFilters={start_date:'',end_date:'',action:'',status:''}; loadAudit()" :disabled="auditLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
           </div>
           <p class="list-count">Through includes the whole day.</p>
           <p class="list-count" x-show="auditLoading" role="status">Loading audit entries…</p>
-          <div class="audit-error" x-show="auditError" role="alert"><span x-text="auditError"></span> <button class="btn btn-sm btn-outline" @click="loadAudit()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#refresh"></use></svg> Retry</button></div>
+          <div class="audit-error" x-show="auditError" role="alert"><span x-text="auditError"></span> <button class="btn btn-sm btn-outline" @click="loadAudit()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></div>
           <div style="overflow-x:auto;" x-show="!auditError && !auditLoading">
             <table class="audit-table tbl">
               <thead>
@@ -852,7 +852,7 @@
          x-text="resetModal.error || actionErrors.reset"></div>
     <div class="confirm-actions">
       <button class="btn btn-outline" @click="resetModal.open=false; resetModal.password=''; resetModal.confirm=''; resetModal.error=''" :disabled="actionPending.reset">Cancel</button>
-      <button class="btn btn-red" @click="submitPasswordReset()" :disabled="actionPending.reset"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v3#lock"></use></svg> <span x-text="actionPending.reset ? 'Resetting…' : 'Reset Password'"></span></button>
+      <button class="btn btn-red" @click="submitPasswordReset()" :disabled="actionPending.reset"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#lock"></use></svg> <span x-text="actionPending.reset ? 'Resetting…' : 'Reset Password'"></span></button>
     </div>
   </div>
 </div>
