@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -104,6 +104,17 @@ def create_inventory_app(
         allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
     )
+
+    @app.middleware("http")
+    async def redirect_legacy_frontend_url(request: Request, call_next):
+        if (
+            request.method in {"GET", "HEAD"}
+            and request.url.hostname == "sparesinventory-production.up.railway.app"
+            and request.url.path == "/static/index.html"
+        ):
+            return RedirectResponse("https://www.sparestracker.com/", status_code=301)
+        return await call_next(request)
+
     @app.middleware("http")
     async def prevent_announcement_caching(request, call_next):
         try:
