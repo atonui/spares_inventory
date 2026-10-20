@@ -15,6 +15,17 @@ const html=()=>fs.readFileSync('static/index.html','utf8');
 const clicks=()=>[...html().matchAll(/@click="([^"]*)"/g)].map(m=>m[1]);
 function fill(a,op='update'){a.editUser(row);a.userForm.password='new password';if(op==='create')a.editingUser=null;}
 const response=(status,data)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
+test('user management uses the shared responsive heading and retains its access/actions',()=>{
+ const source=html();const start=source.indexOf('<!-- User Management Panel (Admin Only) -->');const end=source.indexOf('<!-- Equipment Management Panel -->',start);const panel=source.slice(start,end);
+ assert.match(panel,/x-show="!loading && showUsersPanel && \['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\)"/);
+ assert.ok(panel.includes('class="inventory-panel-heading"'));
+ assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+ assert.ok(panel.includes('class="inventory-panel-title">User Management</h3>'));
+ assert.ok(panel.includes('class="inventory-panel-actions"'));
+ assert.match(panel,/@click="editingUser = null; userForm = \{ email: '', name: '', password: '', role: 'engineer', territory: '' \}; showUserModal = true"/);
+ assert.match(panel,/@click="closeAllPanels\(\)" aria-label="Close panel" title="Close panel"/);
+ for(const action of ['x-for="user in users"','editUser(user)','deleteUser(user.id, user.name)','removeUser(user.id, user.name)','x-show="currentUser?.saas_mode"','resendInvitation(invitation.id)','cancelInvitation(invitation.id)']) assert.ok(panel.includes(action),action);
+});
 test('actual add/cancel/submit and email/password bindings retain create/edit mode',async()=>{
  const {a,c}=setup();fill(a);const add=clicks().find(e=>e.startsWith('editingUser = null; userForm ='));assert.ok(add);
  vm.runInContext('with(app){'+add+'}',c);assert.deepEqual(plain(a.userForm),initial);assert.equal(a.editingUser,null);assert.equal(a.showUserModal,true);
