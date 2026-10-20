@@ -202,6 +202,13 @@ test('primary, success, warning, and consume actions meet WCAG AA contrast', () 
     }
 });
 
+test('equipment due-soon and overdue summary text meets WCAG AA contrast', () => {
+    const mainCss = read('mystyle.css');
+    const background = declaration(mainCss, '.inventory-panel-heading', 'background');
+    assertAa('Equipment due soon summary', declaration(mainCss, '.equipment-summary-due', 'color'), background);
+    assertAa('Equipment overdue summary', declaration(mainCss, '.equipment-summary-overdue', 'color'), background);
+});
+
 test('dark SparesFlow action buttons explicitly use a light foreground', () => {
     const mainCss = read('mystyle.css');
     const adminCss = read('superadmin.css');
