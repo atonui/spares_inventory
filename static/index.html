@@ -328,10 +328,15 @@
             </div>
 
             <section x-show="showArchivedPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom:1.5rem;">
-                <div style="padding:1rem; display:flex; justify-content:space-between; gap:1rem;">
-                    <div><h3>Archived records</h3><p>History is preserved. Restore a record before using it again.</p></div>
-                    <div><button class="btn btn-sm ui-icon-only" @click="loadArchivedRecords()" :disabled="loading" aria-label="Refresh data" title="Refresh data"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button></div>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 class="inventory-panel-title">Archived records</h3>
+                        <p class="inventory-panel-meta">History is preserved. Restore a record before using it again.</p>
+                    </div>
+                    <div class="inventory-panel-actions">
+                        <button class="btn btn-sm ui-icon-only" @click="loadArchivedRecords()" :disabled="loading" aria-label="Refresh data" title="Refresh data"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
+                    </div>
                 </div>
                 <p x-show="archivedRecords.length === 0" style="padding:1rem;">No archived records.</p>
                 <div style="overflow-x:auto;" x-show="archivedRecords.length > 0">
