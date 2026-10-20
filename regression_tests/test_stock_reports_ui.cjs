@@ -37,3 +37,25 @@ test('consumption report tables become labeled mobile cards without changing rep
  assert.match(css,/\.consumption-report-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s,'Mobile report values should retain field labels');
  assert.match(css,/\.report-table-wrap\s+table\.consumption-report-table\s*\{[^}]*min-width:\s*0/s,'Consumption report cards should not keep the wide-table minimum');
 });
+
+test('consumption reports uses the shared heading while retaining report controls and results',()=>{
+ const html=readStatic('index.html');
+ const start=html.indexOf('<section x-show="showReportsPanel"');
+ const end=html.indexOf('<section x-show="showLogsPanel"',start);
+ assert.ok(start>=0&&end>start,'Missing consumption reports panel');
+ const panel=html.slice(start,end);
+ assert.match(panel,/aria-labelledby="reports-heading"/,'Panel should keep its accessible title reference');
+ assert.match(panel,/class="inventory-panel-heading"/,'Report heading should use the shared layout');
+ assert.match(panel,/class="inventory-panel-heading-content"/,'Heading text should use the shared content wrapper');
+ assert.match(panel,/<h3 id="reports-heading" class="inventory-panel-title">Consumption reports<\/h3>/,'Report title should use the shared title style');
+ assert.match(panel,/<p class="inventory-panel-meta" x-text="\['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\) \? 'All recorded consumption\. Filter by the engineer who recorded it\.' : 'Your recorded consumption, including work orders assigned to other engineers\.'"><\/p>/,'Role-dependent report scope copy should remain unchanged');
+ assert.match(panel,/<p class="inventory-panel-meta">Archived parts and stores remain in history\.<\/p>/,'Archive history guidance should remain visible');
+ assert.match(panel,/<form @submit\.prevent="loadConsumptionReport\(\)" class="report-filters">/,'Report filter form should remain in place');
+ assert.match(panel,/:disabled="reportBusy \|\| reportExportBusy"/,'Report filters should keep their busy-state guard');
+ assert.match(panel,/x-model="reportForm\.allDates"/,'All-dates filter should remain available');
+ assert.match(panel,/x-show="\['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\)"/,'Engineer filter should keep its role gate');
+ assert.match(panel,/x-text="reportBusy \? 'Loading…' : 'Refresh report'"/,'Report refresh action should remain available');
+ assert.match(panel,/exportConsumptionReport\(\)/,'CSV export should remain available');
+ assert.match(panel,/reportOffset\+100/,'Next-page action should remain available');
+ assert.match(panel,/x-for="p in consumptionReport\?\.by_part \|\| \[\]"/,'Report results should remain rendered');
+});

@@ -750,9 +750,13 @@
             </section>
 
             <section x-show="showReportsPanel" class="controls reports-panel" aria-labelledby="reports-heading">
-                <h3 id="reports-heading">Consumption reports</h3>
-                <p x-text="['owner','admin','superadmin'].includes(currentUser?.role) ? 'All recorded consumption. Filter by the engineer who recorded it.' : 'Your recorded consumption, including work orders assigned to other engineers.'"></p>
-                <p>Archived parts and stores remain in history.</p>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 id="reports-heading" class="inventory-panel-title">Consumption reports</h3>
+                        <p class="inventory-panel-meta" x-text="['owner','admin','superadmin'].includes(currentUser?.role) ? 'All recorded consumption. Filter by the engineer who recorded it.' : 'Your recorded consumption, including work orders assigned to other engineers.'"></p>
+                        <p class="inventory-panel-meta">Archived parts and stores remain in history.</p>
+                    </div>
+                </div>
                 <form @submit.prevent="loadConsumptionReport()" class="report-filters">
                     <fieldset :disabled="reportBusy || reportExportBusy">
                         <label class="report-all-dates"><input type="checkbox" x-model="reportForm.allDates" @change="markReportDirty()"> All dates</label>
