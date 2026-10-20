@@ -1,28 +1,28 @@
 .profile-page { display: block; padding: clamp(16px, 4vw, 40px); color: var(--brand-navy); }
 .profile-page [x-cloak] { display: none !important; }
-.profile-shell { max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid var(--brand-border); border-radius: 16px; box-shadow: 0 8px 28px rgba(21, 38, 59, .07); overflow: hidden; }
-.profile-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 32px; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); }
+.profile-shell { max-width: 980px; margin: 0 auto; background: var(--brand-surface); border: 1px solid var(--brand-border); border-radius: var(--radius-surface); box-shadow: var(--shadow-surface); overflow: hidden; }
+.profile-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) var(--space-8); background: var(--brand-page); border-bottom: 1px solid var(--brand-border); }
 .profile-header h1 { font-size: clamp(24px, 4vw, 30px); margin: 0 0 8px; }
 .profile-header p { margin: 0; }
 .profile-header a { color: var(--brand-navy); font-weight: 600; }
-.profile-content { padding: 24px 32px 32px; }
-.profile-page h2 { margin: 24px 0 8px; font-size: 21px; }
-.profile-page h3 { margin: 8px 0; font-size: 18px; }
-.profile-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid var(--brand-border); }
-.profile-page button { background: var(--brand-navy); color: #ffffff; border: 1px solid transparent; border-radius: 6px; padding: 10px 16px; font: inherit; cursor: pointer; max-width: 100%; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+.profile-content { padding: var(--space-6) var(--space-8) var(--space-8); }
+.profile-page h2 { margin: var(--space-6) 0 var(--space-2); font-size: var(--type-xl); line-height: var(--line-heading); }
+.profile-page h3 { margin: var(--space-2) 0; font-size: var(--type-lg); line-height: var(--line-heading); }
+.profile-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-bottom: var(--space-4); border-bottom: 1px solid var(--brand-border); }
+.profile-page button { background: var(--brand-navy); color: #ffffff; border: 1px solid transparent; border-radius: var(--radius-control); padding: var(--space-2) var(--space-4); font: inherit; cursor: pointer; max-width: 100%; min-height: var(--control-height); white-space: normal; overflow-wrap: anywhere; }
 .profile-tabs button, .profile-page .profile-secondary { color: var(--brand-navy); background: var(--brand-page); border: 1px solid var(--brand-border); }
 .profile-tabs button[aria-selected="true"] { background: var(--brand-navy); color: #ffffff; }
 .profile-page :is(button, a, input, select):focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
 .profile-help { color: var(--brand-slate); line-height: 1.6; font-size: 14px; }
-.profile-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding: 20px; border: 1px solid var(--brand-border); border-radius: 10px; background: var(--brand-page); }
-.profile-details dt { color: var(--brand-slate); font-size: 13px; margin-bottom: 6px; }
+.profile-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); padding: var(--space-5); border: 1px solid var(--brand-border); border-radius: var(--radius-surface); background: var(--brand-page); }
+.profile-details dt { color: var(--brand-slate); font-size: var(--type-sm); margin-bottom: var(--space-1); }
 .profile-details dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-.profile-preferences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-.profile-setting { min-width: 0; padding: 20px; border: 1px solid var(--brand-border); border-radius: 10px; }
+.profile-preferences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+.profile-setting { min-width: 0; padding: var(--space-5); border: 1px solid var(--brand-border); border-radius: var(--radius-surface); }
 .profile-eyebrow { color: var(--brand-slate); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.profile-page label { display: block; font-weight: 600; margin-bottom: 8px; }
-.profile-page input, .profile-page select { display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; }
-.profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
+.profile-page label { display: block; font-weight: 600; margin-bottom: var(--space-2); }
+.profile-page input, .profile-page select { display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; min-height: var(--control-height); }
+.profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-5); }
 .profile-password { max-width: 480px; }
 .profile-page button:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 760px) { .profile-preferences { grid-template-columns: minmax(0, 1fr); } }

@@ -1,11 +1,14 @@
+Warning: truncated output (original token count: 15420)
+Total output lines: 865
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
-<link rel="stylesheet" href="mystyle.css?v=20261017-sparesflow-button-contrast">
-<link rel="stylesheet" href="superadmin.css?v=20261017-sparesflow-button-contrast">
+<link rel="stylesheet" href="mystyle.css?v=20261020-sitewide-visual-system">
+<link rel="stylesheet" href="superadmin.css?v=20261020-sitewide-visual-system">
 <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
@@ -338,200 +341,7 @@
       </div><!-- /accounts -->
 
 
-      <!-- ══════════ ACTIVE SESSIONS ══════════ -->
-      <div x-show="tab==='sessions'">
-        <div class="action-feedback">
-          <p x-show="panelLoads.sessions.loading" role="status">Loading sessions…</p>
-          <div x-show="panelLoads.sessions.error" role="alert">
-            <p class="action-error" x-text="panelLoads.sessions.error"></p>
-            <button class="btn btn-sm btn-outline" @click="loadSessions()" :disabled="panelLoads.sessions.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">
-              Active Sessions
-              <span class="tag tag-blue" style="margin-left:6px;" x-show="panelReady('sessions')" x-text="sessions.length"></span>
-            </span>
-            <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-red" @click="confirmLogoutAll()" :disabled="!panelReady('sessions')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Logout All</button>
-              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadSessions()" :disabled="panelLoads.sessions.loading" aria-label="Refresh active sessions" title="Refresh active sessions"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-            </div>
-          </div>
-
-          <div class="list-filters">
-              <label for="session-search">Search<input id="session-search" type="search" x-model="sessionFilters.search" placeholder="Name, email or IP address"></label>
-              <label for="session-role">Role<select id="session-role" x-model="sessionFilters.role"><option value="">All roles</option><option value="engineer">Engineer</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select></label>
-              <label for="session-expiry">Expires<select id="session-expiry" x-model="sessionFilters.expiry"><option value="">Any expiry</option><option value="soon">Within 24 hours</option></select></label>
-              <button class="btn btn-sm btn-outline" @click="sessionFilters={ search:'', role:'', expiry:'' }"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
-            </div>
-            <p x-show="panelReady('sessions')" class="list-count" role="status" x-text="filteredSessions.length + ' of ' + sessions.length + ' sessions'"></p>
-          <div x-show="panelReady('sessions')" style="overflow-x:auto;">
-            <table class="tbl sessions-table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>IP Address</th>
-                  <th>Last Activity</th>
-                  <th>Expires</th>
-                  <th>Browser</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="s in filteredSessions" :key="s.id">
-                  <tr>
-                    <td data-label="User">
-                      <div style="font-weight:600;" x-text="s.name"></div>
-                      <div style="font-size:0.75rem;color:var(--brand-slate);" x-text="s.email"></div>
-                    </td>
-                    <td data-label="Role"><span class="tag tag-grey" x-text="s.role"></span></td>
-                    <td data-label="IP Address" style="font-size:0.8rem;font-family:monospace;" x-text="s.ip_address||'—'"></td>
-                    <td data-label="Last Activity" style="font-size:0.8rem;" x-text="fmtDate(s.last_activity)"></td>
-                    <td data-label="Expires" style="font-size:0.8rem;" x-text="fmtDate(s.expires_at)"></td>
-                    <td data-label="Browser" style="font-size:0.75rem;color:var(--brand-slate);" x-text="parseUA(s.user_agent)"></td>
-                    <td data-label="Action"><button class="btn btn-sm btn-red" @click="forceLogout(s)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> Terminate</button></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-            <div x-show="filteredSessions.length===0" class="empty" x-text="sessions.length ? 'No sessions match these filters.' : 'No active sessions found.'"></div>
-          </div>
-        </div>
-      </div><!-- /sessions -->
-
-
-      <!-- ══════════ SECURITY CONFIG ══════════ -->
-      <div x-show="tab==='config'">
-        <div class="action-feedback">
-          <p x-show="panelLoads.config.loading" role="status">Loading security settings…</p>
-          <div x-show="panelLoads.config.error" role="alert">
-            <p class="action-error" x-text="panelLoads.config.error"></p>
-            <button class="btn btn-sm btn-outline" @click="loadConfig()" :disabled="panelLoads.config.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button>
-          </div>
-        </div>
-
-
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">Security Parameters</span>
-            <span style="font-size:0.75rem;color:var(--brand-slate);">Changes apply to new logins immediately</span>
-          </div>
-          <div class="panel-body">
-            <template x-for="[key, meta] in Object.entries(cfgMeta)">
-              <div class="cfg-row">
-                <div>
-                  <div class="cfg-label" x-text="meta.label"></div>
-                  <div class="cfg-desc"  x-text="meta.desc"></div>
-                </div>
-                <div class="cfg-ctrl">
-                  <input type="number" :min="meta.min" :max="meta.max"
-                         x-model="cfgVals[key]" :disabled="!panelReady('config') || actionPending['config:' + key]" :aria-label="meta.label"
-                         @keydown.enter="saveConfig(key)">
-                  <span class="cfg-unit" x-text="meta.unit"></span>
-                  <button class="btn btn-sm btn-success" @click="saveConfig(key)" :disabled="!panelReady('config') || actionPending['config:' + key]"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#save"></use></svg> <span x-text="actionPending['config:' + key] ? 'Saving…' : 'Save'"></span></button>
-                  <p class="action-error" x-show="actionErrors['config:' + key]" role="alert" x-text="actionErrors['config:' + key]"></p>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">Current Values (from database)</span>
-            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadConfig()" :disabled="panelLoads.config.loading" aria-label="Refresh security configuration" title="Refresh security configuration"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-          </div>
-          <div class="panel-body" x-show="panelReady('config')">
-            <div x-show="panelReady('config') && Object.keys(secConfig).length===0" style="color:var(--brand-slate);font-size:0.875rem;">
-              No values saved yet — save a parameter above to create them.
-            </div>
-            <template x-for="[key, row] in Object.entries(secConfig)">
-              <div class="cfg-row">
-                <div>
-                  <div class="cfg-label" style="font-family:monospace;font-size:0.82rem;" x-text="key"></div>
-                  <div class="cfg-desc" x-text="'Last updated: ' + (row.updated_at ? fmtDate(row.updated_at) : 'never')"></div>
-                </div>
-                <span class="tag tag-blue" style="font-family:monospace;" x-text="row.setting_value"></span>
-              </div>
-            </template>
-          </div>
-        </div>
-
-      </div><!-- /config -->
-
-
-      <!-- ══════════ USERS ══════════ -->
-      <div x-show="tab==='users'">
-        <div class="action-feedback">
-          <p x-show="panelLoads.users.loading" role="status">Loading users…</p>
-          <div x-show="panelLoads.users.error" role="alert">
-            <p class="action-error" x-text="panelLoads.users.error"></p>
-            <button class="btn btn-sm btn-outline" @click="loadUsers()" :disabled="panelLoads.users.loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">All Users</span>
-            <button class="btn btn-sm btn-outline ui-icon-only" @click="loadUsers()" :disabled="panelLoads.users.loading" aria-label="Refresh users" title="Refresh users"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-          </div>
-          <div class="action-feedback">
-            <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
-            <p class="action-error" x-show="actionErrors.unlock" role="alert" x-text="actionErrors.unlock"></p>
-          </div>
-          <div class="list-filters">
-              <label for="user-search">Search<input id="user-search" type="search" x-model="userFilters.search" placeholder="Name or email"></label>
-              <label for="user-role">Role<select id="user-role" x-model="userFilters.role"><option value="">All roles</option><option value="engineer">Engineer</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select></label>
-              <label for="user-status">Status<select id="user-status" x-model="userFilters.status"><option value="">All statuses</option><option value="active">Active</option><option value="locked">Locked</option></select></label>
-              <button class="btn btn-sm btn-outline" @click="userFilters={ search:'', role:'', status:'' }"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
-            </div>
-            <p x-show="panelReady('users')" class="list-count" role="status" x-text="filteredUsers.length + ' of ' + allUsers.length + ' users'"></p>
-          <div x-show="panelReady('users')" style="overflow-x:auto;">
-            <table class="tbl users-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Territory</th>
-                  <th>Failed Logins</th>
-                  <th>Last Login</th>
-                  <th>Status</th>
-                  <th>Account Actions</th>
-                  <th>Reset Password</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="u in filteredUsers" :key="u.id">
-                  <tr>
-                    <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
-                    <td data-label="Email" style="font-size:0.8rem;color:var(--brand-slate);" x-text="u.email"></td>
-                    <td data-label="Role">
-                      <select style="padding:3px 6px;border:1px solid var(--brand-border);border-radius:4px;font-size:0.8rem;background:white;"
-                              x-model="u._role" :disabled="u._saving" :aria-label="'Role for ' + u.name">
-                        <option value="engineer">engineer</option>
-                        <option value="manager">manager</option>
-                        <option value="admin">admin</option>
-                        <option value="superadmin">superadmin</option>
-                      </select>
-                      <div class="role-actions" x-show="u._role !== u.role || u._saving">
-                        <span class="role-change" x-text="u.role + ' → ' + u._role"></span>
-                        <button class="btn btn-sm" @click="changeRole(u)" :disabled="u._saving"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#save"></use></svg> <span x-text="u._saving ? 'Saving…' : 'Save'"></span></button>
-                        <button class="btn btn-sm btn-outline" @click="u._role=u.role; u._error=''" :disabled="u._saving">Cancel</button>
-                      </div>
-                      <p class="action-error" role="alert" x-show="u._error" x-text="u._error"></p>
-                    </td>
-                    <td data-label="Territory" style="font-size:0.8rem;" x-text="u.territory||'—'"></td>
-                    <td data-label="Failed Logins">
-                      <span :class="u.failed_login_attempts>0?'tag tag-amber':'tag tag-grey'"
-                            x-text="u.failed_login_attempts"></span>
-                    </td>
-                    <td data-label="Last Login" style="font-size:0.8rem;" x-text="u.last_login ? fmtDate(u.last_login) : 'Never'"></td>
-                    <td data-label="Status">
-                      <span x-show="isLocked(u)"  class="tag tag-red">Locked</span>
+      <!-- ══════════ ACTIVE SESSIONS ════════…3420 tokens truncated…ed</span>
                       <span x-show="!isLocked(u)" class="tag tag-green">Active</span>
                     </td>
                     <td data-label="Account Actions">
