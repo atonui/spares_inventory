@@ -21,6 +21,22 @@ function upload() { return {target: {files: [new File([csv], 'stores.csv', {type
 function fill(app, operation = 'update') { app.editStore(store); if (operation === 'create') app.editingStore = null; }
 const expressions = () => [...fs.readFileSync('static/index.html', 'utf8').matchAll(/@click="([^"]*)"/g)].map(m => m[1]);
 
+test('store management uses the shared panel toolbar while retaining its access gate and actions', () => {
+    const source = fs.readFileSync('static/index.html', 'utf8');
+    const start = source.indexOf('<!-- Store Management Panel (Admin Only) -->');
+    const end = source.indexOf('<!-- All Stores Panel -->', start);
+    const panel = source.slice(start, end);
+
+    assert.match(panel, /x-show="!loading && showStoresPanel && \['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\)"/);
+    assert.ok(panel.includes('class="inventory-panel-heading"'));
+    assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+    assert.ok(panel.includes('class="inventory-panel-actions"'));
+    assert.match(panel, /@click="downloadStoreTemplate\(\)"/);
+    assert.match(panel, /@change="importStores\(\$event\)"/);
+    assert.match(panel, /class="btn btn-success"[\s\S]*?showStoreModal = true/);
+    assert.ok(panel.includes('accept=".csv"'));
+});
+
 test('actual store add/cancel bindings preserve mode and optional-field fallbacks', () => {
     const {app: a, context} = setup();
     a.editStore(store);
