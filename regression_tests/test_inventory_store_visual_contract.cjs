@@ -69,3 +69,14 @@ test('mobile stock rows retain labeled fields and provide touch-sized actions', 
     assert.match(storePanel, /x-show="isLowStock\(item\)"[\s\S]{0,120}aria-label="Low stock"/);
     assert.match(css, /\.stock-table\s+\.btn[^{]*\{[^}]*min-height:\s*44px/s);
 });
+
+test('replenishment uses the shared panel heading and retains its setup guidance', () => {
+    const panel = sectionBetween('<section x-show="showLowStockPanel"', '<section x-show="showReportsPanel"');
+    assert.match(panel, /class="inventory-panel-heading"/);
+    assert.match(panel, /class="inventory-panel-heading-content"/);
+    assert.match(panel, /<h3 id="replenishment-heading" class="inventory-panel-title">Plan stock replenishment<\/h3>/);
+    assert.match(panel, /class="inventory-panel-meta replenishment-copy"[^>]*>Set a minimum for each store and part\./);
+    for (const contract of ['Set minimum stock', 'id="replenishment-store"', 'aria-label="Refresh plan"', 'Export purchases CSV', 'replenishmentRows.length']) {
+        assert.ok(panel.includes(contract), `replenishment must retain ${contract}`);
+    }
+});

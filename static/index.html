@@ -716,8 +716,12 @@
             </div>
 
             <section x-show="showLowStockPanel" class="panel replenishment-panel" aria-labelledby="replenishment-heading">
-                <h3 id="replenishment-heading">Plan stock replenishment</h3>
-                <p class="replenishment-copy">Set a minimum for each store and part. The plan uses unallocated stock above each donor’s minimum. Incoming transfers remain unavailable until physical receipt.</p>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 id="replenishment-heading" class="inventory-panel-title">Plan stock replenishment</h3>
+                        <p class="inventory-panel-meta replenishment-copy">Set a minimum for each store and part. The plan uses unallocated stock above each donor’s minimum. Incoming transfers remain unavailable until physical receipt.</p>
+                    </div>
+                </div>
                 <details class="minimum-settings" open>
                     <summary>Set minimum stock</summary>
                     <p>Minimums apply to unallocated stock. Zero turns off the target; saving a minimum does not add parts.</p>
