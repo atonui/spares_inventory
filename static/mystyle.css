@@ -676,6 +676,38 @@ body > [x-data="inventoryApp()"] .stat-card {
 .stock-table td[data-label="Part number"] strong { font-size: 1.05rem; }
 .stock-table td[data-label="Quantity"] strong { font-size: 1.15rem; line-height: 1.2; }
 .stock-table td[data-label="Actions"] .btn { margin: 0.2rem 0; }
+.stock-row-actions { display: block; width: 100%; }
+.stock-action-menu { position: relative; width: 100%; max-width: 12rem; }
+.stock-action-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+    width: 100%; min-height: 44px; padding: 0.55rem 0.75rem;
+    border: 1px solid var(--brand-border); border-radius: var(--radius-control);
+    background: var(--brand-surface); color: var(--brand-navy); font: inherit; font-weight: 600;
+    cursor: pointer; list-style: none;
+}
+.stock-action-trigger::-webkit-details-marker { display: none; }
+.stock-action-trigger::marker { content: ""; }
+.stock-action-trigger::after {
+    content: ""; width: 0.4rem; height: 0.4rem; flex: 0 0 auto;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translateY(-0.1rem); transition: transform 120ms ease;
+}
+.stock-action-menu[open] > .stock-action-trigger::after { transform: rotate(225deg) translateY(-0.1rem); }
+.stock-action-menu__items {
+    display: flex; flex-direction: column; gap: 0.125rem;
+    margin-top: var(--space-2); padding: var(--space-1);
+    border: 1px solid var(--brand-border); border-radius: var(--radius-control);
+    background: var(--brand-surface); box-shadow: var(--shadow-surface);
+}
+.stock-action-item {
+    display: block; width: 100%; min-height: 40px; padding: 0.55rem 0.65rem;
+    border: 0; border-radius: calc(var(--radius-control) - 2px);
+    background: transparent; color: var(--brand-navy); font: inherit; text-align: left; cursor: pointer;
+}
+.stock-action-item:hover { background: var(--brand-page); }
+.stock-action-trigger:focus-visible, .stock-action-item:focus-visible {
+    outline: 3px solid var(--brand-focus); outline-offset: 2px;
+}
 .inventory-controls .btn:disabled { opacity: 1; cursor: not-allowed; }
 .inventory-controls :focus-visible, .store-search :focus-visible, .stock-table .btn:focus-visible {
     outline: 3px solid var(--brand-focus); outline-offset: 3px;
@@ -712,6 +744,7 @@ body > [x-data="inventoryApp()"] .stat-card {
     .stock-table td[data-label="Actions"] { display: flex; flex-wrap: wrap; gap: var(--space-2); }
     .stock-table td[data-label="Actions"]::before { flex-basis: 100%; }
     .stock-table td[data-label="Actions"] .stock-cell-value { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+    .stock-table td[data-label="Actions"] .stock-row-actions { display: block; width: 100%; }
     .stock-table .store-tag, .stock-table .wo-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
     .store-search input { min-height: 44px; font-size: 16px; }
     .in-transit-transfers-table, .in-transit-transfers-table tbody { display: block; width: 100%; min-width: 0; }
