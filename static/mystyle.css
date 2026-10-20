@@ -1072,6 +1072,7 @@ label.btn {
 
 /* Replenishment follows the inventory controls and responsive stock tables. */
 .replenishment-panel { margin-top: 1.5rem; background: white; padding: 1.5rem; border-radius: 8px; }
+.replenishment-panel > .inventory-panel-heading { margin: -1.5rem -1.5rem 1.5rem; border-radius: 8px 8px 0 0; }
 .replenishment-panel h3 { margin-bottom: .75rem; }
 .replenishment-panel .table-responsive { overflow-x: auto; }
 .replenishment-panel .btn { background: var(--brand-navy); color: #ffffff; }
