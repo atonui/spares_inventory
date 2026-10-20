@@ -22,6 +22,21 @@ test('all-stores and selected-store headers use the shared responsive panel tool
     assert.match(selectedStore,/x-show="canEdit\(selectedStore\?\.assigned_user_id, selectedStore\?\.type\)"/);
     assert.match(css,/\.inventory-panel-actions > \.btn:not\(\.ui-icon-only\),\s*\.inventory-panel-actions > label\.btn \{ flex: 1 1 9rem; min-height: 44px; white-space: normal; \}/);
 });
+test('my-parts panel uses the shared responsive heading and keeps its existing close action',()=>{
+    const source=fs.readFileSync('static/index.html','utf8');
+    const start=source.indexOf('<!-- My Parts Panel -->');
+    const end=source.indexOf('<!-- Edit Stock Modal -->',start);
+    const panel=source.slice(start,end);
+
+    assert.ok(panel.includes('class="inventory-panel-heading"'));
+    assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+    assert.ok(panel.includes('class="inventory-panel-title">My Parts Inventory</h3>'));
+    assert.ok(panel.includes('class="inventory-panel-actions"'));
+    assert.match(panel,/<button class="btn btn-sm ui-icon-only" @click="closeAllPanels\(\)" aria-label="Close panel" title="Close panel">/);
+    assert.ok(panel.includes('x-show="showMyPartsPanel"'));
+    assert.ok(panel.includes('x-for="item in myPartsView"'));
+    for(const action of ['Edit','Transfer','Consume']) assert.ok(panel.includes(action));
+});
 for(const [query,ids] of [['  RED   pump ',[1]],['pump same',[1,2]],['wo1',[2]],['',[1,2,3]],['red blue',[]]])test('search exact matching '+JSON.stringify(query),()=>{const {a}=setup();assert.deepEqual(Array.from(a.matchInventoryRows(rows,query),r=>r.id),ids);});
 for(const [filter,ids] of [[1,[1,3]],['2',[2]],['bad',[]],['',[1,2,3]]])test('store filter strict ID '+filter,()=>{const {a}=setup();a.inventory=rows;a.storeFilter=filter;a.filterInventory();assert.deepEqual(Array.from(a.filteredInventory,r=>r.id),ids);});
 for(const [patch,ids] of [[{},[1,2,3]],[{partNumber:'ab'},[1]],[{category:'A'},[1]],[{lowStockOnly:true},[1]],[{minQuantity:0},[1,2,3]],[{minQuantity:'0'},[1,2]],[{maxQuantity:'0'},[1,3]],[{minQuantity:'1.9'},[2]],[{minQuantity:'bad'},[]],[{description:'ignored',storeType:'ignored'},[1,2,3]]])test('advanced filters preserve existing behavior '+JSON.stringify(patch),()=>{const {a}=setup();a.inventory=rows.map(r=>({...r,part_number:r.part_number||''}));a.parts=[{part_number:'ABC',category:'A'},{part_number:'XYZ',category:'a'}];Object.assign(a.advancedSearch,patch);a.filterInventoryAdvanced();assert.deepEqual(Array.from(a.filteredInventory,r=>r.id),ids);if(!Object.keys(patch).length)assert.equal(a.filteredInventory,a.inventory);});
