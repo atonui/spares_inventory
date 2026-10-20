@@ -1026,10 +1026,7 @@
                                 <td x-text="eq.calibration_date ? formatDate(eq.calibration_date) : '-'" data-label="Last calibration"></td>
                                 <td x-text="eq.next_calibration_date ? formatDate(eq.next_calibration_date) : '-'" data-label="Next calibration"></td>
                                 <td data-label="Status">
-                                    <span class="wo-tag"
-                                        :style="`background: ${getCalibrationStatus(eq).status === 'overdue' ? '#fee2e2' : getCalibrationStatus(eq).status === 'urgent' ? '#fed7aa' : getCalibrationStatus(eq).status === 'soon' ? '#fef3c7' : '#d1fae5'}; color: ${getCalibrationStatus(eq).status === 'overdue' ? '#991b1b' : getCalibrationStatus(eq).status === 'urgent' ? '#9a3412' : getCalibrationStatus(eq).status === 'soon' ? '#92400e' : '#065f46'};`"
-                                        x-text="getCalibrationStatus(eq).text">
-                                    </span>
+                                    <span class="wo-tag equipment-calibration-status" :class="'equipment-calibration-status--' + getCalibrationStatus(eq).status" x-text="getCalibrationStatus(eq).text"></span>
                                 </td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm"

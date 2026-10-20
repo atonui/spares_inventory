@@ -209,6 +209,23 @@ test('equipment due-soon and overdue summary text meets WCAG AA contrast', () =>
     assertAa('Equipment overdue summary', declaration(mainCss, '.equipment-summary-overdue', 'color'), background);
 });
 
+test('equipment calibration badges meet WCAG AA contrast in every state', () => {
+    const mainCss = read('mystyle.css');
+    const colors = {
+        overdue: ['#991b1b', '#fee2e2'],
+        urgent: ['#9a3412', '#fed7aa'],
+        soon: ['#92400e', '#fef3c7'],
+        ok: ['#065f46', '#d1fae5'],
+        none: ['#334155', '#f1f5f9'],
+    };
+    for (const [state, [foreground, background]] of Object.entries(colors)) {
+        const selector = `.equipment-calibration-status--${state}`;
+        assert.equal(declaration(mainCss, selector, 'color'), foreground);
+        assert.equal(declaration(mainCss, selector, 'background'), background);
+        assertAa(`Equipment calibration ${state}`, foreground, background);
+    }
+});
+
 test('dark SparesFlow action buttons explicitly use a light foreground', () => {
     const mainCss = read('mystyle.css');
     const adminCss = read('superadmin.css');
