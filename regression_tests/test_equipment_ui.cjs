@@ -39,6 +39,16 @@ test('equipment panel uses the shared responsive heading and preserves summary/a
  for(const action of ['downloadEquipmentTemplate()','exportEquipmentCSV()','showEquipmentModal = true','loadCalibrationSettings()','closeAllPanels()','openCalibrationModal(eq)','openTransferEquipmentModal(eq)','viewEquipmentHistory(eq)','x-for="eq in equipment"']) assert.ok(panel.includes(action),action);
  assert.equal((panel.match(/x-show="\['owner','admin'\]\.includes\(currentUser\?\.role\)"/g)||[]).length,4);
 });
+test('calibration table uses neutral rows and class-based status badges',()=>{
+ const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Store Types Management Panel',start);const panel=source.slice(start,end);
+ const css=fs.readFileSync('static/mystyle.css','utf8');
+ assert.match(panel,/<tr :class="getCalibrationStatus\(eq\)\.class">/);
+ assert.match(panel,/<span class="wo-tag equipment-calibration-status" :class="'equipment-calibration-status--' \+ getCalibrationStatus\(eq\)\.status"\s+x-text="getCalibrationStatus\(eq\)\.text">/);
+ const statusCell=panel.slice(panel.indexOf('<td data-label="Status">'),panel.indexOf('<td data-label="Actions">'));
+ assert.doesNotMatch(statusCell,/:style=/,'Status colors should come from CSS classes');
+ for(const status of ['overdue','urgent','soon','ok','none']) assert.match(css,new RegExp(`\\.equipment-calibration-status--${status}\\s*\\{`),status);
+ for(const status of ['overdue','urgent','soon','ok']) assert.match(css,new RegExp(`\\.stock-table tr\\.${status}-cal\\s*\\{[^}]*border-left:\\s*4px solid`, 's'),`${status} row accent`);
+});
 function fill(a,op){a.editEquipment(row);if(op==='create')a.editingEquipment=null;if(op==='calibration')a.openCalibrationModal(row);if(op==='transfer')a.openTransferEquipmentModal(row);if(op==='setting'){a.calibrationReminderDays=45;a.showCalibrationSettingsModal=true;}}
 function payload(a,op){
  if(op==='create'||op==='update'){const f=a.equipmentForm;return {equipment_name:f.equipment_name,make:f.make,model:f.model,serial_number:f.serial_number,assigned_user_id:7,calibration_cert_number:null,calibration_authority:null,calibration_date:null,next_calibration_date:'2026-10-21',notes:null};}
