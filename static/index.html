@@ -560,24 +560,20 @@
                                 <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
                                 <span x-show="!item.work_order" class="wo-tag">Original</span>
                             </div></td>
-                            <td role="cell" data-label="Actions"><div class="stock-cell-value">
-                                <button class="btn btn-sm"
-
-                                        x-show="canEdit(item.store_owner, item.store_type)" @click="editItem(item)">
-                                    Adjust
-                                </button>
-                                <button class="btn btn-sm btn-warning"
-
-                                        x-show="canEdit(item.store_owner, item.store_type)" @click="transferItem(item)">
-                                    Transfer
-                                </button>
-                                <button class="btn btn-sm btn-consume"
-
-                                        x-show="canEdit(item.store_owner, item.store_type)" @click="consumeItem(item)">
-                                    Consume
-                                </button>
-                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
-                                </div></td>
+                            <td role="cell" data-label="Actions"><div class="stock-cell-value stock-row-actions">
+                                <details class="stock-action-menu"
+                                         x-show="canEdit(item.store_owner, item.store_type)"
+                                         @click.outside="$el.open = false"
+                                         @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
+                                    <summary class="stock-action-trigger">Actions</summary>
+                                    <div class="stock-action-menu__items">
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)">Adjust quantity</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)">Transfer stock</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)">Consume for work order</button>
+                                    </div>
+                                </details>
+                                <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                            </div></td>
                         </tr>
                     </template>
                 </tbody>
@@ -1098,22 +1094,18 @@
                                     </span>
                                     <span x-show="!item.work_order" class="wo-tag">Original</span>
                                 </div></td>
-                                <td role="cell" data-label="Actions"><div class="stock-cell-value">
-                                    <button class="btn btn-sm"
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="editItem(item)">
-                                        Adjust
-                                    </button>
-                                    <button class="btn btn-sm btn-warning"
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="transferItem(item)">
-                                        Transfer
-                                    </button>
-                                    <button class="btn btn-sm btn-consume"
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="consumeItem(item)">
-                                        Consume
-                                    </button>
+                                <td role="cell" data-label="Actions"><div class="stock-cell-value stock-row-actions">
+                                    <details class="stock-action-menu"
+                                             x-show="canEdit(item.store_owner, item.store_type)"
+                                             @click.outside="$el.open = false"
+                                             @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
+                                        <summary class="stock-action-trigger">Actions</summary>
+                                        <div class="stock-action-menu__items">
+                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)">Adjust quantity</button>
+                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)">Transfer stock</button>
+                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)">Consume for work order</button>
+                                        </div>
+                                    </details>
                                     <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
                                 </div></td>
                             </tr>
