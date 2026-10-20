@@ -1029,6 +1029,7 @@
                                     <span class="wo-tag equipment-calibration-status" :class="'equipment-calibration-status--' + getCalibrationStatus(eq).status" x-text="getCalibrationStatus(eq).text"></span>
                                 </td>
                                 <td data-label="Actions">
+                                    <div class="equipment-row-actions">
                                     <button class="btn btn-sm"
                                             @click="openCalibrationModal(eq)"
                                             x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#tools"></use></svg>
@@ -1045,12 +1046,12 @@
                                             @click="editEquipment(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>
                                         Edit
                                     </button>
-                                    <button class="btn btn-sm"
-                                            style="background: #dc3545; color: white;"
+                                    <button class="btn btn-sm btn-danger"
                                             x-show="['owner','admin'].includes(currentUser?.role)"
                                             @click="deleteEquipment(eq.id, eq.equipment_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg>
                                         Delete
                                     </button>
+                                    </div>
                                 </td>
                             </tr>
                         </template>

@@ -23,6 +23,16 @@ const cases={
  transfer:{method:'transferEquipmentToUser',path:'/equipment/42/transfer',verb:'POST',message:'Equipment transferred successfully!',error:'Failed to transfer equipment: ',modal:'showTransferEquipmentModal'},
  setting:{method:'updateCalibrationReminderDays',path:'/settings/calibration-reminder-days?days=45',verb:'PUT',message:'Calibration reminder set to 45 days!',error:'Failed to update setting: ',modal:'showCalibrationSettingsModal'},
 };
+test('equipment row actions use a spaced group and shared danger styling',()=>{
+ const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Inventory Panel -->',start);const panel=source.slice(start,end);
+ const actions=panel.slice(panel.indexOf('<td data-label="Actions">'),panel.indexOf('</td>',panel.indexOf('<td data-label="Actions">')));
+ const css=fs.readFileSync('static/mystyle.css','utf8');
+ assert.match(actions,/class="equipment-row-actions"/);
+ assert.match(actions,/class="btn btn-sm btn-danger"/);
+ assert.doesNotMatch(actions,/style="background:\s*#dc3545/);
+ assert.match(css,/\.equipment-row-actions\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*var\(--space-2\);/s);
+ assert.match(css,/\.stock-table \.btn-danger\s*\{[^}]*background:\s*#dc3545;[^}]*color:\s*#ffffff;/s);
+});
 test('equipment panel uses the shared responsive heading and preserves summary/actions',()=>{
  const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Store Types Management Panel',start);const panel=source.slice(start,end);
  const css=fs.readFileSync('static/mystyle.css','utf8');

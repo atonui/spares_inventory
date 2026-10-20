@@ -601,8 +601,10 @@ body > [x-data="inventoryApp()"] .stat-card {
 .store-inventory-primary-action { background: var(--brand-amber); color: var(--brand-navy); font-weight: 700; }
 .inventory-toolbar .toolbar-actions > .btn:first-child:hover,
 .store-inventory-primary-action:hover { background: #D78B25; color: var(--brand-navy); }
-.stock-table .btn:not(.btn-warning):not(.btn-consume) { background: var(--brand-navy); color: #ffffff; }
-.stock-table .btn:not(.btn-warning):not(.btn-consume):hover { background: var(--brand-navy); color: #ffffff; }
+.stock-table .btn:not(.btn-warning):not(.btn-consume):not(.btn-danger) { background: var(--brand-navy); color: #ffffff; }
+.stock-table .btn:not(.btn-warning):not(.btn-consume):not(.btn-danger):hover { background: var(--brand-navy); color: #ffffff; }
+.stock-table .btn-danger { background: #dc3545; color: #ffffff; }
+.stock-table .btn-danger:hover { background: #bb2d3b; color: #ffffff; }
 .stock-table .btn-consume { background: var(--brand-amber); color: var(--brand-navy); }
 .stock-table .btn-consume:hover { background: #D78B25; color: var(--brand-navy); }
 .stock-table .btn-warning:hover { background: #e5ac00; color: var(--brand-navy); }
@@ -893,6 +895,7 @@ label.btn {
 .equipment-calibration-status--soon { background: #fef3c7; color: #92400e; }
 .equipment-calibration-status--ok { background: #d1fae5; color: #065f46; }
 .equipment-calibration-status--none { background: #f1f5f9; color: #334155; }
+.equipment-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
 /* Equipment status badges */
 .equipment-status {
