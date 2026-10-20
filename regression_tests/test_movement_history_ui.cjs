@@ -19,6 +19,23 @@ test('movement history navigation has a rendered panel with filters and rows',()
  const mobileCss=css.slice(css.indexOf('@media (max-width: 768px)'));
  assert.match(mobileCss,/\.movement-history-panel \.movement-history-toolbar input\[type="date"\]\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*min-width:\s*0;/);
 });
+test('movement history uses the shared heading and preserves its existing panel controls',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const start=html.indexOf('<section x-show="showMovementsPanel"');
+ const end=html.indexOf('<!-- My Parts Panel -->',start);
+ assert.ok(start>=0&&end>start,'Missing movement history panel');
+ const panel=html.slice(start,end);
+ assert.match(panel,/aria-labelledby="movement-history-heading"/,'Panel should keep its accessible title reference');
+ assert.match(panel,/class="inventory-panel-heading"/,'Panel title should use the shared heading layout');
+ assert.match(panel,/class="inventory-panel-heading-content"/,'Title and copy should use the shared content wrapper');
+ assert.match(panel,/<h3 id="movement-history-heading" class="inventory-panel-title">Movement history<\/h3>/,'Panel title should use the shared title style');
+ assert.match(panel,/<p class="inventory-panel-meta">Review the latest stock additions, consumption, adjustments, and transfers\. Use filters to narrow the displayed movements\.<\/p>/,'Existing explanatory copy should remain visible');
+ assert.match(panel,/<form class="replenishment-toolbar movement-history-toolbar" @submit\.prevent="loadMovements\(\)">/,'Filter form should remain in place');
+ for(const field of ['startDate','endDate','movementType','partId','storeId'])assert.ok(panel.includes(`x-model="movementFilters.${field}"`),`Missing ${field} filter`);
+ for(const binding of ['@click="clearMovementFilters()"','@click="loadMovements()"','@click="exportMovementsCSV()"'])assert.ok(panel.includes(binding),`Missing action ${binding}`);
+ for(const state of ['x-show="loading"','x-show="!loading && !movements.length"','x-show="movements.length"'])assert.ok(panel.includes(state),`Missing state ${state}`);
+ assert.match(panel,/x-for="movement in movements"/,'Movement rows should remain rendered');
+});
 const movement={id:1,created_at:'2026-10-12T09:00:00Z',movement_type:'TRANSFER',part_number:'P-1',quantity:0,from_store_name:null,to_store_name:'Site',work_order:null,created_by_name:'Engineer',transfer_status:'RECEIVED',completed_by_name:'Receiver',completed_at:'2026-10-12T10:00:00Z'};
 class FixedDate extends Date{constructor(...args){super(...(args.length?args:['2026-10-14T02:00:00Z']));}static now(){return new FixedDate().getTime();}}
 function setup({fetch,globals={}}={}){const c=vm.createContext({Date:FixedDate,Intl,Headers,FormData,URLSearchParams,fetch,console:{log(){},error(){}},setTimeout(){},localStorage:{removeItem(){}},window:{location:{}},...globals});loadPageScripts('index.html',c);const a=c.inventoryApp();c.app=a;a.currentUser={id:7,role:'superadmin',name:'Tester',email:'tester@example.test'};return {a,c};}

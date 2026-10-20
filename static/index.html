@@ -809,8 +809,12 @@
             </section>
 
             <section x-show="showMovementsPanel" class="controls movement-history-panel" aria-labelledby="movement-history-heading">
-                <h3 id="movement-history-heading">Movement history</h3>
-                <p>Review the latest stock additions, consumption, adjustments, and transfers. Use filters to narrow the displayed movements.</p>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 id="movement-history-heading" class="inventory-panel-title">Movement history</h3>
+                        <p class="inventory-panel-meta">Review the latest stock additions, consumption, adjustments, and transfers. Use filters to narrow the displayed movements.</p>
+                    </div>
+                </div>
                 <form class="replenishment-toolbar movement-history-toolbar" @submit.prevent="loadMovements()">
                     <div><label for="movement-start">From date</label><input id="movement-start" type="date" x-model="movementFilters.startDate"></div>
                     <div><label for="movement-end">Through date</label><input id="movement-end" type="date" x-model="movementFilters.endDate"></div>
