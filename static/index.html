@@ -891,9 +891,11 @@
 
             <!-- User Management Panel (Admin Only) -->
             <div x-show="!loading && showUsersPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0;">User Management</h3>
-                    <div style="display: flex; gap: 0.5rem;">
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 class="inventory-panel-title">User Management</h3>
+                    </div>
+                    <div class="inventory-panel-actions">
                         <button class="btn btn-success"
                                 @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg>
                             Add User
