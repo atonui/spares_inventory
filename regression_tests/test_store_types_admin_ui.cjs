@@ -4,6 +4,18 @@ const row={id:42,type_code:'custom',type_name:'Target',description:null,display_
 function setup({confirm=()=>true,fetch}={}){const timers=[];const c=vm.createContext({Headers,FormData,URLSearchParams,fetch,confirm,console:{log(){},error(){}},setTimeout(callback,delay){timers.push({callback,delay});}});loadPageScripts('index.html',c);const a=c.inventoryApp();c.app=a;a.currentUser={id:1,role:'superadmin'};return {a,c,timers};}
 function fill(a,op='update'){a.editStoreType(row);if(op==='create')a.editingStoreType=null;}
 const html=()=>fs.readFileSync('static/index.html','utf8');const clicks=()=>[...html().matchAll(/@click="([^"]*)"/g)].map(m=>m[1]);const response=(status,data)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
+test('store-type management uses shared responsive toolbar and keeps its access/data contracts',()=>{
+ const source=html();const start=source.indexOf('<!-- Store Types Management Panel (Admin Only) -->');const end=source.indexOf('<!-- ',start+1);const panel=source.slice(start,end);
+ assert.match(panel,/x-show="!loading && showStoreTypesPanel && \['owner','admin'\]\.includes\(currentUser\?\.role\)"/);
+ assert.ok(panel.includes('class="inventory-panel-heading"'));
+ assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+ assert.ok(panel.includes('class="inventory-panel-title">Store Types Management</h3>'));
+ assert.ok(panel.includes('class="inventory-panel-actions"'));
+ for(const action of ['downloadStoreTypeTemplate()','exportStoreTypesCSV()','storeTypeForm = { type_code:','showStoreTypeModal = true','closeAllPanels()']) assert.ok(panel.includes(action),action);
+ assert.ok(panel.includes('x-for="storeType in storeTypes"'));
+ assert.ok(panel.includes('data-label="In Use" x-text="stores.filter(s => s.type === storeType.type_code).length + \' stores\'"'));
+ for(const action of ['editStoreType(storeType)','deleteStoreType(storeType.id, storeType.type_name)']) assert.ok(panel.includes(action),action);
+});
 test('actual add/cancel/submit/code bindings preserve mode and inactive form',()=>{
  const {a,c}=setup();fill(a);assert.deepEqual(plain(a.storeTypeForm),{type_code:'custom',type_name:'Target',description:'',display_order:-2,is_active:false});
  const add=clicks().find(e=>e.startsWith('editingStoreType = null; storeTypeForm ='));assert.ok(add);vm.runInContext('with(app){'+add+'}',c);assert.deepEqual(plain(a.storeTypeForm),initial);assert.equal(a.editingStoreType,null);assert.equal(a.showStoreTypeModal,true);
