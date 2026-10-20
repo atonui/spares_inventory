@@ -537,7 +537,7 @@
                 <input id="store-stock-search" type="search" x-model="storeSearchTerm" placeholder="Part number, description or work order">
                 <p role="status" aria-live="polite" x-text="filteredStoreInventory.length + ' of ' + storeInventory.length + ' stock entries'"></p>
             </div>
-            <table class="stock-table" role="table">
+            <table class="stock-table stock-inventory-table stock-inventory-table--store" role="table">
                 <thead>
                     <tr>
                         <th>Part Number</th>
@@ -560,16 +560,19 @@
                                 <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
                                 <span x-show="!item.work_order" class="wo-tag">Original</span>
                             </div></td>
-                            <td role="cell" data-label="Actions"><div class="stock-cell-value stock-row-actions">
+                            <td role="cell" data-label="Actions" class="stock-actions-cell"
+                                :class="canEdit(item.store_owner, item.store_type) ? 'stock-actions-cell--editable' : 'stock-actions-cell--readonly'"><div class="stock-cell-value stock-row-actions">
                                 <details class="stock-action-menu"
                                          x-show="canEdit(item.store_owner, item.store_type)"
                                          @click.outside="$el.open = false"
                                          @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
-                                    <summary class="stock-action-trigger">Actions</summary>
+                                    <summary class="stock-action-trigger" :aria-label="'Actions for ' + item.part_number" title="Stock actions">
+                                        <svg class="stock-action-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+                                    </summary>
                                     <div class="stock-action-menu__items">
-                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)">Adjust quantity</button>
-                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)">Transfer stock</button>
-                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)">Consume for work order</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>Adjust quantity</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>Transfer stock</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>Consume for work order</button>
                                     </div>
                                 </details>
                                 <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
@@ -1061,7 +1064,7 @@
 
             <!-- Inventory Panel -->
             <div x-show="showInventoryPanel" class="inventory-table">
-                <table class="stock-table" role="table">
+                <table class="stock-table stock-inventory-table stock-inventory-table--all" role="table">
                     <thead>
                         <tr>
                             <th>Part Number</th>
@@ -1094,20 +1097,23 @@
                                     </span>
                                     <span x-show="!item.work_order" class="wo-tag">Original</span>
                                 </div></td>
-                                <td role="cell" data-label="Actions"><div class="stock-cell-value stock-row-actions">
-                                    <details class="stock-action-menu"
-                                             x-show="canEdit(item.store_owner, item.store_type)"
-                                             @click.outside="$el.open = false"
-                                             @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
-                                        <summary class="stock-action-trigger">Actions</summary>
-                                        <div class="stock-action-menu__items">
-                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)">Adjust quantity</button>
-                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)">Transfer stock</button>
-                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)">Consume for work order</button>
-                                        </div>
-                                    </details>
-                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
-                                </div></td>
+                                <td role="cell" data-label="Actions" class="stock-actions-cell"
+                                :class="canEdit(item.store_owner, item.store_type) ? 'stock-actions-cell--editable' : 'stock-actions-cell--readonly'"><div class="stock-cell-value stock-row-actions">
+                                <details class="stock-action-menu"
+                                         x-show="canEdit(item.store_owner, item.store_type)"
+                                         @click.outside="$el.open = false"
+                                         @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
+                                    <summary class="stock-action-trigger" :aria-label="'Actions for ' + item.part_number" title="Stock actions">
+                                        <svg class="stock-action-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+                                    </summary>
+                                    <div class="stock-action-menu__items">
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>Adjust quantity</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>Transfer stock</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>Consume for work order</button>
+                                    </div>
+                                </details>
+                                <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                            </div></td>
                             </tr>
                         </template>
                     </tbody>
