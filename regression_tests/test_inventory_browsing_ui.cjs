@@ -2,6 +2,28 @@ const {test}=require('node:test');const assert=require('node:assert/strict');con
 function setup(){const c=vm.createContext({Headers,FormData,URLSearchParams,console:{log(){},error(){}},setTimeout(){}});loadPageScripts('index.html',c);const a=c.inventoryApp();c.app=a;a.currentUser={id:7,role:'engineer'};return {a,c};}
 const rows=[{id:1,part_number:'ABC',description:'Red Pump',store_name:'Same',store_id:1,quantity:0,min_threshold:2,store_owner:7},{id:2,part_number:'XYZ',description:'Blue Pump',store_name:'Same',store_id:2,quantity:5,min_threshold:2,work_order:'WO1',store_owner:'7'},{id:3,part_number:null,description:null,store_name:null,store_id:1,quantity:-1,min_threshold:0}];
 test('selected-store panel contains its search and inventory table instead of truncated output',()=>{const source=fs.readFileSync('static/index.html','utf8');const start=source.indexOf('x-show="showStoreInventoryPanel"');const end=source.indexOf('<!-- Edit Stock Modal -->',start);const panel=source.slice(start,end);assert.ok(!panel.includes('tokens truncated'),'store panel must not contain truncated source text');assert.equal((panel.match(/<label for="store-stock-search">/g)||[]).length,1,'store search label must not be duplicated');assert.match(panel,/<label for="store-stock-search">(?:<svg\b[^>]*>[\s\S]*?<\/svg>\s*)?Find stock in this store<\/label>/,'store search label text and association must remain valid, with an optional decorative icon');assert.ok(panel.includes('id="store-stock-search"'),'store panel must render store stock search');assert.ok(panel.includes('x-for="item in filteredStoreInventory"'),'store panel must render selected-store inventory rows');assert.ok(source.includes('<!-- Inventory Panel -->'),'main inventory panel must exist');assert.ok(source.includes('x-for="item in filteredInventory"'),'main inventory rows must render');});
+test('all-stores and selected-store headers use the shared responsive panel toolbar',()=>{
+    const source=fs.readFileSync('static/index.html','utf8');
+    const css=fs.readFileSync('static/mystyle.css','utf8');
+    const allStoresStart=source.indexOf('x-show="showAllStoresPanel"');
+    const selectedStoreStart=source.indexOf('x-show="showStoreInventoryPanel"');
+    const storeManagement=source.slice(source.indexOf('<!-- Store Management Panel'),allStoresStart);
+    const allStores=source.slice(allStoresStart,selectedStoreStart);
+    const selectedStore=source.slice(selectedStoreStart,source.indexOf('<!-- Edit Stock Modal -->',selectedStoreStart));
+
+    assert.ok(allStores.includes('class="inventory-panel-heading"'));
+    assert.ok(allStores.includes('class="inventory-panel-actions"'));
+    assert.ok(allStores.includes('aria-label="Close panel"'));
+    assert.ok(selectedStore.includes('class="inventory-panel-heading"'));
+    assert.ok(selectedStore.includes('class="inventory-panel-actions"'));
+    assert.ok(selectedStore.includes("x-text=\"selectedStore?.name + ' Inventory'\""));
+    assert.ok(selectedStore.includes("x-text=\"storeInventory.length + ' items in stock'\""));
+    assert.match(selectedStore,/@click="downloadStoreImportTemplate\(\)"/);
+    assert.match(selectedStore,/@click="addStockToStore\(selectedStore\)"/);
+    assert.match(selectedStore,/x-show="canEdit\(selectedStore\?\.assigned_user_id, selectedStore\?\.type\)"/);
+    assert.ok(!storeManagement.includes('inventory-panel-heading'),'store management stays outside this follow-up slice');
+    assert.match(css,/\.inventory-panel-actions > \.btn:not\(\.ui-icon-only\),\s*\.inventory-panel-actions > label\.btn \{ flex: 1 1 9rem; min-height: 44px; white-space: normal; \}/);
+});
 for(const [query,ids] of [['  RED   pump ',[1]],['pump same',[1,2]],['wo1',[2]],['',[1,2,3]],['red blue',[]]])test('search exact matching '+JSON.stringify(query),()=>{const {a}=setup();assert.deepEqual(Array.from(a.matchInventoryRows(rows,query),r=>r.id),ids);});
 for(const [filter,ids] of [[1,[1,3]],['2',[2]],['bad',[]],['',[1,2,3]]])test('store filter strict ID '+filter,()=>{const {a}=setup();a.inventory=rows;a.storeFilter=filter;a.filterInventory();assert.deepEqual(Array.from(a.filteredInventory,r=>r.id),ids);});
 for(const [patch,ids] of [[{},[1,2,3]],[{partNumber:'ab'},[1]],[{category:'A'},[1]],[{lowStockOnly:true},[1]],[{minQuantity:0},[1,2,3]],[{minQuantity:'0'},[1,2]],[{maxQuantity:'0'},[1,3]],[{minQuantity:'1.9'},[2]],[{minQuantity:'bad'},[]],[{description:'ignored',storeType:'ignored'},[1,2,3]]])test('advanced filters preserve existing behavior '+JSON.stringify(patch),()=>{const {a}=setup();a.inventory=rows.map(r=>({...r,part_number:r.part_number||''}));a.parts=[{part_number:'ABC',category:'A'},{part_number:'XYZ',category:'a'}];Object.assign(a.advancedSearch,patch);a.filterInventoryAdvanced();assert.deepEqual(Array.from(a.filteredInventory,r=>r.id),ids);if(!Object.keys(patch).length)assert.equal(a.filteredInventory,a.inventory);});

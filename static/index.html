@@ -441,9 +441,11 @@
 
             <!-- All Stores Panel -->
             <div x-show="showAllStoresPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0;">All Stores</h3>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
+                <div class="inventory-panel-heading">
+                    <h3 class="inventory-panel-title">All Stores</h3>
+                    <div class="inventory-panel-actions">
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
+                    </div>
                 </div>
                 <table class="inventory-reference-table">
                     <thead>
@@ -482,12 +484,12 @@
 
            <!-- Store Inventory Management Panel -->
             <div x-show="showStoreInventoryPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-            <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                <div>
-                    <h3 style="margin: 0;" x-text="selectedStore?.name + ' Inventory'"></h3>
-                    <p style="margin: 0.5rem 0 0 0; color: var(--brand-navy); font-size: 0.9rem;" x-text="storeInventory.length + ' items in stock'"></p>
+            <div class="inventory-panel-heading">
+                <div class="inventory-panel-heading-content">
+                    <h3 class="inventory-panel-title" x-text="selectedStore?.name + ' Inventory'"></h3>
+                    <p class="inventory-panel-meta" x-text="storeInventory.length + ' items in stock'"></p>
                 </div>
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <div class="inventory-panel-actions">
                     <button class="btn btn-sm"
 
                             @click="downloadStoreImportTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
