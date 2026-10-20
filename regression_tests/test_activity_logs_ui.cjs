@@ -11,6 +11,26 @@ function setup({prompt=()=> '90',confirm=()=>true,fetch}={}){
  const timers=[],alerts=[];const c=vm.createContext({Date:FixedDate,Intl,Headers,FormData,URLSearchParams,prompt,confirm,fetch,alert:m=>alerts.push(m),console:{log(){},error(){}},setTimeout(callback,delay){timers.push({callback,delay});},localStorage:{removeItem(){}},window:{location:{}}});loadPageScripts('index.html',c);const a=c.inventoryApp();c.app=a;a.currentUser={id:7,role:'superadmin'};return {a,c,timers,alerts};
 }
 const response=(status,data,headers={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json',...headers}});
+test('activity log uses the shared heading and retains its filters, actions, and audit details',()=>{
+ const source=fs.readFileSync('static/index.html','utf8');
+ const start=source.indexOf('<section x-show="showLogsPanel"');
+ const end=source.indexOf('<section x-show="showMovementsPanel"',start);
+ assert.ok(start>=0&&end>start,'Missing Activity Log panel');
+ const panel=source.slice(start,end);
+ assert.match(panel,/aria-labelledby="audit-heading"/,'Panel should retain its accessible title reference');
+ assert.match(panel,/class="inventory-panel-heading"/,'Panel should use the shared heading layout');
+ assert.match(panel,/class="inventory-panel-heading-content"/,'Title and explanatory copy should use the shared content wrapper');
+ assert.match(panel,/<h3 id="audit-heading" class="inventory-panel-title">Activity log<\/h3>/,'Title should use the shared heading style');
+ assert.match(panel,/<p class="inventory-panel-meta">Stock changes include recorded balances and linked movements\. Older entries retain their original details; missing historical balances cannot be reconstructed here\.<\/p>/,'Audit guidance should remain visible');
+ assert.match(panel,/<form class="replenishment-toolbar" @submit\.prevent="loadActivityLogs\(\)">/,'Log filter form should remain in place');
+ for(const input of ['logFilters.startDate','logFilters.endDate','logFilters.action','logFilters.status'])assert.ok(panel.includes(`x-model="${input}"`),`Missing ${input} filter`);
+ assert.match(panel,/aria-label="Refresh log"/,'Refresh action should remain available');
+ assert.match(panel,/@click="exportActivityLogsCSV\(\)"/,'CSV export should remain available');
+ for(const state of ['x-show="loading"','x-show="!loading && !activityLogs.length && !error"','x-show="activityLogs.length"'])assert.ok(panel.includes(state),`Missing state ${state}`);
+ assert.match(panel,/x-for="log in activityLogs"/,'Audit entries should remain rendered');
+ assert.match(panel,/View recorded details/,'Recorded detail disclosure should remain available');
+ assert.match(panel,/Raw record/,'Raw record disclosure should remain available');
+});
 for(const full of [false,true])test('logs preserve '+(full?'full encoded':'empty')+' query, limit, callback and loading',async()=>{
  const {a}=setup();a.error='old';if(full)a.logFilters={startDate:'2026-10-01',endDate:'2026-10-14',action:'A & B',targetUserId:'7',status:'FAILED'};const context={timezone:'Africa/Nairobi',timezone_revision:1};
  a.apiCall=async(path,opts,callback)=>{assert.equal(a.loading,true);assert.equal(a.error,'');assert.equal(path,full?'/logs/activity?start_date=2026-10-01&end_date=2026-10-14&action=A+%26+B&target_user_id=7&status=FAILED&limit=200':'/logs/activity?limit=200');assert.deepEqual(plain(opts),{});callback(context);return [actorless];};await a.loadActivityLogs();assert.equal(a.activityTimeContext,context);assert.equal(a.activityLogs[0],actorless);assert.equal(a.loading,false);

@@ -789,8 +789,12 @@
             </section>
 
             <section x-show="showLogsPanel" class="controls audit-panel" aria-labelledby="audit-heading">
-                <h3 id="audit-heading">Activity log</h3>
-                <p>Stock changes include recorded balances and linked movements. Older entries retain their original details; missing historical balances cannot be reconstructed here.</p>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 id="audit-heading" class="inventory-panel-title">Activity log</h3>
+                        <p class="inventory-panel-meta">Stock changes include recorded balances and linked movements. Older entries retain their original details; missing historical balances cannot be reconstructed here.</p>
+                    </div>
+                </div>
                 <form class="replenishment-toolbar" @submit.prevent="loadActivityLogs()">
                     <div><label for="audit-start">From date</label><input id="audit-start" type="date" x-model="logFilters.startDate"></div>
                     <div><label for="audit-end">Through date</label><input id="audit-end" type="date" x-model="logFilters.endDate"></div>
