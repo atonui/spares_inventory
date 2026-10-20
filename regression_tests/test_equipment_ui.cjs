@@ -23,6 +23,20 @@ const cases={
  transfer:{method:'transferEquipmentToUser',path:'/equipment/42/transfer',verb:'POST',message:'Equipment transferred successfully!',error:'Failed to transfer equipment: ',modal:'showTransferEquipmentModal'},
  setting:{method:'updateCalibrationReminderDays',path:'/settings/calibration-reminder-days?days=45',verb:'PUT',message:'Calibration reminder set to 45 days!',error:'Failed to update setting: ',modal:'showCalibrationSettingsModal'},
 };
+test('equipment panel uses the shared responsive heading and preserves summary/actions',()=>{
+ const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Store Types Management Panel',start);const panel=source.slice(start,end);
+ assert.ok(panel.includes('x-show="!loading && showEquipmentPanel"'));
+ assert.ok(panel.includes('class="inventory-panel-heading"'));
+ assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+ assert.ok(panel.includes('class="inventory-panel-title">Equipment Management</h3>'));
+ assert.ok(panel.includes('class="inventory-panel-meta"'));
+ for(const field of ['total_equipment','my_equipment','due_soon','overdue']) assert.ok(panel.includes(`equipmentStats.${field} || 0`),field);
+ assert.ok(panel.includes('color: #f59e0b;'));
+ assert.ok(panel.includes('color: #dc2626;'));
+ assert.ok(panel.includes('class="inventory-panel-actions"'));
+ for(const action of ['downloadEquipmentTemplate()','exportEquipmentCSV()','showEquipmentModal = true','loadCalibrationSettings()','closeAllPanels()','openCalibrationModal(eq)','openTransferEquipmentModal(eq)','viewEquipmentHistory(eq)','x-for="eq in equipment"']) assert.ok(panel.includes(action),action);
+ assert.equal((panel.match(/x-show="\['owner','admin'\]\.includes\(currentUser\?\.role\)"/g)||[]).length,4);
+});
 function fill(a,op){a.editEquipment(row);if(op==='create')a.editingEquipment=null;if(op==='calibration')a.openCalibrationModal(row);if(op==='transfer')a.openTransferEquipmentModal(row);if(op==='setting'){a.calibrationReminderDays=45;a.showCalibrationSettingsModal=true;}}
 function payload(a,op){
  if(op==='create'||op==='update'){const f=a.equipmentForm;return {equipment_name:f.equipment_name,make:f.make,model:f.model,serial_number:f.serial_number,assigned_user_id:7,calibration_cert_number:null,calibration_authority:null,calibration_date:null,next_calibration_date:'2026-10-21',notes:null};}

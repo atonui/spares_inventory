@@ -954,17 +954,17 @@
 
             <!-- Equipment Management Panel -->
             <div x-show="!loading && showEquipmentPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                    <div>
-                        <h3 style="margin: 0;">Equipment Management</h3>
-                        <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 class="inventory-panel-title">Equipment Management</h3>
+                        <div class="inventory-panel-meta" style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
                             <span>Total: <strong x-text="equipmentStats.total_equipment || 0"></strong></span>
                             <span>Mine: <strong x-text="equipmentStats.my_equipment || 0"></strong></span>
                             <span style="color: #f59e0b;">Due Soon: <strong x-text="equipmentStats.due_soon || 0"></strong></span>
                             <span style="color: #dc2626;">Overdue: <strong x-text="equipmentStats.overdue || 0"></strong></span>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <div class="inventory-panel-actions">
                         <button class="btn btn-sm" @click="downloadEquipmentTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Download Template</button>
                         <button class="btn btn-sm btn-success" @click="exportEquipmentCSV()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Export CSV</button>
                         <button x-show="['owner','admin'].includes(currentUser?.role)" class="btn btn-success"
