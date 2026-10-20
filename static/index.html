@@ -262,13 +262,15 @@
             </div>
 
             <section class="inventory-table" style="margin-bottom:1rem;">
-                <div style="padding:1rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
-                    <div>
-                        <h3 style="margin:0;">In-transit transfers</h3>
-                        <p style="margin:0.5rem 0;">Stock becomes available at the destination after physical receipt is confirmed.</p>
-                        <span>Units in transit: <strong x-text="stats.in_transit_quantity || 0"></strong></span>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 class="inventory-panel-title">In-transit transfers</h3>
+                        <p class="inventory-panel-meta">Stock becomes available at the destination after physical receipt is confirmed.</p>
+                        <p class="inventory-panel-meta">Units in transit: <strong x-text="stats.in_transit_quantity || 0"></strong></p>
                     </div>
-                    <button class="btn btn-sm ui-icon-only" @click="refreshTransfers()" :disabled="loading" aria-label="Refresh transfers" title="Refresh transfers"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+                    <div class="inventory-panel-actions">
+                        <button class="btn btn-sm ui-icon-only" @click="refreshTransfers()" :disabled="loading" aria-label="Refresh transfers" title="Refresh transfers"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+                    </div>
                 </div>
                 <div style="overflow-x:auto;" x-show="pendingTransfers.length > 0">
                     <table class="in-transit-transfers-table">

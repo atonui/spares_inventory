@@ -15,6 +15,29 @@ function setup() {
     return {app: c.inventoryApp(), timers};
 }
 
+test('in-transit transfers uses the shared panel heading and keeps transfer controls intact', () => {
+    const source = require('node:fs').readFileSync('static/index.html', 'utf8');
+    const title = source.indexOf('In-transit transfers');
+    assert.notEqual(title, -1);
+    const start = source.lastIndexOf('<section', title);
+    const end = source.indexOf('</section>', title);
+    assert.ok(start >= 0 && end > title);
+    const panel = source.slice(start, end);
+    assert.match(panel, /class="inventory-panel-heading"/);
+    assert.match(panel, /class="inventory-panel-heading-content"/);
+    assert.match(panel, /<h3 class="inventory-panel-title">In-transit transfers<\/h3>/);
+    assert.match(panel, /class="inventory-panel-meta"[^>]*>Stock becomes available at the destination after physical receipt is confirmed\.<\/p>/);
+    assert.match(panel, /Units in transit:/);
+    assert.match(panel, /x-text="stats\.in_transit_quantity \|\| 0"/);
+    assert.match(panel, /class="inventory-panel-actions"/);
+    assert.match(panel, /@click="refreshTransfers\(\)" :disabled="loading" aria-label="Refresh transfers"/);
+    assert.match(panel, /x-show="pendingTransfers\.length > 0"/);
+    assert.match(panel, /x-for="transfer in pendingTransfers"/);
+    assert.match(panel, /x-show="transfer\.can_receive" @click="confirmTransfer\(transfer,'receive'\)"/);
+    assert.match(panel, /x-show="transfer\.can_return" @click="confirmTransfer\(transfer,'return'\)"/);
+    assert.match(panel, /x-show="pendingTransfers\.length === 0"/);
+});
+
 for (const replenishment of [false, true]) {
     test(`${replenishment ? 'replenishment' : 'ordinary'} dispatch preserves payload and success lifecycle`, async () => {
         const {app: a, timers} = setup();
