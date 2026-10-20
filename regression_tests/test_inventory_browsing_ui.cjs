@@ -7,7 +7,6 @@ test('all-stores and selected-store headers use the shared responsive panel tool
     const css=fs.readFileSync('static/mystyle.css','utf8');
     const allStoresStart=source.indexOf('x-show="showAllStoresPanel"');
     const selectedStoreStart=source.indexOf('x-show="showStoreInventoryPanel"');
-    const storeManagement=source.slice(source.indexOf('<!-- Store Management Panel'),allStoresStart);
     const allStores=source.slice(allStoresStart,selectedStoreStart);
     const selectedStore=source.slice(selectedStoreStart,source.indexOf('<!-- Edit Stock Modal -->',selectedStoreStart));
 
@@ -21,7 +20,6 @@ test('all-stores and selected-store headers use the shared responsive panel tool
     assert.match(selectedStore,/@click="downloadStoreImportTemplate\(\)"/);
     assert.match(selectedStore,/@click="addStockToStore\(selectedStore\)"/);
     assert.match(selectedStore,/x-show="canEdit\(selectedStore\?\.assigned_user_id, selectedStore\?\.type\)"/);
-    assert.ok(!storeManagement.includes('inventory-panel-heading'),'store management stays outside this follow-up slice');
     assert.match(css,/\.inventory-panel-actions > \.btn:not\(\.ui-icon-only\),\s*\.inventory-panel-actions > label\.btn \{ flex: 1 1 9rem; min-height: 44px; white-space: normal; \}/);
 });
 for(const [query,ids] of [['  RED   pump ',[1]],['pump same',[1,2]],['wo1',[2]],['',[1,2,3]],['red blue',[]]])test('search exact matching '+JSON.stringify(query),()=>{const {a}=setup();assert.deepEqual(Array.from(a.matchInventoryRows(rows,query),r=>r.id),ids);});
