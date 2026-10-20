@@ -33,6 +33,14 @@ test('equipment row actions use a spaced group and shared danger styling',()=>{
  assert.match(css,/\.equipment-row-actions\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*var\(--space-2\);/s);
  assert.match(css,/\.stock-table \.btn-danger\s*\{[^}]*background:\s*#dc3545;[^}]*color:\s*#ffffff;/s);
 });
+test('equipment mobile column rules are attached to the rendered table',()=>{
+ const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Inventory Panel -->',start);const panel=source.slice(start,end);
+ const css=fs.readFileSync('static/mystyle.css','utf8');
+ assert.match(panel,/<table class="stock-table equipment-table">/);
+ assert.match(css,/\.equipment-table th:nth-child\(4\),\s*\.equipment-table td:nth-child\(4\)\s*\{\s*display:\s*none;/);
+ assert.match(css,/\.equipment-table th:nth-child\(5\),\s*\.equipment-table td:nth-child\(5\)\s*\{\s*display:\s*none;/);
+ assert.match(css,/\.equipment-table th:nth-child\(2\),\s*\.equipment-table td:nth-child\(2\)\s*\{\s*display:\s*none;/);
+});
 test('equipment panel uses the shared responsive heading and preserves summary/actions',()=>{
  const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Store Types Management Panel',start);const panel=source.slice(start,end);
  const css=fs.readFileSync('static/mystyle.css','utf8');

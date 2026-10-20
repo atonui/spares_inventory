@@ -30,7 +30,7 @@ test('restored management tables use mobile cards and SaaS invitation actions',(
         const start=html.indexOf(marker);
         const next=html.indexOf('<!-- ',start+marker.length);
         const panel=html.slice(start,next<0?undefined:next);
-        assert.match(panel,/<table class="stock-table">/);
+        assert.match(panel,/<table class="stock-table(?: equipment-table)?">/);
         assert.match(panel,/<td[^>]*data-label="[^"]+"/);
     }
     const users=html.slice(html.indexOf('<!-- User Management Panel'),html.indexOf('<!-- Equipment Management Panel'));
