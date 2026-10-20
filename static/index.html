@@ -342,9 +342,11 @@
 
             <!-- Parts Management Panel (Admin Only) -->
             <div x-show="!loading && showPartsPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                    <h3 style="margin: 0;">Parts Management</h3>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 class="inventory-panel-title">Parts Management</h3>
+                    </div>
+                    <div class="inventory-panel-actions">
                         <button class="btn btn-sm" @click="downloadPartTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Download Template</button>
                         <label class="btn btn-sm" style="cursor: pointer;">
                             <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg> Import CSV
