@@ -25,14 +25,16 @@ const cases={
 };
 test('equipment panel uses the shared responsive heading and preserves summary/actions',()=>{
  const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Store Types Management Panel',start);const panel=source.slice(start,end);
+ const css=fs.readFileSync('static/mystyle.css','utf8');
  assert.ok(panel.includes('x-show="!loading && showEquipmentPanel"'));
  assert.ok(panel.includes('class="inventory-panel-heading"'));
  assert.ok(panel.includes('class="inventory-panel-heading-content"'));
  assert.ok(panel.includes('class="inventory-panel-title">Equipment Management</h3>'));
- assert.ok(panel.includes('class="inventory-panel-meta"'));
+ assert.ok(panel.includes('class="inventory-panel-meta equipment-summary"'));
  for(const field of ['total_equipment','my_equipment','due_soon','overdue']) assert.ok(panel.includes(`equipmentStats.${field} || 0`),field);
- assert.ok(panel.includes('color: #f59e0b;'));
- assert.ok(panel.includes('color: #dc2626;'));
+ assert.ok(panel.includes('class="equipment-summary-due"'));
+ assert.ok(panel.includes('class="equipment-summary-overdue"'));
+ assert.match(css,/\.equipment-summary\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s);
  assert.ok(panel.includes('class="inventory-panel-actions"'));
  for(const action of ['downloadEquipmentTemplate()','exportEquipmentCSV()','showEquipmentModal = true','loadCalibrationSettings()','closeAllPanels()','openCalibrationModal(eq)','openTransferEquipmentModal(eq)','viewEquipmentHistory(eq)','x-for="eq in equipment"']) assert.ok(panel.includes(action),action);
  assert.equal((panel.match(/x-show="\['owner','admin'\]\.includes\(currentUser\?\.role\)"/g)||[]).length,4);

@@ -980,11 +980,11 @@
                 <div class="inventory-panel-heading">
                     <div class="inventory-panel-heading-content">
                         <h3 class="inventory-panel-title">Equipment Management</h3>
-                        <div class="inventory-panel-meta" style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                        <div class="inventory-panel-meta equipment-summary">
                             <span>Total: <strong x-text="equipmentStats.total_equipment || 0"></strong></span>
                             <span>Mine: <strong x-text="equipmentStats.my_equipment || 0"></strong></span>
-                            <span style="color: #f59e0b;">Due Soon: <strong x-text="equipmentStats.due_soon || 0"></strong></span>
-                            <span style="color: #dc2626;">Overdue: <strong x-text="equipmentStats.overdue || 0"></strong></span>
+                            <span class="equipment-summary-due">Due Soon: <strong x-text="equipmentStats.due_soon || 0"></strong></span>
+                            <span class="equipment-summary-overdue">Overdue: <strong x-text="equipmentStats.overdue || 0"></strong></span>
                         </div>
                     </div>
                     <div class="inventory-panel-actions">
