@@ -1098,22 +1098,22 @@
                                     <span x-show="!item.work_order" class="wo-tag">Original</span>
                                 </div></td>
                                 <td role="cell" data-label="Actions" class="stock-actions-cell"
-                                    :class="canEdit(item.store_owner, item.store_type) ? 'stock-actions-cell--editable' : 'stock-actions-cell--readonly'"><div class="stock-cell-value stock-row-actions">
-                                    <details class="stock-action-menu"
-                                             x-show="canEdit(item.store_owner, item.store_type)"
-                                             @click.outside="$el.open = false"
-                                             @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
-                                        <summary class="stock-action-trigger" :aria-label="'Actions for ' + item.part_number" title="Stock actions">
-                                            <svg class="stock-action-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
-                                        </summary>
-                                        <div class="stock-action-menu__items">
-                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>Adjust quantity</button>
-                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>Transfer stock</button>
-                                            <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>Consume for work order</button>
-                                        </div>
-                                    </details>
-                                    <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
-                                </div></td>
+                                :class="canEdit(item.store_owner, item.store_type) ? 'stock-actions-cell--editable' : 'stock-actions-cell--readonly'"><div class="stock-cell-value stock-row-actions">
+                                <details class="stock-action-menu"
+                                         x-show="canEdit(item.store_owner, item.store_type)"
+                                         @click.outside="$el.open = false"
+                                         @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
+                                    <summary class="stock-action-trigger" :aria-label="'Actions for ' + item.part_number" title="Stock actions">
+                                        <svg class="stock-action-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+                                    </summary>
+                                    <div class="stock-action-menu__items">
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>Adjust quantity</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>Transfer stock</button>
+                                        <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>Consume for work order</button>
+                                    </div>
+                                </details>
+                                <span x-show="!canEdit(item.store_owner, item.store_type)">Read only</span>
+                            </div></td>
                             </tr>
                         </template>
                     </tbody>
