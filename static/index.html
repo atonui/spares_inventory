@@ -295,9 +295,13 @@
 
             <!-- All Parts Panel -->
             <div x-show="showAllPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div style="padding: 1rem; background: var(--brand-page); border-bottom: 1px solid var(--brand-border); display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0;">All Parts Catalog</h3>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
+                <div class="inventory-panel-heading">
+                    <div class="inventory-panel-heading-content">
+                        <h3 class="inventory-panel-title">All Parts Catalog</h3>
+                    </div>
+                    <div class="inventory-panel-actions">
+                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
+                    </div>
                 </div>
                 <table class="inventory-reference-table">
                     <thead>
