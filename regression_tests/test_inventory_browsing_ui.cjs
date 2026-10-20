@@ -37,6 +37,21 @@ test('my-parts panel uses the shared responsive heading and keeps its existing c
     assert.ok(panel.includes('x-for="item in myPartsView"'));
     for(const action of ['Edit','Transfer','Consume']) assert.ok(panel.includes(action));
 });
+test('all-parts catalog uses the shared responsive heading and retains its catalog data',()=>{
+    const source=fs.readFileSync('static/index.html','utf8');
+    const start=source.indexOf('<!-- All Parts Panel -->');
+    const end=source.indexOf('<!-- User Management Panel',start);
+    const panel=source.slice(start,end);
+
+    assert.ok(panel.includes('class="inventory-panel-heading"'));
+    assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+    assert.ok(panel.includes('class="inventory-panel-title">All Parts Catalog</h3>'));
+    assert.ok(panel.includes('class="inventory-panel-actions"'));
+    assert.match(panel,/@click="closeAllPanels\(\)" aria-label="Close panel" title="Close panel"/);
+    assert.ok(panel.includes('x-show="showAllPartsPanel"'));
+    assert.ok(panel.includes('x-for="part in allPartsView"'));
+    assert.ok(panel.includes('inventory.filter(i => i.part_number === part.part_number).reduce((sum, i) => sum + i.quantity, 0)'));
+});
 for(const [query,ids] of [['  RED   pump ',[1]],['pump same',[1,2]],['wo1',[2]],['',[1,2,3]],['red blue',[]]])test('search exact matching '+JSON.stringify(query),()=>{const {a}=setup();assert.deepEqual(Array.from(a.matchInventoryRows(rows,query),r=>r.id),ids);});
 for(const [filter,ids] of [[1,[1,3]],['2',[2]],['bad',[]],['',[1,2,3]]])test('store filter strict ID '+filter,()=>{const {a}=setup();a.inventory=rows;a.storeFilter=filter;a.filterInventory();assert.deepEqual(Array.from(a.filteredInventory,r=>r.id),ids);});
 for(const [patch,ids] of [[{},[1,2,3]],[{partNumber:'ab'},[1]],[{category:'A'},[1]],[{lowStockOnly:true},[1]],[{minQuantity:0},[1,2,3]],[{minQuantity:'0'},[1,2]],[{maxQuantity:'0'},[1,3]],[{minQuantity:'1.9'},[2]],[{minQuantity:'bad'},[]],[{description:'ignored',storeType:'ignored'},[1,2,3]]])test('advanced filters preserve existing behavior '+JSON.stringify(patch),()=>{const {a}=setup();a.inventory=rows.map(r=>({...r,part_number:r.part_number||''}));a.parts=[{part_number:'ABC',category:'A'},{part_number:'XYZ',category:'a'}];Object.assign(a.advancedSearch,patch);a.filterInventoryAdvanced();assert.deepEqual(Array.from(a.filteredInventory,r=>r.id),ids);if(!Object.keys(patch).length)assert.equal(a.filteredInventory,a.inventory);});
