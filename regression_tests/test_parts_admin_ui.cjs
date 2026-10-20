@@ -379,6 +379,23 @@ test('shipped catalog administration forms remain independent', () => {
     assert.equal(second.showPartModal, false);
 });
 
+test('parts management uses the shared panel toolbar while retaining its access gate and actions', () => {
+    const html = fs.readFileSync('static/index.html', 'utf8');
+    const start = html.indexOf('<!-- Parts Management Panel (Admin Only) -->');
+    const end = html.indexOf('<table class="parts-management-table">', start);
+    const panel = html.slice(start, end);
+
+    assert.match(panel, /x-show="!loading && showPartsPanel && \['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\)"/);
+    assert.ok(panel.includes('class="inventory-panel-heading"'));
+    assert.ok(panel.includes('class="inventory-panel-heading-content"'));
+    assert.ok(panel.includes('class="inventory-panel-actions"'));
+    assert.match(panel, /@click="downloadPartTemplate\(\)"/);
+    assert.match(panel, /@change="importParts\(\$event\)"/);
+    assert.match(panel, /class="btn btn-success"[\s\S]*?showPartModal = true/);
+    assert.match(panel, /aria-label="Close panel"/);
+    assert.ok(panel.includes('accept=".csv"'));
+});
+
 test('parts management table becomes labeled mobile cards and keeps edit/archive actions', () => {
     const html = fs.readFileSync('static/index.html', 'utf8');
     const section = html.indexOf('<!-- Parts Management Panel (Admin Only) -->');
