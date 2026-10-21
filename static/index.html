@@ -188,17 +188,20 @@
                         <label for="inventory-store">Store</label>
                         <select id="inventory-store" x-model="storeFilter" @change="filterInventory()">
                             <option value="">All stores</option>
-                            <template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name + ' — ' + store.type + (store.location ? ', ' + store.location : '')"></option></template>
+                            <template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template>
                         </select>
                     </div>
-                    <div class="inventory-filter-actions" role="group" aria-label="Inventory filter actions">
-                        <button class="btn inventory-filter-action" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
-                        <button class="btn inventory-filter-action" @click="viewStoreInventory(stores.find(store=>store.id===Number(storeFilter)))" :disabled="!storeFilter">Open store</button>
-                    </div>
+
                 </div>
                 <div x-show="showInventoryPanel" class="inventory-toolbar">
                     <p role="status" aria-live="polite" x-text="filteredInventory.length + ' of ' + inventory.length + ' stock entries'"></p>
-                    <div class="toolbar-actions">
+                    <div class="inventory-toolbar-actions" role="group" aria-label="Inventory actions">
+                        <div class="inventory-action-group inventory-filter-actions" role="group" aria-label="Filter actions">
+                            <button class="btn inventory-filter-action" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
+                            <button class="btn inventory-filter-action" @click="viewStoreInventory(stores.find(store=>store.id===Number(storeFilter)))" :disabled="!storeFilter">Open store</button>
+                        </div>
+                        <span class="inventory-action-divider" aria-hidden="true"></span>
+                    <div class="toolbar-actions inventory-action-group" role="group" aria-label="Stock actions">
                         <button class="btn inventory-add-action" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Add Stock</button>
                     <!-- UPDATED: Export dropdown button -->
                     <div style="position: relative;" x-data="{ showExportMenu: false }">
@@ -236,6 +239,7 @@
                         </div>
                     </div>
 
+                    </div>
                     </div>
                 </div>
                 <div x-show="error" role="alert" class="error" x-text="error"></div>
