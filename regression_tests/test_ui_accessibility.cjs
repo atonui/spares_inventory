@@ -209,6 +209,22 @@ test('equipment due-soon and overdue summary text meets WCAG AA contrast', () =>
     assertAa('Equipment overdue summary', declaration(mainCss, '.equipment-summary-overdue', 'color'), background);
 });
 
+test('workspace, report, and platform table headers meet WCAG AA contrast', () => {
+    const mainCss = read('mystyle.css');
+    const adminCss = read('superadmin.css');
+    for (const [stylesheet, selector, backgroundSelector] of [
+        [mainCss, '.stock-table th', '.stock-table th'],
+        [mainCss, '.report-table-wrap th', '.report-table-wrap th'],
+        [adminCss, '.tbl th', '.tbl th'],
+    ]) {
+        assertAa(
+            `${selector} table header`,
+            declaration(stylesheet, selector, 'color'),
+            declaration(stylesheet, backgroundSelector, 'background'),
+        );
+    }
+});
+
 test('equipment calibration badges meet WCAG AA contrast in every state', () => {
     const mainCss = read('mystyle.css');
     const colors = {
@@ -403,5 +419,5 @@ test('remaining fixed inventory tables become labeled mobile cards and keep row 
     assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
     assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
     assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
-    assert.match(html, /href="mystyle\.css\?v=20261020-inventory-store-ux"/, 'Header stylesheet changes should use a fresh cache version');
+    assert.match(html, /href="mystyle\.css\?v=20261020-sitewide-visual-system"/, 'Header stylesheet changes should use a fresh cache version');
 });
