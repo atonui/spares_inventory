@@ -333,7 +333,7 @@ from backend.schemas.auth import (
 
 
 from backend.schemas.stores import (
-    StoreResponse, StoreTypeResponse, CreateStoreTypeRequest, UpdateStoreTypeRequest,
+    StoreResponse, StoreOptionResponse, StoreTypeResponse, CreateStoreTypeRequest, UpdateStoreTypeRequest,
     CreateStoreRequest, UpdateStoreRequest,
 )
 

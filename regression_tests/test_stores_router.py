@@ -15,7 +15,7 @@ from regression_tests.test_session_write_routes import session_api, database_sta
 
 ROOT = Path(__file__).resolve().parents[1]
 OPERATIONS = {
-    ('GET', '/api/stores'), ('POST', '/api/stores'),
+    ('GET', '/api/stores'), ('GET', '/api/store-options'), ('POST', '/api/stores'),
     ('POST', '/api/stores/bulk-import'), ('PUT', '/api/stores/{store_id}'),
     ('DELETE', '/api/stores/{store_id}'), ('POST', '/api/stores/{store_id}/restore'),
     ('GET', '/api/store-types'), ('POST', '/api/store-types'),
@@ -26,9 +26,9 @@ OPERATIONS = {
 
 def test_stores_registered_once_with_original_dependencies():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)
-              and (r.path == '/api/stores' or r.path.startswith('/api/stores/')
+              and (r.path == '/api/stores' or r.path == '/api/store-options' or r.path.startswith('/api/stores/')
                    or r.path.startswith('/api/store-types'))]
-    assert len(routes) == 11
+    assert len(routes) == 12
     assert {(m, r.path) for r in routes for m in r.methods} == OPERATIONS
     for route in routes:
         assert route.endpoint.__module__ == 'backend.routes.stores'
@@ -41,7 +41,7 @@ def test_stores_registered_once_with_original_dependencies():
 
 def test_store_schema_reexports():
     from backend.schemas import stores
-    for name in ('StoreResponse', 'StoreTypeResponse', 'CreateStoreRequest',
+    for name in ('StoreResponse', 'StoreOptionResponse', 'StoreTypeResponse', 'CreateStoreRequest',
                  'UpdateStoreRequest', 'CreateStoreTypeRequest', 'UpdateStoreTypeRequest'):
         assert getattr(main, name) is getattr(stores, name)
     assert stores.UpdateStoreRequest().model_dump() == {
@@ -62,6 +62,17 @@ def test_store_listing_archive_visibility(session_api, actor, include_archived):
         return
     assert response.status_code == 200, response.text
     assert (3 in {r['id'] for r in response.json()}) == include_archived
+
+
+def test_store_picker_options_return_only_id_and_name(session_api):
+    client, path, _ = session_api
+    client.cookies.set('session_token', 'engineer-token')
+    response = client.get('/api/store-options')
+    assert response.status_code == 200, response.text
+    options = response.json()
+    assert options
+    assert all(set(option) == {'id', 'name'} for option in options)
+    assert all(option['name'] for option in options)
 
 
 def test_store_types_listing_and_validation_keep_inactive_access(session_api):

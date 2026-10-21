@@ -36,7 +36,7 @@ test('inventory lookup keeps its common controls and stock actions in the shell'
         'id="inventory-search"',
         'id="inventory-store"',
         'clearInventoryFilters()',
-        'viewStoreInventory(stores.find',
+        'viewStoreInventory(storeOptions.find',
         'aria-label="Refresh inventory"',
         'Add Stock',
         'class="management-menu"',

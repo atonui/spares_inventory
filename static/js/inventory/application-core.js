@@ -51,6 +51,7 @@ function inventoryCoreFeature() {
         // Data
         stats: {},
         stores: [],
+        storeOptions: [],
         parts: [],
         inventory: [],
         workOrders: [],
@@ -325,7 +326,12 @@ function inventoryCoreFeature() {
         },
 
         async loadStores() {
-            this.stores = await this.apiCall('/stores');
+            const [stores, options] = await Promise.all([
+                this.apiCall('/stores'),
+                this.apiCall('/store-options'),
+            ]);
+            this.stores = stores;
+            this.storeOptions = options;
         },
 
         // function to load store types

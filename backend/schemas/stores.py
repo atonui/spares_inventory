@@ -11,6 +11,11 @@ class StoreResponse(BaseModel):
     location: Optional[str]
     assigned_user_id: Optional[int]
 
+
+class StoreOptionResponse(BaseModel):
+    id: int
+    name: str
+
 class StoreTypeResponse(BaseModel):
     id: int
     type_code: str

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261021-inventory-action-visuals">
-    <link rel="stylesheet" href="login.css?v=20261021-inventory-action-visuals">
+    <link rel="stylesheet" href="mystyle.css?v=20261021-toolbar-picker-feedback">
+    <link rel="stylesheet" href="login.css?v=20261021-toolbar-picker-feedback">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -15,7 +15,7 @@
 <script src="js/shared/time-context.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/features.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/back-to-top.js?v=20261018-back-to-top" defer></script>
-<script src="js/inventory/application-core.js?v=20261018-auth-bootstrap" defer></script>
+<script src="js/inventory/application-core.js?v=20261021-toolbar-picker-feedback" defer></script>
 <script src="js/inventory/dialog-focus.js?v=20261016-dialog-focus" defer></script>
 <script src="js/inventory/reports.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/replenishment.js?v=20261014-frontend-21" defer></script>
@@ -188,58 +188,36 @@
                         <label for="inventory-store">Store</label>
                         <select id="inventory-store" x-model="storeFilter" @change="filterInventory()">
                             <option value="">All stores</option>
-                            <template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template>
+                            <template x-for="store in storeOptions" :key="store.id"><option :value="store.id" x-text="store.name"></option></template>
                         </select>
                     </div>
-
+                    <div class="inventory-filter-actions" role="group" aria-label="Filter actions">
+                        <button class="btn inventory-filter-action" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
+                        <button class="btn inventory-filter-action" @click="viewStoreInventory(storeOptions.find(store=>store.id===Number(storeFilter)))" :disabled="!storeFilter">Open store</button>
+                    </div>
                 </div>
                 <div x-show="showInventoryPanel" class="inventory-toolbar">
                     <p role="status" aria-live="polite" x-text="filteredInventory.length + ' of ' + inventory.length + ' stock entries'"></p>
                     <div class="inventory-toolbar-actions" role="group" aria-label="Inventory actions">
-                        <div class="inventory-action-group inventory-filter-actions" role="group" aria-label="Filter actions">
-                            <button class="btn inventory-filter-action" @click="clearInventoryFilters()" :disabled="!searchTerm && !storeFilter"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
-                            <button class="btn inventory-filter-action" @click="viewStoreInventory(stores.find(store=>store.id===Number(storeFilter)))" :disabled="!storeFilter">Open store</button>
+                        <div class="toolbar-actions inventory-action-group" role="group" aria-label="Stock actions">
+                            <button class="btn inventory-add-action" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Add Stock</button>
+                            <div class="inventory-export-menu" x-data="{ showExportMenu: false }">
+                                <button class="btn inventory-export-action" @click="showExportMenu = !showExportMenu" :aria-expanded="showExportMenu" aria-haspopup="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
+                                    Export CSV <span class="inventory-export-chevron" aria-hidden="true">⌄</span>
+                                </button>
+                                <div class="inventory-export-menu__items" x-show="showExportMenu" @click.outside="showExportMenu = false">
+                                    <button class="inventory-export-menu__item" @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Current View</button>
+                                    <button class="inventory-export-menu__item" @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Parts Catalog</button>
+                                    <button class="inventory-export-menu__item" @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Stores</button>
+                                    <button class="inventory-export-menu__item" @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Movement History</button>
+                                    <button class="inventory-export-menu__item" @click="exportUsersCSV(); showExportMenu = false">Users</button>
+                                    <button class="inventory-export-menu__item" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
+                                    <button class="inventory-export-menu__item" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
+                                    <button class="inventory-export-menu__item" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
+                                    <button class="inventory-export-menu__item" @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg> Comprehensive Report</button>
+                                </div>
+                            </div>
                         </div>
-                        <span class="inventory-action-divider" aria-hidden="true"></span>
-                    <div class="toolbar-actions inventory-action-group" role="group" aria-label="Stock actions">
-                        <button class="btn inventory-add-action" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Add Stock</button>
-                    <!-- UPDATED: Export dropdown button -->
-                    <div style="position: relative;" x-data="{ showExportMenu: false }">
-                        <button class="btn inventory-export-action" @click="showExportMenu = !showExportMenu" :aria-expanded="showExportMenu" aria-haspopup="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
-                            Export CSV <span class="inventory-export-chevron" aria-hidden="true">⌄</span>
-                        </button>
-                        <div x-show="showExportMenu"
-                            @click.outside="showExportMenu = false"
-                            style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid var(--brand-border); border-radius: 4px; margin-top: 4px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000;">
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
-                                Current View
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
-                                All Parts Catalog
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
-                                All Stores
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);"
-                                    @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
-                                Movement History
-                            </button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportUsersCSV(); showExportMenu = false">Users</button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
-                            <button class="btn" style="width: 100%; text-align: left; border-radius: 0; border: none; border-bottom: 1px solid var(--brand-border);" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
-                            <button class="btn btn-success" style="width: 100%; text-align: left; border-radius: 0; border: none;"
-                                    @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg>
-                                Comprehensive Report
-                            </button>
-
-                        </div>
-                    </div>
-
-                    </div>
                     </div>
                 </div>
                 <div x-show="error" role="alert" class="error" x-text="error"></div>
