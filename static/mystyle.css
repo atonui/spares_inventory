@@ -987,7 +987,20 @@ label.btn {
 .equipment-calibration-status--soon { background: #fef3c7; color: #92400e; }
 .equipment-calibration-status--ok { background: #d1fae5; color: #065f46; }
 .equipment-calibration-status--none { background: #f1f5f9; color: #334155; }
-.equipment-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.equipment-table-wrap { width: 100%; min-width: 0; overflow-x: auto; }
+.equipment-table { min-width: 58rem; }
+.equipment-table td[data-label="Equipment Name"] { font-weight: 600; }
+.equipment-table td[data-label="Serial number"] { color: var(--brand-slate); font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important; font-size: var(--type-sm) !important; font-variant-numeric: tabular-nums; }
+.equipment-table td[data-label="Assigned to"] .wo-tag { display: inline-block; padding: var(--space-1) var(--space-2); border: 1px solid var(--brand-border); border-radius: 999px; background: var(--brand-page); color: var(--brand-navy); font-size: var(--type-xs); font-weight: 600; }
+.equipment-table th:last-child, .equipment-table td[data-label="Actions"] { width: 3.5rem; padding-inline: var(--space-2); text-align: right; }
+.equipment-table td[data-label="Actions"] { overflow: visible; }
+.equipment-table .stock-action-trigger { width: 44px; height: 44px; min-height: 44px; }
+.equipment-table .equipment-action-menu__items { width: 15rem; }
+.equipment-action-item--danger { color: #991b1b; }
+.equipment-action-item--danger .ui-icon { color: #991b1b; }
+.equipment-action-item--danger:hover { background: #fff1f2; }
+.equipment-table-wrap:has(.stock-action-menu[open]) { overflow: visible; }
+.equipment-table td[data-label="Actions"]:has(.stock-action-menu[open]) { position: relative; z-index: 6; }
 
 /* Equipment status badges */
 .equipment-status {
@@ -1097,24 +1110,57 @@ label.btn {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Responsive adjustments for equipment table */
+/* Equipment rows retain all details on mobile and make actions easy to reach. */
 @media (max-width: 768px) {
-    .equipment-table th:nth-child(4), 
-    .equipment-table td:nth-child(4) {
-        display: none; /* Hide assigned to column on mobile */
+    .equipment-table-wrap { overflow: visible; }
+    .equipment-table { display: block; min-width: 0; }
+    .equipment-table tbody { display: block; }
+    .equipment-table tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+        grid-template-areas:
+            "name name actions"
+            "model model model"
+            "serial serial assigned"
+            "last last next"
+            "status status status";
+        align-items: start;
+        gap: 0 var(--space-3);
     }
-    
-    .equipment-table th:nth-child(5), 
-    .equipment-table td:nth-child(5) {
-        display: none; /* Hide last calibration on mobile */
+    .equipment-table td {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        min-width: 0;
+        gap: var(--space-1);
+        padding: var(--space-2) 0;
+        white-space: normal;
     }
-}
-
-@media (max-width: 480px) {
-    .equipment-table th:nth-child(2), 
-    .equipment-table td:nth-child(2) {
-        display: none; /* Hide make/model on very small screens */
+    .equipment-table td::before {
+        color: var(--brand-slate);
+        font-size: var(--type-xs);
+        font-weight: 600;
+        letter-spacing: 0.025em;
     }
+    .equipment-table td[data-label="Equipment Name"] { grid-area: name; display: block; align-self: center; padding-block: var(--space-2); }
+    .equipment-table td[data-label="Equipment Name"] strong { display: block; font-size: var(--type-base); line-height: var(--line-heading); overflow-wrap: anywhere; }
+    .equipment-table td[data-label="Actions"] { grid-area: actions; display: flex; align-items: flex-start; justify-content: flex-end; width: auto; padding: 0; }
+    .equipment-table td[data-label="Actions"]::before { display: none; }
+    .equipment-table td[data-label="Make / model"] { grid-area: model; }
+    .equipment-table td[data-label="Serial number"] { grid-area: serial; }
+    .equipment-table td[data-label="Assigned to"] { grid-area: assigned; }
+    .equipment-table td[data-label="Last calibration"] { grid-area: last; }
+    .equipment-table td[data-label="Next calibration"] { grid-area: next; }
+    .equipment-table td[data-label="Status"] {
+        grid-area: status;
+        flex-direction: row;
+        align-items: center;
+        gap: var(--space-2);
+        margin-top: var(--space-1);
+        padding-top: var(--space-3);
+        border-top: 1px solid var(--brand-border);
+    }
+    .equipment-table .equipment-action-menu__items { top: calc(100% + 0.2rem); }
 }
 
 /* Add to mystyle.css */

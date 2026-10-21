@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261020-sitewide-visual-system">
-    <link rel="stylesheet" href="login.css?v=20261020-sitewide-visual-system">
+    <link rel="stylesheet" href="mystyle.css?v=20261021-equipment-table-refresh">
+    <link rel="stylesheet" href="login.css?v=20261021-equipment-table-refresh">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -1000,62 +1000,55 @@
                     </div>
                 </div>
 
-                <table class="stock-table equipment-table">
-                    <thead>
-                        <tr>
-                            <th>Equipment Name</th>
-                            <th>Make/Model</th>
-                            <th>Serial #</th>
-                            <th>Assigned To</th>
-                            <th>Last Calibration</th>
-                            <th>Next Calibration</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="eq in equipment" :key="eq.id">
-                            <tr :class="getCalibrationStatus(eq).class">
-                                <td data-label="Equipment Name"><strong x-text="eq.equipment_name"></strong></td>
-                                <td x-text="`${eq.make} ${eq.model}`" data-label="Make / model"></td>
-                                <td x-text="eq.serial_number" style="font-family: monospace; font-size: 0.9em;" data-label="Serial number"></td>
-                                <td data-label="Assigned to">
-                                    <span class="wo-tag" x-text="eq.assigned_user_name || 'Unassigned'"></span>
-                                </td>
-                                <td x-text="eq.calibration_date ? formatDate(eq.calibration_date) : '-'" data-label="Last calibration"></td>
-                                <td x-text="eq.next_calibration_date ? formatDate(eq.next_calibration_date) : '-'" data-label="Next calibration"></td>
-                                <td data-label="Status">
-                                    <span class="wo-tag equipment-calibration-status" :class="'equipment-calibration-status--' + getCalibrationStatus(eq).status" x-text="getCalibrationStatus(eq).text"></span>
-                                </td>
-                                <td data-label="Actions">
-                                    <div class="equipment-row-actions">
-                                    <button class="btn btn-sm"
-                                            @click="openCalibrationModal(eq)"
-                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#tools"></use></svg>
-                                        Calibrate
-                                    </button>
-                                    <button class="btn btn-sm"
-                                            @click="openTransferEquipmentModal(eq)"
-                                            x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>
-                                        Transfer
-                                    </button>
-                                    <button class="btn btn-sm" @click="viewEquipmentHistory(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#history"></use></svg> History</button>
-                                    <button class="btn btn-sm"
-                                            x-show="['owner','admin'].includes(currentUser?.role)"
-                                            @click="editEquipment(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>
-                                        Edit
-                                    </button>
-                                    <button class="btn btn-sm btn-danger"
-                                            x-show="['owner','admin'].includes(currentUser?.role)"
-                                            @click="deleteEquipment(eq.id, eq.equipment_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg>
-                                        Delete
-                                    </button>
-                                    </div>
-                                </td>
+                <div class="equipment-table-wrap" role="region" aria-label="Equipment records" tabindex="0">
+                    <table class="stock-table equipment-table" aria-label="Equipment records">
+                        <thead>
+                            <tr>
+                                <th>Equipment Name</th>
+                                <th>Make/Model</th>
+                                <th>Serial #</th>
+                                <th>Assigned To</th>
+                                <th>Last Calibration</th>
+                                <th>Next Calibration</th>
+                                <th>Status</th>
+                                <th>Actions</th>
                             </tr>
-                        </template>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <template x-for="eq in equipment" :key="eq.id">
+                                <tr :class="getCalibrationStatus(eq).class">
+                                    <td data-label="Equipment Name"><strong x-text="eq.equipment_name"></strong></td>
+                                    <td x-text="`${eq.make} ${eq.model}`" data-label="Make / model"></td>
+                                    <td x-text="eq.serial_number" data-label="Serial number"></td>
+                                    <td data-label="Assigned to">
+                                        <span class="wo-tag" x-text="eq.assigned_user_name || 'Unassigned'"></span>
+                                    </td>
+                                    <td x-text="eq.calibration_date ? formatDate(eq.calibration_date) : '-'" data-label="Last calibration"></td>
+                                    <td x-text="eq.next_calibration_date ? formatDate(eq.next_calibration_date) : '-'" data-label="Next calibration"></td>
+                                    <td data-label="Status">
+                                        <span class="wo-tag equipment-calibration-status" :class="'equipment-calibration-status--' + getCalibrationStatus(eq).status" x-text="getCalibrationStatus(eq).text"></span>
+                                    </td>
+                                    <td data-label="Actions">
+                                        <details class="stock-action-menu equipment-action-menu"
+                                                 @click.outside="$el.open = false"
+                                                 @keydown.escape.stop.prevent="$el.open = false; $el.querySelector('summary').focus()">
+                                            <summary class="stock-action-trigger" :aria-label="'Actions for ' + eq.equipment_name" title="Equipment actions">
+                                                <svg class="stock-action-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+                                            </summary>
+                                            <div class="stock-action-menu__items equipment-action-menu__items">
+                                                <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; openCalibrationModal(eq)" x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#tools"></use></svg>Calibrate</button>
+                                                <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; openTransferEquipmentModal(eq)" x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>Transfer</button>
+                                                <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; viewEquipmentHistory(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#history"></use></svg>View history</button>
+                                                <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editEquipment(eq)" x-show="['owner','admin'].includes(currentUser?.role)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>Edit equipment</button>
+                                                <button type="button" class="stock-action-item equipment-action-item--danger" @click="$el.closest('details').open = false; deleteEquipment(eq.id, eq.equipment_name)" x-show="['owner','admin'].includes(currentUser?.role)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg>Delete equipment</button>
+                                            </div>
+                                        </details>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
 
                 <div x-show="equipment.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
                     No equipment found.
