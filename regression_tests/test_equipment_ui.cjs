@@ -23,23 +23,33 @@ const cases={
  transfer:{method:'transferEquipmentToUser',path:'/equipment/42/transfer',verb:'POST',message:'Equipment transferred successfully!',error:'Failed to transfer equipment: ',modal:'showTransferEquipmentModal'},
  setting:{method:'updateCalibrationReminderDays',path:'/settings/calibration-reminder-days?days=45',verb:'PUT',message:'Calibration reminder set to 45 days!',error:'Failed to update setting: ',modal:'showCalibrationSettingsModal'},
 };
-test('equipment row actions use a spaced group and shared danger styling',()=>{
+test('equipment row actions use an accessible compact menu with role-gated operations',()=>{
  const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Inventory Panel -->',start);const panel=source.slice(start,end);
  const actions=panel.slice(panel.indexOf('<td data-label="Actions">'),panel.indexOf('</td>',panel.indexOf('<td data-label="Actions">')));
  const css=fs.readFileSync('static/mystyle.css','utf8');
- assert.match(actions,/class="equipment-row-actions"/);
- assert.match(actions,/class="btn btn-sm btn-danger"/);
+ assert.match(actions,/<details class="stock-action-menu equipment-action-menu"/);
+ assert.match(actions,/:aria-label="'Actions for ' \+ eq\.equipment_name"/);
+ assert.match(actions,/<div class="stock-action-menu__items equipment-action-menu__items">/);
+ for(const action of ['openCalibrationModal(eq)','openTransferEquipmentModal(eq)','viewEquipmentHistory(eq)','editEquipment(eq)','deleteEquipment(eq.id, eq.equipment_name)']) assert.ok(actions.includes(action),action);
+ assert.equal((actions.match(/x-show="\['owner','admin'\]\.includes\(currentUser\?\.role\) \|\| eq\.assigned_user_id === currentUser\?\.id"/g)||[]).length,2);
+ assert.equal((actions.match(/x-show="\['owner','admin'\]\.includes\(currentUser\?\.role\)"/g)||[]).length,2);
+ assert.match(actions,/@click\.outside="\$el\.open = false"/);
+ assert.match(actions,/@keydown\.escape\.stop\.prevent=/);
+ assert.match(actions,/class="stock-action-item equipment-action-item--danger"/);
  assert.doesNotMatch(actions,/style="background:\s*#dc3545/);
- assert.match(css,/\.equipment-row-actions\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*var\(--space-2\);/s);
- assert.match(css,/\.stock-table \.btn-danger\s*\{[^}]*background:\s*#dc3545;[^}]*color:\s*#ffffff;/s);
+ assert.match(css,/\.equipment-action-item--danger\s*\{[^}]*color:\s*#991b1b/s);
 });
-test('equipment mobile column rules are attached to the rendered table',()=>{
+test('equipment table keeps labeled fields visible in mobile cards',()=>{
  const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Inventory Panel -->',start);const panel=source.slice(start,end);
  const css=fs.readFileSync('static/mystyle.css','utf8');
- assert.match(panel,/<table class="stock-table equipment-table">/);
- assert.match(css,/\.equipment-table th:nth-child\(4\),\s*\.equipment-table td:nth-child\(4\)\s*\{\s*display:\s*none;/);
- assert.match(css,/\.equipment-table th:nth-child\(5\),\s*\.equipment-table td:nth-child\(5\)\s*\{\s*display:\s*none;/);
- assert.match(css,/\.equipment-table th:nth-child\(2\),\s*\.equipment-table td:nth-child\(2\)\s*\{\s*display:\s*none;/);
+ assert.match(panel,/<div class="equipment-table-wrap" role="region" aria-label="Equipment records" tabindex="0">/);
+ assert.match(panel,/<table class="stock-table equipment-table" aria-label="Equipment records">/);
+ for(const label of ['Equipment Name','Make / model','Serial number','Assigned to','Last calibration','Next calibration','Status','Actions']) assert.ok(panel.includes(`data-label="${label}"`),label);
+ assert.doesNotMatch(css,/\.equipment-table (?:th|td):nth-child\(\d+\)\s*\{\s*display:\s*none;/);
+ assert.match(css,/\.equipment-table tr\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)\s+44px/s);
+ assert.match(css,/\.equipment-table td\[data-label="Assigned to"\]\s*\{\s*grid-area:\s*assigned;/);
+ assert.match(css,/\.equipment-table td\[data-label="Next calibration"\]\s*\{\s*grid-area:\s*next;/);
+ assert.match(css,/\.equipment-table \.stock-action-trigger\s*\{[^}]*min-height:\s*44px/s);
 });
 test('equipment panel uses the shared responsive heading and preserves summary/actions',()=>{
  const source=html();const start=source.indexOf('<!-- Equipment Management Panel -->');const end=source.indexOf('<!-- Store Types Management Panel',start);const panel=source.slice(start,end);
