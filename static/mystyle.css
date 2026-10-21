@@ -473,12 +473,7 @@
             font-size: 0.9rem;
         }
         
-        @media (min-width: 769px) and (max-width: 960px) {
-    .inventory-toolbar { align-items: flex-start; }
-    .inventory-toolbar-actions { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
-}
-
-@media (max-width: 768px) {
+        @media (max-width: 768px) {
             .container {
                 padding: 0.5rem;
             }
@@ -768,6 +763,11 @@ body > [x-data="inventoryApp()"] .stat-card {
 .inventory-controls :focus-visible, .store-search :focus-visible, .stock-table .btn:focus-visible {
     outline: 3px solid var(--brand-focus); outline-offset: 3px;
 }
+@media (min-width: 769px) and (max-width: 960px) {
+    .inventory-toolbar { align-items: flex-start; }
+    .inventory-toolbar-actions { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
+}
+
 @media (max-width: 768px) {
     .mobile-nav-toggle {
         display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-height);
