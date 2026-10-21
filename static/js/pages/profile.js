@@ -33,6 +33,12 @@ function profileManager() {
         businessTimezoneError: '',
         displayTimezoneMessage: '',
         businessTimezoneMessage: '',
+        mobilePairing: null,
+        mobilePairingBusy: false,
+        mobilePairingError: '',
+        mobilePairingMessage: '',
+        mobilePairingSuccess: '',
+        mobilePairingTimer: null,
 
         get timezoneSaving() { return this.displayTimezoneSaving || this.businessTimezoneSaving; },
         get displayTimezoneDirty() { return this.displayTimezoneDraft !== (this.profile.display_timezone || ''); },
@@ -111,6 +117,67 @@ function profileManager() {
                 this.csrfToken = '';
                 this.csrfError = 'Saving is unavailable. Retry to reload the security token.';
             }
+        },
+        async createMobilePairing() {
+            if (!this.profile.saas_mode || this.mobilePairingBusy || this.csrfLoading || !this.csrfToken) return;
+            this.mobilePairingBusy=true;this.mobilePairingError='';this.mobilePairingSuccess='';
+            this.stopMobilePairingPolling();this.mobilePairing=null;
+            try {
+                const response=await fetch('/api/profile/mobile-pairings',{method:'POST',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const data=await response.json();this.handleSecurityRejection(response,data);
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'A mobile pairing code could not be generated.');
+                if (typeof data.request_id!=='string' || typeof data.qr_svg!=='string' || typeof data.expires_at!=='string') throw Error('The server returned an invalid pairing code.');
+                this.mobilePairing={requestId:data.request_id,qrDataUrl:`data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.qr_svg)}`,expiresAt:data.expires_at,status:'created',deviceName:''};
+                this.mobilePairingMessage='Waiting for a phone to scan this code.';
+                this.pollMobilePairing();
+            } catch (error) {this.mobilePairingError=error.message;}
+            finally {this.mobilePairingBusy=false;}
+        },
+        async pollMobilePairing() {
+            const pairing=this.mobilePairing;
+            if (!pairing) return;
+            try {
+                const response=await fetch(`/api/profile/mobile-pairings/${encodeURIComponent(pairing.requestId)}`,{credentials:'include',cache:'no-store'});
+                const data=await response.json();
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Pairing status could not be checked.');
+                if (this.mobilePairing?.requestId!==pairing.requestId) return;
+                pairing.status=data.status;pairing.deviceName=data.device_name || '';
+                if (data.status==='created') this.mobilePairingMessage='Waiting for a phone to scan this code.';
+                else if (data.status==='pending') this.mobilePairingMessage='Review the device name, then approve the request if you recognize it.';
+                else if (data.status==='approved') this.mobilePairingMessage='Approved. Finish signing in on the phone.';
+                else if (data.status==='consumed') {this.mobilePairingSuccess='Mobile app connected successfully.';this.mobilePairingMessage='This one-time code has been used.';this.mobilePairing=null;return;}
+                else {
+                    if (data.status==='cancelled') this.mobilePairingSuccess='The pairing request was canceled from the phone.';
+                    else this.mobilePairingError=data.status==='expired' ? 'This QR code expired. Generate a new one to try again.' : 'This pairing request is no longer active.';
+                    this.stopMobilePairingPolling();this.mobilePairing=null;return;
+                }
+                if (['created','pending','approved'].includes(data.status)) this.mobilePairingTimer=setTimeout(()=>this.pollMobilePairing(),1500);
+            } catch (error) {
+                if (this.mobilePairing?.requestId===pairing.requestId) this.mobilePairingError=error.message;
+            }
+        },
+        stopMobilePairingPolling() {if (this.mobilePairingTimer) clearTimeout(this.mobilePairingTimer);this.mobilePairingTimer=null;},
+        async approveMobilePairing() {
+            if (!this.mobilePairing || this.mobilePairing.status!=='pending' || this.mobilePairingBusy || !this.csrfToken) return;
+            const requestId=this.mobilePairing.requestId;this.mobilePairingBusy=true;this.mobilePairingError='';
+            try {
+                const response=await fetch(`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/approve`,{method:'POST',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const data=await response.json();this.handleSecurityRejection(response,data);
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'This device could not be approved.');
+                if (this.mobilePairing?.requestId===requestId) {this.mobilePairing.status='approved';this.mobilePairingMessage='Approved. Finish signing in on the phone.';}
+            } catch (error) {this.mobilePairingError=error.message;}
+            finally {this.mobilePairingBusy=false;}
+        },
+        async cancelMobilePairing() {
+            if (!this.mobilePairing || this.mobilePairingBusy) return;
+            const requestId=this.mobilePairing.requestId;this.mobilePairingBusy=true;this.mobilePairingError='';
+            try {
+                const response=await fetch(`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/cancel`,{method:'POST',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const data=await response.json();this.handleSecurityRejection(response,data);
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'This pairing request could not be canceled.');
+                this.stopMobilePairingPolling();this.mobilePairing=null;this.mobilePairingMessage='';this.mobilePairingSuccess='Mobile pairing canceled.';
+            } catch (error) {this.mobilePairingError=error.message;}
+            finally {this.mobilePairingBusy=false;}
         },
         async loadEmailChangeStatus() {
             if (!this.profile.saas_mode) {this.pendingEmailChange=null;return;}

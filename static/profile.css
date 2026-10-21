@@ -29,3 +29,7 @@
 @media (max-width: 480px) { .profile-header, .profile-content { padding: 20px 16px; } .profile-details { grid-template-columns: minmax(0, 1fr); } .profile-setting { padding: 16px; } .profile-actions { align-items: stretch; flex-direction: column; } }
 
 .profile-preferences-personal { grid-template-columns: minmax(0, 1fr); }
+.mobile-pairing-code { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); align-items: center; gap: var(--space-5); margin-top: var(--space-4); }
+.mobile-pairing-code img { display: block; width: min(100%, 220px); padding: 10px; box-sizing: border-box; border: 1px solid var(--brand-border); border-radius: var(--radius-surface); background: #ffffff; }
+.mobile-pairing-code [role="status"] { font-weight: 600; color: var(--brand-navy); }
+@media (max-width: 480px) { .mobile-pairing-code { grid-template-columns: minmax(0, 1fr); } }

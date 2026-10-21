@@ -15,6 +15,10 @@ from backend.schemas.auth import (
     NativeRefreshRequest, NativeRefreshResponse,
 )
 from backend.schemas.api_v1 import CsrfTokenResponse, SuccessResponse
+from backend.schemas.mobile_pairing import (
+    MobilePairingClaim, MobilePairingClaimResponse, MobilePairingComplete,
+    MobilePairingCompleteResponse, MobilePairingCreated, MobilePairingDesktopStatus,
+)
 from backend.schemas.email_change import (
     EmailChangeCancelResponse,
     EmailChangeConfirmation,
@@ -85,11 +89,27 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         if not is_postgres(conn):
             raise HTTPException(status_code=503, detail="Email change is unavailable")
 
+    def require_mobile_pairing_postgres(conn):
+        if not is_postgres(conn):
+            raise HTTPException(status_code=503, detail="Mobile pairing requires the SaaS account service")
+
     def set_email_change_user_scope(conn, user_id):
         conn.execute(
             "SELECT set_config('app.email_change_user_id', %s, true)",
             (str(user_id),),
         )
+
+    def set_mobile_pairing_user_scope(conn, user_id):
+        if is_postgres(conn):
+            conn.execute(
+                "SELECT set_config('app.mobile_pairing_user_id', %s, true)",
+                (str(user_id),),
+            )
+
+    def set_mobile_pairing_token_scope(conn, setting, token_hash):
+        if setting not in {'app.mobile_pairing_qr_token_hash', 'app.mobile_pairing_claim_token_hash'}:
+            raise ValueError('Invalid mobile pairing scope')
+        conn.execute(f"SELECT set_config('{setting}', %s, true)", (token_hash,))
 
     def email_change_http_error(exc):
         messages = {
@@ -995,6 +1015,273 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                    422: {"description": "Invalid request or missing request ID"},
                    503: {"description": "Native refresh is unavailable"}},
     )
+
+
+    @router.post("/api/profile/mobile-pairings", status_code=201, response_model=MobilePairingCreated)
+    @account_rate_limit("5/hour")
+    async def create_mobile_pairing(
+        request: Request,
+        user=Depends(email_change_user),
+        _csrf=Depends(verify_csrf),
+    ):
+        """Create a short-lived QR capability; it does not grant a mobile session."""
+        from io import BytesIO
+        from urllib.parse import quote
+
+        import qrcode
+        from qrcode.image.svg import SvgPathImage
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hash_session_credential(token)
+        request_id = secrets.token_urlsafe(18)
+        created_at = utc_now()
+        expires_at = created_at + timedelta(minutes=2)
+        qr_data = f"sparesflow://pair?token={quote(token, safe='')}"
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=7, border=3)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        output = BytesIO()
+        qr.make_image(image_factory=SvgPathImage).save(output)
+        qr_svg = output.getvalue().decode("utf-8")
+
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as conn:
+            require_mobile_pairing_postgres(conn)
+            user_id = authenticated_user_id(user)
+            set_mobile_pairing_user_scope(conn, user_id)
+            conn.execute(
+                """UPDATE mobile_pairing_requests SET status = 'cancelled'
+                   WHERE user_id = %s AND status IN ('created', 'pending', 'approved')""",
+                (user_id,),
+            )
+            conn.execute(
+                """INSERT INTO mobile_pairing_requests
+                   (request_id, user_id, qr_token_hash, status, created_at, expires_at)
+                   VALUES (%s, %s, %s, 'created', %s, %s)""",
+                (request_id, user_id, token_hash, serialize_instant(created_at), serialize_instant(expires_at)),
+            )
+        return JSONResponse(
+            status_code=201,
+            content={
+                "request_id": request_id,
+                "qr_data": qr_data,
+                "qr_svg": qr_svg,
+                "expires_at": serialize_instant(expires_at),
+            },
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Referrer-Policy": "no-referrer"},
+        )
+
+
+    @router.get("/api/profile/mobile-pairings/{request_id}", response_model=MobilePairingDesktopStatus)
+    @instant_response
+    async def get_mobile_pairing_status(
+        request_id: str,
+        request: Request,
+        user=Depends(email_change_user),
+    ):
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as conn:
+            require_mobile_pairing_postgres(conn)
+            set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
+            row = conn.execute(
+                """SELECT status, device_name, expires_at FROM mobile_pairing_requests
+                   WHERE request_id = %s AND user_id = %s""",
+                (request_id, authenticated_user_id(user)),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Pairing request not found")
+            status = row["status"]
+            if status in {"created", "pending"} and utc_now() >= stored_instant(row["expires_at"], "expires_at"):
+                status = "expired"
+            return JSONResponse(
+                content={"status": status, "device_name": row["device_name"], "expires_at": row["expires_at"]},
+                headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+            )
+
+
+    @router.post("/api/profile/mobile-pairings/{request_id}/approve")
+    async def approve_mobile_pairing(
+        request_id: str,
+        request: Request,
+        user=Depends(email_change_user),
+        _csrf=Depends(verify_csrf),
+    ):
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as conn:
+            require_mobile_pairing_postgres(conn)
+            set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
+            row = conn.execute(
+                """SELECT status, expires_at FROM mobile_pairing_requests
+                   WHERE request_id = %s AND user_id = %s FOR UPDATE""",
+                (request_id, authenticated_user_id(user)),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Pairing request not found")
+            if row["status"] != "pending" or utc_now() >= stored_instant(row["expires_at"], "expires_at"):
+                raise HTTPException(status_code=409, detail="This pairing request is no longer waiting for approval")
+            conn.execute(
+                """UPDATE mobile_pairing_requests SET status = 'approved', approved_at = %s
+                   WHERE request_id = %s""",
+                (serialize_instant(utc_now()), request_id),
+            )
+        return JSONResponse(content={"success": True}, headers={"Cache-Control": "no-store"})
+
+
+    @router.post("/api/profile/mobile-pairings/{request_id}/cancel")
+    async def cancel_mobile_pairing(
+        request_id: str,
+        request: Request,
+        user=Depends(email_change_user),
+        _csrf=Depends(verify_csrf),
+    ):
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as conn:
+            require_mobile_pairing_postgres(conn)
+            set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
+            result = conn.execute(
+                """UPDATE mobile_pairing_requests SET status = 'cancelled'
+                   WHERE request_id = %s AND user_id = %s AND status IN ('created', 'pending', 'approved')""",
+                (request_id, authenticated_user_id(user)),
+            )
+            if result.rowcount != 1:
+                raise HTTPException(status_code=409, detail="This pairing request can no longer be canceled")
+        return JSONResponse(content={"success": True}, headers={"Cache-Control": "no-store"})
+
+
+    @router.post("/api/v1/auth/mobile-pairing/claim", response_model=MobilePairingClaimResponse)
+    @limiter.limit("10/minute")
+    async def claim_mobile_pairing(payload: MobilePairingClaim, request: Request):
+        from urllib.parse import parse_qs, urlsplit
+        from backend.database_sql import is_postgres
+        from backend.postgres_database import postgres_transaction
+        try:
+            parsed = urlsplit(payload.qr_data)
+            values = parse_qs(parsed.query, strict_parsing=True)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="This QR code is invalid or has expired") from None
+        token_values = values.get("token", [])
+        if (parsed.scheme != "sparesflow" or parsed.netloc != "pair" or parsed.path or parsed.fragment
+                or set(values) != {"token"} or len(token_values) != 1 or not token_values[0]):
+            raise HTTPException(status_code=400, detail="This QR code is invalid or has expired")
+        qr_hash = hash_session_credential(token_values[0])
+        claim_token = secrets.token_urlsafe(32)
+        claim_hash = hash_session_credential(claim_token)
+        now = utc_now()
+        conn = get_db_connection()
+        if not is_postgres(conn):
+            conn.close()
+            raise HTTPException(status_code=503, detail="Mobile pairing requires the SaaS account service")
+        try:
+            with postgres_transaction(conn):
+                conn.execute("SELECT set_config('app.organization_id', '', true)")
+                conn.execute("SELECT set_config('app.email_change_user_id', '', true)")
+                set_mobile_pairing_token_scope(conn, 'app.mobile_pairing_qr_token_hash', qr_hash)
+                row = conn.execute(
+                    """SELECT request_id, status, expires_at FROM mobile_pairing_requests
+                       WHERE qr_token_hash = %s FOR UPDATE""",
+                    (qr_hash,),
+                ).fetchone()
+                if (row is None or row["status"] != "created"
+                        or now >= stored_instant(row["expires_at"], "expires_at")):
+                    raise HTTPException(status_code=410, detail="This QR code is invalid or has expired")
+                conn.execute(
+                    """UPDATE mobile_pairing_requests
+                       SET status = 'pending', device_name = %s, claimed_at = %s, claim_token_hash = %s
+                       WHERE request_id = %s""",
+                    (payload.device_name.strip(), serialize_instant(now), claim_hash, row["request_id"]),
+                )
+                expires_at = row["expires_at"]
+        finally:
+            conn.close()
+        return JSONResponse(
+            content={"claim_token": claim_token, "expires_at": expires_at},
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
+
+
+    @router.post("/api/v1/auth/mobile-pairing/complete", response_model=MobilePairingCompleteResponse)
+    @limiter.limit("10/minute")
+    async def complete_mobile_pairing(payload: MobilePairingComplete, request: Request):
+        from backend.database_sql import is_postgres
+        from backend.postgres_database import postgres_transaction
+        claim_hash = hash_session_credential(payload.claim_token)
+        now = utc_now()
+        access_token = secrets.token_urlsafe(32)
+        refresh_token = secrets.token_urlsafe(32)
+        conn = get_db_connection()
+        if not is_postgres(conn):
+            conn.close()
+            raise HTTPException(status_code=503, detail="Mobile pairing requires the SaaS account service")
+        try:
+            with postgres_transaction(conn):
+                conn.execute("SELECT set_config('app.organization_id', '', true)")
+                conn.execute("SELECT set_config('app.email_change_user_id', '', true)")
+                set_mobile_pairing_token_scope(conn, 'app.mobile_pairing_claim_token_hash', claim_hash)
+                pairing = conn.execute(
+                    """SELECT request_id, user_id, status, expires_at FROM mobile_pairing_requests
+                       WHERE claim_token_hash = %s FOR UPDATE""",
+                    (claim_hash,),
+                ).fetchone()
+                if pairing is None or now >= stored_instant(pairing["expires_at"], "expires_at"):
+                    raise HTTPException(status_code=410, detail="This pairing request is invalid or has expired")
+                if pairing["status"] == "pending":
+                    return JSONResponse(content={"status": "pending"}, headers={"Cache-Control": "no-store"})
+                if pairing["status"] != "approved":
+                    raise HTTPException(status_code=410, detail="This pairing request is no longer available")
+
+                user = conn.execute(
+                    "SELECT id, email, name, territory, archived_at FROM users WHERE id = %s FOR UPDATE",
+                    (pairing["user_id"],),
+                ).fetchone()
+                if user is None or user["archived_at"] is not None:
+                    raise HTTPException(status_code=401, detail="The account is unavailable")
+                cfg = get_security_config()
+                absolute_expires = now + timedelta(hours=cfg["session_duration_hours"])
+                access_expires = min(now + timedelta(minutes=15), absolute_expires)
+                session_id = conn.execute(
+                    """INSERT INTO sessions (user_id, session_token_hash, expires_at,
+                                              absolute_expires_at, ip_address, user_agent)
+                       VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+                    (user["id"], hash_session_credential(access_token), serialize_instant(access_expires),
+                     serialize_instant(absolute_expires), request.client.host if request.client else None,
+                     request.headers.get("user-agent", "")[:512]),
+                ).fetchone()["id"]
+                conn.execute(
+                    """INSERT INTO session_refresh_credentials (session_id, token_hash, issued_at, expires_at)
+                       VALUES (%s, %s, %s, %s)""",
+                    (session_id, hash_session_credential(refresh_token), serialize_instant(now), serialize_instant(absolute_expires)),
+                )
+                from backend.services.principals import resolve_principal
+                principal = resolve_principal(conn, access_token)
+                if principal.user_id != user["id"] or not (principal.company_role or principal.is_platform_admin):
+                    raise HTTPException(status_code=403, detail="The account has no active company access")
+                conn.execute(
+                    "UPDATE mobile_pairing_requests SET status = 'consumed', consumed_at = %s WHERE request_id = %s",
+                    (serialize_instant(now), pairing["request_id"]),
+                )
+                conn.execute(
+                    "UPDATE users SET last_login = %s WHERE id = %s",
+                    (serialize_instant(now), user["id"]),
+                )
+                response_data = {
+                    "status": "approved",
+                    "success": True,
+                    "token_type": "Bearer",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "expires_at": serialize_instant(access_expires),
+                    "user": {
+                        "id": user["id"], "email": user["email"], "name": user["name"],
+                        "role": principal.company_role or "platform_admin", "territory": user["territory"],
+                    },
+                }
+        finally:
+            conn.close()
+        return JSONResponse(content=response_data, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
 
 
     @router.get("/api/auth/sessions")

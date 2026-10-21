@@ -9,7 +9,7 @@ pytest_plugins = ("regression_tests.postgres_fixtures",)
 def test_password_reset_mail_migration_remains_registered_at_version_eight():
     from backend.postgres_migrations.registry import MIGRATIONS
 
-    assert [(migration.version, migration.name) for migration in MIGRATIONS][-2] == (
+    assert [(migration.version, migration.name) for migration in MIGRATIONS][-3] == (
         8,
         "password_reset_mail",
     )
@@ -18,7 +18,7 @@ def test_password_reset_mail_migration_remains_registered_at_version_eight():
 def test_email_change_verification_migration_is_registered_with_account_schema():
     from backend.postgres_migrations.registry import MIGRATIONS
 
-    migration = MIGRATIONS[-1]
+    migration = MIGRATIONS[-2]
     assert (migration.version, migration.name) == (9, "email_change_verification")
     sql = "\n".join(migration.statements)
     assert "CREATE TABLE email_change_requests" in sql
@@ -36,6 +36,21 @@ def test_email_change_verification_migration_is_registered_with_account_schema()
     assert "UPDATE users SET email" not in sql
 
 
+def test_mobile_pairing_migration_is_registered_with_token_scoped_rls():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = MIGRATIONS[-1]
+    assert (migration.version, migration.name) == (10, "mobile_pairing")
+    sql = "\n".join(migration.statements)
+    assert "CREATE TABLE mobile_pairing_requests" in sql
+    assert "qr_token_hash TEXT NOT NULL" in sql
+    assert "claim_token_hash TEXT" in sql
+    assert "ENABLE ROW LEVEL SECURITY" in sql
+    assert "app.mobile_pairing_user_id" in sql
+    assert "app.mobile_pairing_qr_token_hash" in sql
+    assert "app.mobile_pairing_claim_token_hash" in sql
+
+
 def test_email_change_request_constraints_are_append_only_and_single_active(postgres_schema):
     from psycopg.errors import UniqueViolation
 
@@ -45,7 +60,7 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 10))
+    assert status.applied_versions == tuple(range(1, 11))
     assert status.pending_versions == ()
 
     user_id = connection.execute(
@@ -77,7 +92,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 10))
+    assert status.applied_versions == tuple(range(1, 11))
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -131,7 +146,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 10))
+    assert status.applied_versions == tuple(range(1, 11))
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -255,7 +270,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == tuple(range(1, 10))
+    assert status.applied_versions == tuple(range(1, 11))
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -390,7 +405,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 10))
+    assert status.applied_versions == tuple(range(1, 11))
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -441,7 +456,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 10))
+    assert status.applied_versions == tuple(range(1, 11))
     session_columns = {
         row["column_name"]
         for row in connection.execute(
