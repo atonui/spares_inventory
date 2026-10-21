@@ -47,3 +47,27 @@ test('desktop profile can cancel an active pairing request',async()=>{
  assert.equal(p.mobilePairing,null);
  assert.match(p.mobilePairingSuccess,/canceled/i);
 });
+
+test('desktop profile loads only active mobile sessions as paired devices',async()=>{
+ let call;
+ const p=setup(async(url,options)=>{call={url,options};return {ok:true,json:async()=>[{device_id:'device-id',device_name:'Android phone',paired_at:'2026-10-21T12:00:00Z',last_activity:'2026-10-21T12:10:00Z'}]};});
+ p.profile.saas_mode=true;
+ await p.loadMobileDevices();
+ assert.equal(call.url,'/api/profile/mobile-devices');
+ assert.equal(call.options.cache,'no-store');
+ assert.equal(p.mobileDevices[0].device_name,'Android phone');
+});
+
+test('revoking a paired device requires explicit confirmation and sends CSRF protection',async()=>{
+ const calls=[];
+ const p=setup(async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>url==='/api/profile/mobile-devices'?[]:{success:true}};});
+ p.profile.saas_mode=true;p.csrfToken='csrf';p.mobileDevices=[{device_id:'device-id',device_name:'Android phone'}];
+ p.askToRevokeMobileDevice('device-id');
+ assert.equal(calls.length,0);
+ assert.equal(p.pendingMobileDeviceRevocation,'device-id');
+ await p.confirmRevokeMobileDevice();
+ assert.equal(calls[0].url,'/api/profile/mobile-devices/device-id');
+ assert.equal(calls[0].options.method,'DELETE');
+ assert.equal(calls[0].options.headers['X-CSRF-Token'],'csrf');
+ assert.equal(p.mobileDevices.length,0);
+});

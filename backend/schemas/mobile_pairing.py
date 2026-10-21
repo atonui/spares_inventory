@@ -41,6 +41,13 @@ class MobilePairingDesktopStatus(BaseModel):
     expires_at: datetime
 
 
+class MobileDeviceResponse(BaseModel):
+    device_id: str
+    device_name: str
+    paired_at: datetime
+    last_activity: datetime | None = None
+
+
 class MobilePairingCompleteResponse(BaseModel):
     status: str
     success: bool | None = None

@@ -33,3 +33,9 @@
 .mobile-pairing-code img { display: block; width: min(100%, 220px); padding: 10px; box-sizing: border-box; border: 1px solid var(--brand-border); border-radius: var(--radius-surface); background: #ffffff; }
 .mobile-pairing-code [role="status"] { font-weight: 600; color: var(--brand-navy); }
 @media (max-width: 480px) { .mobile-pairing-code { grid-template-columns: minmax(0, 1fr); } }
+.mobile-devices { margin-top: var(--space-5); }
+.mobile-device-list { list-style: none; padding: 0; margin: var(--space-4) 0 0; }
+.mobile-device-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) 0; border-top: 1px solid var(--brand-border); }
+.mobile-device-row .profile-help { margin: var(--space-1) 0 0; }
+.mobile-device-row .profile-actions { margin: 0; }
+.mobile-device-row [role="group"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }

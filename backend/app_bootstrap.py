@@ -145,7 +145,7 @@ def create_inventory_app(
     @app.middleware("http")
     async def prevent_mobile_pairing_caching(request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/api/profile/mobile-pairings", "/api/v1/auth/mobile-pairing/")):
+        if request.url.path.startswith(("/api/profile/mobile-pairings", "/api/profile/mobile-devices", "/api/v1/auth/mobile-pairing/")):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Pragma"] = "no-cache"
             response.headers["Referrer-Policy"] = "no-referrer"

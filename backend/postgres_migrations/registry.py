@@ -14,6 +14,7 @@ from . import (
     v0008_password_reset_mail,
     v0009_email_change_verification,
     v0010_mobile_pairing,
+    v0011_mobile_device_sessions,
 )
 
 
@@ -42,6 +43,7 @@ MIGRATIONS = tuple(
         v0008_password_reset_mail,
         v0009_email_change_verification,
         v0010_mobile_pairing,
+        v0011_mobile_device_sessions,
     )
 )
 

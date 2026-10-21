@@ -39,6 +39,12 @@ function profileManager() {
         mobilePairingMessage: '',
         mobilePairingSuccess: '',
         mobilePairingTimer: null,
+        mobileDevices: [],
+        mobileDevicesLoading: false,
+        mobileDevicesError: '',
+        mobileDevicesSuccess: '',
+        mobileDeviceRevoking: false,
+        pendingMobileDeviceRevocation: null,
 
         get timezoneSaving() { return this.displayTimezoneSaving || this.businessTimezoneSaving; },
         get displayTimezoneDirty() { return this.displayTimezoneDraft !== (this.profile.display_timezone || ''); },
@@ -59,11 +65,11 @@ function profileManager() {
         },
         async init() {
             await Promise.all([this.getCsrfToken(),this.loadProfile()]);
-            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadEmailChangeStatus()]);
+            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadEmailChangeStatus(),this.loadMobileDevices()]);
         },
         async retryProfile() {
             await this.loadProfile();
-            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadEmailChangeStatus()]);
+            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadEmailChangeStatus(),this.loadMobileDevices()]);
         },
         async getCsrfToken() {
             if (this.csrfLoading || this.saving || this.timezoneSaving) return;
@@ -178,6 +184,35 @@ function profileManager() {
                 this.stopMobilePairingPolling();this.mobilePairing=null;this.mobilePairingMessage='';this.mobilePairingSuccess='Mobile pairing canceled.';
             } catch (error) {this.mobilePairingError=error.message;}
             finally {this.mobilePairingBusy=false;}
+        },
+        async loadMobileDevices() {
+            if (!this.profile.saas_mode || this.mobileDevicesLoading) return;
+            this.mobileDevicesLoading=true;this.mobileDevicesError='';
+            try {
+                const response=await fetch('/api/profile/mobile-devices',{credentials:'include',cache:'no-store'});
+                const data=await response.json();
+                if (!response.ok || !Array.isArray(data)) throw Error(typeof data.detail==='string' ? data.detail : 'Paired devices could not be loaded.');
+                this.mobileDevices=data;
+            } catch (error) {this.mobileDevicesError=error.message;}
+            finally {this.mobileDevicesLoading=false;}
+        },
+        askToRevokeMobileDevice(deviceId) {
+            if (this.mobileDeviceRevoking || !this.mobileDevices.some(device=>device.device_id===deviceId)) return;
+            this.pendingMobileDeviceRevocation=deviceId;this.mobileDevicesError='';this.mobileDevicesSuccess='';
+        },
+        cancelMobileDeviceRevocation() {this.pendingMobileDeviceRevocation=null;},
+        async confirmRevokeMobileDevice() {
+            const deviceId=this.pendingMobileDeviceRevocation;
+            if (!deviceId || this.mobileDeviceRevoking || !this.csrfToken) return;
+            this.mobileDeviceRevoking=true;this.mobileDevicesError='';this.mobileDevicesSuccess='';
+            try {
+                const response=await fetch(`/api/profile/mobile-devices/${encodeURIComponent(deviceId)}`,{method:'DELETE',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const data=await response.json();this.handleSecurityRejection(response,data);
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Device access could not be revoked.');
+                this.pendingMobileDeviceRevocation=null;this.mobileDevicesSuccess='Device access revoked.';
+                await this.loadMobileDevices();
+            } catch (error) {this.mobileDevicesError=error.message;}
+            finally {this.mobileDeviceRevoking=false;}
         },
         async loadEmailChangeStatus() {
             if (!this.profile.saas_mode) {this.pendingEmailChange=null;return;}

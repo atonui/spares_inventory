@@ -49,13 +49,14 @@ def reference(canonical=False):
                     c.execute(f'DROP TABLE "{name}"')
                     c.execute(canonical_schema(obj[2]))
                     for sql in indexes:c.execute(sql)
-        from . import v0006_announcement_dismissals,v0007_mobile_pairing
+        from . import v0006_announcement_dismissals,v0007_mobile_pairing,v0008_mobile_device_sessions
         v0006_announcement_dismissals.upgrade(c)
         v0007_mobile_pairing.upgrade(c)
+        v0008_mobile_device_sessions.upgrade(c)
         tables={n:(columns(c,n),foreign_keys(c,n),unique_columns(c,n)) for n,o in objects(c).items() if o[0]=='table'}
         return tables,objects(c)
 
-def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False, require_announcements=False, require_mobile_pairing=False):
+def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False, require_announcements=False, require_mobile_pairing=False, require_mobile_devices=False):
     from .v0001_core_schema import OPTIONAL_COLUMNS
     expected,expected_objects=reference(require_canonical);actual_objects=objects(conn)
     actual_tables={n for n,o in actual_objects.items() if o[0]=='table' and n!='schema_migrations'}
@@ -65,6 +66,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
     required=set(expected) if not legacy else {'users','stores','parts','inventory','movements','work_orders'}
     if not require_announcements:required.discard('announcement_dismissals')
     if not require_mobile_pairing:required.discard('mobile_pairing_requests')
+    if not require_mobile_devices:required.discard('mobile_device_sessions')
     if not require_timezone:required.discard('organisation_settings')
     if not include_transfer:required.discard('stock_transfers')
     missing=required-actual_tables
@@ -92,7 +94,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
             raise MigrationError('Incompatible transfer lifecycle definition')
     if not legacy:
         for name,(kind,table,sql) in expected_objects.items():
-            if kind!='index' or (not include_transfer and table=='stock_transfers') or (allow_archive and name.startswith('idx_inventory_')) or (not require_mobile_pairing and table=='mobile_pairing_requests'):continue
+            if kind!='index' or (not include_transfer and table=='stock_transfers') or (allow_archive and name.startswith('idx_inventory_')) or (not require_mobile_pairing and table=='mobile_pairing_requests') or (not require_mobile_devices and table=='mobile_device_sessions'):continue
             if name not in actual_objects:raise MigrationError('Missing required index: '+name)
 
 def validate_integrity(conn, *, allow_legacy_sentinel=False):
@@ -108,7 +110,7 @@ def validate_integrity(conn, *, allow_legacy_sentinel=False):
 def validate_legacy(conn):
     validate_tables(conn,legacy=True)
 
-def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None, require_mobile_pairing=None):
+def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None, require_mobile_pairing=None, require_mobile_devices=None):
     if require_timezone is None:
         require_timezone=('schema_migrations' in objects(conn) and
                           conn.execute('SELECT 1 FROM schema_migrations WHERE version=4').fetchone() is not None)
@@ -119,8 +121,10 @@ def validate_current(conn, *, require_timezone=None, require_canonical=None, can
         require_announcements=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=6').fetchone() is not None)
     if require_mobile_pairing is None:
         require_mobile_pairing=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=7').fetchone() is not None)
+    if require_mobile_devices is None:
+        require_mobile_devices=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=8').fetchone() is not None)
     validate_integrity(conn)
-    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical,require_announcements=require_announcements,require_mobile_pairing=require_mobile_pairing)
+    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical,require_announcements=require_announcements,require_mobile_pairing=require_mobile_pairing,require_mobile_devices=require_mobile_devices)
     if require_announcements:
         from backend.services.announcements import load_notice
         from backend.temporal import parse_api_instant,serialize_instant

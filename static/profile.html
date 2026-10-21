@@ -81,6 +81,29 @@
   <p role="alert" class="error" x-show="mobilePairingError" x-text="mobilePairingError"></p>
   <p role="status" class="success" aria-live="polite" x-show="mobilePairingSuccess" x-text="mobilePairingSuccess"></p>
 </div>
+<div class="profile-setting mobile-devices" aria-labelledby="paired-devices-title">
+  <h3 id="paired-devices-title">Paired devices</h3>
+  <p class="profile-help">Phones with access to your account appear here. Revoking access signs that phone out.</p>
+  <p class="profile-help" role="status" aria-live="polite" x-show="mobileDevicesLoading">Loading paired devices…</p>
+  <div role="alert" x-show="mobileDevicesError" x-cloak><p class="error" x-text="mobileDevicesError"></p><button type="button" class="profile-secondary" @click="loadMobileDevices()" :disabled="mobileDevicesLoading">Retry</button></div>
+  <p class="profile-help" x-show="!mobileDevicesLoading && !mobileDevicesError && mobileDevices.length === 0">No paired phones have access to your account.</p>
+  <ul class="mobile-device-list" x-show="mobileDevices.length">
+    <template x-for="device in mobileDevices" :key="device.device_id">
+      <li class="mobile-device-row">
+        <div><strong x-text="device.device_name"></strong><p class="profile-help">Paired <time x-text="device.paired_at"></time><span x-show="device.last_activity"> · Last active <time x-text="device.last_activity"></time></span></p></div>
+        <div class="profile-actions">
+          <button type="button" class="profile-secondary" @click="askToRevokeMobileDevice(device.device_id)" :disabled="mobileDeviceRevoking || !csrfToken">Revoke access</button>
+          <span class="profile-help" role="group" :aria-label="'Confirm revoking access for ' + device.device_name" x-show="pendingMobileDeviceRevocation === device.device_id" x-cloak>
+            Revoke this phone?
+            <button type="button" @click="confirmRevokeMobileDevice()" :disabled="mobileDeviceRevoking || !csrfToken"><span x-text="mobileDeviceRevoking ? 'Revoking…' : 'Confirm revoke'"></span></button>
+            <button type="button" class="profile-secondary" @click="cancelMobileDeviceRevocation()" :disabled="mobileDeviceRevoking">Keep device</button>
+          </span>
+        </div>
+      </li>
+    </template>
+  </ul>
+  <p role="status" class="success" aria-live="polite" x-show="mobileDevicesSuccess" x-text="mobileDevicesSuccess"></p>
+</div>
 </section>
 <h2>Timezones</h2><p role="status" x-show="timezoneLoading">Loading timezone settings…</p>
 <div role="alert" x-show="timezoneError"><p x-text="timezoneError"></p><button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry timezone settings</button></div>

@@ -18,6 +18,7 @@ from backend.schemas.api_v1 import CsrfTokenResponse, SuccessResponse
 from backend.schemas.mobile_pairing import (
     MobilePairingClaim, MobilePairingClaimResponse, MobilePairingComplete,
     MobilePairingCompleteResponse, MobilePairingCreated, MobilePairingDesktopStatus,
+    MobileDeviceResponse,
 )
 from backend.schemas.email_change import (
     EmailChangeCancelResponse,
@@ -1073,6 +1074,51 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         )
 
 
+    @router.get("/api/profile/mobile-devices", response_model=list[MobileDeviceResponse])
+    async def list_mobile_devices(request: Request, user=Depends(email_change_user)):
+        with authenticated_account_write_transaction(user, get_request_credential(request).value) as conn:
+            require_mobile_pairing_postgres(conn)
+            user_id = authenticated_user_id(user)
+            set_mobile_pairing_user_scope(conn, user_id)
+            rows = conn.execute(
+                """SELECT d.request_id AS device_id, d.device_name, d.paired_at, s.last_activity
+                   FROM mobile_device_sessions d JOIN sessions s ON s.id = d.session_id
+                   WHERE d.user_id = %s AND d.revoked_at IS NULL AND s.is_active = TRUE
+                   ORDER BY d.paired_at DESC""",
+                (user_id,),
+            ).fetchall()
+        return JSONResponse(
+            content=[dict(row) for row in rows],
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
+
+
+    @router.delete("/api/profile/mobile-devices/{request_id}")
+    async def revoke_mobile_device(
+        request_id: str, request: Request, user=Depends(email_change_user), _csrf=Depends(verify_csrf),
+    ):
+        with authenticated_account_write_transaction(user, get_request_credential(request).value) as conn:
+            require_mobile_pairing_postgres(conn)
+            user_id = authenticated_user_id(user)
+            set_mobile_pairing_user_scope(conn, user_id)
+            device = conn.execute(
+                """SELECT session_id FROM mobile_device_sessions
+                   WHERE request_id = %s AND user_id = %s AND revoked_at IS NULL FOR UPDATE""",
+                (request_id, user_id),
+            ).fetchone()
+            if device is None:
+                raise HTTPException(status_code=404, detail="Paired device not found")
+            conn.execute(
+                "UPDATE sessions SET is_active = FALSE WHERE id = %s AND user_id = %s",
+                (device["session_id"], user_id),
+            )
+            conn.execute(
+                "UPDATE mobile_device_sessions SET revoked_at = %s WHERE request_id = %s",
+                (serialize_instant(utc_now()), request_id),
+            )
+        return JSONResponse(content={"success": True}, headers={"Cache-Control": "no-store"})
+
+
     @router.get("/api/profile/mobile-pairings/{request_id}", response_model=MobilePairingDesktopStatus)
     @instant_response
     async def get_mobile_pairing_status(
@@ -1222,7 +1268,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 conn.execute("SELECT set_config('app.email_change_user_id', '', true)")
                 set_mobile_pairing_token_scope(conn, 'app.mobile_pairing_claim_token_hash', claim_hash)
                 pairing = conn.execute(
-                    """SELECT request_id, user_id, status, expires_at FROM mobile_pairing_requests
+                    """SELECT request_id, user_id, status, expires_at, device_name FROM mobile_pairing_requests
                        WHERE claim_token_hash = %s FOR UPDATE""",
                     (claim_hash,),
                 ).fetchone()
@@ -1259,6 +1305,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 principal = resolve_principal(conn, access_token)
                 if principal.user_id != user["id"] or not (principal.company_role or principal.is_platform_admin):
                     raise HTTPException(status_code=403, detail="The account has no active company access")
+                set_mobile_pairing_user_scope(conn, user["id"])
+                conn.execute(
+                    """INSERT INTO mobile_device_sessions
+                       (request_id, user_id, session_id, device_name, paired_at)
+                       VALUES (%s, %s, %s, %s, %s)""",
+                    (pairing["request_id"], user["id"], session_id,
+                     pairing["device_name"] or "Mobile device", serialize_instant(now)),
+                )
                 conn.execute(
                     "UPDATE mobile_pairing_requests SET status = 'consumed', consumed_at = %s WHERE request_id = %s",
                     (serialize_instant(now), pairing["request_id"]),
