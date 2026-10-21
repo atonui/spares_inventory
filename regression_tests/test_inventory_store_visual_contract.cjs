@@ -43,7 +43,7 @@ test('inventory lookup keeps its common controls and stock actions in the shell'
     ]) assert.ok(shell.includes(contract), `inventory shell must retain ${contract}`);
     assert.equal((shell.match(/id="inventory-search"/g) || []).length, 1);
     assert.equal((shell.match(/id="inventory-store"/g) || []).length, 1);
-    assert.match(css, /\.inventory-toolbar \.toolbar-actions > \.btn:first-child,[\s\S]*?\.store-inventory-primary-action\s*\{[^}]*background:\s*var\(--brand-amber\);[^}]*color:\s*var\(--brand-navy\)/);
+    assert.match(css, /\.inventory-toolbar \.inventory-add-action,[\s\S]*?\.store-inventory-primary-action\s*\{[^}]*background:\s*var\(--brand-amber\);[^}]*color:\s*var\(--brand-navy\)/);
     assert.match(html, /class="btn store-inventory-primary-action"/);
 });
 

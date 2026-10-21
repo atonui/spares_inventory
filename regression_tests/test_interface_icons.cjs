@@ -22,7 +22,7 @@ test('all application navigation uses the shared local icon set', () => {
 test('Add Stock uses the brand primary action color, not the success color', () => {
   const addStock = buttons(read('index.html')).find(button => /Add Stock/.test(button));
   assert.ok(addStock, 'Add Stock action must exist');
-  assert.match(opening(addStock), /class="btn"/);
+  assert.match(opening(addStock), /class="btn(?:\s+[^"]+)?"/);
   assert.doesNotMatch(opening(addStock), /btn-success/);
 });
 
