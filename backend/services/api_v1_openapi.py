@@ -9,6 +9,8 @@ _V1_PATHS = {
     "/api/v1/csrf-token",
     "/api/v1/auth/native/login",
     "/api/v1/auth/native/refresh",
+    "/api/v1/auth/mobile-pairing/claim",
+    "/api/v1/auth/mobile-pairing/complete",
     "/api/v1/me",
     "/api/v1/inventory",
     "/api/v1/auth/logout",
@@ -22,6 +24,7 @@ _ERRORS = {
     "401": ("unauthenticated", "Sign in to continue."),
     "403": ("forbidden", "You do not have access to this resource."),
     "404": ("not_found", "The requested resource was not found."),
+    "410": ("gone", "The pairing request is invalid or has expired."),
     "409": ("conflict", "The request conflicts with current state."),
     "422": ("validation_error", "One or more request fields are invalid."),
     "423": ("account_locked", "Your account is temporarily locked. Try again later."),
@@ -34,6 +37,8 @@ _ERRORS_BY_PATH = {
     "/api/v1/csrf-token": ("429", "500", "503"),
     "/api/v1/auth/native/login": ("400", "401", "403", "409", "422", "423", "429", "500", "503"),
     "/api/v1/auth/native/refresh": ("401", "422", "429", "500", "503"),
+    "/api/v1/auth/mobile-pairing/claim": ("400", "410", "422", "429", "500", "503"),
+    "/api/v1/auth/mobile-pairing/complete": ("403", "410", "422", "429", "500", "503"),
     "/api/v1/me": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/inventory": ("400", "401", "403", "404", "422", "429", "500", "503"),
     "/api/v1/auth/logout": ("401", "403", "404", "429", "500", "503"),
@@ -206,6 +211,19 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                         "description": "Stable client-generated ID reused only for retries of this request.",
                         "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
                     })
+            if path == "/api/v1/auth/mobile-pairing/claim" and method.lower() == "post":
+                operation["description"] = (
+                    "Exchange the short-lived QR capability for a separate claim token. The QR capability "
+                    "does not authenticate the device; a signed-in desktop account must approve the "
+                    "pending request before credentials can be exchanged. QR capabilities expire after "
+                    "two minutes and can be claimed once. Do not log request bodies or cache responses."
+                )
+            if path == "/api/v1/auth/mobile-pairing/complete" and method.lower() == "post":
+                operation["description"] = (
+                    "Poll using the short-lived claim token. Returns pending until an authenticated "
+                    "desktop session approves the request. After approval, exchanges the claim for one "
+                    "native session exactly once. Store returned credentials only in secure device storage."
+                )
             if path == "/api/v1/inventory" and method.lower() == "get":
                 operation["description"] = (
                     operation.get("description", "")

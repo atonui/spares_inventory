@@ -187,6 +187,8 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
         "/api/v1/csrf-token",
         "/api/v1/auth/native/login",
         "/api/v1/auth/native/refresh",
+        "/api/v1/auth/mobile-pairing/claim",
+        "/api/v1/auth/mobile-pairing/complete",
         "/api/v1/me",
         "/api/v1/auth/logout",
         "/api/v1/me/email-change-requests",
@@ -196,6 +198,8 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
     assert routes["/api/v1/csrf-token"] == {"GET"}
     assert routes["/api/v1/auth/native/login"] == {"POST"}
     assert routes["/api/v1/auth/native/refresh"] == {"POST"}
+    assert routes["/api/v1/auth/mobile-pairing/claim"] == {"POST"}
+    assert routes["/api/v1/auth/mobile-pairing/complete"] == {"POST"}
     assert routes["/api/v1/me"] == {"GET"}
     assert routes["/api/v1/auth/logout"] == {"POST"}
     assert routes["/api/v1/me/email-change-requests"] == {"POST"}
@@ -301,6 +305,8 @@ def test_v1_openapi_is_filtered_and_versioned():
         "/api/v1/csrf-token",
         "/api/v1/auth/native/login",
         "/api/v1/auth/native/refresh",
+        "/api/v1/auth/mobile-pairing/claim",
+        "/api/v1/auth/mobile-pairing/complete",
         "/api/v1/me",
         "/api/v1/inventory",
         "/api/v1/auth/logout",
@@ -333,6 +339,10 @@ def test_v1_openapi_documents_bearer_and_login_csrf():
     assert document["paths"]["/api/v1/auth/email-change/confirm"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/auth/native/login"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/auth/native/refresh"]["post"].get("security", []) == []
+    assert document["paths"]["/api/v1/auth/mobile-pairing/claim"]["post"].get("security", []) == []
+    assert document["paths"]["/api/v1/auth/mobile-pairing/complete"]["post"].get("security", []) == []
+    assert "two minutes" in document["paths"]["/api/v1/auth/mobile-pairing/claim"]["post"]["description"]
+    assert "approves" in document["paths"]["/api/v1/auth/mobile-pairing/complete"]["post"]["description"]
     assert document["paths"]["/api/v1/csrf-token"]["get"].get("security", []) == []
     login_parameters = document["paths"]["/api/v1/auth/native/login"]["post"].get("parameters", [])
     assert any(
