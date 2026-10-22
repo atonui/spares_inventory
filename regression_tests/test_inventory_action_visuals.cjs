@@ -28,10 +28,12 @@ test('inventory toolbar groups filter actions separately from stock actions', ()
     assert.match(css, /\.inventory-toolbar \.inventory-add-action \{ background:\s*var\(--brand-navy\); color:\s*#ffffff/);
     assert.match(css, /\.inventory-controls \.inventory-export-action\s*\{[^}]*border:\s*1px solid var\(--brand-border\)/s);
     const filters = html.slice(html.indexOf('class="inventory-filters"'), html.indexOf('class="inventory-toolbar"'));
-    assert.match(filters, /class="inventory-filter-actions" role="group" aria-label="Filter actions"/);
-    assert.match(filters, /class="btn inventory-filter-action"[^>]*clearInventoryFilters/);
-    assert.match(filters, /class="btn inventory-filter-action"[^>]*viewStoreInventory/);
+    assert.match(filters, /class="inventory-filter-actions" role="group" aria-label="Filter actions" x-show="searchTerm \|\| storeFilter"/);
+    assert.match(filters, /class="btn inventory-filter-action"[^>]*:class="storeFilter \? '' : 'inventory-filter-action--wide'"[^>]*clearInventoryFilters/);
+    assert.match(filters, /class="btn inventory-filter-action"[^>]*x-show="storeFilter"[^>]*viewStoreInventory/);
+    assert.doesNotMatch(filters, /:disabled=/);
     assert.match(html, /x-for="store in storeOptions"[\s\S]*?x-text="store\.name"/);
+    assert.match(css, /\.inventory-filter-action--wide \{ grid-column:\s*1 \/ -1; \}/);
 });
 
 test('inventory toolbar actions remain touch-friendly and separate on mobile', () => {

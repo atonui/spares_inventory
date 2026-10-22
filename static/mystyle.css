@@ -612,6 +612,7 @@ body > [x-data="inventoryApp()"] .stat-card {
 .inventory-toolbar-actions { display: flex; align-items: center; gap: var(--space-3); margin-left: auto; }
 .inventory-action-group { display: flex; align-items: center; gap: var(--space-2); }
 .inventory-filter-actions { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.inventory-filter-action--wide { grid-column: 1 / -1; }
 .inventory-controls .inventory-filter-action,
 .inventory-controls .inventory-export-action {
     min-height: var(--control-height);
