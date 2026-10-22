@@ -9,7 +9,7 @@ from backend.database_sql import execute, execute_cursor, is_postgres
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.temporal import serialize_instant, utc_now
 from backend.schemas.stores import (
-    StoreResponse, StoreTypeResponse, CreateStoreTypeRequest, UpdateStoreTypeRequest,
+    StoreResponse, StoreOptionResponse, StoreTypeResponse, CreateStoreTypeRequest, UpdateStoreTypeRequest,
     CreateStoreRequest, UpdateStoreRequest,
 )
 
@@ -44,6 +44,23 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 require_archive_admin(conn,principal)
             where='' if include_archived else ' WHERE archived_at IS NULL'
             rows=execute(conn, 'SELECT id, name, type, location, assigned_user_id, archived_at FROM stores'+where+' ORDER BY name').fetchall()
+            return [dict(row) for row in rows]
+
+
+    @router.get("/api/store-options", response_model=List[StoreOptionResponse])
+    @instant_response
+    async def get_store_options(user_id: int = Depends(get_current_user), request: Request = None):
+        """Return only fields needed to label store pickers."""
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=get_request_credential(request).value if request else None,
+            readonly=True,
+        ) as (conn, _principal):
+            rows = execute(
+                conn,
+                "SELECT id, name FROM stores WHERE archived_at IS NULL ORDER BY name",
+            ).fetchall()
             return [dict(row) for row in rows]
 
 
