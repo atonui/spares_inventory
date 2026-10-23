@@ -1,0 +1,169 @@
+/* Shared action-button treatment for every app page. */
+:is(
+    button:not(.nav-item, .stock-action-item, .inventory-export-menu__item, .stock-action-trigger, .qa-btn),
+    .btn,
+    label.btn,
+    input[type="submit"],
+    input[type="button"],
+    .auth-retry,
+    .login-submit,
+    .recovery-action
+) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2, 0.5rem);
+    min-height: 40px;
+    max-width: 100%;
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    border: 1px solid var(--brand-border, #D8E0E8);
+    border-radius: var(--radius-control, 0.5rem);
+    background: var(--brand-surface, #FFFFFF);
+    color: var(--brand-navy, #15263B);
+    font: inherit;
+    font-size: var(--type-sm, 0.875rem);
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+:is(
+    button:not(.nav-item, .stock-action-item, .inventory-export-menu__item, .stock-action-trigger, .qa-btn),
+    .btn,
+    label.btn,
+    input[type="submit"],
+    input[type="button"],
+    .auth-retry,
+    .login-submit,
+    .recovery-action
+):hover:not(:disabled) {
+    border-color: #AEBBC8;
+    background: var(--brand-page, #F5F7FA);
+    color: var(--brand-navy, #15263B);
+}
+
+:is(
+    button:not(.nav-item, .stock-action-item, .inventory-export-menu__item, .stock-action-trigger, .qa-btn),
+    .btn,
+    label.btn,
+    input[type="submit"],
+    input[type="button"],
+    .auth-retry,
+    .login-submit,
+    .recovery-action
+):disabled {
+    border-color: var(--brand-border, #D8E0E8);
+    background: var(--brand-page, #F5F7FA);
+    color: var(--brand-slate, #64748B);
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+:is(
+    button:not(.nav-item, .stock-action-item, .inventory-export-menu__item, .stock-action-trigger, .qa-btn),
+    .btn,
+    label.btn,
+    input[type="submit"],
+    input[type="button"],
+    .auth-retry,
+    .login-submit,
+    .recovery-action
+):focus-visible {
+    outline: 3px solid var(--brand-focus, #15263B);
+    outline-offset: 3px;
+}
+
+/* Keep each member of an action group visually equal; preserve danger meaning with an outline. */
+:is(button.btn.btn-danger, button.btn.btn-red, .btn.btn-danger, .btn.btn-red) {
+    border-color: #D7A5A5;
+    background: var(--brand-surface, #FFFFFF);
+    color: #8A2828;
+}
+:is(button.btn.btn-danger, button.btn.btn-red, .btn.btn-danger, .btn.btn-red):hover:not(:disabled) {
+    border-color: #C78383;
+    background: #FFF7F7;
+    color: #7A2020;
+}
+
+/* Navigation keeps a restrained selected state to show the current section. */
+.inventory-nav .btn.is-active,
+.profile-tabs button[aria-selected="true"],
+.tab button.active {
+    border-color: var(--brand-navy, #15263B);
+    background: var(--brand-navy, #15263B);
+    color: #FFFFFF;
+}
+.inventory-nav .btn.is-active:hover,
+.profile-tabs button[aria-selected="true"]:hover,
+.tab button.active:hover {
+    border-color: var(--brand-navy, #15263B);
+    background: var(--brand-navy, #15263B);
+    color: #FFFFFF;
+}
+
+/* Icon-only controls use the same outline and remain square. */
+button.ui-icon-only {
+    width: 40px;
+    min-width: 40px;
+    flex: 0 0 40px;
+    padding: var(--space-2, 0.5rem);
+}
+.inventory-panel-actions > button.ui-icon-only { flex: 0 0 40px; width: 40px; }
+.stock-action-trigger {
+    border: 1px solid var(--brand-border, #D8E0E8);
+    border-radius: var(--radius-control, 0.5rem);
+    background: var(--brand-surface, #FFFFFF);
+    color: var(--brand-navy, #15263B);
+}
+.stock-action-trigger:hover,
+.stock-action-menu[open] > .stock-action-trigger {
+    border-color: #AEBBC8;
+    background: var(--brand-page, #F5F7FA);
+    color: var(--brand-navy, #15263B);
+}
+
+/* Filter and export controls use the same weight and compact geometry as other actions. */
+.inventory-controls .inventory-filter-action,
+.inventory-controls .inventory-export-action {
+    min-height: 40px;
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    font-size: var(--type-sm, 0.875rem);
+    font-weight: 500;
+}
+
+/* Quick-action cards keep their card layout while using the shared quiet surface. */
+.qa-btn {
+    border: 1px solid var(--brand-border, #D8E0E8);
+    border-radius: var(--radius-control, 0.5rem);
+    background: var(--brand-surface, #FFFFFF);
+    color: var(--brand-navy, #15263B);
+    text-align: left;
+}
+.qa-btn:hover:not(:disabled) {
+    border-color: #AEBBC8;
+    background: var(--brand-page, #F5F7FA);
+    box-shadow: none;
+}
+.qa-btn.qa-danger:hover:not(:disabled) { border-color: #C78383; background: #FFF7F7; }
+
+@media (max-width: 768px) {
+    :is(
+        button:not(.nav-item, .stock-action-item, .inventory-export-menu__item, .stock-action-trigger, .qa-btn),
+        .btn,
+        label.btn,
+        input[type="submit"],
+        input[type="button"],
+        .auth-retry,
+        .login-submit,
+        .recovery-action
+    ) { min-height: 44px; }
+    button.ui-icon-only { width: 44px; min-width: 44px; flex-basis: 44px; }
+    .inventory-panel-actions > button.ui-icon-only { flex-basis: 44px; width: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :is(button, .btn, label.btn, input[type="submit"], input[type="button"]) { transition: none; }
+}

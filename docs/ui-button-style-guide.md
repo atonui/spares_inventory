@@ -1,6 +1,6 @@
 # Button style guide
 
-Use this guide for compact button groups in Spares Tracker, especially inventory and store headers.
+Use this guide for action buttons throughout Spares Tracker, including inventory, profile, and superadmin screens.
 
 ## Match the supplied Filter and Export reference
 
@@ -10,6 +10,14 @@ Use this guide for compact button groups in Spares Tracker, especially inventory
 - Put a simple line icon before a short text label. Keep labels visible; reserve icon-only controls for familiar actions such as Close and provide an accessible name.
 - Do not add decorative dropdown arrows, group boxes, or divider lines. Use an indicator only when the control actually opens a menu or disclosure.
 - Keep the group compact and aligned with its related heading or search field. Let it wrap cleanly on narrow screens without horizontal scrolling; retain touch-friendly targets on mobile.
+
+## App-wide consistency
+
+- Use the same outlined control shape and neutral surface for action buttons across app pages, including forms, tables, dialogs, and admin screens.
+- Keep success, primary, warning, and ordinary actions visually equal. Communicate the action through its label and context rather than a filled color treatment.
+- Preserve a restrained red outline and text for destructive actions so their meaning remains clear without turning them into filled standout buttons.
+- Navigation controls may show the current page with a selected state. Dropdown menu items keep their simple list treatment instead of becoming outlined buttons.
+- Preserve accessible focus and disabled states. Disabled controls use a quiet neutral surface and remain legible.
 
 ## Implementation
 
