@@ -35,7 +35,13 @@ test('in-transit transfers uses the shared panel heading and keeps transfer cont
     assert.match(panel, /x-for="transfer in pendingTransfers"/);
     assert.match(panel, /x-show="transfer\.can_receive" @click="confirmTransfer\(transfer,'receive'\)"/);
     assert.match(panel, /x-show="transfer\.can_return" @click="confirmTransfer\(transfer,'return'\)"/);
-    assert.match(panel, /x-show="pendingTransfers\.length === 0"/);
+    assert.match(panel, /class="in-transit-empty-state" x-show="pendingTransfers\.length === 0">No transfers awaiting receipt\.<\/p>/);
+});
+
+test('in-transit empty state has clear desktop and mobile spacing', () => {
+    const css = require('node:fs').readFileSync('static/mystyle.css', 'utf8');
+    assert.match(css, /\.in-transit-empty-state\s*\{[^}]*padding:\s*var\(--space-8\)\s+var\(--space-6\)/s);
+    assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.in-transit-empty-state\s*\{[^}]*padding:\s*var\(--space-6\)\s+var\(--space-4\)/);
 });
 
 for (const replenishment of [false, true]) {
