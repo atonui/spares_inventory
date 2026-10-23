@@ -2,6 +2,7 @@
     --brand-navy: #15263B;
     --brand-amber: #E9A23B;
     --brand-slate: #64748B;
+    --brand-slate-on-page: #475569;
     --brand-page: #F5F7FA;
     --brand-surface: #FFFFFF;
     --brand-border: #D8E0E8;
@@ -589,7 +590,7 @@ body > [x-data="inventoryApp()"] > .workspace-layout {
 .sidebar-nav-link {
     display: flex; width: 100%; min-height: 42px; justify-content: flex-start;
     gap: 0.7rem; padding: 0.55rem 0.7rem; border: 1px solid transparent;
-    border-radius: 7px; background: transparent; color: #465561; text-align: left;
+    border-radius: 7px; background: transparent; color: var(--brand-slate-on-page); text-align: left;
     text-decoration: none; font-weight: 500; white-space: normal;
 }
 .sidebar-nav-link .ui-icon { width: 1.05rem; height: 1.05rem; flex: 0 0 1.05rem; color: var(--brand-slate); }
@@ -679,7 +680,7 @@ body > [x-data="inventoryApp()"] .stat-card {
 }
 .inventory-panel-heading-content { flex: 1 1 14rem; min-width: 0; }
 .inventory-panel-title { font-size: var(--type-lg); line-height: var(--line-heading); overflow-wrap: anywhere; }
-.inventory-panel-meta { margin-top: var(--space-1); color: var(--brand-slate); font-size: var(--type-sm); }
+.inventory-panel-meta { margin-top: var(--space-1); color: var(--brand-slate-on-page); font-size: var(--type-sm); }
 .equipment-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 .equipment-summary-due { color: #92400e; }
 .equipment-summary-overdue { color: #991b1b; }
@@ -719,11 +720,11 @@ body > [x-data="inventoryApp()"] .stat-card {
     width: 100%; min-width: 0; min-height: var(--control-height); padding: var(--space-2) var(--space-3); border: 1px solid #778899;
     border-radius: var(--radius-control); color: var(--brand-navy); background: white; font: inherit;
 }
-.inventory-filters input::placeholder, .store-search input::placeholder { color: #596774; opacity: 1; }
+.inventory-filters input::placeholder, .store-search input::placeholder { color: var(--brand-slate-on-page); opacity: 1; }
 .inventory-toolbar { margin-top: var(--space-4); }
-.inventory-toolbar p, .store-search p { color: #465561; font-size: var(--type-sm); }
+.inventory-toolbar p, .store-search p { color: var(--brand-slate-on-page); font-size: var(--type-sm); }
 .store-search { padding: var(--space-4); max-width: 650px; }
-.stock-empty { padding: 1.5rem; text-align: center; color: #465561; }
+.stock-empty { padding: 1.5rem; text-align: center; color: var(--brand-slate-on-page); }
 .stock-empty .btn { margin-top: 0.5rem; }
 .refresh-warning { margin-top: 0.75rem; color: #704b00; }
 .stock-table th {
@@ -746,23 +747,23 @@ body > [x-data="inventoryApp()"] .stat-card {
 .stock-inventory-table { width: 100%; min-width: 0; table-layout: auto; }
 .stock-inventory-table th {
     padding: 0.65rem 0.9rem; border-bottom: 1px solid #e7ebf0; background: #f8f9fb;
-    color: #66717d; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.035em; text-transform: uppercase;
+    color: var(--brand-slate-on-page); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.035em; text-transform: uppercase;
 }
 .stock-inventory-table td { padding: 0.7rem 0.9rem; border-bottom: 1px solid #edf0f3; vertical-align: middle; }
 .stock-inventory-table tbody tr:last-child td { border-bottom: 0; }
 .stock-inventory-table tbody tr:hover { background: #fbfcfd; }
 .stock-inventory-table td[data-label="Part number"] { font-weight: 650; }
-.stock-inventory-table td[data-label="Description"] { color: #596774; }
+.stock-inventory-table td[data-label="Description"] { color: var(--brand-slate-on-page); }
 .stock-inventory-table td[data-label="Quantity"] strong { font-size: 1rem; line-height: 1.3; }
 .stock-inventory-table td[data-label="Actions"] { width: 56px; padding-inline: 0.45rem; overflow: visible; text-align: right; }
 .stock-inventory-table td.stock-actions-cell--readonly { width: auto; white-space: nowrap; }
-.stock-actions-cell--readonly .stock-row-actions > span { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 999px; background: #f0f2f5; color: #596774; font-size: 0.72rem; font-weight: 600; }
+.stock-actions-cell--readonly .stock-row-actions > span { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 999px; background: #f0f2f5; color: var(--brand-slate-on-page); font-size: 0.72rem; font-weight: 600; }
 .stock-row-actions { display: flex; justify-content: flex-end; width: auto; }
 .stock-action-menu { position: relative; z-index: 1; width: auto; max-width: none; }
 .stock-action-menu[open] { z-index: 20; }
 .stock-action-trigger {
     display: grid; place-items: center; width: 40px; height: 40px; min-height: 40px; padding: 0;
-    border: 0; border-radius: 8px; background: transparent; color: #66717d; cursor: pointer; list-style: none;
+    border: 0; border-radius: 8px; background: transparent; color: var(--brand-slate-on-page); cursor: pointer; list-style: none;
 }
 .stock-action-trigger::-webkit-details-marker { display: none; }
 .stock-action-trigger::marker { content: ""; }
@@ -779,7 +780,7 @@ body > [x-data="inventoryApp()"] .stat-card {
     border: 0; border-radius: 7px; background: transparent; color: var(--brand-navy); font: inherit; text-align: left; cursor: pointer;
 }
 .stock-action-item:hover { background: #f3f5f7; }
-.stock-action-item .ui-icon { width: 1rem; height: 1rem; flex: 0 0 auto; color: #66717d; }
+.stock-action-item .ui-icon { width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--brand-slate-on-page); }
 .stock-action-trigger:focus-visible, .stock-action-item:focus-visible {
     outline: 3px solid var(--brand-focus); outline-offset: 2px;
 }
@@ -847,7 +848,7 @@ body > [x-data="inventoryApp()"] .stat-card {
     .stock-table tbody { display: block; }
     .stock-table tr { display: block; margin: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--brand-border); border-radius: var(--radius-control); background: var(--brand-surface); }
     .stock-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--space-3); padding: var(--space-2) 0; border: 0; white-space: normal; }
-    .stock-table td::before { content: attr(data-label); font-size: var(--type-xs); font-weight: 600; color: #465561; }
+    .stock-table td::before { content: attr(data-label); font-size: var(--type-xs); font-weight: 600; color: var(--brand-slate-on-page); }
     .stock-cell-value { min-width: 0; }
     .stock-table td[data-label="Actions"] { display: flex; flex-wrap: wrap; gap: var(--space-2); }
     .stock-table td[data-label="Actions"]::before { flex-basis: 100%; }
@@ -863,7 +864,7 @@ body > [x-data="inventoryApp()"] .stat-card {
     .stock-inventory-table td::before { display: none; }
     .stock-inventory-table td[data-label="Part number"] { grid-column: 1 / 3; grid-row: 1; font-size: 0.95rem; line-height: 1.3; }
     .stock-inventory-table td[data-label="Part number"] strong { font-size: 0.98rem; overflow-wrap: anywhere; }
-    .stock-inventory-table td[data-label="Description"] { grid-column: 1 / -1; grid-row: 2; color: #66717d; font-size: 0.84rem; line-height: 1.35; }
+    .stock-inventory-table td[data-label="Description"] { grid-column: 1 / -1; grid-row: 2; color: var(--brand-slate-on-page); font-size: 0.84rem; line-height: 1.35; }
     .stock-inventory-table td[data-label="Actions"] {
         grid-column: 3; grid-row: 1; display: flex; justify-content: flex-end; width: 44px; padding: 0; overflow: visible;
     }
@@ -871,7 +872,7 @@ body > [x-data="inventoryApp()"] .stat-card {
     .stock-inventory-table .stock-row-actions { display: flex; justify-content: flex-end; width: 100%; }
     .stock-inventory-table .stock-action-trigger { width: 44px; height: 44px; min-height: 44px; }
     .stock-inventory-table td[data-label="Quantity"] { grid-column: 2; grid-row: 3; display: flex; align-items: baseline; justify-content: flex-end; gap: 0.35rem; }
-    .stock-inventory-table td[data-label="Quantity"]::before { display: inline; content: "Qty"; color: #66717d; font-size: 0.72rem; }
+    .stock-inventory-table td[data-label="Quantity"]::before { display: inline; content: "Qty"; color: var(--brand-slate-on-page); font-size: 0.72rem; }
     .stock-inventory-table td[data-label="Quantity"] strong { font-size: 0.9rem; }
     .stock-inventory-table--store td[data-label="Quantity"] { grid-column: 1; justify-content: flex-start; }
     .stock-inventory-table--store td[data-label="Work order"] { grid-column: 2 / 4; grid-row: 3; justify-self: end; }
@@ -888,13 +889,13 @@ body > [x-data="inventoryApp()"] .stat-card {
     .in-transit-transfers-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .in-transit-transfers-table tr { display: block; padding: .5rem .75rem; border: 1px solid var(--brand-border); border-radius: 8px; background: #fff; margin-bottom: .75rem; }
     .in-transit-transfers-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
-    .in-transit-transfers-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #465561; }
+    .in-transit-transfers-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: var(--brand-slate-on-page); }
     .in-transit-transfers-table td[data-label="Action"] .btn { width: 100%; min-height: 44px; white-space: normal; }
     .parts-management-table, .parts-management-table tbody { display: block; width: 100%; min-width: 0; }
     .parts-management-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .parts-management-table tr { display: block; padding: .5rem .75rem; border: 1px solid var(--brand-border); border-radius: 8px; background: #fff; margin-bottom: .75rem; }
     .parts-management-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
-    .parts-management-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #465561; }
+    .parts-management-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: var(--brand-slate-on-page); }
     .parts-management-table td[data-label="Actions"] { display: flex; flex-wrap: wrap; gap: .5rem; }
     .parts-management-table td[data-label="Actions"]::before { flex-basis: 100%; }
     .parts-management-table td[data-label="Actions"] .btn { flex: 1 1 100px; min-height: 44px; }
@@ -902,7 +903,7 @@ body > [x-data="inventoryApp()"] .stat-card {
     .inventory-reference-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .inventory-reference-table tr { display: block; padding: .5rem .75rem; border: 1px solid var(--brand-border); border-radius: 8px; background: #fff; margin-bottom: .75rem; }
     .inventory-reference-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; align-items: center; padding: .35rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
-    .inventory-reference-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: #465561; }
+    .inventory-reference-table td::before { content: attr(data-label); font-size: .75rem; font-weight: 600; color: var(--brand-slate-on-page); }
     .inventory-reference-table td[data-label="Action"], .inventory-reference-table td[data-label="Actions"] { display: flex; flex-wrap: wrap; gap: .5rem; }
     .inventory-reference-table td[data-label="Action"]::before, .inventory-reference-table td[data-label="Actions"]::before { flex-basis: 100%; }
     .inventory-reference-table td[data-label="Action"] .btn { min-height: 44px; }

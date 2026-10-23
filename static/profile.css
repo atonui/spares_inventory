@@ -15,7 +15,7 @@
 .profile-page :is(button, a, input, select):focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
 .profile-help { color: var(--brand-slate); line-height: 1.6; font-size: 14px; }
 .profile-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); padding: var(--space-5); border: 1px solid var(--brand-border); border-radius: var(--radius-surface); background: var(--brand-page); }
-.profile-details dt { color: var(--brand-slate); font-size: var(--type-sm); margin-bottom: var(--space-1); }
+.profile-details dt { color: var(--brand-slate-on-page); font-size: var(--type-sm); margin-bottom: var(--space-1); }
 .profile-details dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .profile-preferences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
 .profile-setting { min-width: 0; padding: var(--space-5); border: 1px solid var(--brand-border); border-radius: var(--radius-surface); }
