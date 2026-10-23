@@ -157,3 +157,15 @@ The v1 inventory item fields follow the existing `InventoryResponse` meaning and
 ## Open Implementation Detail
 
 The implementation must select a cursor encoding and signing key source consistent with existing secret management, and preserve behavior across supported SQLite/PostgreSQL test adapters where practical. That choice must not change the externally documented properties: opaque, integrity-protected, endpoint-bound, tenant-neutral, and stable keyset continuation.
+
+## Addendum: Mobile Offline Stock Counts (2026-10-23)
+
+The mobile client now uses the following additional bearer-protected v1 operation:
+
+| Method and path | Authentication | Contract purpose |
+| --- | --- | --- |
+| `POST /api/v1/inventory/adjustments` | Bearer session | Set an unallocated inventory row's counted quantity with a stable operation ID and expected current quantity. |
+
+The request includes `operation_id`, `inventory_id`, `expected_quantity`, and `new_quantity`. The server derives tenant scope from the session, enforces store/part access, and returns `409` if the stored quantity differs from `expected_quantity`. The balance update, movement evidence, and protected stock audit record share one transaction. The operation ID is stored on the movement with a uniqueness constraint so a retry after a lost response returns success without applying the quantity twice. The app stores pending requests locally, syncs in order after reconnection, and retains conflicts for user review. Allocated stock is not editable through this endpoint.
+
+Both migration tracks must add the retry key before serving this endpoint. The live generated OpenAPI document and the SaaS/PostgreSQL deployment remain the runtime contract and integration target.

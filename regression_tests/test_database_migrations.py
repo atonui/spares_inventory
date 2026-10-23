@@ -75,9 +75,10 @@ def runner():
 
 def test_fresh_database_records_current_versions(tmp_path):
     c=sqlite3.connect(tmp_path/'fresh.db');s=runner().apply_migrations(c)
-    assert s.current_version==8 and s.pending==()
-    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,),(6,),(7,),(8,)]
+    assert s.current_version==9 and s.pending==()
+    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,),(6,),(7,),(8,),(9,)]
     assert c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mobile_device_sessions'").fetchone()
+    assert 'client_operation_id' in {row[1] for row in c.execute('PRAGMA table_info(movements)')}
 
 def test_adoption_records_only_validated_versions(tmp_path):
     c=legacy_connection(tmp_path/'live.db',current=True);before=snapshot(c)
@@ -92,7 +93,7 @@ def test_adoption_records_only_validated_versions(tmp_path):
                         for name,value in zip(original_columns[table],row)) for row in rows]
         assert [tuple(r) for r in c.execute(f'SELECT {projection} FROM "{table}" ORDER BY rowid')]==expected
     assert c.execute('SELECT business_timezone FROM organisation_settings').fetchone()[0]=='Africa/Nairobi'
-    assert runner().migration_status(c).applied==(1,2,3,4,5,6,7,8)
+    assert runner().migration_status(c).applied==(1,2,3,4,5,6,7,8,9)
 
 def test_repeat_upgrade_preserves_rows_and_applied_at(tmp_path):
     c=legacy_connection(tmp_path/'live.db');runner().apply_migrations(c);before=snapshot(c);schema=schema_snapshot(c)

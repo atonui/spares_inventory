@@ -21,6 +21,12 @@ class UpdateStockRequest(BaseModel):
     inventory_id: int
     new_quantity: int = Field(ge=0, strict=True)
 
+class NativeStockAdjustmentRequest(BaseModel):
+    operation_id: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    inventory_id: int = Field(gt=0, strict=True)
+    expected_quantity: int = Field(ge=0, le=2147483647, strict=True)
+    new_quantity: int = Field(ge=0, le=2147483647, strict=True)
+
 class TransferConfirmationRequest(BaseModel):
     confirmed: bool = Field(strict=True)
     notes: Optional[str] = Field(default=None, max_length=1000)

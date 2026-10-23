@@ -172,3 +172,61 @@ def test_legacy_inventory_remains_unpaginated_array(v1_inventory_client):
     assert response.status_code == 200
     assert isinstance(response.json(), list)
     assert {row["id"] for row in response.json()} == {1, 10, 11, 12}
+
+
+def test_mobile_stock_adjustment_is_idempotent_and_checks_expected_quantity(v1_inventory_client):
+    client, database_path = v1_inventory_client
+    populate(database_path)
+    headers = {"Authorization": "Bearer admin-token"}
+    payload = {
+        "operation_id": "6fa457d3-2a56-4c3b-8431-f65761bd49da",
+        "inventory_id": 1,
+        "expected_quantity": 0,
+        "new_quantity": 7,
+    }
+
+    first = client.post("/api/v1/inventory/adjustments", json=payload, headers=headers)
+    retry = client.post("/api/v1/inventory/adjustments", json=payload, headers=headers)
+    stale = client.post("/api/v1/inventory/adjustments", json={
+        **payload,
+        "expected_quantity": 0,
+        "operation_id": "a347f43a-2230-4ce6-aa0a-cb42d45f94c6",
+    }, headers=headers)
+
+    assert first.status_code == 200, first.text
+    assert first.json() == {"success": True, "duplicate": False, "quantity": 7}
+    assert retry.status_code == 200, retry.text
+    assert retry.json() == {"success": True, "duplicate": True}
+    assert stale.status_code == 409
+    with closing(connect_database(database_path)) as conn:
+        assert conn.execute("SELECT quantity FROM inventory WHERE id=1").fetchone()["quantity"] == 7
+        assert conn.execute("SELECT count(*) AS count FROM movements WHERE client_operation_id=?",
+                            (payload["operation_id"],)).fetchone()["count"] == 1
+
+
+def test_mobile_stock_adjustment_requires_bearer_and_rejects_invalid_operation_id(v1_inventory_client):
+    client, _database_path = v1_inventory_client
+    payload = {"operation_id": "bad", "inventory_id": 1, "expected_quantity": 4, "new_quantity": 7}
+    unauthorized = client.post("/api/v1/inventory/adjustments", json=payload)
+    invalid = client.post("/api/v1/inventory/adjustments", json=payload,
+                          headers={"Authorization": "Bearer admin-token"})
+
+    assert unauthorized.status_code == 401
+    assert invalid.status_code == 422
+
+
+def test_mobile_stock_adjustment_is_in_the_generated_bearer_contract(v1_inventory_client):
+    import main
+    from backend.services.api_v1_openapi import build_v1_openapi_document
+
+    document = build_v1_openapi_document(main.app.openapi())
+    operation = document["paths"]["/api/v1/inventory/adjustments"]["post"]
+    body_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    if "$ref" in body_schema:
+        component_name = body_schema["$ref"].rsplit("/", 1)[-1]
+        body_schema = document["components"]["schemas"][component_name]
+
+    assert operation["security"] == [{"BearerAuth": []}]
+    assert "expected_quantity" in body_schema["properties"]
+    assert "409" in operation["responses"]
+    assert "applied once" in operation["description"]

@@ -13,6 +13,7 @@ _V1_PATHS = {
     "/api/v1/auth/mobile-pairing/complete",
     "/api/v1/me",
     "/api/v1/inventory",
+    "/api/v1/inventory/adjustments",
     "/api/v1/auth/logout",
     "/api/v1/me/email-change-requests",
     "/api/v1/me/email-change-request",
@@ -41,6 +42,7 @@ _ERRORS_BY_PATH = {
     "/api/v1/auth/mobile-pairing/complete": ("403", "410", "422", "429", "500", "503"),
     "/api/v1/me": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/inventory": ("400", "401", "403", "404", "422", "429", "500", "503"),
+    "/api/v1/inventory/adjustments": ("401", "403", "404", "409", "422", "429", "500", "503"),
     "/api/v1/auth/logout": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/me/email-change-requests": ("401", "403", "409", "422", "429", "500", "503"),
     "/api/v1/me/email-change-request": ("401", "403", "404", "429", "500", "503"),
@@ -162,7 +164,7 @@ def build_v1_openapi_document(full_document: dict) -> dict:
             if method.lower() not in {"get", "post", "put", "patch", "delete", "options", "head"}:
                 continue
             if path in {
-                "/api/v1/me", "/api/v1/inventory", "/api/v1/auth/logout",
+                "/api/v1/me", "/api/v1/inventory", "/api/v1/inventory/adjustments", "/api/v1/auth/logout",
                 "/api/v1/me/email-change-requests", "/api/v1/me/email-change-request",
             }:
                 operation["security"] = [{"BearerAuth": []}]
@@ -231,6 +233,13 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                     "as a tie-breaker. Pages are scoped to the authenticated company and "
                     "include no total count. Continue with `next_cursor` until it is null."
                 ).strip()
+            if path == "/api/v1/inventory/adjustments" and method.lower() == "post":
+                operation["description"] = (
+                    "Set the counted quantity of an unallocated inventory row. The server derives "
+                    "company scope from the bearer session and returns 409 when the current quantity "
+                    "does not match expected_quantity. Keep operation_id stable when retrying the same "
+                    "change after an ambiguous network failure; an accepted operation is applied once."
+                )
             if path == "/api/v1/me/email-change-requests" and method.lower() == "post":
                 operation["description"] = (
                     "Request a verified email change. The current email remains active until "
