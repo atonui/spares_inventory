@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 37685)
+Total output lines: 1714
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261023-approved-brand-v1">
+    <link rel="stylesheet" href="mystyle.css?v=20261023-approved-brand-v2">
     <link rel="stylesheet" href="login.css?v=20261023-approved-brand-v1">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
@@ -293,7 +296,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p x-show="pendingTransfers.length === 0" style="padding:0 1rem 1rem;">No transfers awaiting receipt.</p>
+                <p class="in-transit-empty-state" x-show="pendingTransfers.length === 0">No transfers awaiting receipt.</p>
             </section>
 
             <!-- All Parts Panel -->
@@ -666,271 +669,7 @@
                         </div>
                     </div>
 
-                    <!-- Buttons -->
-                    <div style="display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;">
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button type="button" class="btn btn-sm" @click="setAllCsvDuplicates('tally')" :disabled="loading">
-                                Tally All CSV
-                            </button>
-                            <button type="button" class="btn btn-sm" @click="setAllStoreConflicts('replace')" :disabled="loading">
-                                Set All Balances
-                            </button>
-                            <button type="button" class="btn btn-sm" @click="setAllActions('skip')" :disabled="loading">
-                                Skip All
-                            </button>
-                        </div>
-                        <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" @click="cancelDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg>
-                                Cancel Import
-                            </button>
-                            <button type="button" class="btn btn-success" @click="processDuplicateResolution()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg>
-                                <span x-show="!loading">Proceed with Import</span>
-                                <span x-show="loading">Processing...</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Edit Stock Modal -->
-            <div x-show="showEditModal" class="modal" x-init="initDialogFocus($el, 'showEditModal')" @keydown.tab="trapDialogFocus($event)" @keydown.escape.stop.prevent="closeDialog('showEditModal')" role="dialog" aria-modal="true" aria-labelledby="edit-stock-title" tabindex="-1" @click.outside="showEditModal = false">
-                <div class="modal-content">
-                    <h3 id="edit-stock-title">Edit Stock Quantity</h3>
-                    <form @submit.prevent="updateStock()">
-                        <div class="form-group">
-                            <label for="edit-stock-new-quantity">New Quantity</label>
-                            <input id="edit-stock-new-quantity" type="number" x-model="editForm.new_quantity" min="0" required>
-                        </div>
-                        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                            <button type="button" class="btn" @click="showEditModal = false">Cancel</button>
-                            <button type="submit" class="btn btn-success" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#save"></use></svg>
-                                <span x-show="!loading">Update</span>
-                                <span x-show="loading">Updating...</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <section x-show="showLowStockPanel" class="panel replenishment-panel" aria-labelledby="replenishment-heading">
-                <div class="inventory-panel-heading">
-                    <div class="inventory-panel-heading-content">
-                        <h3 id="replenishment-heading" class="inventory-panel-title">Plan stock replenishment</h3>
-                        <p class="inventory-panel-meta replenishment-copy">Set a minimum for each store and part. The plan uses unallocated stock above each donor’s minimum. Incoming transfers remain unavailable until physical receipt.</p>
-                    </div>
-                </div>
-                <details class="minimum-settings" open>
-                    <summary>Set minimum stock</summary>
-                    <p>Minimums apply to unallocated stock. Zero turns off the target; saving a minimum does not add parts.</p>
-                    <form @submit.prevent="saveMinimum()" class="minimum-form">
-                        <div class="form-group"><label for="minimum-store">Store</label><select id="minimum-store" x-model="minimumForm.store_id" @change="selectMinimum()" :disabled="minimumBusy" required><option value="">Choose store</option><template x-for="store in editableStores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
-                        <div class="form-group"><label for="minimum-part">Part</label><select id="minimum-part" x-model="minimumForm.part_id" @change="selectMinimum()" :disabled="minimumBusy" required><option value="">Choose part</option><template x-for="part in parts" :key="part.id"><option :value="part.id" x-text="part.part_number + ' — ' + part.description"></option></template></select></div>
-                        <div class="form-group"><label for="minimum-quantity">Minimum quantity</label><input id="minimum-quantity" type="number" min="0" max="2147483647" step="1" x-model="minimumForm.min_threshold" :disabled="minimumBusy" required></div>
-                        <div class="minimum-actions"><button type="submit" class="btn btn-primary" :disabled="minimumBusy || inventoryLoadFailed"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#save"></use></svg> <span x-text="minimumBusy ? 'Saving…' : 'Save minimum'"></span></button><button type="button" class="btn" @click="reloadMinimum()" :disabled="minimumBusy || loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Reload current minimum</button></div>
-                    </form>
-                </details>
-                <div class="replenishment-toolbar">
-                    <div><label for="replenishment-store">Show shortages for</label><select id="replenishment-store" x-model="replenishmentStoreFilter"><option value="">All stores</option><template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
-                    <button class="btn ui-icon-only" @click="loadReplenishment()" :disabled="replenishmentBusy || minimumBusy" aria-label="Refresh plan" title="Refresh plan"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-                    <button class="btn btn-primary" @click="exportProcurementCSV()" :disabled="replenishmentBusy || minimumBusy || !replenishmentPlan"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Export purchases CSV</button>
-                </div>
-                <p class="replenishment-copy">Suggestions are shared across all stores and are not reservations. Purchase quantities assume the suggested internal transfers proceed. Refresh before ordering.</p>
-                <p x-show="replenishmentBusy" role="status">Loading replenishment plan…</p>
-                <p x-show="replenishmentError" x-text="replenishmentError" class="error-message" role="alert"></p>
-                <p x-show="replenishmentPlan && !replenishmentRows.length && !replenishmentBusy">No shortages for the selected stores. If targets are not configured yet, set minimum stock above.</p>
-                <div class="table-responsive" x-show="replenishmentRows.length && !replenishmentBusy">
-                    <table class="stock-table replenishment-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Store / part</th><th role="columnheader">Available / minimum</th><th role="columnheader">Incoming</th><th role="columnheader">Internal transfers</th><th role="columnheader">Purchase</th></tr></thead>
-                    <tbody role="rowgroup"><template x-for="row in replenishmentRows" :key="row.inventory_id"><tr role="row">
-                        <td role="cell" data-label="Store / part"><div class="stock-cell-value"><strong x-text="row.store_name"></strong><span x-text="row.part_number"></span><span x-text="row.description"></span></div></td>
-                        <td role="cell" data-label="Available / minimum"><span class="stock-cell-value" x-text="row.quantity + ' / ' + row.min_threshold"></span></td>
-                        <td role="cell" data-label="Incoming"><span class="stock-cell-value" x-text="row.incoming_quantity + ' awaiting receipt'"></span></td>
-                        <td role="cell" data-label="Internal transfers"><div class="stock-cell-value replenishment-suggestions"><span x-show="!row.suggestions.length">No transfer suggested</span><template x-for="suggestion in row.suggestions" :key="suggestion.inventory_id"><div><span x-text="suggestion.quantity + ' from ' + suggestion.store_name"></span><button x-show="suggestion.can_dispatch" class="btn btn-sm" @click="reviewReplenishmentTransfer(row,suggestion)" :disabled="replenishmentBusy || minimumBusy || loading">Review transfer</button><span x-show="!suggestion.can_dispatch" class="source-owner-note">Source owner must dispatch</span></div></template></div></td>
-                        <td role="cell" data-label="Purchase"><strong class="stock-cell-value" x-text="row.purchase_quantity"></strong></td>
-                    </tr></template></tbody></table>
-                </div>
-            </section>
-
-            <section x-show="showReportsPanel" class="controls reports-panel" aria-labelledby="reports-heading">
-                <div class="inventory-panel-heading">
-                    <div class="inventory-panel-heading-content">
-                        <h3 id="reports-heading" class="inventory-panel-title">Consumption reports</h3>
-                        <p class="inventory-panel-meta" x-text="['owner','admin','superadmin'].includes(currentUser?.role) ? 'All recorded consumption. Filter by the engineer who recorded it.' : 'Your recorded consumption, including work orders assigned to other engineers.'"></p>
-                        <p class="inventory-panel-meta">Archived parts and stores remain in history.</p>
-                    </div>
-                </div>
-                <form @submit.prevent="loadConsumptionReport()" class="report-filters">
-                    <fieldset :disabled="reportBusy || reportExportBusy">
-                        <label class="report-all-dates"><input type="checkbox" x-model="reportForm.allDates" @change="markReportDirty()"> All dates</label>
-                        <label>From <input type="date" x-model="reportForm.start_date" :disabled="reportForm.allDates" @change="markReportDirty()"></label>
-                        <label>Through <input type="date" x-model="reportForm.end_date" :disabled="reportForm.allDates" @change="markReportDirty()"></label>
-                        <label>Part <select x-model="reportForm.part_id" @change="markReportDirty()"><option value="">All parts</option><template x-for="p in reportOptions.parts" :key="p.id"><option :value="p.id" x-text="p.part_number+' — '+p.description"></option></template></select></label>
-                        <label>Source store <select x-model="reportForm.store_id" @change="markReportDirty()"><option value="">All stores</option><template x-for="s in reportOptions.stores" :key="s.id"><option :value="s.id" x-text="s.name"></option></template></select></label>
-                        <label x-show="['owner','admin','superadmin'].includes(currentUser?.role)">Recorded by <select x-model="reportForm.engineer_id" @change="markReportDirty()"><option value="">All engineers</option><template x-for="u in reportOptions.engineers" :key="u.id"><option :value="u.id" x-text="u.name"></option></template></select></label>
-                        <label>Exact work-order number <input type="text" maxlength="200" x-model="reportForm.work_order_number" @input="markReportDirty()" placeholder="Leave blank for all work orders"></label>
-                        <button type="submit" class="btn btn-primary"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> <span x-text="reportBusy ? 'Loading…' : 'Refresh report'"></span></button>
-                    </fieldset>
-                </form>
-                <p x-show="reportBusy" role="status">Loading consumption history…</p>
-                <p x-show="reportError" x-text="reportError" role="alert" class="report-error"></p>
-                <p x-show="reportDirty && consumptionReport" role="status">Filters changed. Refresh the report to update results and enable export.</p>
-                <div x-show="consumptionReport && !reportBusy">
-                    <p class="report-summary"><strong x-text="consumptionReport?.totals.quantity || 0"></strong> units consumed across <span x-text="consumptionReport?.totals.parts || 0"></span> parts in <span x-text="consumptionReport?.totals.events || 0"></span> consumption events. Totals include all matching records.</p>
-                    <button class="btn" @click="exportConsumptionReport()" :disabled="reportDirty || reportExportBusy"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> <span x-text="reportExportBusy ? 'Downloading…' : 'Export all matching records (CSV)'"></span></button>
-                    <p x-show="consumptionReport?.totals.events === 0">No consumption matches these filters. Try a wider date range or all dates.</p>
-                    <h4>Parts used</h4>
-                    <div class="report-table-wrap"><table class="consumption-report-table"><thead><tr><th>Part number</th><th>Description</th><th>Quantity</th><th>Events</th></tr></thead><tbody><template x-for="p in consumptionReport?.by_part || []" :key="p.part_id"><tr><td data-label="Part number" x-text="p.part_number || 'Unknown'"></td><td data-label="Description" x-text="p.description || 'Unknown'"></td><td data-label="Quantity" x-text="p.quantity"></td><td data-label="Events" x-text="p.events"></td></tr></template></tbody></table></div>
-                    <h4>Work orders</h4>
-                    <p>Select a work order to see its parts and consumption events within the current filters.</p>
-                    <div class="report-table-wrap"><table class="consumption-report-table"><thead><tr><th>Work order</th><th>Quantity</th><th>Events</th></tr></thead><tbody><template x-for="w in consumptionReport?.by_work_order || []" :key="w.work_order_id ?? 'unknown'"><tr><td data-label="Work order"><button x-show="w.work_order" class="btn btn-sm" :disabled="reportDirty || reportExportBusy" @click="openWorkOrderReport(w.work_order)" x-text="w.work_order"></button><span x-show="!w.work_order">Unlinked work order</span></td><td data-label="Quantity" x-text="w.quantity"></td><td data-label="Events" x-text="w.events"></td></tr></template></tbody></table></div>
-                    <h4>Consumption events</h4>
-                    <p>Up to 100 events per page. CSV includes all matching events. Names reflect the current catalog.</p>
-                    <div class="report-table-wrap"><table class="consumption-report-table"><thead><tr><th>Time</th><th>Part</th><th>Quantity</th><th>Source store</th><th>Recorded by</th><th>Work order</th><th>Notes</th></tr></thead><tbody><template x-for="r in consumptionReport?.rows || []" :key="r.movement_id"><tr><td data-label="Time" x-text="formatReportInstant(r.recorded_at)"></td><td data-label="Part"><span x-text="r.part_number || 'Unknown'"></span><br><span x-text="r.description"></span></td><td data-label="Quantity" x-text="r.quantity"></td><td data-label="Source store" x-text="r.store_name || 'Unknown'"></td><td data-label="Recorded by" x-text="r.engineer_name || 'Unknown'"></td><td data-label="Work order" x-text="r.work_order || 'Unlinked'"></td><td data-label="Notes" x-text="r.notes || '—'"></td></tr></template></tbody></table></div>
-                    <div class="report-pagination"><button class="btn" :disabled="reportDirty || reportOffset===0 || reportExportBusy" @click="loadConsumptionReport(Math.max(0,reportOffset-100))">Previous</button><span x-text="consumptionReport?.totals.events ? 'Events '+(reportOffset+1)+'–'+Math.min(reportOffset+100,consumptionReport.totals.events)+' of '+consumptionReport.totals.events : '0 events'"></span><button class="btn" :disabled="reportDirty || reportOffset+100 >= (consumptionReport?.totals.events || 0) || reportExportBusy" @click="loadConsumptionReport(reportOffset+100)">Next</button></div>
-                </div>
-            </section>
-
-            <section x-show="showLogsPanel" class="controls audit-panel" aria-labelledby="audit-heading">
-                <div class="inventory-panel-heading">
-                    <div class="inventory-panel-heading-content">
-                        <h3 id="audit-heading" class="inventory-panel-title">Activity log</h3>
-                        <p class="inventory-panel-meta">Stock changes include recorded balances and linked movements. Older entries retain their original details; missing historical balances cannot be reconstructed here.</p>
-                    </div>
-                </div>
-                <form class="replenishment-toolbar" @submit.prevent="loadActivityLogs()">
-                    <div><label for="audit-start">From date</label><input id="audit-start" type="date" x-model="logFilters.startDate"></div>
-                    <div><label for="audit-end">Through date</label><input id="audit-end" type="date" x-model="logFilters.endDate"></div>
-                    <div><label for="audit-action">Action</label><select id="audit-action" x-model="logFilters.action"><option value="">All actions</option><option value="add_stock">Add stock</option><option value="consume_stock">Consume stock</option><option value="update_stock">Adjust stock</option><option value="import_stock_balances">Import balances</option><option value="transfer_stock">Dispatch transfer</option><option value="receive_transfer">Receive transfer</option><option value="return_transfer">Return transfer</option><option value="confirm_stock_count">Physical count</option><option value="set_stock_minimum">Set minimum</option></select></div>
-                    <div><label for="audit-status">Result</label><select id="audit-status" x-model="logFilters.status"><option value="">All results</option><option value="success">Successful</option><option value="error">Failed attempts</option></select></div>
-                    <button class="btn ui-icon-only" type="submit" :disabled="loading" aria-label="Refresh log" title="Refresh log"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button><button class="btn" type="button" @click="exportActivityLogsCSV()" :disabled="loading || !activityLogs.length"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Export displayed entries</button>
-                </form>
-                <p x-show="loading" role="status">Loading activity…</p>
-                <p x-show="!loading && !activityLogs.length && !error">No entries match these filters.</p>
-                <p x-show="activityLogs.length">Showing up to 200 recent matching entries. Use dates and action filters to narrow the history.</p>
-                <div style="overflow-x:auto" x-show="activityLogs.length"><table class="stock-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Time / user</th><th role="columnheader">Action / result</th><th role="columnheader">Evidence</th></tr></thead><tbody role="rowgroup"><template x-for="log in activityLogs" :key="log.id"><tr role="row">
-                    <td role="cell" data-label="Time / user"><div class="stock-cell-value"><span x-text="log.created_at"></span><strong x-text="log.username || 'Unknown user'"></strong></div></td>
-                    <td role="cell" data-label="Action / result"><div class="stock-cell-value"><span x-text="log.action.replaceAll('_',' ')"></span><span x-text="log.status"></span><span x-show="log.error_message" x-text="log.error_message"></span></div></td>
-                    <td role="cell" data-label="Evidence"><div class="stock-cell-value"><details><summary>View recorded details</summary><p class="audit-details" x-text="formatAuditDetails(log.details)"></p><details><summary>Raw record</summary><pre class="audit-details" x-text="log.details || 'No details recorded'"></pre></details></details></div></td>
-                </tr></template></tbody></table></div>
-            </section>
-
-            <section x-show="showMovementsPanel" class="controls movement-history-panel" aria-labelledby="movement-history-heading">
-                <div class="inventory-panel-heading">
-                    <div class="inventory-panel-heading-content">
-                        <h3 id="movement-history-heading" class="inventory-panel-title">Movement history</h3>
-                        <p class="inventory-panel-meta">Review the latest stock additions, consumption, adjustments, and transfers. Use filters to narrow the displayed movements.</p>
-                    </div>
-                </div>
-                <form class="replenishment-toolbar movement-history-toolbar" @submit.prevent="loadMovements()">
-                    <div><label for="movement-start">From date</label><input id="movement-start" type="date" x-model="movementFilters.startDate"></div>
-                    <div><label for="movement-end">Through date</label><input id="movement-end" type="date" x-model="movementFilters.endDate"></div>
-                    <div><label for="movement-type">Type</label><select id="movement-type" x-model="movementFilters.movementType"><option value="">All types</option><option value="add">Addition</option><option value="consume">Consumption</option><option value="remove">Adjustment</option><option value="transfer">Transfer</option></select></div>
-                    <div><label for="movement-part">Part</label><select id="movement-part" x-model="movementFilters.partId"><option value="">All parts</option><template x-for="part in parts" :key="part.id"><option :value="part.id" x-text="part.part_number + ' — ' + part.description"></option></template></select></div>
-                    <div><label for="movement-store">Store</label><select id="movement-store" x-model="movementFilters.storeId"><option value="">All stores</option><template x-for="store in stores" :key="store.id"><option :value="store.id" x-text="store.name"></option></template></select></div>
-                    <button class="btn btn-primary" type="submit" :disabled="loading">Apply filters</button>
-                    <button class="btn" type="button" @click="clearMovementFilters()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
-                    <button class="btn" type="button" @click="loadMovements()" :disabled="loading">Refresh</button>
-                    <button class="btn" type="button" @click="exportMovementsCSV()" :disabled="loading || !movements.length">Export CSV</button>
-                </form>
-                <p x-show="loading" role="status">Loading movement history…</p>
-                <p x-show="!loading && !movements.length">No movements match these filters.</p>
-                <p x-show="movements.length">Showing the latest 100 matching movements.</p>
-                <div class="report-table-wrap" x-show="movements.length"><table class="stock-table">
-                    <thead><tr><th>Date / time</th><th>Type</th><th>Part</th><th>Quantity</th><th>From store</th><th>To store</th><th>Work order</th><th>Recorded by</th><th>Transfer status</th></tr></thead>
-                    <tbody><template x-for="movement in movements" :key="movement.id"><tr>
-                        <td data-label="Date / time" x-text="formatBusinessInstant(movement.created_at, movementTimeContext)"></td>
-                        <td data-label="Type" x-text="movement.movement_type"></td>
-                        <td data-label="Part"><strong x-text="movement.part_number"></strong></td>
-                        <td data-label="Quantity" x-text="movement.quantity"></td>
-                        <td data-label="From store" x-text="movement.from_store_name || '—'"></td>
-                        <td data-label="To store" x-text="movement.to_store_name || '—'"></td>
-                        <td data-label="Work order" x-text="movement.work_order || '—'"></td>
-                        <td data-label="Recorded by" x-text="movement.created_by_name"></td>
-                        <td data-label="Transfer status" x-text="movement.transfer_status || '—'"></td>
-                    </tr></template></tbody>
-                </table></div>
-            </section>
-
-            <!-- My Parts Panel -->
-            <div x-show="showMyPartsPanel" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div class="inventory-panel-heading">
-                    <div class="inventory-panel-heading-content">
-                        <h3 class="inventory-panel-title">My Parts Inventory</h3>
-                    </div>
-                    <div class="inventory-panel-actions">
-                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
-                    </div>
-                </div>
-                <table class="stock-table">
-                    <thead>
-                        <tr>
-                            <th>Part Number</th>
-                            <th>Description</th>
-                            <th>Store</th>
-                            <th>Quantity</th>
-                            <th>Work Order</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="item in myPartsView" :key="item.id">
-                            <tr>
-                                <td data-label="Part Number"><strong x-text="item.part_number"></strong></td>
-                                <td x-text="item.description" data-label="Description"></td>
-                                <td data-label="Store"><span class="store-tag store-mine" x-text="item.store_name"></span></td>
-                                <td data-label="Quantity"><strong x-text="item.quantity"></strong></td>
-                                <td data-label="Work Order">
-                                    <span x-show="item.work_order" class="wo-tag" x-text="item.work_order"></span>
-                                    <span x-show="!item.work_order" class="wo-tag">Original</span>
-                                </td>
-                                <td data-label="Actions">
-                                    <button class="btn btn-sm"
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="editItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>
-                                        Edit
-                                    </button>
-                                    <button class="btn btn-sm btn-warning"
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="transferItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>
-                                        Transfer
-                                    </button>
-                                    <button class="btn btn-sm"
-                                            style="background: var(--brand-amber); color: var(--brand-navy);"
-                                            x-show="canEdit(item.store_owner, item.store_type)"
-                                            @click="consumeItem(item)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>
-                                        Consume
-                                    </button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                <div x-show="myPartsView.length === 0" style="padding: 2rem; text-align: center; color: var(--brand-slate);">
-                    You don't have any parts in your assigned stores yet.
-                </div>
-            </div>
-
-            <!-- User Management Panel (Admin Only) -->
-            <div x-show="!loading && showUsersPanel && ['owner','admin','superadmin'].includes(currentUser?.role)" class="inventory-table" style="margin-bottom: 1.5rem;">
-                <div class="inventory-panel-heading">
-                    <div class="inventory-panel-heading-content">
-                        <h3 class="inventory-panel-title">User Management</h3>
-                    </div>
-                    <div class="inventory-panel-actions">
-                        <button class="btn btn-success"
-                                @click="editingUser = null; userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' }; showUserModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg>
-                            Add User
-                        </button>
-                        <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
-                    </div>
-                </div>
-                <table class="stock-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Territory</th>
-                            <th>Actions</th>
+…7685 tokens truncated…         <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
