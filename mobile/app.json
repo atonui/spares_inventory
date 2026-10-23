@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SparesFlow",
+    "name": "Spares Tracker",
     "slug": "inventory-management-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,10 +16,9 @@
     "android": {
       "package": "com.atonui.inventory",
       "adaptiveIcon": {
-        "backgroundColor": "#15263B",
+        "backgroundColor": "#F5F7FA",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundImage": "./assets/android-icon-background.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -33,6 +32,8 @@
     "scheme": "inventory-management",
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "backgroundColor": "#F5F7FA",
+    "primaryColor": "#15263B"
   }
 }

@@ -213,7 +213,7 @@ export default function InventoryScreen() {
           <View style={styles.topBar}>
             <View style={styles.brandMark}><Image source={require('../../assets/android-icon-foreground.png')} style={styles.brandIcon} /></View>
             <View style={styles.brandCopy}>
-              <Text style={styles.eyebrow}>INVENTORY MANAGEMENT</Text>
+              <Text style={styles.eyebrow}>SPARES TRACKER</Text>
               <Text style={styles.pageTitle}>Your stock</Text>
             </View>
             <Pressable accessibilityRole="button" onPress={signOut} disabled={loading} style={styles.signOutButton}>
@@ -250,7 +250,7 @@ export default function InventoryScreen() {
 
           <ScrollView
             contentContainerStyle={styles.listContent}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={palette.blue} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={palette.navy} />}
             keyboardShouldPersistTaps="handled"
           >
             {visibleInventory.length === 0 ? (
@@ -288,8 +288,8 @@ export default function InventoryScreen() {
       <KeyboardAvoidingView style={styles.loginScreen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.loginContent} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
-            <View style={styles.heroMark}><Image source={require('../../assets/android-icon-foreground.png')} style={styles.brandIcon} /></View>
-            <Text style={styles.heroLabel}>INVENTORY MANAGEMENT</Text>
+            <View style={styles.heroMark}><Image source={require('../../assets/icon.png')} style={styles.heroIcon} /></View>
+            <Text style={styles.heroLabel}>SPARES TRACKER</Text>
             <Text style={styles.heroTitle}>Everything in its place.</Text>
             <Text style={styles.heroSubtitle}>Keep track of your stock, wherever the work takes you.</Text>
           </View>
@@ -353,7 +353,7 @@ export default function InventoryScreen() {
 function LoadingScreen({message}: {message: string}) {
   return (
     <SafeAreaView style={[styles.safeArea, styles.loadingScreen]}>
-      <ActivityIndicator size="large" color={palette.blue} />
+      <ActivityIndicator size="large" color={palette.navy} />
       <Text style={styles.muted}>{message}</Text>
     </SafeAreaView>
   );
@@ -368,37 +368,48 @@ function ErrorNotice({message, onRetry}: {message: string; onRetry?: () => void}
   );
 }
 
-const palette = {
-  navy: '#112B45',
-  blue: '#1266B5',
-  sky: '#78B5FF',
-  background: '#F4F7FA',
+const brandColors = {
+  navy: '#15263B',
+  amber: '#E9A23B',
+  slate: '#64748B',
+  paleNeutral: '#F5F7FA',
   white: '#FFFFFF',
-  text: '#182E43',
-  muted: '#65788A',
-  placeholder: '#8A9AAA',
-  border: '#D5DFE8',
+  border: '#D8E0E8',
   red: '#A13A32',
   redTint: '#FFF0EE',
+};
+
+const palette = {
+  navy: brandColors.navy,
+  amber: brandColors.amber,
+  slate: brandColors.slate,
+  background: brandColors.paleNeutral,
+  white: brandColors.white,
+  text: brandColors.navy,
+  muted: brandColors.slate,
+  placeholder: brandColors.slate,
+  border: brandColors.border,
+  red: brandColors.red,
+  redTint: brandColors.redTint,
 };
 
 const styles = StyleSheet.create({
   safeArea: {flex: 1, backgroundColor: palette.background},
   screen: {flex: 1, paddingHorizontal: 20},
   topBar: {minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, borderBottomColor: palette.border},
-  brandMark: {width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.navy},
+  brandMark: {width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.background},
   brandIcon: {width: 31, height: 31},
   brandCopy: {flex: 1},
-  eyebrow: {fontSize: 9, fontWeight: '800', letterSpacing: 1.4, color: palette.blue},
+  eyebrow: {fontSize: 9, fontWeight: '800', letterSpacing: 1.4, color: palette.navy},
   pageTitle: {fontSize: 20, fontWeight: '800', color: palette.text},
   signOutButton: {paddingVertical: 10, paddingHorizontal: 12},
-  signOutText: {fontWeight: '700', color: palette.blue},
+  signOutText: {fontWeight: '700', color: palette.navy},
   welcomeRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20, paddingBottom: 16},
   welcome: {fontSize: 17, fontWeight: '700', color: palette.text},
   muted: {marginTop: 4, color: palette.muted, fontSize: 13},
-  totalBadge: {minWidth: 56, alignItems: 'center', borderRadius: 12, backgroundColor: '#E4EFFA', paddingVertical: 7, paddingHorizontal: 9},
+  totalBadge: {minWidth: 56, alignItems: 'center', borderRadius: 12, backgroundColor: palette.background, paddingVertical: 7, paddingHorizontal: 9},
   totalNumber: {fontSize: 19, fontWeight: '800', color: palette.navy},
-  totalLabel: {fontSize: 8, fontWeight: '800', letterSpacing: 1.2, color: palette.blue},
+  totalLabel: {fontSize: 8, fontWeight: '800', letterSpacing: 1.2, color: palette.navy},
   searchBox: {height: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 13, backgroundColor: palette.white, borderRadius: 13, borderWidth: 1, borderColor: palette.border},
   searchIcon: {fontSize: 24, color: palette.muted, transform: [{rotate: '-20deg'}]},
   searchInput: {flex: 1, paddingVertical: 10, fontSize: 14, color: palette.text},
@@ -412,7 +423,7 @@ const styles = StyleSheet.create({
   quantityCaption: {fontSize: 7, fontWeight: '800', letterSpacing: 0.8, color: '#287441'},
   lowQuantityBadge: {backgroundColor: '#FFF0E8'},
   lowQuantityText: {color: '#A54E1E'},
-  cardFooter: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 13, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#EDF1F4'},
+  cardFooter: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 13, paddingTop: 10, borderTopWidth: 1, borderTopColor: palette.border},
   storeName: {flex: 1, marginRight: 8, fontSize: 12, fontWeight: '700', color: palette.muted},
   threshold: {fontSize: 11, color: palette.muted},
   emptyState: {alignItems: 'center', paddingHorizontal: 24, paddingTop: 70},
@@ -420,10 +431,11 @@ const styles = StyleSheet.create({
   loginScreen: {flex: 1},
   loginContent: {flexGrow: 1, padding: 18, justifyContent: 'center'},
   hero: {paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30, backgroundColor: palette.navy, borderTopLeftRadius: 24, borderTopRightRadius: 24},
-  heroMark: {width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: palette.sky},
-  heroLabel: {marginTop: 16, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, color: palette.sky},
+  heroMark: {width: 52, height: 52, borderRadius: 12, overflow: 'hidden'},
+  heroIcon: {width: 52, height: 52},
+  heroLabel: {marginTop: 16, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, color: palette.amber},
   heroTitle: {marginTop: 9, fontSize: 30, lineHeight: 36, fontWeight: '800', color: palette.white},
-  heroSubtitle: {marginTop: 8, fontSize: 15, lineHeight: 23, color: '#C1D0DF'},
+  heroSubtitle: {marginTop: 8, fontSize: 15, lineHeight: 23, color: palette.background},
   loginCard: {padding: 22, backgroundColor: palette.white, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, borderWidth: 1, borderTopWidth: 0, borderColor: palette.border},
   loginTitle: {fontSize: 29, fontWeight: '800', letterSpacing: -0.7, color: palette.navy},
   loginSubtitle: {marginTop: 5, marginBottom: 23, fontSize: 15, color: palette.muted},
@@ -431,10 +443,10 @@ const styles = StyleSheet.create({
   input: {height: 52, paddingHorizontal: 13, borderRadius: 11, borderWidth: 1, borderColor: '#AFC0CF', fontSize: 15, color: palette.text, backgroundColor: palette.white},
   rememberRow: {flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 9, marginTop: 18, paddingVertical: 5},
   checkbox: {width: 21, height: 21, alignItems: 'center', justifyContent: 'center', borderRadius: 6, borderWidth: 1.5, borderColor: '#98A7B5'},
-  checkboxChecked: {backgroundColor: palette.blue, borderColor: palette.blue},
+  checkboxChecked: {backgroundColor: palette.navy, borderColor: palette.navy},
   checkboxTick: {fontSize: 14, fontWeight: '800', color: palette.white},
   rememberText: {fontSize: 13, color: palette.muted},
-  primaryButton: {minHeight: 51, marginTop: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.blue},
+  primaryButton: {minHeight: 51, marginTop: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.navy},
   buttonDisabled: {opacity: 0.65},
   primaryButtonText: {fontSize: 15, fontWeight: '800', color: palette.white},
   inviteNote: {marginTop: 16, textAlign: 'center', fontSize: 11, lineHeight: 16, color: palette.muted},
