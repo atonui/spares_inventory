@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261023-app-button-system-v1">
+    <link rel="stylesheet" href="mystyle.css?v=20261023-sidebar-navigation-v1">
     <link rel="stylesheet" href="login.css?v=20261023-app-button-system-v1">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
@@ -110,12 +110,54 @@
         </section>
 
         <!-- Main App -->
-        <div x-show="isAuthenticated" class="container" x-cloak>
+        <div x-show="isAuthenticated" class="workspace-layout" x-cloak
+             x-data="{ mobileNavigationOpen: false, trapNavigationFocus(event, drawer) { const focusable = [...drawer.querySelectorAll('a[href], button:not([disabled])')].filter((element) => element.getClientRects().length); if (!focusable.length) return; const first = focusable[0]; const last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } } }"
+             @click.outside="if (mobileNavigationOpen) mobileNavigationOpen = false"
+             @keydown.escape.window="if (mobileNavigationOpen) { mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus()) }">
+            <aside class="workspace-sidebar" :class="mobileNavigationOpen ? 'is-open' : ''" @keydown.tab="if (mobileNavigationOpen) trapNavigationFocus($event, $el)"
+                   :inert="window.matchMedia('(max-width: 1024px)').matches && !mobileNavigationOpen"
+                   :role="mobileNavigationOpen ? 'dialog' : null"
+                   :aria-modal="mobileNavigationOpen ? 'true' : null"
+                   aria-label="Application navigation" aria-labelledby="sidebar-brand-name">
+                <a class="sidebar-brand" href="/" aria-label="Spares Tracker home">
+                    <img src="brand/source/logo-icon.svg" alt=""><span id="sidebar-brand-name">Spares Tracker</span>
+                </a>
+                <button type="button" class="sidebar-close" x-show="mobileNavigationOpen" @click="mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus())" aria-label="Close main navigation">Close <span aria-hidden="true">×</span></button>
+                <p class="sidebar-nav-heading">Workspace</p>
+                <nav class="inventory-nav sidebar-nav" id="primary-navigation" aria-label="Main navigation"
+                     @click="if (mobileNavigationOpen) { mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus()) }">
+                    <a class="sidebar-nav-link" x-ref="firstNavigationLink" href="#inventory" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click.prevent="openPanel('showInventoryPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Inventory</a>
+                    <a class="sidebar-nav-link" href="#stores" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click.prevent="openPanel('showAllStoresPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg> Stores</a>
+                    <a class="sidebar-nav-link" href="#replenishment" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click.prevent="openPanel('showLowStockPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Replenishment</a>
+                    <a class="sidebar-nav-link" href="#reports" :class="showReportsPanel ? 'is-active' : ''" :aria-current="showReportsPanel ? 'page' : null" @click.prevent="openPanel('showReportsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg> Reports</a>
+                    <a class="sidebar-nav-link" href="#parts" :class="showAllPartsPanel ? 'is-active' : ''" :aria-current="showAllPartsPanel ? 'page' : null" @click.prevent="openPanel('showAllPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Parts catalog</a>
+                    <a class="sidebar-nav-link" href="#equipment" :class="showEquipmentPanel ? 'is-active' : ''" :aria-current="showEquipmentPanel ? 'page' : null" @click.prevent="openPanel('showEquipmentPanel'); loadEquipment()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#equipment"></use></svg> Equipment</a>
+                    <a class="sidebar-nav-link" href="#movements" :class="showMovementsPanel ? 'is-active' : ''" :aria-current="showMovementsPanel ? 'page' : null" @click.prevent="openPanel('showMovementsPanel'); loadMovements()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#history"></use></svg> Movement history</a>
+                </nav>
+                <section class="sidebar-management" x-show="['owner','admin','superadmin'].includes(currentUser?.role)" aria-labelledby="sidebar-management-heading">
+                    <h2 id="sidebar-management-heading" class="sidebar-nav-heading">Management</h2>
+                    <nav class="sidebar-nav" aria-label="Management navigation"
+                         @click="if (mobileNavigationOpen) { mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus()) }">
+                        <a x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="sidebar-nav-link" href="#archived" :class="showArchivedPanel ? 'is-active' : ''" :aria-current="showArchivedPanel ? 'page' : null" @click.prevent="openPanel('showArchivedPanel'); loadArchivedRecords()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#archive"></use></svg> Archived records</a>
+                        <a x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="sidebar-nav-link" href="#users" :class="showUsersPanel ? 'is-active' : ''" :aria-current="showUsersPanel ? 'page' : null" @click.prevent="openPanel('showUsersPanel'); loadUsers(); loadInvitations()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg> Manage users</a>
+                        <a x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="sidebar-nav-link" href="#manage-stores" :class="showStoresPanel ? 'is-active' : ''" :aria-current="showStoresPanel ? 'page' : null" @click.prevent="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg> Manage stores</a>
+                        <a x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="sidebar-nav-link" href="#manage-parts" :class="showPartsPanel ? 'is-active' : ''" :aria-current="showPartsPanel ? 'page' : null" @click.prevent="openPanel('showPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Manage parts</a>
+                        <a class="sidebar-nav-link" href="#activity-log" :class="showLogsPanel ? 'is-active' : ''" :aria-current="showLogsPanel ? 'page' : null" @click.prevent="openPanel('showLogsPanel'); loadActivityLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#audit"></use></svg> Activity log</a>
+                        <a x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="sidebar-nav-link" href="#store-types" :class="showStoreTypesPanel ? 'is-active' : ''" :aria-current="showStoreTypesPanel ? 'page' : null" @click.prevent="openPanel('showStoreTypesPanel'); loadStoreTypes()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg> Store types</a>
+                    </nav>
+                </section>
+            </aside>
+            <div class="sidebar-backdrop" x-show="mobileNavigationOpen" x-cloak @click="mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus())" aria-hidden="true"></div>
+            <main class="container workspace-main" :inert="window.matchMedia('(max-width: 1024px)').matches && mobileNavigationOpen">
             <!-- Header -->
             <div class="header">
                 <div class="user-info">
-                    <div>
-                        <h1 class="header-brand-heading"><a class="header-brand" href="/" aria-label="Spares Tracker home"><img src="brand/source/logo-icon.svg" alt=""><span>Spares Tracker</span></a></h1>
+                    <button type="button" class="mobile-nav-toggle" x-ref="mobileNavigationTrigger" :aria-label="mobileNavigationOpen ? 'Close main navigation' : 'Open main navigation'" aria-controls="primary-navigation" :aria-expanded="mobileNavigationOpen" @click="mobileNavigationOpen = !mobileNavigationOpen; if (mobileNavigationOpen) $nextTick(() => $refs.firstNavigationLink.focus())">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        <span>Menu</span>
+                    </button>
+                    <div class="user-summary">
+                        <h1 class="header-brand-heading mobile-header-brand"><a class="header-brand" href="/" aria-label="Spares Tracker home"><img src="brand/source/logo-icon.svg" alt=""><span>Spares Tracker</span></a></h1>
                         <p class="timezone-note" x-show="timezoneError" role="alert"><span x-text="timezoneError"></span> <button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry timezone settings</button></p>
                         <p>Welcome back, <strong x-text="currentUser?.name"></strong> (<span x-text="currentUser?.role"></span>)</p>
                     </div>
@@ -133,6 +175,7 @@
                             </div>
                         </div>
                     </div>
+                </div>
             </div>
 
             <!-- Loading State -->
@@ -146,40 +189,6 @@
                     <h2 x-text="currentViewLabel"></h2>
                     <button class="btn btn-sm ui-icon-only" @click="loadInventory()" :disabled="loading" aria-label="Refresh inventory" title="Refresh inventory"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
                 </div>
-                <div class="primary-navigation-shell" x-data="{ mobileNavigationOpen: false }" @click.outside="mobileNavigationOpen = false" @keydown.escape.window="if (mobileNavigationOpen) { mobileNavigationOpen = false; $refs.mobileNavigationTrigger.focus() }">
-                <button type="button" class="mobile-nav-toggle" x-ref="mobileNavigationTrigger" :aria-label="mobileNavigationOpen ? 'Close main navigation' : 'Open main navigation'" aria-controls="primary-navigation" :aria-expanded="mobileNavigationOpen" @click="mobileNavigationOpen = !mobileNavigationOpen">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                    <span>Menu</span>
-                </button>
-                <nav class="inventory-nav" id="primary-navigation" :class="mobileNavigationOpen ? 'is-open' : ''" @click="if (mobileNavigationOpen) { mobileNavigationOpen = false; $refs.mobileNavigationTrigger.focus() }" aria-label="Main navigation">
-                    <button class="btn" :class="showInventoryPanel ? 'is-active' : ''" :aria-current="showInventoryPanel ? 'page' : null" @click="openPanel('showInventoryPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Inventory</button>
-                    <button class="btn" :class="showAllStoresPanel || showStoreInventoryPanel ? 'is-active' : ''" :aria-current="showAllStoresPanel || showStoreInventoryPanel ? 'page' : null" @click="openPanel('showAllStoresPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg> Stores</button>
-                    <button class="btn" :class="showLowStockPanel ? 'is-active' : ''" :aria-current="showLowStockPanel ? 'page' : null" @click="openPanel('showLowStockPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Replenishment</button>
-                    <button class="btn" :class="showReportsPanel ? 'is-active' : ''" :aria-current="showReportsPanel ? 'page' : null" @click="openPanel('showReportsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg> Reports</button>
-                    <button class="btn" :class="showAllPartsPanel ? 'is-active' : ''" @click="openPanel('showAllPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg> Parts catalog</button>
-                    <button class="btn" :class="showEquipmentPanel ? 'is-active' : ''" @click="openPanel('showEquipmentPanel'); loadEquipment()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#equipment"></use></svg> Equipment</button>
-                    <button class="btn" :class="showMovementsPanel ? 'is-active' : ''" @click="openPanel('showMovementsPanel'); loadMovements()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#history"></use></svg> Movement history</button>
-                </nav>
-                </div>
-                <details class="management-menu" x-show="['owner','admin','superadmin'].includes(currentUser?.role)">
-                    <summary>Management</summary>
-                    <div class="management-actions">
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showArchivedPanel'); loadArchivedRecords()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#archive"></use></svg> Archived records</button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showUsersPanel'); loadUsers(); loadInvitations()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg>
-                        <span>Manage Users</span>
-                    </button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoresPanel'); if(users.length === 0) loadUsers()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg>
-                        <span>Manage Stores</span>
-                    </button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showPartsPanel')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#box"></use></svg>
-                        <span>Manage Parts</span>
-                    </button>
-                    <button class="btn" @click="openPanel('showLogsPanel'); loadActivityLogs()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#audit"></use></svg> Activity log</button>
-                    <button x-show="['owner','admin','superadmin'].includes(currentUser?.role)" class="btn" @click="openPanel('showStoreTypesPanel'); loadStoreTypes()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg>
-                        <span>Store Types</span>
-                    </button>
-                    </div>
-                </details>
                 <div x-show="showInventoryPanel" class="inventory-toolbar">
                     <p role="status" aria-live="polite" x-text="filteredInventory.length + ' of ' + inventory.length + ' stock entries'"></p>
                     <button class="btn inventory-add-action" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Add Stock</button>
@@ -1696,6 +1705,7 @@
                     </tbody>
                 </table>
             </div>
+        </main>
         </div>
     </div>
 <button id="back-to-top" class="back-to-top" type="button" aria-label="Back to top" hidden>

@@ -73,13 +73,18 @@ test('superadmin uses shared surface and control tokens', () => {
 });
 
 test('every page cache-busts the updated site-wide stylesheets', () => {
-    const version = '20261023-app-button-system-v1';
+    const versions = {
+        'mystyle.css': '20261023-sidebar-navigation-v1',
+        'login.css': '20261023-app-button-system-v1',
+        'profile.css': '20261023-app-button-system-v1',
+        'superadmin.css': '20261023-app-button-system-v1',
+    };
     const pages = fs.readdirSync('static').filter(name => name.endsWith('.html'));
     for (const page of pages) {
         const source = fs.readFileSync(`static/${page}`, 'utf8');
-        for (const stylesheet of ['mystyle.css', 'login.css', 'profile.css', 'superadmin.css']) {
+        for (const stylesheet of Object.keys(versions)) {
             const href = new RegExp(`href=["'][^"']*${stylesheet}\\?v=([^"']+)["']`).exec(source);
-            if (href) assert.equal(href[1], version, `${page} must load the updated ${stylesheet}`);
+            if (href) assert.equal(href[1], versions[stylesheet], `${page} must load the updated ${stylesheet}`);
         }
     }
 });
