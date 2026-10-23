@@ -35,7 +35,7 @@ test('in-transit transfers uses the shared panel heading and keeps transfer cont
     assert.match(panel, /x-for="transfer in pendingTransfers"/);
     assert.match(panel, /x-show="transfer\.can_receive" @click="confirmTransfer\(transfer,'receive'\)"/);
     assert.match(panel, /x-show="transfer\.can_return" @click="confirmTransfer\(transfer,'return'\)"/);
-    assert.match(panel, /x-show="pendingTransfers\.length === 0"/);
+    assert.match(panel, /class="in-transit-empty-state" x-show="pendingTransfers\.length === 0">No transfers awaiting receipt\.<\/p>/);
 });
 
 for (const replenishment of [false, true]) {
