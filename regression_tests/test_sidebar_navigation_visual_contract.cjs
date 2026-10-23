@@ -5,6 +5,7 @@ const vm = require('node:vm');
 
 const html = fs.readFileSync('static/index.html', 'utf8');
 const css = fs.readFileSync('static/mystyle.css', 'utf8');
+const buttonCss = fs.readFileSync('static/buttons.css', 'utf8');
 
 test('authenticated app uses a labeled sidebar and a separate content column', () => {
   assert.match(html, /class="workspace-layout"/);
@@ -49,6 +50,14 @@ test('narrow layouts get an accessible drawer trigger, dismiss control, and focu
   assert.match(css, /@media\s*\(max-width:\s*1024px\)[\s\S]*?\.workspace-sidebar\s*\{[^}]*position:\s*fixed/);
   assert.match(css, /\.workspace-sidebar\.is-open\s*\{[^}]*transform:\s*translateX\(0\)/);
   assert.match(css, /\.sidebar-backdrop\s*\{[^}]*position:\s*fixed/);
+});
+
+test('shared button styles keep the drawer trigger hidden on desktop and enabled on narrow layouts', () => {
+  const desktopHide = buttonCss.lastIndexOf('button.mobile-nav-toggle { display: none; }');
+  const mobileShow = buttonCss.lastIndexOf('button.mobile-nav-toggle { display: inline-flex; }');
+  assert.ok(desktopHide > buttonCss.indexOf('display: inline-flex;'), 'desktop visibility override must follow the shared button reset');
+  assert.ok(mobileShow > desktopHide, 'mobile visibility override must follow the desktop hide rule');
+  assert.match(buttonCss.slice(desktopHide), /@media\s*\(max-width:\s*1024px\)\s*\{\s*button\.mobile-nav-toggle\s*\{\s*display:\s*inline-flex;\s*\}\s*\}/);
 });
 
 test('drawer focus wraps from its first and last visible controls', () => {

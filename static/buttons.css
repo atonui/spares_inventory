@@ -149,6 +149,13 @@ button.ui-icon-only {
 }
 .qa-btn.qa-danger:hover:not(:disabled) { border-color: #C78383; background: #FFF7F7; }
 
+/* The shared button reset sets every button to inline-flex. Keep the mobile
+   navigation trigger hidden on desktop, then enable it at drawer widths. */
+button.mobile-nav-toggle { display: none; }
+@media (max-width: 1024px) {
+    button.mobile-nav-toggle { display: inline-flex; }
+}
+
 @media (max-width: 768px) {
     :is(
         button:not(.nav-item, .stock-action-item, .inventory-export-menu__item, .stock-action-trigger, .qa-btn),
