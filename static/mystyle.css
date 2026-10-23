@@ -316,26 +316,6 @@
             font-size: 0.8rem;
         }
         
-        .btn-success {
-            background: #155724;
-            color: #ffffff;
-        }
-        
-        .btn-success:hover {
-            background: #0f401b;
-            color: #ffffff;
-        }
-        
-        .btn-warning {
-            background: #ffc107;
-            color: #000;
-        }
-
-        .btn-warning:hover {
-            background: #e5ac00;
-            color: var(--brand-navy);
-        }
-        
         .inventory-table {
             background: white;
             border-radius: 8px;
@@ -601,12 +581,6 @@ body > [x-data="inventoryApp()"] .stat-card {
     box-shadow: var(--shadow-surface);
 }
 .inventory-controls { overflow: visible; }
-.inventory-controls .btn { background: var(--brand-navy); color: #ffffff; }
-.inventory-controls .btn:hover { background: var(--brand-navy); color: #ffffff; }
-.inventory-controls .btn-success { background: #1c7430; }
-.inventory-controls .btn-success:hover { background: #155b25; }
-.inventory-toolbar .inventory-add-action { background: var(--brand-navy); color: #ffffff; border: 1px solid var(--brand-navy); font-weight: 600; }
-.inventory-toolbar .inventory-add-action:hover { background: #203953; color: #ffffff; border-color: #203953; }
 .inventory-filter-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); margin-top: var(--space-4); }
 .inventory-search-field { min-width: 0; }
 .inventory-search-field label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -653,13 +627,6 @@ body > [x-data="inventoryApp()"] .stat-card {
 }
 .inventory-controls .inventory-export-menu__item:hover { background: var(--brand-page); color: var(--brand-navy); }
 .inventory-controls .inventory-export-menu__item .ui-icon { width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--brand-slate); }
-.stock-table .btn:not(.btn-warning):not(.btn-consume):not(.btn-danger) { background: var(--brand-navy); color: #ffffff; }
-.stock-table .btn:not(.btn-warning):not(.btn-consume):not(.btn-danger):hover { background: var(--brand-navy); color: #ffffff; }
-.stock-table .btn-danger { background: #dc3545; color: #ffffff; }
-.stock-table .btn-danger:hover { background: #bb2d3b; color: #ffffff; }
-.stock-table .btn-consume { background: var(--brand-amber); color: var(--brand-navy); }
-.stock-table .btn-consume:hover { background: #D78B25; color: var(--brand-navy); }
-.stock-table .btn-warning:hover { background: #e5ac00; color: var(--brand-navy); }
 .view-heading, .inventory-toolbar, .toolbar-actions {
     display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: var(--space-3);
@@ -714,9 +681,6 @@ body > [x-data="inventoryApp()"] .stat-card {
 .mobile-nav-toggle { display: none; }
 .inventory-nav, .management-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .management-actions { margin-top: var(--space-3); }
-.inventory-nav .btn { background: var(--brand-page); color: var(--brand-navy); }
-.inventory-nav .btn:hover { background: var(--brand-border); }
-.inventory-nav .btn.is-active { background: var(--brand-navy); color: #ffffff; }
 .management-menu { margin-top: var(--space-3); border-top: 1px solid var(--brand-border); padding-top: var(--space-2); }
 .management-menu summary { cursor: pointer; font-weight: 600; padding: var(--space-2) 0; width: fit-content; }
 .inventory-filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--brand-border); }
@@ -1280,8 +1244,6 @@ label.btn {
 .replenishment-panel > .inventory-panel-heading { margin: -1.5rem -1.5rem 1.5rem; border-radius: 8px 8px 0 0; }
 .replenishment-panel h3 { margin-bottom: .75rem; }
 .replenishment-panel .table-responsive { overflow-x: auto; }
-.replenishment-panel .btn { background: var(--brand-navy); color: #ffffff; }
-.replenishment-panel .btn:hover { background: var(--brand-navy); color: #ffffff; }
 .replenishment-panel .btn:disabled { opacity: 1; cursor: not-allowed; }
 .replenishment-panel .btn:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
 .replenishment-copy { max-width: 72ch; line-height: 1.55; }

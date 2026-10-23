@@ -73,7 +73,7 @@ test('superadmin uses shared surface and control tokens', () => {
 });
 
 test('every page cache-busts the updated site-wide stylesheets', () => {
-    const version = '20261023-store-inventory-buttons-v2';
+    const version = '20261023-app-button-system-v1';
     const pages = fs.readdirSync('static').filter(name => name.endsWith('.html'));
     for (const page of pages) {
         const source = fs.readFileSync(`static/${page}`, 'utf8');

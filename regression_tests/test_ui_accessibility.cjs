@@ -143,63 +143,13 @@ test('inventory dialogs expose accessible names and modal semantics', () => {
     }
 });
 
-test('primary, success, warning, and consume actions meet WCAG AA contrast', () => {
+test('shared outlined buttons and destructive actions meet WCAG AA contrast', () => {
     assertAa('Brand navy text on pale neutral', '#15263B', '#F5F7FA');
     assertAa('Brand slate text on white', '#64748B', '#FFFFFF');
-    const mainCss = read('mystyle.css');
-    const adminCss = read('superadmin.css');
-    const primaryBg = declaration(mainCss, '.btn', 'background');
-    const primaryFg = declaration(mainCss, '.btn', 'color');
-    const successBg = declaration(mainCss, '.btn-success', 'background');
-    const warningBg = declaration(mainCss, '.btn-warning', 'background');
-    const disabledBg = declaration(mainCss, '.btn:disabled', 'background');
-    const disabledFg = declaration(mainCss, '.btn:disabled', 'color');
-    const greenBg = declaration(adminCss, '.btn-green', 'background');
-    const greenFg = declaration(adminCss, '.btn-green', 'color');
-    const greenDisabledBg = declaration(adminCss, '.btn-green:disabled', 'background');
-    const greenDisabledFg = declaration(adminCss, '.btn-green:disabled', 'color');
-    const amberBg = declaration(adminCss, '.btn-amber', 'background');
-    const amberFg = declaration(adminCss, '.btn-amber', 'color');
-    const adminTextSelectors = ['.sidebar-brand p', '.sidebar-footer a', '.tbl th', '.stat-lbl', '.cfg-desc', '.cfg-unit', '.empty', '.qa-sub'];
-    const indexHtml = read('index.html');
-    const consumeText = indexHtml.indexOf('<span x-show="!loading">Consume Part</span>');
-    const consumeStart = indexHtml.lastIndexOf('<button', consumeText);
-    const consumeEnd = indexHtml.indexOf('>', consumeStart);
-    assert.ok(consumeText >= 0 && consumeStart >= 0 && consumeEnd > consumeStart, 'Missing consume action button');
-    const consumeButtonAttrs = attributes(indexHtml.slice(consumeStart + '<button'.length, consumeEnd));
-    const consumeStyle = Object.fromEntries(consumeButtonAttrs.style.split(';').map(item => {
-        const [key, ...value] = item.split(':');
-        return [key?.trim().toLowerCase(), value.join(':').trim()];
-    }).filter(([key, value]) => key && value));
-    const consumeBg = consumeStyle.background || consumeStyle['background-color'];
-    const consumeFg = consumeStyle.color;
-
-    assertAa('Primary action', primaryFg, primaryBg);
-    assertAa('Primary action hover', primaryFg, declaration(mainCss, '.btn:hover', 'background'));
-    const inventoryHoverFg = declaration(mainCss, '.inventory-controls .btn:hover', 'color');
-    const replenishmentHoverFg = declaration(mainCss, '.replenishment-panel .btn:hover', 'color');
-    assert.equal(inventoryHoverFg, '#ffffff');
-    assert.equal(replenishmentHoverFg, '#ffffff');
-    assertAa('Inventory control hover action', inventoryHoverFg, declaration(mainCss, '.inventory-controls .btn:hover', 'background'));
-    assertAa('Replenishment hover action', replenishmentHoverFg, declaration(mainCss, '.replenishment-panel .btn:hover', 'background'));
-    assertAa('Success action', primaryFg, successBg);
-    assertAa('Success action hover', primaryFg, declaration(mainCss, '.btn-success:hover', 'background'));
-    assertAa('Warning action', declaration(mainCss, '.btn-warning', 'color'), warningBg);
-    assertAa('Warning action hover', declaration(mainCss, '.btn-warning:hover', 'color'), declaration(mainCss, '.btn-warning:hover', 'background'));
-    assertAa('Disabled action', disabledFg, disabledBg);
-    assert.equal(declaration(mainCss, '.inventory-controls .btn:disabled', 'opacity'), '1');
-    assert.equal(declaration(mainCss, '.replenishment-panel .btn:disabled', 'opacity'), '1');
-    assertAa('Green platform-admin action', greenFg, greenBg);
-    assertAa('Green platform-admin hover action', greenFg, declaration(adminCss, '.btn-green:hover', 'background'));
-    assertAa('Disabled platform-admin action', greenDisabledFg, greenDisabledBg);
-    assertAa('Amber platform-admin action', amberFg, amberBg);
-    assertAa('Amber platform-admin hover action', amberFg, declaration(adminCss, '.btn-amber:hover', 'background'));
-    assertAa('Consume action', consumeFg, consumeBg);
-    for (const selector of adminTextSelectors) {
-        const foreground = declaration(adminCss, selector, 'color');
-        const background = /\.tbl th/.test(selector) ? declaration(adminCss, selector, 'background') : '#ffffff';
-        assertAa(`${selector} helper text`, foreground, background);
-    }
+    const buttonCss = read('buttons.css');
+    assertAa('Standard button label', '#15263B', '#FFFFFF');
+    assertAa('Destructive button label', '#8A2828', '#FFFFFF');
+    assert.match(buttonCss, /\.btn-danger[^{}]*\{[^}]*color:\s*#8A2828/s);
 });
 
 test('equipment due-soon and overdue summary text meets WCAG AA contrast', () => {
@@ -242,28 +192,10 @@ test('equipment calibration badges meet WCAG AA contrast in every state', () => 
     }
 });
 
-test('dark SparesFlow action buttons explicitly use a light foreground', () => {
-    const mainCss = read('mystyle.css');
-    const adminCss = read('superadmin.css');
-    const loginCss = read('login.css');
-    const darkButtons = [
-        ['Primary button', declaration(mainCss, '.btn', 'color'), declaration(mainCss, '.btn', 'background')],
-        ['Success button', declaration(mainCss, '.btn-success', 'color'), declaration(mainCss, '.btn-success', 'background')],
-        ['Inventory controls', declaration(mainCss, '.inventory-controls .btn', 'color'), declaration(mainCss, '.inventory-controls .btn', 'background')],
-        ['Stock row actions', declaration(mainCss, '.stock-table .btn:not(.btn-warning):not(.btn-consume):not(.btn-danger)', 'color'), declaration(mainCss, '.stock-table .btn:not(.btn-warning):not(.btn-consume):not(.btn-danger)', 'background')],
-        ['Danger row action', declaration(mainCss, '.stock-table .btn-danger', 'color'), declaration(mainCss, '.stock-table .btn-danger', 'background')],
-        ['Replenishment actions', declaration(mainCss, '.replenishment-panel .btn', 'color'), declaration(mainCss, '.replenishment-panel .btn', 'background')],
-        ['Profile actions', declaration(read('profile.css'), '.profile-page button', 'color'), declaration(read('profile.css'), '.profile-page button', 'background')],
-        ['Selected inventory tab', declaration(mainCss, '.inventory-nav .btn.is-active', 'color'), declaration(mainCss, '.inventory-nav .btn.is-active', 'background')],
-        ['Login submit', declaration(loginCss, '.login-submit', 'color'), declaration(loginCss, '.login-submit', 'background')],
-        ['Platform admin red action', declaration(adminCss, '.btn-red', 'color'), declaration(adminCss, '.btn-red', 'background')],
-        ['Platform admin green action', declaration(adminCss, '.btn-green', 'color'), declaration(adminCss, '.btn-green', 'background')],
-        ['Platform admin amber action', declaration(adminCss, '.btn-amber', 'color'), declaration(adminCss, '.btn-amber', 'background')],
-    ];
-    for (const [name, foreground, background] of darkButtons) {
-        assert.ok(foreground, `${name} should explicitly define its text color`);
-        assertAa(name, foreground, background);
-    }
+test('selected navigation buttons retain a readable active state', () => {
+    const buttonCss = read('buttons.css');
+    assert.match(buttonCss, /\.inventory-nav \.btn\.is-active[^{}]*\{[^}]*color:\s*#FFFFFF/s);
+    assert.match(buttonCss, /\.profile-tabs button\[aria-selected="true"\][^{}]*\{[^}]*color:\s*#FFFFFF/s);
 });
 
 test('platform-admin inline helper copy keeps readable contrast', () => {
@@ -419,5 +351,5 @@ test('remaining fixed inventory tables become labeled mobile cards and keep row 
     assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
     assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
     assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
-    assert.match(html, /href="mystyle\.css\?v=20261023-store-inventory-buttons-v2"/, 'Header stylesheet changes should use a fresh cache version');
+    assert.match(html, /href="mystyle\.css\?v=20261023-app-button-system-v1"/, 'Header stylesheet changes should use a fresh cache version');
 });

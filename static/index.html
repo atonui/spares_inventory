@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261023-store-inventory-buttons-v2">
-    <link rel="stylesheet" href="login.css?v=20261023-store-inventory-buttons-v2">
+    <link rel="stylesheet" href="mystyle.css?v=20261023-app-button-system-v1">
+    <link rel="stylesheet" href="login.css?v=20261023-app-button-system-v1">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -41,6 +41,7 @@
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 <link rel="stylesheet" href="icons.css?v=20261017-sparesflow-button-contrast">
+<link rel="stylesheet" href="buttons.css?v=20261023-app-button-system-v1">
     <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="brand/generated/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="brand/generated/favicon-16.png">
@@ -383,8 +384,7 @@
                                 <td data-label="Unit Cost" x-text="part.unit_cost ? part.unit_cost.toFixed(2) : '0.00'"></td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editPart(part)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg> Edit</button>
-                                    <button class="btn btn-sm"
-                                            style="background: #dc3545; color: white;"
+                                    <button class="btn btn-sm btn-danger"
                                             @click="deletePart(part.id, part.part_number)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#archive"></use></svg>
                                             Archive
                                     </button>
@@ -436,8 +436,7 @@
                                 <td data-label="Assigned To" x-text="getUserName(store.assigned_user_id)"></td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editStore(store)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg> Edit</button>
-                                    <button class="btn btn-sm"
-                                            style="background: #dc3545; color: white;"
+                                    <button class="btn btn-sm btn-danger"
                                             @click="deleteStore(store.id, store.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#archive"></use></svg> Archive</button>
                                 </td>
                             </tr>
@@ -937,8 +936,7 @@
                                 <td x-text="user.territory || 'N/A'" data-label="Territory"></td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editUser(user)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg> Edit</button>
-                                    <button class="btn btn-sm"
-                                            style="background: #dc3545; color: white;"
+                                    <button class="btn btn-sm btn-danger"
                                             x-show="user.id !== currentUser.id"
                                             @click="deleteUser(user.id, user.name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#archive"></use></svg> Archive</button>
                                     <button class="btn btn-sm"
@@ -1153,8 +1151,7 @@
                                 <td data-label="In Use" x-text="stores.filter(s => s.type === storeType.type_code).length + ' stores'"></td>
                                 <td data-label="Actions">
                                     <button class="btn btn-sm" @click="editStoreType(storeType)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg> Edit</button>
-                                    <button class="btn btn-sm"
-                                            style="background: #dc3545; color: white;"
+                                    <button class="btn btn-sm btn-danger"
                                             @click="deleteStoreType(storeType.id, storeType.type_name)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg>
                                         Delete
                                     </button>
@@ -1262,7 +1259,7 @@
                             <button type="button" class="btn" @click="showConsumeModal = false; consumeForm = {};">
                                 Cancel
                             </button>
-                            <button type="submit" class="btn" style="background: var(--brand-amber); color: var(--brand-navy);" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>
+                            <button type="submit" class="btn btn-consume" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#minus"></use></svg>
                                 <span x-show="!loading">Consume Part</span>
                                 <span x-show="loading">Processing...</span>
                             </button>
