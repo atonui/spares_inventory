@@ -15,6 +15,7 @@ from . import (
     v0009_email_change_verification,
     v0010_mobile_pairing,
     v0011_mobile_device_sessions,
+    v0012_mobile_stock_adjustments,
 )
 
 
@@ -44,6 +45,7 @@ MIGRATIONS = tuple(
         v0009_email_change_verification,
         v0010_mobile_pairing,
         v0011_mobile_device_sessions,
+        v0012_mobile_stock_adjustments,
     )
 )
 

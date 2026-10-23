@@ -5,7 +5,7 @@ from backend.database_sql import execute, is_postgres
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.activity import record_activity
 
-STOCK_AUDIT_ACTIONS = frozenset({'add_stock','consume_stock','update_stock','import_stock_balances',
+STOCK_AUDIT_ACTIONS = frozenset({'add_stock','consume_stock','update_stock','mobile_stock_adjustment','import_stock_balances',
     'transfer_stock','receive_transfer','return_transfer','confirm_stock_count','set_stock_minimum'})
 PROTECTED_AUDIT_SQL = '(' + ','.join("'"+name+"'" for name in sorted(STOCK_AUDIT_ACTIONS)) + ')'
 

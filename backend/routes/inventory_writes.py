@@ -11,6 +11,7 @@ from backend.schemas.inventory_writes import (
     TransferConfirmationRequest,
     TransferStockRequest,
     ConsumeStockRequest,
+    NativeStockAdjustmentRequest,
 )
 
 
@@ -431,6 +432,60 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         user_id: int = Depends(get_current_user),csrf_valid: bool = Depends(verify_csrf),request: Request = None):
         return complete_transfer(transfer_id,data,user_id,'returned',request,session_token=get_request_credential(request).value)
 
+    @router.post('/api/v1/inventory/adjustments')
+    @log_endpoint(action='mobile_stock_adjustment', resource_type='inventory', transactional=True)
+    async def adjust_stock_v1(data: NativeStockAdjustmentRequest,
+        user_id: int = Depends(get_current_user), request: Request = None):
+        """Set a counted balance with optimistic concurrency and retry-safe operation ID."""
+        credential = get_request_credential(request)
+        if credential.transport != 'bearer':
+            raise HTTPException(status_code=401, detail='Not authenticated')
+        with authenticated_write_transaction(user_id, credential.value,
+                busy_detail='Stock is busy; no changes saved. Try again') as conn:
+            item = execute(conn, _locked(conn, """SELECT i.*,s.type,s.assigned_user_id
+                FROM inventory i JOIN stores s ON s.id=i.store_id WHERE i.id=?""", 'i'),
+                (data.inventory_id,)).fetchone()
+            if not item:
+                raise HTTPException(status_code=404, detail='Inventory item not found')
+            require_stock_access(conn, user_id, item['type'], item['assigned_user_id'])
+            require_active_record(conn, 'stores', item['store_id'])
+            require_active_record(conn, 'parts', item['part_id'])
+            if item['work_order_id'] is not None:
+                raise HTTPException(status_code=409, detail='Allocated stock cannot be adjusted here')
+
+            prior = execute(conn, "SELECT id FROM movements WHERE created_by=? AND client_operation_id=?",
+                            (_actor_id(user_id), data.operation_id)).fetchone()
+            if prior:
+                return {'success': True, 'duplicate': True}
+            if item['quantity'] != data.expected_quantity:
+                raise HTTPException(status_code=409, detail='Stock changed since this count was recorded. Refresh and review the current quantity.')
+            if data.new_quantity == data.expected_quantity:
+                return {'success': True, 'duplicate': False, 'quantity': data.new_quantity}
+
+            before = balance_snapshot(conn, item['store_id'], item['part_id'], None)
+            execute(conn, 'UPDATE inventory SET quantity=?,updated_at=? WHERE id=?',
+                    (data.new_quantity, serialize_instant(utc_now()), item['id']))
+            delta = data.new_quantity - data.expected_quantity
+            values = (item['store_id'] if delta < 0 else None,
+                      item['store_id'] if delta > 0 else None,
+                      item['part_id'], abs(delta), _actor_id(user_id),
+                      f"Mobile stock count: {data.expected_quantity} -> {data.new_quantity}",
+                      data.operation_id)
+            if is_postgres(conn):
+                movement_id = execute(conn, """INSERT INTO movements
+                    (organization_id,from_store_id,to_store_id,part_id,quantity,movement_type,created_by,notes,client_operation_id)
+                    VALUES(?,?,?,?,?,'adjust',?,?,?) RETURNING id""",
+                    (_organization_id(conn, user_id), *values)).fetchone()['id']
+            else:
+                movement_id = execute(conn, """INSERT INTO movements
+                    (from_store_id,to_store_id,part_id,quantity,movement_type,created_by,notes,client_operation_id)
+                    VALUES(?,?,?,?,'adjust',?,?,?)""", values).lastrowid
+            record_stock_audit(conn, user_id, 'mobile_stock_adjustment',
+                [change_after(conn, before)], [movement_id], resource_id=item['id'], request=request,
+                extra={'operation_id': data.operation_id, 'expected_quantity': data.expected_quantity,
+                       'new_quantity': data.new_quantity})
+            return {'success': True, 'duplicate': False, 'quantity': data.new_quantity}
+
     router.consume_stock = consume_stock
     router.import_stock_balances = import_stock_balances
     router.add_stock = add_stock
@@ -438,4 +493,5 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
     router.transfer_stock = transfer_stock
     router.receive_transfer = receive_transfer
     router.return_transfer = return_transfer
+    router.adjust_stock_v1 = adjust_stock_v1
     return router
