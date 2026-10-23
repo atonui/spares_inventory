@@ -1,23 +1,24 @@
 # Spares Tracker brand assets
 
-Spares Tracker is the current public-facing product name. Repository, package, bundle, and URL identifiers remain unchanged.
+The approved asset pack in this directory is the source of truth for the public product identity. Do not redraw, distort, recolor, or replace the S-shaped tracking-route mark.
 
-## Editable SVG sources
+## Palette
 
-- `source/logo-horizontal.svg` — shelf mark with the wordmark as live SVG text.
-- `source/logo-icon.svg` — icon-only mark for light surfaces.
-- `source/app-icon-square.svg` — square navy app-icon master.
-- `source/adaptive-icon-foreground.svg` — transparent foreground for Android adaptive icons.
-- `source/favicon.svg` — browser favicon source.
+- Navy: `#15263B`
+- Amber: `#E9A23B`
+- Slate: `#64748B`
+- Pale neutral: `#F5F7FA`
+- White: `#FFFFFF`
 
-The wordmark shown in the web UI is HTML text next to an inline SVG icon. App icons contain only the shelf symbol.
+Use amber as an accent. Use navy on amber for text and controls; amber on white is not suitable for normal text. Keep stock, warning, error, and success colors distinct from brand accents.
 
-## Exports
+## Supplied source files
 
-- `generated/app-icon-1024.png` and `generated/app-icon-512.png` — raster exports from `app-icon-square.svg`.
-- `generated/favicon-{16,32,48}.png` and `generated/favicon.ico` — web favicon exports.
-- `generated/apple-touch-icon.png` — iOS home-screen icon.
-- `mobile/assets/icon.png` — iOS and general app icon.
-- `mobile/assets/android-icon-foreground.png`, `android-icon-background.png`, and `android-icon-monochrome.png` — Android adaptive icon layers.
-- `mobile/assets/favicon.png` — Expo web favicon.
-- `mobile/assets/splash-icon.png` — transparent shelf mark from `logo-icon.svg`.
+- `source/logo-color.svg`, `logo-black.svg`, `logo-white.svg` — wordmark variants.
+- `source/mark-color.svg`, `mark-black.svg`, `mark-white.svg` — supplied route mark variants.
+- `source/logo-*.png` and `logo-color.jpg` — supplied raster wordmarks.
+- `source/favicon.svg` — supplied vector favicon.
+- `generated/favicon-*.png`, `favicon.ico`, and `apple-touch-icon.png` — supplied web icon exports.
+- `generated/app-icon-*.png` and platform layers — supplied mobile icon exports.
+
+The web UI uses the supplied white wordmark on navy and color mark on pale or white surfaces. The Expo app uses the supplied `mobile/assets/icon.png` plus supplied Android adaptive layers.
