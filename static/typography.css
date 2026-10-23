@@ -1,0 +1,97 @@
+/* Shared typography scale for the Spares Tracker app. */
+@font-face {
+    font-family: Inter;
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("fonts/inter-latin.woff2") format("woff2");
+}
+
+:root {
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --type-caption: 0.75rem;
+    --type-data: 0.875rem;
+    --type-dashboard-body: 0.9375rem;
+    --type-reading: 1rem;
+    --type-h3: clamp(1.125rem, 1.6vw, 1.5rem);
+    --type-h2: clamp(1.5rem, 2.7vw, 2.25rem);
+    --type-hero: clamp(3rem, 5vw, 3.75rem);
+}
+
+html { font-family: var(--font-sans); }
+body {
+    font-family: var(--font-sans);
+    font-size: var(--type-dashboard-body);
+    line-height: 1.55;
+}
+
+h1, h2, h3 {
+    font-family: var(--font-sans);
+    font-weight: 650;
+}
+h1 { letter-spacing: -0.02em; line-height: 1.15; }
+h2 { letter-spacing: -0.01em; line-height: 1.25; }
+h3 { line-height: 1.3; }
+
+/* Inventory dashboard: page titles, panel headings, and data remain distinct. */
+.view-heading h2 { font-size: var(--type-h2); line-height: 1.25; }
+.inventory-panel-title { font-size: var(--type-h3); line-height: 1.3; }
+.inventory-panel-meta,
+.inventory-toolbar p,
+.store-search p { font-size: var(--type-data); line-height: 1.4; }
+.stock-table,
+.stock-inventory-table,
+.report-table-wrap,
+.movement-history-table { font-size: var(--type-data); line-height: 1.4; }
+.stock-table th,
+.stock-inventory-table th,
+.report-table-wrap th,
+.movement-history-table th { font-size: var(--type-caption); line-height: 1.4; font-weight: 500; }
+
+/* Account pages use the same hierarchy while leaving field text comfortably readable. */
+.profile-page { font-size: var(--type-dashboard-body); }
+.profile-header h1 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -0.02em; }
+.profile-page h2 { font-size: var(--type-h2); line-height: 1.25; letter-spacing: -0.01em; }
+.profile-page h3 { font-size: var(--type-h3); line-height: 1.3; }
+.profile-help,
+.profile-details dd { font-size: var(--type-data); line-height: 1.5; }
+.profile-details dt,
+.profile-eyebrow { font-size: var(--type-caption); line-height: 1.4; }
+.profile-page label { font-size: var(--type-data); line-height: 1.4; font-weight: 500; }
+
+/* Platform admin is a dense dashboard, so reserve 14px for data and 12px for captions. */
+.topbar h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); line-height: 1.2; letter-spacing: -0.02em; }
+.panel-title { font-size: var(--type-h3); line-height: 1.3; }
+.tbl { font-size: var(--type-data); line-height: 1.4; }
+.tbl th { font-size: var(--type-caption); line-height: 1.4; font-weight: 500; }
+
+/* Sign-in's left panel is the product's marketing-style hero. */
+.login-screen { font-size: var(--type-reading); }
+.login-intro h1 { font-size: var(--type-hero); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
+.login-intro-copy > p:last-child { font-size: 1.125rem; line-height: 1.55; }
+.login-heading h2 { font-size: clamp(1.5rem, 2.5vw, 2rem); line-height: 1.25; letter-spacing: -0.01em; }
+.login-field label { font-size: var(--type-data); line-height: 1.4; font-weight: 500; }
+
+small,
+.caption,
+.helper-text,
+.inventory-filter-label,
+.login-footnote,
+.login-options,
+.recovery-field-help,
+.recovery-strength-label { font-size: var(--type-caption); line-height: 1.4; }
+
+@media (max-width: 768px) {
+    .view-heading h2,
+    .profile-page h2 { font-size: clamp(1.5rem, 5vw, 1.75rem); line-height: 1.25; }
+    .inventory-panel-title,
+    .profile-page h3,
+    .panel-title { font-size: clamp(1.125rem, 4vw, 1.25rem); line-height: 1.3; }
+    .topbar h1 { font-size: 1.5rem; }
+    .login-intro h1 { font-size: clamp(2rem, 8vw, 2.25rem); line-height: 1.15; }
+    .login-intro-copy > p:last-child { font-size: 1rem; }
+}
+
+@media (max-width: 480px) {
+    .profile-header h1 { font-size: 1.75rem; }
+}
