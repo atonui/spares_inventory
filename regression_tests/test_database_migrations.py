@@ -80,6 +80,17 @@ def test_fresh_database_records_current_versions(tmp_path):
     assert c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mobile_device_sessions'").fetchone()
     assert 'client_operation_id' in {row[1] for row in c.execute('PRAGMA table_info(movements)')}
 
+def test_v8_database_upgrades_to_mobile_stock_adjustments(tmp_path,monkeypatch):
+    from backend.migrations import registry
+    migrations=registry.MIGRATIONS
+    monkeypatch.setattr(registry,'MIGRATIONS',migrations[:8])
+    c=sqlite3.connect(tmp_path/'v8.db')
+    assert runner().apply_migrations(c).current_version==8
+    monkeypatch.setattr(registry,'MIGRATIONS',migrations)
+    status=runner().apply_migrations(c)
+    assert status.current_version==9 and status.pending==()
+    assert 'client_operation_id' in {row[1] for row in c.execute('PRAGMA table_info(movements)')}
+
 def test_adoption_records_only_validated_versions(tmp_path):
     c=legacy_connection(tmp_path/'live.db',current=True);before=snapshot(c)
     original_columns={table:[r[1] for r in c.execute(f'PRAGMA table_info("{table}")')] for table in before}
@@ -136,8 +147,8 @@ def test_two_workers_apply_once(tmp_path):
     p=tmp_path/'live.db';legacy_connection(p).close()
     def run():
         with sqlite3.connect(p,timeout=10) as c:return runner().apply_migrations(c).current_version
-    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[8,8]
-    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==8
+    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[9,9]
+    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==9
 
 def test_write_lock_timeout_leaves_database_unchanged(tmp_path):
     from backend.migrations.validation import MigrationError
@@ -151,7 +162,7 @@ def test_main_wrappers_respect_database_override(tmp_path,monkeypatch):
     import main
     p=tmp_path/'override.db';monkeypatch.setattr(main,'DATABASE',str(p));assert main.init_db() is None
     with main.get_db_connection() as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==8
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==9
         assert c.execute('PRAGMA foreign_keys').fetchone()[0]==1
 
 

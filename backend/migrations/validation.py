@@ -49,14 +49,15 @@ def reference(canonical=False):
                     c.execute(f'DROP TABLE "{name}"')
                     c.execute(canonical_schema(obj[2]))
                     for sql in indexes:c.execute(sql)
-        from . import v0006_announcement_dismissals,v0007_mobile_pairing,v0008_mobile_device_sessions
+        from . import v0006_announcement_dismissals,v0007_mobile_pairing,v0008_mobile_device_sessions,v0009_mobile_stock_adjustments
         v0006_announcement_dismissals.upgrade(c)
         v0007_mobile_pairing.upgrade(c)
         v0008_mobile_device_sessions.upgrade(c)
+        v0009_mobile_stock_adjustments.upgrade(c)
         tables={n:(columns(c,n),foreign_keys(c,n),unique_columns(c,n)) for n,o in objects(c).items() if o[0]=='table'}
         return tables,objects(c)
 
-def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False, require_announcements=False, require_mobile_pairing=False, require_mobile_devices=False):
+def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=False, require_timezone=False, require_canonical=False, require_announcements=False, require_mobile_pairing=False, require_mobile_devices=False, require_mobile_stock_adjustments=False):
     from .v0001_core_schema import OPTIONAL_COLUMNS
     expected,expected_objects=reference(require_canonical);actual_objects=objects(conn)
     actual_tables={n for n,o in actual_objects.items() if o[0]=='table' and n!='schema_migrations'}
@@ -75,6 +76,8 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
         if name=='schema_migrations':continue
         if name not in expected_objects or expected_objects[name][0]!=kind:
             raise MigrationError('Unsupported schema object: '+name)
+        if name=='uq_movements_created_operation' and not require_mobile_stock_adjustments:
+            raise MigrationError('Unexpected mobile stock-adjustment index')
         if kind=='index' and normalized(sql)!=normalized(expected_objects[name][2]):
             raise MigrationError('Conflicting index definition: '+name)
     for table in actual_tables:
@@ -82,6 +85,8 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
         if table_options(actual_objects[table][2])!=table_options(expected_objects[table][2]):
             raise MigrationError('Incompatible table constraints in '+table)
         if legacy:allowed_missing.update(OPTIONAL_COLUMNS.get(table,{}))
+        if table=='movements' and not require_mobile_stock_adjustments:
+            allowed_missing.add('client_operation_id')
         if not require_timezone:allowed_missing.add('display_timezone')
         if legacy or allow_archive:allowed_missing.add('archived_at')
         if set(cols)-set(actual)-allowed_missing or set(actual)-set(cols):raise MigrationError('Incompatible columns in '+table)
@@ -94,7 +99,7 @@ def validate_tables(conn, *, include_transfer=True, allow_archive=False, legacy=
             raise MigrationError('Incompatible transfer lifecycle definition')
     if not legacy:
         for name,(kind,table,sql) in expected_objects.items():
-            if kind!='index' or (not include_transfer and table=='stock_transfers') or (allow_archive and name.startswith('idx_inventory_')) or (not require_mobile_pairing and table=='mobile_pairing_requests') or (not require_mobile_devices and table=='mobile_device_sessions'):continue
+            if kind!='index' or (not include_transfer and table=='stock_transfers') or (allow_archive and name.startswith('idx_inventory_')) or (not require_mobile_pairing and table=='mobile_pairing_requests') or (not require_mobile_devices and table=='mobile_device_sessions') or (not require_mobile_stock_adjustments and name=='uq_movements_created_operation'):continue
             if name not in actual_objects:raise MigrationError('Missing required index: '+name)
 
 def validate_integrity(conn, *, allow_legacy_sentinel=False):
@@ -110,7 +115,7 @@ def validate_integrity(conn, *, allow_legacy_sentinel=False):
 def validate_legacy(conn):
     validate_tables(conn,legacy=True)
 
-def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None, require_mobile_pairing=None, require_mobile_devices=None):
+def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None, require_mobile_pairing=None, require_mobile_devices=None, require_mobile_stock_adjustments=None):
     if require_timezone is None:
         require_timezone=('schema_migrations' in objects(conn) and
                           conn.execute('SELECT 1 FROM schema_migrations WHERE version=4').fetchone() is not None)
@@ -123,8 +128,10 @@ def validate_current(conn, *, require_timezone=None, require_canonical=None, can
         require_mobile_pairing=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=7').fetchone() is not None)
     if require_mobile_devices is None:
         require_mobile_devices=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=8').fetchone() is not None)
+    if require_mobile_stock_adjustments is None:
+        require_mobile_stock_adjustments=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=9').fetchone() is not None)
     validate_integrity(conn)
-    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical,require_announcements=require_announcements,require_mobile_pairing=require_mobile_pairing,require_mobile_devices=require_mobile_devices)
+    validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical,require_announcements=require_announcements,require_mobile_pairing=require_mobile_pairing,require_mobile_devices=require_mobile_devices,require_mobile_stock_adjustments=require_mobile_stock_adjustments)
     if require_announcements:
         from backend.services.announcements import load_notice
         from backend.temporal import parse_api_instant,serialize_instant
