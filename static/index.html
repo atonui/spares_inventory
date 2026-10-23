@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261023-store-inventory-action-groups">
+    <link rel="stylesheet" href="mystyle.css?v=20261023-store-inventory-buttons-v2">
     <link rel="stylesheet" href="login.css?v=20261023-store-inventory-action-groups">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
@@ -497,13 +497,12 @@
                     <p class="inventory-panel-meta" x-text="storeInventory.length + ' items in stock'"></p>
                 </div>
                 <div class="inventory-panel-actions">
-                    <div class="store-inventory-utility-group" aria-label="Inventory file and count actions">
-                    <button class="btn btn-sm store-inventory-utility-action"
+                    <button class="btn btn-sm store-inventory-action"
 
                             @click="downloadStoreImportTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
                         Download Template
                     </button>
-                    <label x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" class="btn btn-sm store-inventory-utility-action"
+                    <label x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" class="btn btn-sm store-inventory-action"
                         style="cursor: pointer;">
 
                         <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg> Import CSV
@@ -512,17 +511,16 @@
                             @change="importPartsToStore($event, selectedStore?.id)"
                             style="display: none;">
                     </label>
-                    <button class="btn btn-sm store-inventory-utility-action" @click="exportStoreInventoryCSV(selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
+                    <button class="btn btn-sm store-inventory-action" @click="exportStoreInventoryCSV(selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
                         Export CSV
                     </button>
-                    <button class="btn btn-sm store-inventory-utility-action" @click="startStockCount(selectedStore, $event.currentTarget)" :disabled="stockCountBusy"
+                    <button class="btn btn-sm store-inventory-action" @click="startStockCount(selectedStore, $event.currentTarget)" :disabled="stockCountBusy"
                             x-show="editableStores.some(store=>store.id===selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clipboard"></use></svg> Count Stock</button>
-                    </div>
-                    <button class="btn store-inventory-primary-action"
+                    <button class="btn btn-sm store-inventory-action"
                             x-show="canEdit(selectedStore?.assigned_user_id, selectedStore?.type)" @click="addStockToStore(selectedStore)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg>
                         Add Single Part
                     </button>
-                    <button class="btn btn-sm ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
+                    <button class="btn btn-sm store-inventory-action ui-icon-only" @click="closeAllPanels()" aria-label="Close panel" title="Close panel"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#close"></use></svg></button>
             </div>
             </div>
             <div class="store-search">
