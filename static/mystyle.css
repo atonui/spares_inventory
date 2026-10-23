@@ -808,7 +808,12 @@ body > [x-data="inventoryApp()"] .stat-card {
         padding: 0; border: 1px solid var(--brand-border); border-radius: var(--radius-control);
         background: var(--brand-surface); color: var(--brand-navy); font: inherit; font-weight: 600;
     }
-    .mobile-nav-toggle svg { display: block; width: 1.25rem; height: 1.25rem; }
+    .mobile-nav-toggle::before {
+        content: ""; display: block; width: 20px; height: 14px;
+        background: linear-gradient(currentColor 0 0) top / 100% 2px no-repeat,
+                    linear-gradient(currentColor 0 0) center / 100% 2px no-repeat,
+                    linear-gradient(currentColor 0 0) bottom / 100% 2px no-repeat;
+    }
     .mobile-nav-toggle:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
     .mobile-header-brand { display: block; }
     .sidebar-brand { margin-bottom: 1.5rem; }
