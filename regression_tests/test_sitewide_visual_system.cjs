@@ -74,7 +74,7 @@ test('superadmin uses shared surface and control tokens', () => {
 
 test('every page cache-busts the updated site-wide stylesheets', () => {
     const versions = {
-        'mystyle.css': '20261023-icon-only-mobile-menu-v1',
+        'mystyle.css': '20261023-mobile-menu-bars-v2',
         'login.css': '20261023-app-button-system-v1',
         'profile.css': '20261023-app-button-system-v1',
         'superadmin.css': '20261023-app-button-system-v1',
