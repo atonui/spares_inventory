@@ -804,11 +804,11 @@ body > [x-data="inventoryApp()"] .stat-card {
     .sidebar-backdrop { position: fixed; inset: 0; z-index: 40; width: 100%; height: 100%; max-width: none; padding: 0; border: 0; border-radius: 0; background: rgba(21, 38, 59, 0.38); cursor: default; }
     .sidebar-close { display: inline-flex; align-self: flex-end; align-items: center; justify-content: center; gap: 0.45rem; min-height: 44px; margin: -3.25rem 0 1.5rem; padding: 0.45rem 0.65rem; border: 1px solid var(--brand-border); border-radius: var(--radius-control); background: var(--brand-surface); color: var(--brand-navy); }
     .mobile-nav-toggle {
-        display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px;
-        padding: var(--space-2) var(--space-3); border: 1px solid var(--brand-border); border-radius: var(--radius-control);
+        display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px;
+        padding: 0; border: 1px solid var(--brand-border); border-radius: var(--radius-control);
         background: var(--brand-surface); color: var(--brand-navy); font: inherit; font-weight: 600;
     }
-    .mobile-nav-toggle svg { width: 1.15rem; height: 1.15rem; }
+    .mobile-nav-toggle svg { display: block; width: 1.25rem; height: 1.25rem; }
     .mobile-nav-toggle:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
     .mobile-header-brand { display: block; }
     .sidebar-brand { margin-bottom: 1.5rem; }

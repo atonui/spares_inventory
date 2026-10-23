@@ -31,7 +31,13 @@ test('management links are visible as a labeled section without a disclosure con
 });
 
 test('narrow layouts get an accessible drawer trigger, dismiss control, and focus behavior', () => {
-  assert.match(html, /class="mobile-nav-toggle"[^>]*aria-controls="primary-navigation"[^>]*:aria-expanded="mobileNavigationOpen"/);
+  const menuTrigger = html.match(/<button[^>]*class="mobile-nav-toggle"[^>]*>[\s\S]*?<\/button>/)?.[0];
+  assert.ok(menuTrigger, 'mobile navigation trigger should exist');
+  assert.match(menuTrigger, /:aria-label="mobileNavigationOpen \? 'Close main navigation' : 'Open main navigation'"/);
+  assert.match(menuTrigger, /aria-controls="primary-navigation"[^>]*:aria-expanded="mobileNavigationOpen"/);
+  assert.match(menuTrigger, /<svg[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(menuTrigger, /<span|>\s*Menu\s*</);
+  assert.match(css, /\.mobile-nav-toggle\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/s);
   assert.match(html, /@keydown\.escape\.window=.*mobileNavigationOpen/);
   assert.match(html, /class="sidebar-backdrop"[^>]*x-show="mobileNavigationOpen"/);
   assert.match(html, /@click="mobileNavigationOpen = !mobileNavigationOpen; if \(mobileNavigationOpen\) \$nextTick\(\(\) => \$refs\.firstNavigationLink\.focus\(\)\)"/);
