@@ -5,16 +5,20 @@ const path = require('node:path');
 
 const styleVersion = '20261023-app-button-system-v1';
 const buttonCss = fs.readFileSync('static/buttons.css', 'utf8');
+const typographyVersion = '20261023-font-scale-v1';
 
-test('every app page loads the shared button system after its page styles', () => {
+test('every app page loads button and typography systems after its page styles', () => {
     const pages = fs.readdirSync('static').filter(name => name.endsWith('.html'));
     for (const page of pages) {
         const html = fs.readFileSync(path.join('static', page), 'utf8');
         const buttonLink = html.indexOf(`buttons.css?v=${styleVersion}`);
+        const typographyLink = html.indexOf(`typography.css?v=${typographyVersion}`);
         assert.notEqual(buttonLink, -1, `${page} must load the shared button stylesheet`);
+        assert.notEqual(typographyLink, -1, `${page} must load the shared typography stylesheet`);
         const head = html.slice(0, html.indexOf('</head>'));
-        const lastStyleLink = Math.max(...Array.from(head.matchAll(/<link rel="stylesheet"/g), match => match.index));
-        assert.ok(buttonLink > lastStyleLink, `${page} must load shared button rules after its page styles`);
+        const stylesheetLinks = Array.from(head.matchAll(/<link rel="stylesheet" href="([^"]+)"/g));
+        assert.ok(buttonLink < typographyLink, `${page} must load typography after button rules`);
+        assert.match(stylesheetLinks.at(-1)?.[1] || '', /typography\.css\?v=20261023-font-scale-v1$/, `${page} must load typography after its page styles`);
     }
 });
 
@@ -39,4 +43,19 @@ test('semantic danger and selected navigation remain identifiable without filled
     assert.match(buttonCss, /\.inventory-nav \.btn\.is-active/);
     assert.match(buttonCss, /\.profile-tabs button\[aria-selected="true"\]/);
     assert.doesNotMatch(dangerRules.slice(0, dangerRules.indexOf(':hover')), /background:\s*(?:#|var\(--brand-(?:navy|amber)\))/);
+});
+
+test('shared typography uses the SaaS scale and mobile heading sizes', () => {
+    const typographyCss = fs.readFileSync('static/typography.css', 'utf8');
+    assert.match(typographyCss, /--font-sans:\s*Inter,\s*ui-sans-serif,\s*system-ui/);
+    assert.match(typographyCss, /--type-dashboard-body:\s*0\.9375rem/);
+    assert.match(typographyCss, /--type-data:\s*0\.875rem/);
+    assert.match(typographyCss, /--type-caption:\s*0\.75rem/);
+    assert.match(typographyCss, /--type-h2:\s*clamp\(1\.5rem,\s*2\.7vw,\s*2\.25rem\)/);
+    assert.match(typographyCss, /--type-h3:\s*clamp\(1\.125rem,\s*1\.6vw,\s*1\.5rem\)/);
+    assert.match(typographyCss, /--type-hero:\s*clamp\(3rem,\s*5vw,\s*3\.75rem\)/);
+    assert.match(typographyCss, /h1\s*\{[^}]*letter-spacing:\s*-0\.02em/s);
+    assert.match(typographyCss, /h2\s*\{[^}]*letter-spacing:\s*-0\.01em/s);
+    assert.match(typographyCss, /line-height:\s*1\.55/);
+    assert.match(typographyCss, /@media\s*\(max-width:\s*768px\)[\s\S]*?login-intro h1\s*\{[^}]*font-size:\s*clamp\(2rem,\s*8vw,\s*2\.25rem\)/);
 });
