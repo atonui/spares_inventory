@@ -14,24 +14,27 @@ function sectionBetween(startMarker, endMarker) {
     return html.slice(start, end);
 }
 
-test('mobile primary navigation has an accessible toggle and preserves all destinations', () => {
-    const shell = sectionBetween('<!-- Inventory navigation and controls -->', '<!-- Quick Stats -->');
+test('responsive primary navigation has an accessible drawer trigger and preserves all destinations', () => {
+    const start = html.indexOf('class="workspace-layout"');
+    const shell = html.slice(start, html.indexOf('<!-- Quick Stats -->', start));
     assert.match(shell, /class="mobile-nav-toggle"/);
     assert.match(shell, /aria-label="Main navigation"/);
     assert.match(shell, /aria-controls="primary-navigation"/);
     assert.match(shell, /:aria-expanded="mobileNavigationOpen"/);
-    assert.match(shell, /@keydown\.escape\.window=.*mobileNavigationOpen/);
+    assert.match(shell, /@keydown\.escape\.window=.*mobileNavigationOpen.*\$nextTick/);
     assert.match(shell, /x-ref="mobileNavigationTrigger"/);
-    assert.match(shell, /@click\.outside="mobileNavigationOpen = false"/);
+    assert.match(shell, /@click\.outside="if \(mobileNavigationOpen\) mobileNavigationOpen = false"/);
     assert.match(shell, /id="primary-navigation"/);
-    assert.match(shell, /@click="if \(mobileNavigationOpen\) \{ mobileNavigationOpen = false; \$refs\.mobileNavigationTrigger\.focus\(\) \}" aria-label="Main navigation"/);
+    assert.match(shell, /@click="if \(mobileNavigationOpen\) \{ mobileNavigationOpen = false; \$nextTick\(\(\) => \$refs\.mobileNavigationTrigger\.focus\(\)\) \}"/);
+    assert.match(shell, /class="sidebar-backdrop"/);
     for (const panel of ['showInventoryPanel', 'showAllStoresPanel', 'showLowStockPanel', 'showReportsPanel', 'showAllPartsPanel', 'showEquipmentPanel', 'showMovementsPanel']) {
         assert.ok(shell.includes(`openPanel('${panel}')`), `navigation must preserve ${panel}`);
     }
 });
 
 test('inventory lookup keeps its common controls and stock actions in the shell', () => {
-    const shell = sectionBetween('<!-- Inventory navigation and controls -->', '<!-- Quick Stats -->');
+    const start = html.indexOf('class="workspace-layout"');
+    const shell = html.slice(start, html.indexOf('<!-- Quick Stats -->', start));
     for (const contract of [
         'id="inventory-search"',
         'id="inventory-store"',
@@ -39,7 +42,7 @@ test('inventory lookup keeps its common controls and stock actions in the shell'
         'viewStoreInventory(storeOptions.find',
         'aria-label="Refresh inventory"',
         'Add Stock',
-        'class="management-menu"',
+        'class="sidebar-management"',
     ]) assert.ok(shell.includes(contract), `inventory shell must retain ${contract}`);
     assert.equal((shell.match(/id="inventory-search"/g) || []).length, 1);
     assert.equal((shell.match(/id="inventory-store"/g) || []).length, 1);

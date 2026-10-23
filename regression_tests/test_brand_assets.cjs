@@ -24,7 +24,7 @@ test('brand palette tokens and source logo variants are present', () => {
   const index = read('static/index.html');
   assert.match(index, /<title>Spares Tracker/);
   assert.match(index, /<a[^>]*class="header-brand"[^>]*href="\/"[^>]*>[\s\S]*?<span>Spares Tracker<\/span>[\s\S]*?<\/a>/);
-  assert.match(index, /href="mystyle\.css\?v=20261023-app-button-system-v1"/, 'Header styles must use a fresh stylesheet cache key');
+  assert.match(index, /href="mystyle\.css\?v=20261023-sidebar-navigation-v1"/, 'Header styles must use a fresh stylesheet cache key');
   assert.match(index, /href="login\.css\?v=20261023-app-button-system-v1"/, 'Sign-in styles must use a fresh stylesheet cache key');
   assert.match(index, /rel="icon" type="image\/png" sizes="32x32" href="brand\/generated\/favicon-32\.png"/);
   assert.match(read('static/superadmin.html'), /Spares Tracker/);

@@ -570,7 +570,42 @@
 /* Inventory task controls follow the existing blue/neutral application palette. */
 body > [x-data="inventoryApp()"] { width: 100%; min-width: 0; }
 body > [x-data="inventoryApp()"] > .card { margin-inline: auto; }
-body > [x-data="inventoryApp()"] > .container { width: min(100%, 1280px); min-width: 0; padding: clamp(1rem, 2.4vw, 2rem); }
+body:has(.workspace-layout) { padding: 0; align-items: stretch; justify-content: stretch; }
+body > [x-data="inventoryApp()"] > .workspace-layout {
+    display: grid; grid-template-columns: 248px minmax(0, 1fr); align-items: start;
+    width: 100%; min-width: 0; min-height: 100vh; background: var(--brand-page);
+}
+.workspace-sidebar {
+    position: sticky; top: 0; display: flex; flex-direction: column; gap: 0;
+    width: 248px; height: 100vh; min-height: 100vh; overflow-y: auto;
+    padding: 1.25rem 0.875rem; border-right: 1px solid var(--brand-border);
+    background: var(--brand-surface); color: var(--brand-navy);
+}
+.sidebar-brand { display: flex; align-items: center; gap: 0.625rem; min-height: 44px; margin: 0 0 1.5rem; padding: 0 0.55rem; color: var(--brand-navy); text-decoration: none; font-size: 1rem; font-weight: 650; }
+.sidebar-brand img { width: 32px; height: 32px; flex: 0 0 32px; }
+.sidebar-brand:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; border-radius: var(--radius-control); }
+.sidebar-nav-heading { margin: 0.35rem 0 0.5rem; padding: 0 0.7rem; color: var(--brand-slate); font-size: var(--type-xs); font-weight: 600; letter-spacing: 0.055em; line-height: 1.4; text-transform: uppercase; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 0.2rem; }
+.sidebar-nav-link {
+    display: flex; width: 100%; min-height: 42px; justify-content: flex-start;
+    gap: 0.7rem; padding: 0.55rem 0.7rem; border: 1px solid transparent;
+    border-radius: 7px; background: transparent; color: #465561; text-align: left;
+    text-decoration: none; font-weight: 500; white-space: normal;
+}
+.sidebar-nav-link .ui-icon { width: 1.05rem; height: 1.05rem; flex: 0 0 1.05rem; color: var(--brand-slate); }
+.sidebar-nav-link:hover { border-color: transparent; background: var(--brand-page); color: var(--brand-navy); }
+.workspace-sidebar .sidebar-nav .sidebar-nav-link.is-active,
+.workspace-sidebar .sidebar-nav .sidebar-nav-link.is-active:hover { border-color: transparent; border-left: 3px solid var(--brand-navy); background: #edf2f7; color: var(--brand-navy); font-weight: 600; }
+.workspace-sidebar .sidebar-nav .sidebar-nav-link.is-active .ui-icon { color: var(--brand-navy); }
+.sidebar-nav-link:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 2px; }
+.sidebar-management { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--brand-border); }
+.sidebar-close { display: none; }
+.workspace-main.container { width: 100%; max-width: 1480px; min-width: 0; margin: 0 auto; padding: clamp(1rem, 2.4vw, 2rem); }
+.mobile-nav-toggle { display: none; }
+.user-summary { min-width: 0; }
+.user-summary > p { color: var(--brand-slate); font-size: var(--type-sm); }
+.user-summary > p strong { color: var(--brand-navy); }
+.mobile-header-brand { display: none; }
 body > [x-data="inventoryApp()"] .header,
 body > [x-data="inventoryApp()"] .inventory-controls,
 body > [x-data="inventoryApp()"] .inventory-table,
@@ -677,12 +712,6 @@ body > [x-data="inventoryApp()"] .stat-card {
     border-radius: var(--radius-control);
 }
 .inventory-panel-actions .store-inventory-action:hover { background: var(--brand-page); border-color: #aebbc8; color: var(--brand-navy); }
-.primary-navigation-shell { margin-top: var(--space-3); }
-.mobile-nav-toggle { display: none; }
-.inventory-nav, .management-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.management-actions { margin-top: var(--space-3); }
-.management-menu { margin-top: var(--space-3); border-top: 1px solid var(--brand-border); padding-top: var(--space-2); }
-.management-menu summary { cursor: pointer; font-weight: 600; padding: var(--space-2) 0; width: fit-content; }
 .inventory-filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--brand-border); }
 .filter-field { flex: 1 1 240px; min-width: 0; }
 .filter-field label, .store-search label { display: block; font-weight: 600; margin-bottom: var(--space-1); }
@@ -764,20 +793,34 @@ body > [x-data="inventoryApp()"] .stat-card {
     .inventory-toolbar { align-items: center; }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+    body > [x-data="inventoryApp()"] > .workspace-layout { display: block; }
+    .workspace-sidebar {
+        position: fixed; inset: 0 auto 0 0; z-index: 41; width: min(19rem, 86vw); height: 100vh; height: 100dvh;
+        min-height: 0; transform: translateX(-105%); transition: transform 180ms ease;
+        box-shadow: 0 18px 44px rgba(21, 38, 59, 0.18); pointer-events: none;
+    }
+    .workspace-sidebar.is-open { transform: translateX(0); pointer-events: auto; }
+    .sidebar-backdrop { position: fixed; inset: 0; z-index: 40; width: 100%; height: 100%; max-width: none; padding: 0; border: 0; border-radius: 0; background: rgba(21, 38, 59, 0.38); cursor: default; }
+    .sidebar-close { display: inline-flex; align-self: flex-end; align-items: center; justify-content: center; gap: 0.45rem; min-height: 44px; margin: -3.25rem 0 1.5rem; padding: 0.45rem 0.65rem; border: 1px solid var(--brand-border); border-radius: var(--radius-control); background: var(--brand-surface); color: var(--brand-navy); }
     .mobile-nav-toggle {
-        display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-height);
+        display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px;
         padding: var(--space-2) var(--space-3); border: 1px solid var(--brand-border); border-radius: var(--radius-control);
         background: var(--brand-surface); color: var(--brand-navy); font: inherit; font-weight: 600;
     }
     .mobile-nav-toggle svg { width: 1.15rem; height: 1.15rem; }
     .mobile-nav-toggle:focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
-    .inventory-nav { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--space-2); }
-    .inventory-nav.is-open { display: grid; }
-    .inventory-nav .btn { min-height: var(--control-height); justify-content: flex-start; }
+    .mobile-header-brand { display: block; }
+    .sidebar-brand { margin-bottom: 1.5rem; }
+    .workspace-main.container { max-width: 100%; padding: clamp(0.75rem, 3vw, 1.5rem); }
+    .workspace-main .header { margin-bottom: 1rem; }
+    .workspace-main .user-info { align-items: center; }
+}
+
+@media (max-width: 768px) {
     .inventory-filters { display: grid; grid-template-columns: minmax(0, 1fr); }
     .inventory-filters select { width: 100%; }
-    .inventory-controls .btn, .management-menu summary, .stock-table .btn { min-height: 44px; }
+    .inventory-controls .btn, .stock-table .btn { min-height: 44px; }
     .inventory-toolbar { align-items: stretch; flex-direction: column; }
     .inventory-toolbar p { margin: 0; }
     .inventory-toolbar .inventory-add-action { width: 100%; justify-content: center; }

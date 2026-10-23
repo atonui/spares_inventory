@@ -40,7 +40,8 @@ test('semantic danger and selected navigation remain identifiable without filled
     assert.match(dangerRules, /border-color:\s*#D7A5A5/);
     assert.match(dangerRules, /color:\s*#8A2828/);
     assert.match(buttonCss, /:hover:not\(:disabled\)\s*\{[^}]*background:\s*#FFF7F7/s);
-    assert.match(buttonCss, /\.inventory-nav \.btn\.is-active/);
+    const navigationCss = fs.readFileSync('static/mystyle.css', 'utf8');
+    assert.match(navigationCss, /\.workspace-sidebar \.sidebar-nav \.sidebar-nav-link\.is-active/);
     assert.match(buttonCss, /\.profile-tabs button\[aria-selected="true"\]/);
     assert.doesNotMatch(dangerRules.slice(0, dangerRules.indexOf(':hover')), /background:\s*(?:#|var\(--brand-(?:navy|amber)\))/);
 });

@@ -194,7 +194,8 @@ test('equipment calibration badges meet WCAG AA contrast in every state', () => 
 
 test('selected navigation buttons retain a readable active state', () => {
     const buttonCss = read('buttons.css');
-    assert.match(buttonCss, /\.inventory-nav \.btn\.is-active[^{}]*\{[^}]*color:\s*#FFFFFF/s);
+    const navigationCss = read('mystyle.css');
+    assert.match(navigationCss, /\.workspace-sidebar \.sidebar-nav \.sidebar-nav-link\.is-active[^{}]*\{[^}]*color:\s*var\(--brand-navy\)/s);
     assert.match(buttonCss, /\.profile-tabs button\[aria-selected="true"\][^{}]*\{[^}]*color:\s*#FFFFFF/s);
 });
 
@@ -351,5 +352,5 @@ test('remaining fixed inventory tables become labeled mobile cards and keep row 
     assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
     assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
     assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
-    assert.match(html, /href="mystyle\.css\?v=20261023-app-button-system-v1"/, 'Header stylesheet changes should use a fresh cache version');
+    assert.match(html, /href="mystyle\.css\?v=20261023-sidebar-navigation-v1"/, 'Header stylesheet changes should use a fresh cache version');
 });

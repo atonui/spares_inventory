@@ -41,7 +41,7 @@ test('login is not shown until the server confirms the session is anonymous',asy
 });
 test('authenticated inventory shell stays hidden until Alpine applies auth state',()=>{
   const html=fs.readFileSync('static/index.html','utf8');
-  assert.match(html,/<div x-show="isAuthenticated" class="container" x-cloak>/);
+  assert.match(html,/<div x-show="isAuthenticated" class="workspace-layout" x-cloak/);
 });
 test('inventory load failure does not erase a server-validated session',async()=>{
   const s=setup({stored:JSON.stringify({id:7}),fetch:async()=>response(200,{id:7})});s.a.loadAllData=async()=>{throw Error('Inventory offline');};

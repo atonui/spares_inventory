@@ -12,10 +12,11 @@ test('all application navigation uses the shared local icon set', () => {
   for (const page of pages) {
     const html = read(`${page}.html`);
     assert.match(html, /href="icons\.css\?v=[^"]+"/);
-    const navigation = page === 'index' ? html.match(/<nav class="inventory-nav"[\s\S]*?<\/nav>/)[0]
+    const navigation = page === 'index' ? html.match(/<nav class="inventory-nav(?: sidebar-nav)?"[\s\S]*?<\/nav>/)[0]
       : page === 'superadmin' ? html.match(/<nav aria-label="Superadmin navigation"[\s\S]*?<\/nav>/)[0]
       : html.match(/<div class="profile-tabs"[\s\S]*?<\/div>/)[0];
-    for (const button of buttons(navigation)) assert.match(button, /<svg\b/);
+    const navigationItems = [...navigation.matchAll(/<(?:a|button)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/(?:a|button)>/g)].map(match => match[0]);
+    for (const item of navigationItems) assert.match(item, /<svg\b/);
   }
 });
 
