@@ -43,8 +43,9 @@ test('inventory lookup keeps its common controls and stock actions in the shell'
     ]) assert.ok(shell.includes(contract), `inventory shell must retain ${contract}`);
     assert.equal((shell.match(/id="inventory-search"/g) || []).length, 1);
     assert.equal((shell.match(/id="inventory-store"/g) || []).length, 1);
-    assert.match(css, /\.store-inventory-primary-action\s*\{[^}]*background:\s*var\(--brand-amber\);[^}]*color:\s*var\(--brand-navy\)/);
-    assert.match(html, /class="btn store-inventory-primary-action"/);
+    assert.match(css, /\.inventory-panel-actions \.store-inventory-action\s*\{[^}]*border: 1px solid var\(--brand-border\)[^}]*background: var\(--brand-surface\)[^}]*color: var\(--brand-navy\)/s);
+    assert.match(html, /class="btn btn-sm store-inventory-action"[\s\S]*Add Single Part/);
+    assert.doesNotMatch(css, /\.store-inventory-primary-action/);
 });
 
 test('shared visual tokens are present without replacing the established palette', () => {
