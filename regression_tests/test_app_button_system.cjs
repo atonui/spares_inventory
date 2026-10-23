@@ -47,6 +47,7 @@ test('semantic danger and selected navigation remain identifiable without filled
 
 test('shared typography uses the SaaS scale and mobile heading sizes', () => {
     const typographyCss = fs.readFileSync('static/typography.css', 'utf8');
+    assert.match(typographyCss, /@font-face\s*\{[^}]*font-family:\s*Inter;[^}]*src:\s*url\("fonts\/inter-latin\.woff2"\)/s);
     assert.match(typographyCss, /--font-sans:\s*Inter,\s*ui-sans-serif,\s*system-ui/);
     assert.match(typographyCss, /--type-dashboard-body:\s*0\.9375rem/);
     assert.match(typographyCss, /--type-data:\s*0\.875rem/);
