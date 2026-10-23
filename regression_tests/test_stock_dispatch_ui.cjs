@@ -40,8 +40,8 @@ test('in-transit transfers uses the shared panel heading and keeps transfer cont
 
 test('in-transit empty state has clear desktop and mobile spacing', () => {
     const css = require('node:fs').readFileSync('static/mystyle.css', 'utf8');
-    assert.match(css, /\.in-transit-empty-state\s*\{[^}]*padding:\s*var\(--space-8\)\s+var\(--space-6\)/s);
-    assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.in-transit-empty-state\s*\{[^}]*padding:\s*var\(--space-6\)\s+var\(--space-4\)/);
+    assert.match(css, /\.in-transit-empty-state\s*\{[^}]*padding:\s*1\.75rem\s+var\(--space-6\)/s);
+    assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.in-transit-empty-state\s*\{[^}]*padding:\s*1\.25rem\s+var\(--space-4\)/);
 });
 
 for (const replenishment of [false, true]) {
