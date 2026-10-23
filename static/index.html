@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261021-toolbar-picker-feedback">
-    <link rel="stylesheet" href="login.css?v=20261021-toolbar-picker-feedback">
+    <link rel="stylesheet" href="mystyle.css?v=20261023-inventory-toolbar-actions">
+    <link rel="stylesheet" href="login.css?v=20261023-inventory-toolbar-actions">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
 <script src="temporal.js?v=20261014-frontend-21" defer></script>
@@ -178,33 +178,29 @@
                     </button>
                     </div>
                 </details>
-                <div x-show="showInventoryPanel" class="inventory-filters">
-                    <div class="filter-field">
-                        <label for="inventory-search"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#search"></use></svg> Find stock</label>
-                        <input id="inventory-search" type="search" placeholder="Part number, description or work order" class="search-box"
-                               x-model="searchTerm" @input.debounce.150ms="filterInventory()">
-                    </div>
-                    <div class="filter-field">
-                        <label for="inventory-store">Store</label>
-                        <select id="inventory-store" x-model="storeFilter" @change="filterInventory()">
-                            <option value="">All stores</option>
-                            <template x-for="store in storeOptions" :key="store.id"><option :value="store.id" x-text="store.name"></option></template>
-                        </select>
-                    </div>
-                    <div class="inventory-filter-actions" role="group" aria-label="Filter actions" x-show="searchTerm || storeFilter">
-                        <button class="btn inventory-filter-action" :class="storeFilter ? '' : 'inventory-filter-action--wide'" @click="clearInventoryFilters()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
-                        <button class="btn inventory-filter-action" x-show="storeFilter" @click="viewStoreInventory(storeOptions.find(store=>store.id===Number(storeFilter)))">Open store</button>
-                    </div>
-                </div>
                 <div x-show="showInventoryPanel" class="inventory-toolbar">
                     <p role="status" aria-live="polite" x-text="filteredInventory.length + ' of ' + inventory.length + ' stock entries'"></p>
-                    <div class="inventory-toolbar-actions" role="group" aria-label="Inventory actions">
-                        <div class="toolbar-actions inventory-action-group" role="group" aria-label="Stock actions">
-                            <button class="btn inventory-add-action" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Add Stock</button>
-                            <div class="inventory-export-menu" x-data="{ showExportMenu: false }">
-                                <button class="btn inventory-export-action" @click="showExportMenu = !showExportMenu" :aria-expanded="showExportMenu" aria-haspopup="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
-                                    Export CSV <span class="inventory-export-chevron" aria-hidden="true">⌄</span>
-                                </button>
+                    <button class="btn inventory-add-action" @click="partSearchTerm = ''; filteredPartsForSelection = parts; addForm.part_id = ''; showAddModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg> Add Stock</button>
+                </div>
+                <div x-show="showInventoryPanel" class="inventory-filter-row" x-data="{ showInventoryFilters: false }">
+                    <div class="filter-field inventory-search-field">
+                        <label for="inventory-search">Find stock</label>
+                        <div class="inventory-search-control">
+                            <svg class="inventory-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+                            <input id="inventory-search" type="search" placeholder="Part number, description or work order" class="search-box"
+                                   x-model="searchTerm" @input.debounce.150ms="filterInventory()">
+                        </div>
+                    </div>
+                    <div class="inventory-filter-row-actions" role="group" aria-label="Inventory filters and exports">
+                        <button type="button" class="btn inventory-filter-action" @click="showInventoryFilters = !showInventoryFilters" :aria-expanded="showInventoryFilters" aria-controls="inventory-filter-panel">
+                            <svg class="inventory-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+                            Filters
+                        </button>
+                        <div class="inventory-export-menu" x-data="{ showExportMenu: false }">
+                            <button type="button" class="btn inventory-export-action" @click="showExportMenu = !showExportMenu" :aria-expanded="showExportMenu" aria-haspopup="true">
+                                <svg class="inventory-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v11m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>
+                                Export
+                            </button>
                                 <div class="inventory-export-menu__items" x-show="showExportMenu" @click.outside="showExportMenu = false">
                                     <button class="inventory-export-menu__item" @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Current View</button>
                                     <button class="inventory-export-menu__item" @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Parts Catalog</button>
@@ -216,7 +212,19 @@
                                     <button class="inventory-export-menu__item" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
                                     <button class="inventory-export-menu__item" @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg> Comprehensive Report</button>
                                 </div>
-                            </div>
+                        </div>
+                    </div>
+                    <div class="inventory-filter-panel" id="inventory-filter-panel" x-show="showInventoryFilters" x-cloak>
+                        <div class="filter-field">
+                            <label for="inventory-store">Store</label>
+                            <select id="inventory-store" x-model="storeFilter" @change="filterInventory()">
+                                <option value="">All stores</option>
+                                <template x-for="store in storeOptions" :key="store.id"><option :value="store.id" x-text="store.name"></option></template>
+                            </select>
+                        </div>
+                        <div class="inventory-filter-actions" role="group" aria-label="Filter actions" x-show="searchTerm || storeFilter">
+                            <button type="button" class="inventory-clear-filters" @click="clearInventoryFilters()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#clearfilters"></use></svg> Clear filters</button>
+                            <button type="button" class="inventory-open-store" x-show="storeFilter" @click="viewStoreInventory(storeOptions.find(store=>store.id===Number(storeFilter)))">Open store</button>
                         </div>
                     </div>
                 </div>

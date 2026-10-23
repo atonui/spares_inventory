@@ -65,7 +65,7 @@ test('icon accents use a subtle Spares Tracker amber offset and fresh sprite URL
     }
   }
   const inventory = read('index.html');
-  assert.match(inventory, /<label for="inventory-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v4#search"><\/use><\/svg>\s*Find stock<\/label>/);
+  assert.match(inventory, /<label for="inventory-search">Find stock<\/label>\s*<div class="inventory-search-control">\s*<svg class="inventory-action-icon"[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/svg>\s*<input id="inventory-search"/);
   assert.match(inventory, /<label for="store-stock-search">\s*<svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons\.svg\?v=20261019-icon-pack-v4#search"><\/use><\/svg>\s*Find stock in this store<\/label>/);
 });
 

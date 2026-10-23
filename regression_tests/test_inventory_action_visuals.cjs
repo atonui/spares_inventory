@@ -4,38 +4,38 @@ const fs = require('node:fs');
 
 const html = fs.readFileSync('static/index.html', 'utf8');
 const css = fs.readFileSync('static/mystyle.css', 'utf8');
+const start = html.indexOf('class="inventory-toolbar"');
+const controls = html.slice(start, html.indexOf('</section>', start));
 
-test('inventory filters keep only search and store controls', () => {
-    const filters = html.slice(html.indexOf('class="inventory-filters"'), html.indexOf('class="inventory-toolbar"'));
-    assert.match(filters, /id="inventory-search"/);
-    assert.match(filters, /id="inventory-store"/);
-    assert.match(filters, /x-text="store\.name"/);
-    assert.doesNotMatch(filters, /store\.type|store\.location/);
+test('inventory summary and Add Stock are separated from filter and export controls', () => {
+    assert.match(controls, /class="inventory-toolbar"[\s\S]*?stock entries[\s\S]*?class="btn inventory-add-action"/);
+    assert.match(controls, /class="inventory-filter-row"[\s\S]*?class="[^"]*inventory-search-field"[\s\S]*?id="inventory-search"/);
+    assert.match(controls, /class="inventory-filter-row-actions" role="group" aria-label="Inventory filters and exports"/);
+    assert.match(controls, /class="btn inventory-filter-action"[^>]*:aria-expanded="showInventoryFilters" aria-controls="inventory-filter-panel"/);
+    assert.match(controls, /<svg class="inventory-action-icon"[\s\S]*?<\/svg>\s*Filters/);
+    assert.match(controls, /class="btn inventory-export-action"[^>]*:aria-expanded="showExportMenu" aria-haspopup="true"[\s\S]*?<\/svg>\s*Export/);
+    assert.doesNotMatch(controls, /Export CSV|inventory-export-chevron|⌄/);
+    assert.match(controls, /class="inventory-export-menu__items"/);
+    assert.match(controls, /exportInventoryCSV\(\)/);
+    assert.match(controls, /exportComprehensiveReport\(\)/);
+    assert.match(css, /\.inventory-controls \.inventory-filter-action,[\s\S]*?\.inventory-controls \.inventory-export-action/);
+    assert.match(css, /\.inventory-action-icon \{[^}]*stroke:\s*currentColor/);
 });
 
-test('inventory toolbar groups filter actions separately from stock actions', () => {
-    const start = html.indexOf('class="inventory-toolbar"');
-    const toolbar = html.slice(start, html.indexOf('</section>', start));
-    assert.match(toolbar, /class="inventory-toolbar-actions" role="group" aria-label="Inventory actions"/);
-    assert.doesNotMatch(toolbar, /Clear filters|Open store/);
-    assert.match(toolbar, /class="toolbar-actions inventory-action-group" role="group" aria-label="Stock actions"/);
-    assert.match(toolbar, /class="btn inventory-add-action"/);
-    assert.match(toolbar, /class="btn inventory-export-action"[^>]*:aria-expanded="showExportMenu" aria-haspopup="true"/);
-    assert.match(toolbar, /Export CSV <span class="inventory-export-chevron" aria-hidden="true">⌄<\/span>/);
-    assert.match(toolbar, /class="inventory-export-menu__items"/);
-    assert.match(toolbar, /class="inventory-export-menu__item"/);
-    assert.doesNotMatch(toolbar, /style="[^"]*(?:background|border|width|box-shadow)/);
-    assert.match(css, /\.inventory-toolbar \.inventory-add-action \{ background:\s*var\(--brand-navy\); color:\s*#ffffff/);
-    assert.match(css, /\.inventory-controls \.inventory-export-action\s*\{[^}]*border:\s*1px solid var\(--brand-border\)/s);
-    const filters = html.slice(html.indexOf('class="inventory-filters"'), html.indexOf('class="inventory-toolbar"'));
-    assert.match(filters, /class="inventory-filter-actions" role="group" aria-label="Filter actions" x-show="searchTerm \|\| storeFilter"/);
-    assert.match(filters, /class="btn inventory-filter-action"[^>]*:class="storeFilter \? '' : 'inventory-filter-action--wide'"[^>]*clearInventoryFilters/);
-    assert.match(filters, /class="btn inventory-filter-action"[^>]*x-show="storeFilter"[^>]*viewStoreInventory/);
-    assert.doesNotMatch(filters, /:disabled=/);
-    assert.match(html, /x-for="store in storeOptions"[\s\S]*?x-text="store\.name"/);
-    assert.match(css, /\.inventory-filter-action--wide \{ grid-column:\s*1 \/ -1; \}/);
+test('filter disclosure keeps store, clear, and open-store behaviors available', () => {
+    const panelStart = controls.indexOf('class="inventory-filter-panel"');
+    const panel = controls.slice(panelStart, controls.indexOf('class="inventory-filter-actions"', panelStart));
+    assert.match(panel, /id="inventory-filter-panel"[^>]*x-show="showInventoryFilters"/);
+    assert.match(panel, /id="inventory-store"/);
+    assert.match(panel, /x-for="store in storeOptions"[\s\S]*?x-text="store\.name"/);
+    assert.match(controls, /class="inventory-filter-actions" role="group" aria-label="Filter actions" x-show="searchTerm \|\| storeFilter"/);
+    assert.match(controls, /class="inventory-clear-filters"[^>]*clearInventoryFilters/);
+    assert.match(controls, /class="inventory-open-store"[^>]*x-show="storeFilter"[^>]*viewStoreInventory/);
+    assert.doesNotMatch(controls, /store\.type|store\.location/);
 });
 
-test('inventory toolbar actions remain touch-friendly and separate on mobile', () => {
-    assert.match(css, /@media \(max-width: 768px\)[\s\S]*?\.inventory-toolbar-actions \{ width:\s*100%; margin-left:\s*0; display:\s*grid; grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\); gap:\s*var\(--space-2\); \}[\s\S]*?\.toolbar-actions\.inventory-action-group \{ display:\s*contents; \}[\s\S]*?\.inventory-filter-actions \{ display:\s*grid; grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\); width:\s*100%; margin-left:\s*0; \}/);
+test('inventory toolbar controls stay touch-friendly and responsive', () => {
+    assert.match(css, /\.inventory-filter-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto/);
+    assert.match(css, /\.inventory-filter-panel \{ grid-column: 1 \/ -1/);
+    assert.match(css, /@media \(max-width: 768px\)[\s\S]*?\.inventory-filter-row \{ grid-template-columns: minmax\(0, 1fr\); \}[\s\S]*?\.inventory-filter-row-actions \.inventory-export-action \{ width: 100%; min-height: 44px; \}/);
 });
