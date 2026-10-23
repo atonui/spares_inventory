@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261023-icon-only-mobile-menu-v1">
+    <link rel="stylesheet" href="mystyle.css?v=20261023-mobile-menu-bars-v2">
     <link rel="stylesheet" href="login.css?v=20261023-app-button-system-v1">
     <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
     <style>[x-cloak] { display: none !important; }</style>
@@ -153,6 +153,7 @@
             <div class="header">
                 <div class="user-info">
                     <button type="button" class="mobile-nav-toggle" x-ref="mobileNavigationTrigger" :aria-label="mobileNavigationOpen ? 'Close main navigation' : 'Open main navigation'" aria-controls="primary-navigation" :aria-expanded="mobileNavigationOpen" @click="mobileNavigationOpen = !mobileNavigationOpen; if (mobileNavigationOpen) $nextTick(() => $refs.firstNavigationLink.focus())">
+                        <span class="mobile-nav-icon" aria-hidden="true"><span></span><span></span><span></span></span>
                     </button>
                     <div class="user-summary">
                         <h1 class="header-brand-heading mobile-header-brand"><a class="header-brand" href="/" aria-label="Spares Tracker home"><img src="brand/source/logo-icon.svg" alt=""><span>Spares Tracker</span></a></h1>

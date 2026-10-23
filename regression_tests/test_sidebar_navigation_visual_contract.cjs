@@ -35,10 +35,11 @@ test('narrow layouts get an accessible drawer trigger, dismiss control, and focu
   assert.ok(menuTrigger, 'mobile navigation trigger should exist');
   assert.match(menuTrigger, /:aria-label="mobileNavigationOpen \? 'Close main navigation' : 'Open main navigation'"/);
   assert.match(menuTrigger, /aria-controls="primary-navigation"[^>]*:aria-expanded="mobileNavigationOpen"/);
-  assert.doesNotMatch(menuTrigger, /<svg|<span/);
-  assert.doesNotMatch(menuTrigger, /<span|>\s*Menu\s*</);
+  assert.match(menuTrigger, /<span class="mobile-nav-icon" aria-hidden="true"><span><\/span><span><\/span><span><\/span><\/span>/);
+  assert.doesNotMatch(menuTrigger, /<svg|>\s*Menu\s*</);
   assert.match(css, /\.mobile-nav-toggle\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/s);
-  assert.match(css, /\.mobile-nav-toggle::before\s*\{[^}]*width:\s*20px[^}]*height:\s*14px[^}]*linear-gradient/s);
+  assert.match(css, /\.mobile-nav-icon\s*\{[^}]*width:\s*20px[^}]*height:\s*14px[^}]*flex-direction:\s*column/s);
+  assert.match(css, /\.mobile-nav-icon\s*>\s*span\s*\{[^}]*height:\s*2px[^}]*background-color:\s*currentColor/s);
   assert.match(html, /@keydown\.escape\.window=.*mobileNavigationOpen/);
   assert.match(html, /class="sidebar-backdrop"[^>]*x-show="mobileNavigationOpen"/);
   assert.match(html, /@click="mobileNavigationOpen = !mobileNavigationOpen; if \(mobileNavigationOpen\) \$nextTick\(\(\) => \$refs\.firstNavigationLink\.focus\(\)\)"/);
