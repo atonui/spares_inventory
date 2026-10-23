@@ -19,6 +19,8 @@ test('all-stores and selected-store headers use the shared responsive panel tool
     assert.ok(selectedStore.includes("x-text=\"storeInventory.length + ' items in stock'\""));
     assert.match(selectedStore,/@click="downloadStoreImportTemplate\(\)"/);
     assert.match(selectedStore,/@click="addStockToStore\(selectedStore\)"/);
+    assert.match(selectedStore,/class="store-inventory-utility-group"[\s\S]*Download Template[\s\S]*Import CSV[\s\S]*Export CSV[\s\S]*Count Stock[\s\S]*class="btn store-inventory-primary-action"[\s\S]*Add Single Part/);
+    assert.match(css,/\.store-inventory-utility-group[\s\S]*border-right: 1px solid var\(--brand-border\)/);
     assert.match(selectedStore,/x-show="canEdit\(selectedStore\?\.assigned_user_id, selectedStore\?\.type\)"/);
     assert.match(css,/\.inventory-panel-actions > \.btn:not\(\.ui-icon-only\),\s*\.inventory-panel-actions > label\.btn \{ flex: 1 1 9rem; min-height: 44px; white-space: normal; \}/);
 });

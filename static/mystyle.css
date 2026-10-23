@@ -702,6 +702,23 @@ body > [x-data="inventoryApp()"] .stat-card {
     margin: 0;
 }
 .inventory-panel-actions :focus-visible { outline: 3px solid var(--brand-focus); outline-offset: 3px; }
+.store-inventory-utility-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-right: var(--space-3);
+    border-right: 1px solid var(--brand-border);
+}
+.inventory-panel-actions .store-inventory-utility-action {
+    min-height: 40px;
+    border: 1px solid var(--brand-border);
+    background: var(--brand-surface);
+    color: var(--brand-navy);
+    font-weight: 500;
+}
+.inventory-panel-actions .store-inventory-utility-action:hover { background: var(--brand-page); border-color: #aebbc8; }
+.inventory-panel-actions .store-inventory-primary-action { min-height: 44px; white-space: nowrap; }
 .primary-navigation-shell { margin-top: var(--space-3); }
 .mobile-nav-toggle { display: none; }
 .inventory-nav, .management-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -821,8 +838,11 @@ body > [x-data="inventoryApp()"] .stat-card {
     .toolbar-actions { justify-content: flex-start; }
     .inventory-panel-heading { align-items: flex-start; padding: var(--space-4); }
     .inventory-panel-actions { width: 100%; justify-content: flex-start; }
+    .store-inventory-utility-group { flex: 1 1 100%; padding: 0 0 var(--space-3); border-right: 0; border-bottom: 1px solid var(--brand-border); }
     .inventory-panel-actions > .btn:not(.ui-icon-only),
     .inventory-panel-actions > label.btn { flex: 1 1 9rem; min-height: 44px; white-space: normal; }
+    .inventory-panel-actions .store-inventory-utility-action { flex: 1 1 9rem; min-height: 44px; white-space: normal; }
+    .inventory-panel-actions > .store-inventory-primary-action { flex: 1 1 100%; }
     .inventory-panel-actions > .ui-icon-only { flex: 0 0 44px; width: 44px; min-height: 44px; margin-left: auto; }
     .inventory-table { max-width: 100%; min-width: 0; }
     .stock-table { display: block; width: 100%; min-width: 0; font-size: var(--type-base); }
