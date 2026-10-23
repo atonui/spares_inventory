@@ -13,6 +13,7 @@ test('brand palette tokens and source logo variants are present', () => {
   const css = read('static/mystyle.css');
   for (const [token, value] of Object.entries({
     '--brand-navy': '#15263B', '--brand-amber': '#E9A23B', '--brand-slate': '#64748B',
+    '--brand-slate-on-page': '#475569',
     '--brand-page': '#F5F7FA', '--brand-surface': '#FFFFFF',
   })) assert.match(css, new RegExp(`${token}:\\s*${value}`, 'i'));
 
@@ -99,6 +100,7 @@ test('brand text and primary controls keep accessible contrast', () => {
   };
   assert.ok(ratio('#15263B', '#FFFFFF') >= 4.5, 'Navy text on white must meet WCAG AA');
   assert.ok(ratio('#64748B', '#FFFFFF') >= 4.5, 'Slate text on white must meet WCAG AA');
+  assert.ok(ratio('#475569', '#F5F7FA') >= 4.5, 'Supporting text on pale neutral must meet WCAG AA');
   assert.ok(ratio('#15263B', '#E9A23B') >= 4.5, 'Navy text on amber must meet WCAG AA');
   assert.ok(ratio('#E9A23B', '#FFFFFF') < 4.5, 'Amber must not be used as normal text on white');
 });

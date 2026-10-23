@@ -57,7 +57,7 @@
 ):disabled {
     border-color: var(--brand-border, #D8E0E8);
     background: var(--brand-page, #F5F7FA);
-    color: var(--brand-slate, #64748B);
+    color: var(--brand-slate-on-page, #475569);
     opacity: 1;
     cursor: not-allowed;
 }
