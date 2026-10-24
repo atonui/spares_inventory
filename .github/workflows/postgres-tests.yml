@@ -32,8 +32,10 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      # Run the last passing test and the next test to detect test/fixture teardown hangs.
+      # Exercise the lock fix and both startup tests that failed in the full run.
       - run: >-
-          pytest -vv --tb=no -o faulthandler_timeout=60
+          pytest -vv --tb=short -o faulthandler_timeout=60
           regression_tests/test_tenant_user_administration.py::test_member_deactivation_revokes_sessions
           regression_tests/test_tenant_user_administration.py::test_member_removal_deletes_only_membership_and_revokes_sessions
+          regression_tests/test_tenant_runtime_startup.py::test_startup_applies_empty_schema_then_is_idempotent
+          regression_tests/test_tenant_runtime_startup.py::test_startup_rejects_unknown_newer_migration_history
