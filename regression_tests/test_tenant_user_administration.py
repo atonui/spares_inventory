@@ -174,6 +174,8 @@ def test_member_removal_deletes_only_membership_and_revokes_sessions(tenant_user
            VALUES (%s, 'manager', 'existing-company-history', %s) RETURNING id""",
         (api.manager_id, api.org_a),
     ).fetchone()["id"]
+    # End the fixture-side transaction before the route locks the referenced organization.
+    api.connection.commit()
     remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
     result = asyncio.run(remove(
         target_user_id=api.manager_id,
