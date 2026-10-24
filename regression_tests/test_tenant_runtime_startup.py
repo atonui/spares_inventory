@@ -20,7 +20,7 @@ def test_startup_applies_empty_schema_then_is_idempotent(postgres_schema):
     dsn = _schema_dsn(schema)
     first = initialize_application_database(dsn, defaults={})
     second = initialize_application_database(dsn, defaults={})
-    assert first.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+    assert first.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
     assert first.pending_versions == ()
     assert second == first
 
@@ -43,7 +43,7 @@ def test_startup_rejects_unknown_newer_migration_history(postgres_schema):
     admin, schema = postgres_schema
     apply_postgres_migrations(admin)
     admin.execute(
-        "INSERT INTO postgres_schema_migrations(version,name,checksum) VALUES (7,'future','future')"
+        "INSERT INTO postgres_schema_migrations(version,name,checksum) VALUES (13,'future','future')"
     )
     admin.commit()
     dsn = _schema_dsn(schema)
