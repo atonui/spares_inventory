@@ -7,8 +7,8 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    # Bound the diagnostic run so a stalled test cannot occupy a runner for hours.
-    timeout-minutes: 15
+    # Keep this focused diagnostic bounded.
+    timeout-minutes: 5
     services:
       postgres:
         image: postgres:17
@@ -32,5 +32,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      # Verbose output identifies the test that is active if the suite stalls.
-      - run: pytest regression_tests -vv --tb=no
+      # Run the last passing test and the next test to detect test/fixture teardown hangs.
+      - run: >-
+          pytest -vv --tb=no -o faulthandler_timeout=60
+          regression_tests/test_tenant_user_administration.py::test_member_deactivation_revokes_sessions
+          regression_tests/test_tenant_user_administration.py::test_member_removal_deletes_only_membership_and_revokes_sessions
