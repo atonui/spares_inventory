@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      # Isolate the next member-removal test that stalled in the full suite.
+      # Run the complete tenant user administration module to catch order/teardown interactions.
       - run: >-
           pytest -vv --tb=short -o faulthandler_timeout=60
-          regression_tests/test_tenant_user_administration.py::test_member_removal_is_tenant_scoped_and_protects_owner
+          regression_tests/test_tenant_user_administration.py
