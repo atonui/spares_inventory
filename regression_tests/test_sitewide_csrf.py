@@ -7,6 +7,12 @@ from regression_tests.test_stock_safety import api
 TOKEN_AUTHENTICATED_MUTATIONS = {
     ('/api/auth/native/refresh', frozenset({'POST'})),
     ('/api/v1/auth/native/refresh', frozenset({'POST'})),
+    # These endpoints require an explicit bearer or one-time capability in the request body.
+    ('/api/auth/email-change/confirm', frozenset({'POST'})),
+    ('/api/v1/auth/email-change/confirm', frozenset({'POST'})),
+    ('/api/v1/auth/mobile-pairing/claim', frozenset({'POST'})),
+    ('/api/v1/auth/mobile-pairing/complete', frozenset({'POST'})),
+    ('/api/v1/inventory/adjustments', frozenset({'POST'})),
 }
 
 def dependencies(dependant):
