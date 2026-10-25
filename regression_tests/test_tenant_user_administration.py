@@ -215,6 +215,7 @@ def test_admin_cannot_remove_another_admin(tenant_user_api):
         "UPDATE organization_memberships SET company_role='admin' WHERE organization_id=%s AND user_id=%s",
         (api.org_a, api.manager_id),
     )
+    api.connection.commit()
     remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
     with pytest.raises(HTTPException) as error:
         asyncio.run(remove(
@@ -231,6 +232,7 @@ def test_member_removal_uses_current_actor_role_after_ownership_transfer(tenant_
         "UPDATE organization_memberships SET company_role='admin' WHERE organization_id=%s AND user_id=%s",
         (api.org_a, api.owner_id),
     )
+    api.connection.commit()
     remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
     with pytest.raises(HTTPException) as error:
         asyncio.run(remove(
