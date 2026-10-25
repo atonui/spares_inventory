@@ -106,21 +106,30 @@ def assess_database(path: Path) -> dict:
                 if field.table not in schema or field.column not in {r[1] for r in schema[field.table]}:
                     absent.append(identity)
                     continue
-                # Known schema has integer primary keys. Never expose tokens or text PKs.
-                key = next((r[1] for r in schema[field.table] if r[5] and r[2].upper() == 'INTEGER'), None)
-                if key is None:
-                    raise AssessmentError('Temporal table lacks a safe integer row identity.')
-                sql = 'SELECT ' + _quote(key) + ',' + _quote(field.column) + ' FROM ' + _quote(field.table)
+                # Prefer a safe integer key. For tables with opaque or composite keys,
+                # use a deterministic ordinal and never include the key in the report.
+                table_columns = schema[field.table]
+                key = next((r[1] for r in table_columns if r[5] and r[2].upper() == 'INTEGER'), None)
                 parameters = ()
+                where = ''
                 if field.setting_key:
-                    sql += ' WHERE setting_key=?'
+                    where = ' WHERE setting_key=?'
                     parameters = (field.setting_key,)
-                sql += ' ORDER BY ' + _quote(key)
+                if key:
+                    query = 'SELECT ' + _quote(key) + ',' + _quote(field.column) + ' FROM ' + _quote(field.table)
+                    query += where + ' ORDER BY ' + _quote(key)
+                    rows = ((row[0], row[1]) for row in conn.execute(query, parameters))
+                else:
+                    primary_keys = [r for r in sorted(table_columns, key=lambda item: item[5]) if r[5]]
+                    if not primary_keys:
+                        raise AssessmentError('Temporal table lacks a stable row identity.')
+                    order = ','.join(_quote(row[1]) for row in primary_keys)
+                    query = 'SELECT ' + _quote(field.column) + ' FROM ' + _quote(field.table)
+                    query += where + ' ORDER BY ' + order
+                    rows = ((ordinal, row[0]) for ordinal, row in enumerate(conn.execute(query, parameters), 1))
                 counts = Counter({name: 0 for name in COUNTS})
                 issues = []
-                for row_id, value in conn.execute(sql, parameters):
-                    if not isinstance(row_id, int):
-                        raise AssessmentError('Temporal table contains an unsupported noninteger row identity.')
+                for row_id, value in rows:
                     if field.json_key:
                         try:
                             payload = json.loads(value)
