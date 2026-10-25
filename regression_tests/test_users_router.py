@@ -19,6 +19,7 @@ OPERATIONS = {
     ('GET', '/api/users'), ('POST', '/api/users'),
     ('PUT', '/api/users/{target_user_id}'), ('DELETE', '/api/users/{target_user_id}'),
     ('POST', '/api/users/{target_user_id}/restore'),
+    ('POST', '/api/users/{target_user_id}/remove'),
 }
 
 
@@ -26,7 +27,7 @@ def test_users_router_registration_and_dependency_identity():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)
               and (r.path == '/api/users' or r.path.startswith('/api/users/'))
               and r.endpoint.__module__ == 'backend.routes.users']
-    assert len(routes) == 5
+    assert len(routes) == 6
     assert {(method, r.path) for r in routes for method in r.methods} == OPERATIONS
     for route in routes:
         assert route.endpoint.__module__ == 'backend.routes.users'

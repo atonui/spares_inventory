@@ -194,6 +194,7 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
         "/api/v1/me/email-change-requests",
         "/api/v1/me/email-change-request",
         "/api/v1/auth/email-change/confirm",
+        "/api/v1/inventory/adjustments",
     }
     assert routes["/api/v1/csrf-token"] == {"GET"}
     assert routes["/api/v1/auth/native/login"] == {"POST"}
@@ -313,6 +314,7 @@ def test_v1_openapi_is_filtered_and_versioned():
         "/api/v1/me/email-change-requests",
         "/api/v1/me/email-change-request",
         "/api/v1/auth/email-change/confirm",
+        "/api/v1/inventory/adjustments",
     }
     assert "/api/inventory" not in document["paths"]
     assert not any(path.startswith("/api/superadmin/") for path in document["paths"])

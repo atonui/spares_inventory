@@ -321,11 +321,29 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('PUT', '/api/platform/organizations/{organization_id}/members/{user_id}/role'),
         ('PUT', '/api/platform/admins/{target_user_id}'),
         ('DELETE', '/api/platform/admins/{target_user_id}'),
+        ('POST', '/api/profile/email-change-requests'),
+        ('DELETE', '/api/profile/email-change-request'),
+        ('POST', '/api/profile/mobile-pairings'),
+        ('POST', '/api/profile/mobile-pairings/{request_id}/approve'),
+        ('POST', '/api/profile/mobile-pairings/{request_id}/cancel'),
+        ('DELETE', '/api/profile/mobile-devices/{request_id}'),
+        ('POST', '/api/users/{target_user_id}/remove'),
     })
     exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/v1/auth/native/login','/api/auth/native/refresh','/api/v1/auth/native/refresh','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
-    bearer_only={('POST', '/api/v1/auth/logout')}
+    exempt.update({
+        ('POST', '/api/auth/email-change/confirm'),
+        ('POST', '/api/v1/auth/email-change/confirm'),
+        ('POST', '/api/v1/auth/mobile-pairing/claim'),
+        ('POST', '/api/v1/auth/mobile-pairing/complete'),
+    })
+    bearer_only={
+        ('POST', '/api/v1/auth/logout'),
+        ('POST', '/api/v1/me/email-change-requests'),
+        ('DELETE', '/api/v1/me/email-change-request'),
+        ('POST', '/api/v1/inventory/adjustments'),
+    }
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==62
+    assert len(protected)==69
     assert registered==protected|exempt|bearer_only
 
 

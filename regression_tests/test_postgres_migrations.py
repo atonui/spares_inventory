@@ -193,10 +193,10 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
         "company_announcements",
         "announcement_dismissals",
         "organization_invitations",
-        "mobile_pairing_requests",
-        "mobile_device_sessions",
     }
     assert expected <= tenant_tables
+    account_tables = {"mobile_pairing_requests", "mobile_device_sessions"}
+    assert account_tables <= tenant_tables
     columns = {
         (row["table_name"], row["column_name"])
         for row in connection.execute(
@@ -205,6 +205,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
         ).fetchall()
     }
     assert all((table, "organization_id") in columns for table in expected)
+    assert all((table, "user_id") in columns for table in account_tables)
     rls = {
         row["relname"]: (row["relrowsecurity"], row["relforcerowsecurity"])
         for row in connection.execute(
@@ -217,7 +218,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     policies = connection.execute(
         """SELECT tablename FROM pg_policies WHERE schemaname = current_schema()"""
     ).fetchall()
-    assert {row["tablename"] for row in policies} == expected | {"email_change_requests"}
+    assert {row["tablename"] for row in policies} == expected | account_tables | {"email_change_requests"}
     assert rls["email_change_requests"] == (True, False)
     constraints = {
         row["conname"]
@@ -420,7 +421,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 8"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 13"
     ).fetchone()["count"] == 0
 
 

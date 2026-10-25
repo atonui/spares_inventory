@@ -36,7 +36,9 @@ def authenticated_account_transaction(
                     from fastapi import HTTPException
 
                     raise HTTPException(status_code=401, detail="Invalid or expired session")
-                yield conn, principal
+                # The caller needs the scoped connection; principal revalidation
+                # above is an authorization check, not part of the context value.
+                yield conn
         finally:
             conn.close()
         return

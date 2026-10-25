@@ -37,7 +37,7 @@ def email_change_api(postgres_schema):
         ("email-change-" + uuid4().hex,),
     ).fetchone()["id"]
     identities = {}
-    for email, role in (("first@example.test", "owner"), ("second@example.test", "engineer")):
+    for email, role in (("first@example.com", "owner"), ("second@example.com", "engineer")):
         user_id = admin.execute(
             "INSERT INTO users(email,name,password_hash) VALUES (%s,%s,'hash') RETURNING id",
             (email, role),
@@ -53,7 +53,7 @@ def email_change_api(postgres_schema):
         )
         identities[role] = (user_id, token)
     platform_user_id = admin.execute(
-        "INSERT INTO users(email,name,password_hash) VALUES ('platform@example.test','Platform','hash') RETURNING id"
+        "INSERT INTO users(email,name,password_hash) VALUES ('platform@example.com','Platform','hash') RETURNING id"
     ).fetchone()["id"]
     admin.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_user_id,))
     platform_token = "email-session-" + uuid4().hex
@@ -176,7 +176,7 @@ def test_browser_email_change_requires_csrf_and_keeps_active_address(email_chang
     headers = {"Content-Type": "application/json"}
     response = client.post(
         "/api/profile/email-change-requests",
-        json={"email": "new@example.test"},
+        json={"email": "new@example.com"},
         cookies=_cookie(api),
         headers=headers,
     )
@@ -185,7 +185,7 @@ def test_browser_email_change_requires_csrf_and_keeps_active_address(email_chang
 
     response = client.post(
         "/api/profile/email-change-requests",
-        json={"email": "new@example.test"},
+        json={"email": "new@example.com"},
         cookies=_cookie(api),
         headers={**headers, "X-CSRF-Token": "csrf-fixture"},
     )
@@ -194,9 +194,9 @@ def test_browser_email_change_requires_csrf_and_keeps_active_address(email_chang
     assert response.json()["success"] is True
     assert "token" not in response.text.lower()
     user_id = api["identities"]["owner"][0]
-    assert api["admin"].execute("SELECT email FROM users WHERE id=%s", (user_id,)).fetchone()["email"] == "first@example.test"
+    assert api["admin"].execute("SELECT email FROM users WHERE id=%s", (user_id,)).fetchone()["email"] == "first@example.com"
     stored = api["admin"].execute("SELECT proposed_email, token_hash FROM email_change_requests").fetchone()
-    assert stored["proposed_email"] == "new@example.test"
+    assert stored["proposed_email"] == "new@example.com"
     assert len(stored["token_hash"]) == 64
 
 
@@ -205,13 +205,13 @@ def test_status_is_user_scoped_and_only_returns_masked_pending_email(email_chang
     client = api["client"]
     client.post(
         "/api/profile/email-change-requests",
-        json={"email": "first-new@example.test"},
+        json={"email": "first-new@example.com"},
         cookies=_cookie(api, "owner"),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
     own = client.get("/api/profile/email-change-request", cookies=_cookie(api, "owner"))
     foreign = client.get("/api/profile/email-change-request", cookies=_cookie(api, "engineer"))
-    assert own.status_code == 200 and own.json()["proposed_email"] == "f***@example.test"
+    assert own.status_code == 200 and own.json()["proposed_email"] == "f***@example.com"
     assert foreign.status_code == 200 and foreign.json() == {"status": "none"}
     assert own.headers["cache-control"] == "no-store"
     wrong_user_cancel = client.delete(
@@ -236,7 +236,7 @@ def test_registered_target_has_same_pending_status_without_sending_mail(email_ch
     client = api["client"]
     response = client.post(
         "/api/profile/email-change-requests",
-        json={"email": "second@example.test"},
+        json={"email": "second@example.com"},
         cookies=_cookie(api, "owner"),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
@@ -244,9 +244,9 @@ def test_registered_target_has_same_pending_status_without_sending_mail(email_ch
     status = client.get("/api/profile/email-change-request", cookies=_cookie(api, "owner"))
     assert status.status_code == 200
     assert status.json()["status"] == "pending"
-    assert status.json()["proposed_email"] == "s***@example.test"
+    assert status.json()["proposed_email"] == "s***@example.com"
     assert api["admin"].execute("SELECT count(*) AS n FROM mail_outbox").fetchone()["n"] == 0
-    assert api["admin"].execute("SELECT email FROM users WHERE id=%s", (api["identities"]["owner"][0],)).fetchone()["email"] == "first@example.test"
+    assert api["admin"].execute("SELECT email FROM users WHERE id=%s", (api["identities"]["owner"][0],)).fetchone()["email"] == "first@example.com"
 
 
 def test_public_confirmation_uses_fragment_token_capability_and_notifies_old_address(email_change_api):
@@ -257,7 +257,7 @@ def test_public_confirmation_uses_fragment_token_capability_and_notifies_old_add
     client = api["client"]
     requested = client.post(
         "/api/profile/email-change-requests",
-        json={"email": "verified@example.test"},
+        json={"email": "verified@example.com"},
         cookies=_cookie(api),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
@@ -272,12 +272,12 @@ def test_public_confirmation_uses_fragment_token_capability_and_notifies_old_add
     assert response.status_code == 200, response.text
     assert response.json()["success"] is True
     assert response.headers["cache-control"] == "no-store"
-    assert api["admin"].execute("SELECT email FROM users WHERE id=%s", (api["identities"]["owner"][0],)).fetchone()["email"] == "verified@example.test"
+    assert api["admin"].execute("SELECT email FROM users WHERE id=%s", (api["identities"]["owner"][0],)).fetchone()["email"] == "verified@example.com"
     notices = api["admin"].execute(
         "SELECT message_type, recipient_email, encrypted_payload FROM mail_outbox ORDER BY id"
     ).fetchall()
     assert [row["message_type"] for row in notices] == ["email_change_verification", "email_changed_notice"]
-    assert notices[1]["recipient_email"] == "first@example.test"
+    assert notices[1]["recipient_email"] == "first@example.com"
     assert token not in notices[1]["encrypted_payload"]
     replay = client.post("/api/auth/email-change/confirm", json={"token": token})
     assert replay.status_code == 400
@@ -299,14 +299,14 @@ def test_native_email_change_routes_reject_cookie_only_and_accept_bearer(email_c
     client = api["client"]
     cookie_only = client.post(
         "/api/v1/me/email-change-requests",
-        json={"email": "native@example.test"},
+        json={"email": "native@example.com"},
         cookies=_cookie(api),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
     assert cookie_only.status_code == 401
     bearer = client.post(
         "/api/v1/me/email-change-requests",
-        json={"email": "native@example.test"},
+        json={"email": "native@example.com"},
         headers={"Authorization": "Bearer " + api["identities"]["owner"][1]},
     )
     assert bearer.status_code == 202, bearer.text
@@ -316,7 +316,7 @@ def test_email_change_request_rejects_client_supplied_scope(email_change_api):
     api = email_change_api
     response = api["client"].post(
         "/api/profile/email-change-requests",
-        json={"email": "new@example.test", "user_id": api["identities"]["engineer"][0], "organization_id": "foreign"},
+        json={"email": "new@example.com", "user_id": api["identities"]["engineer"][0], "organization_id": "foreign"},
         cookies=_cookie(api),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
@@ -328,26 +328,26 @@ def test_postgres_legacy_profile_cannot_bypass_email_verification(email_change_a
     api = email_change_api
     response = api["client"].put(
         "/api/profile",
-        json={"email": "bypass@example.test"},
+        json={"email": "bypass@example.com"},
         cookies=_cookie(api),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
     assert response.status_code == 409
     assert api["admin"].execute(
         "SELECT email FROM users WHERE id=%s", (api["identities"]["owner"][0],)
-    ).fetchone()["email"] == "first@example.test"
+    ).fetchone()["email"] == "first@example.com"
 
 
 def test_platform_admin_can_change_own_email_without_company_scope(email_change_api):
     api = email_change_api
     response = api["client"].post(
         "/api/profile/email-change-requests",
-        json={"email": "platform-new@example.test"},
+        json={"email": "platform-new@example.com"},
         cookies=_cookie(api, "platform"),
         headers={"X-CSRF-Token": "csrf-fixture"},
     )
     assert response.status_code == 202, response.text
     assert api["admin"].execute(
         "SELECT email FROM users WHERE id=%s", (api["identities"]["platform"][0],)
-    ).fetchone()["email"] == "platform@example.test"
+    ).fetchone()["email"] == "platform@example.com"
     assert api["admin"].execute("SELECT count(*) AS n FROM email_change_requests").fetchone()["n"] == 1
