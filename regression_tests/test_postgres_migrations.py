@@ -97,13 +97,13 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
         "VALUES (%s, %s, %s, %s)",
         (user_id, "next@example.test", "token-hash-1", expiration),
     )
-    with pytest.raises(UniqueViolation):
+    with pytest.raises(UniqueViolation), connection.transaction():
         connection.execute(
             "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
             "VALUES (%s, %s, %s, %s)",
             (user_id, "other@example.test", "token-hash-2", expiration),
         )
-    with pytest.raises(UniqueViolation):
+    with pytest.raises(UniqueViolation), connection.transaction():
         connection.execute(
             "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s)",
             ("casesensitive@example.test", "Case collision", "unused"),
@@ -193,6 +193,8 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
         "company_announcements",
         "announcement_dismissals",
         "organization_invitations",
+        "mobile_pairing_requests",
+        "mobile_device_sessions",
     }
     assert expected <= tenant_tables
     columns = {
@@ -403,7 +405,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=8,
+        version=13,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
