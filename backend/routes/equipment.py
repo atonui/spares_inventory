@@ -45,6 +45,11 @@ def _require_company_user(conn, actor, target_user_id):
         raise HTTPException(status_code=400, detail="Assigned user must belong to this company")
 
 
+def _require_active_equipment(equipment):
+    if equipment["status"] != "active":
+        raise HTTPException(status_code=409, detail="Equipment is archived; restore it before making changes")
+
+
 def _equipment_history_insert(conn, cursor, user, sql, values):
     if is_postgres(conn):
         sql = sql.replace("INSERT INTO equipment_history (", "INSERT INTO equipment_history (organization_id, ")
@@ -173,6 +178,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
     async def get_equipment(
         user_id: int = Depends(get_current_user),
         show_all: bool = False,
+        include_archived: bool = False,
         request: Request = None,
     ):
         """Get equipment list"""
@@ -191,6 +197,9 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                 user = execute(conn, "SELECT role FROM users WHERE id = ?", (actor_id,)).fetchone()
                 can_see_all = bool(user and user["role"] == "admin")
 
+            if include_archived and not check_admin(user_id, conn):
+                raise HTTPException(status_code=403, detail="Admin access required")
+
             delta = "CAST(CAST(e.next_calibration_date AS date) - CAST(? AS date) AS integer)" if is_postgres(conn) else "CAST(julianday(e.next_calibration_date) - julianday(?) AS INTEGER)"
             query = f"""
                 SELECT
@@ -201,6 +210,9 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                 LEFT JOIN users u ON e.assigned_user_id = u.id
                 WHERE e.status = 'active'
             """
+
+            if include_archived:
+                query = query.replace("WHERE e.status = 'active'", "WHERE e.status IN ('active', 'deleted')")
 
             if not show_all and not can_see_all:
                 query += " AND e.assigned_user_id = ?"
@@ -314,6 +326,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             equipment = cursor.fetchone()
             if not equipment:
                 raise HTTPException(status_code=404, detail="Equipment not found")
+            _require_active_equipment(equipment)
 
             # Build update query
             updates = []
@@ -378,6 +391,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             equipment = cursor.fetchone()
             if not equipment:
                 raise HTTPException(status_code=404, detail="Equipment not found")
+            _require_active_equipment(equipment)
 
             # Check permissions
             if not check_admin(user_id, conn) and equipment["assigned_user_id"] != _actor_id(user_id):
@@ -432,6 +446,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             equipment = cursor.fetchone()
             if not equipment:
                 raise HTTPException(status_code=404, detail="Equipment not found")
+            _require_active_equipment(equipment)
 
             # Check permissions - admin or assigned user
             if not check_admin(user_id, conn) and equipment["assigned_user_id"] != _actor_id(user_id):
@@ -490,10 +505,12 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                 raise HTTPException(status_code=403, detail="Admin access required")
 
             # Get equipment
-            execute_cursor(conn, cursor, "SELECT equipment_name FROM equipment WHERE id = ?", (equipment_id,))
+            execute_cursor(conn, cursor, "SELECT equipment_name, status FROM equipment WHERE id = ?", (equipment_id,))
             equipment = cursor.fetchone()
             if not equipment:
                 raise HTTPException(status_code=404, detail="Equipment not found")
+            if equipment["status"] != "active":
+                raise HTTPException(status_code=409, detail="Equipment is already archived")
 
             # Soft delete
             execute_cursor(conn, cursor,
@@ -515,11 +532,46 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
 
             _result = {
                 "success": True,
-                "message": f"Equipment {equipment['equipment_name']} deleted successfully",
+                "message": f"Equipment {equipment['equipment_name']} archived; history preserved",
             }
 
             _record_mutation_activity(conn, user_id, 'delete_equipment', 'equipment', _result, request)
             return _result
+
+
+    @router.post("/api/equipment/{equipment_id}/restore")
+    @log_endpoint(action="restore_equipment", resource_type="equipment", transactional=True)
+    async def restore_equipment(
+        equipment_id: int,
+        user_id: int = Depends(get_current_user),
+        csrf_valid: bool = Depends(verify_csrf),
+        request: Request = None,
+    ):
+        """Restore archived equipment to active use (admin only)."""
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+            cursor = conn.cursor()
+            if not check_admin(user_id, conn):
+                raise HTTPException(status_code=403, detail="Admin access required")
+
+            execute_cursor(conn, cursor, "SELECT equipment_name, status FROM equipment WHERE id = ?", (equipment_id,))
+            equipment = cursor.fetchone()
+            if not equipment:
+                raise HTTPException(status_code=404, detail="Equipment not found")
+            if equipment["status"] != "deleted":
+                raise HTTPException(status_code=409, detail="Equipment is already active")
+
+            execute_cursor(conn, cursor,
+                "UPDATE equipment SET status = 'active', updated_at = ? WHERE id = ?",
+                (serialize_instant(utc_now()), equipment_id))
+            _equipment_history_insert(conn, cursor, user_id,
+                "INSERT INTO equipment_history (equipment_id, action, created_by) VALUES (?, 'restored', ?)",
+                (equipment_id, _actor_id(user_id)))
+            result = {
+                "success": True,
+                "message": f"Equipment {equipment['equipment_name']} restored; history preserved",
+            }
+            _record_mutation_activity(conn, user_id, "restore_equipment", "equipment", result, request)
+            return result
 
 
     @router.get("/api/equipment/{equipment_id}/history")

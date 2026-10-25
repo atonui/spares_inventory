@@ -34,7 +34,7 @@
 <script src="js/inventory/movement-history.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/exports.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/browsing.js?v=20261014-frontend-21" defer></script>
-<script src="js/inventory/archived-records.js?v=20261014-frontend-21" defer></script>
+<script src="js/inventory/archived-records.js?v=20261025-frontend-22" defer></script>
 <script src="js/inventory/navigation.js?v=20261014-frontend-21" defer></script>
 <script src="js/pages/inventory-v21.js?v=20261014-frontend-21" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
@@ -334,7 +334,7 @@
                 <div class="inventory-panel-heading">
                     <div class="inventory-panel-heading-content">
                         <h3 class="inventory-panel-title">Archived records</h3>
-                        <p class="inventory-panel-meta">History is preserved. Restore a record before using it again.</p>
+                        <p class="inventory-panel-meta">Delete archives these records and preserves their history. Restore one here to use it again. Permanent erasure is not available in this panel.</p>
                     </div>
                     <div class="inventory-panel-actions">
                         <button class="btn btn-sm ui-icon-only" @click="loadArchivedRecords()" :disabled="loading" aria-label="Refresh data" title="Refresh data"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
@@ -1037,7 +1037,7 @@
                                                 <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; openTransferEquipmentModal(eq)" x-show="['owner','admin'].includes(currentUser?.role) || eq.assigned_user_id === currentUser?.id"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#transfer"></use></svg>Transfer</button>
                                                 <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; viewEquipmentHistory(eq)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#history"></use></svg>View history</button>
                                                 <button type="button" class="stock-action-item" @click="$el.closest('details').open = false; editEquipment(eq)" x-show="['owner','admin'].includes(currentUser?.role)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#edit"></use></svg>Edit equipment</button>
-                                                <button type="button" class="stock-action-item equipment-action-item--danger" @click="$el.closest('details').open = false; deleteEquipment(eq.id, eq.equipment_name)" x-show="['owner','admin'].includes(currentUser?.role)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#trash"></use></svg>Delete equipment</button>
+                                                <button type="button" class="stock-action-item equipment-action-item--danger" @click="$el.closest('details').open = false; deleteEquipment(eq.id, eq.equipment_name)" x-show="['owner','admin'].includes(currentUser?.role)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#archive"></use></svg>Archive equipment</button>
                                             </div>
                                         </details>
                                     </td>

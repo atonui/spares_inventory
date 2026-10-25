@@ -17,6 +17,7 @@ OPERATIONS = {
     ('GET', '/api/equipment/statistics'), ('PUT', '/api/equipment/{equipment_id}'),
     ('POST', '/api/equipment/{equipment_id}/transfer'),
     ('POST', '/api/equipment/{equipment_id}/calibrate'),
+    ('POST', '/api/equipment/{equipment_id}/restore'),
     ('DELETE', '/api/equipment/{equipment_id}'), ('GET', '/api/equipment/{equipment_id}/history'),
     ('GET', '/api/settings/calibration-reminder-days'), ('PUT', '/api/settings/calibration-reminder-days'),
 }
@@ -25,7 +26,7 @@ OPERATIONS = {
 def test_equipment_registration_and_dependencies():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)
               and (r.path.startswith('/api/equipment') or r.path == '/api/settings/calibration-reminder-days')]
-    assert len(routes) == 10
+    assert len(routes) == 11
     assert {(m, r.path) for r in routes for m in r.methods} == OPERATIONS
     for route in routes:
         assert route.endpoint.__module__ == 'backend.routes.equipment'
@@ -111,6 +112,40 @@ def test_equipment_nullable_assignment_and_soft_delete(session_api):
     client.cookies.set('session_token', 'manager-token')
     history = client.get('/api/equipment/1/history')
     assert history.status_code == 200 and history.json()[0]['action'] == 'deleted'
+
+
+def test_equipment_archive_listing_is_admin_only_and_restore_preserves_history(session_api):
+    client, path, _ = session_api
+    client.delete('/api/equipment/1')
+
+    # Deleted equipment is not exposed through ordinary lists.
+    assert client.get('/api/equipment', params={'show_all': True}).json() == []
+    assert client.delete('/api/equipment/1').status_code == 409
+    assert client.put('/api/equipment/1', json={'notes': 'edit'}).status_code == 409
+    assert client.post('/api/equipment/1/transfer', json={'to_user_id': 4, 'notes': 'move'}).status_code == 409
+    assert client.post('/api/equipment/1/calibrate', json={
+        'calibration_cert_number': 'CERT', 'calibration_authority': 'Lab',
+        'calibration_date': '2026-01-01', 'next_calibration_date': '2027-01-01',
+    }).status_code == 409
+
+    # Only company admins can retrieve archived equipment for recovery.
+    client.cookies.set('session_token', 'engineer-token')
+    assert client.get('/api/equipment', params={'include_archived': True}).status_code == 403
+    client.cookies.set('session_token', 'admin-token')
+    archived = client.get('/api/equipment', params={'include_archived': True})
+    assert archived.status_code == 200, archived.text
+    assert [(row['id'], row['status']) for row in archived.json()] == [(1, 'deleted')]
+
+    # Restore is admin-only, idempotency conflicts are explicit, and history remains.
+    client.cookies.set('session_token', 'engineer-token')
+    assert client.post('/api/equipment/1/restore').status_code == 403
+    client.cookies.set('session_token', 'admin-token')
+    restored = client.post('/api/equipment/1/restore')
+    assert restored.status_code == 200, restored.text
+    assert restored.json()['success'] is True
+    assert client.post('/api/equipment/1/restore').status_code == 409
+    assert [row['action'] for row in client.get('/api/equipment/1/history').json()] == ['restored', 'deleted']
+    assert [row['id'] for row in client.get('/api/equipment', params={'show_all': True}).json()] == [1]
 
 
 @pytest.mark.parametrize('days,status', [(0, 400), (366, 400), (1, 200), (365, 200)])
