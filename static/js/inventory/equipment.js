@@ -169,7 +169,7 @@ function equipmentFeature() {
         },
 
         async deleteEquipment(equipmentId, equipmentName) {
-            if (!confirm(`Are you sure you want to delete equipment ${equipmentName}?`)) {
+            if (!confirm(`Archive equipment ${equipmentName}? It will leave active lists, keep its history, and can be restored by an admin.`)) {
                 return;
             }
 
@@ -182,7 +182,7 @@ function equipmentFeature() {
                     method: 'DELETE'
                 });
 
-                this.successMessage = 'Equipment deleted successfully!';
+                this.successMessage = 'Equipment archived; history preserved.';
                 await this.loadEquipment();
                 await this.loadEquipmentStats();
                 setTimeout(() => this.successMessage = '', 3000);

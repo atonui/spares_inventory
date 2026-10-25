@@ -18,7 +18,7 @@ const response=(status,data)=>new Response(JSON.stringify(data),{status,headers:
 const cases={
  create:{method:'createEquipment',path:'/equipment',verb:'POST',message:'Equipment created successfully!',error:'Failed to create equipment: ',modal:'showEquipmentModal'},
  update:{method:'updateEquipment',path:'/equipment/42',verb:'PUT',message:'Equipment updated successfully!',error:'Failed to update equipment: ',modal:'showEquipmentModal'},
- delete:{method:'deleteEquipment',path:'/equipment/42',verb:'DELETE',message:'Equipment deleted successfully!',error:'Failed to delete equipment: '},
+ delete:{method:'deleteEquipment',path:'/equipment/42',verb:'DELETE',message:'Equipment archived; history preserved.',error:'Failed to delete equipment: '},
  calibration:{method:'updateCalibration',path:'/equipment/42/calibrate',verb:'POST',message:'Calibration updated successfully!',error:'Failed to update calibration: ',modal:'showCalibrationModal'},
  transfer:{method:'transferEquipmentToUser',path:'/equipment/42/transfer',verb:'POST',message:'Equipment transferred successfully!',error:'Failed to transfer equipment: ',modal:'showTransferEquipmentModal'},
  setting:{method:'updateCalibrationReminderDays',path:'/settings/calibration-reminder-days?days=45',verb:'PUT',message:'Calibration reminder set to 45 days!',error:'Failed to update setting: ',modal:'showCalibrationSettingsModal'},
@@ -36,6 +36,7 @@ test('equipment row actions use an accessible compact menu with role-gated opera
  assert.match(actions,/@click\.outside="\$el\.open = false"/);
  assert.match(actions,/@keydown\.escape\.stop\.prevent=/);
  assert.match(actions,/class="stock-action-item equipment-action-item--danger"/);
+ assert.match(actions,/>Archive equipment<\/button>/);
  assert.doesNotMatch(actions,/style="background:\s*#dc3545/);
  assert.match(css,/\.equipment-action-item--danger\s*\{[^}]*color:\s*#991b1b/s);
 });
@@ -101,7 +102,7 @@ for(const [op,config] of Object.entries(cases))test(op+' preserves payload, rese
  const calls=[];const {a,timers}=setup({confirm(m){calls.push(m);return true;}});fill(a,op);const body=payload(a,op),user=a.currentUser;
  a.apiCall=async(path,opts)=>{assert.equal(a.loading,true);assert.equal(a.error,'');calls.push([path,opts.method,opts.body?JSON.parse(opts.body):undefined]);return {message:'ignored'};};
  a.loadEquipment=async()=>{assertSaved(a,op);assert.equal(timers.length,0);calls.push('equipment');};a.loadEquipmentStats=async()=>{assert.equal(timers.length,0);calls.push('stats');};
- await a[config.method](42,'Meter');assert.deepEqual(calls,[...(op==='delete'?['Are you sure you want to delete equipment Meter?']:[]),[config.path,config.verb,body],...(op==='setting'?[]:['equipment','stats'])]);assertSaved(a,op);assert.equal(a.currentUser,user);assert.equal(a.successMessage,config.message);assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);timers[0].callback();assert.equal(a.successMessage,'');
+ await a[config.method](42,'Meter');assert.deepEqual(calls,[...(op==='delete'?['Archive equipment Meter? It will leave active lists, keep its history, and can be restored by an admin.']:[]),[config.path,config.verb,body],...(op==='setting'?[]:['equipment','stats'])]);assertSaved(a,op);assert.equal(a.currentUser,user);assert.equal(a.successMessage,config.message);assert.equal(a.loading,false);assert.equal(timers[0].delay,3000);timers[0].callback();assert.equal(a.successMessage,'');
 });
 for(const [op,config] of Object.entries(cases))for(const stage of (op==='setting'?['write']:['write','equipment','stats']))test(op+' failure at '+stage+' preserves pre-write or saved state',async()=>{
  const {a,timers}=setup();fill(a,op);const form=a.equipmentForm,cal=a.calibrationForm,transfer=a.transferEquipmentForm,selected=a.selectedEquipment;const calls=[];
@@ -110,7 +111,7 @@ for(const [op,config] of Object.entries(cases))for(const stage of (op==='setting
  if(stage==='write'||op==='delete'){assert.equal(a.equipmentForm,form);assert.equal(a.calibrationForm,cal);assert.equal(a.transferEquipmentForm,transfer);assert.equal(a.selectedEquipment,selected);if(config.modal)assert.equal(a[config.modal],true);}else assertSaved(a,op);
  const order=['write','equipment','stats'];assert.deepEqual(calls,order.slice(0,order.indexOf(stage)+1));
 });
-test('declined permanent delete retains selection, forms and feedback',async()=>{
+test('declined archive retains selection, forms and feedback',async()=>{
  const {a,timers}=setup({confirm:()=>false});a.selectedEquipment=row;a.error='old';a.successMessage='keep';a.apiCall=async()=>assert.fail('no mutation');await a.deleteEquipment(42,'Meter');assert.equal(a.selectedEquipment,row);assert.equal(a.error,'old');assert.equal(a.successMessage,'keep');assert.equal(timers.length,0);
 });
 for(const op of ['create','update'])test(op+' retains populated optional fields and raw identity/date strings',async()=>{

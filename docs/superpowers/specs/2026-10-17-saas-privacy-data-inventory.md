@@ -1,7 +1,7 @@
 # SaaS and Native App Privacy Data Inventory
 
 **Status:** Initial source-code inventory for privacy and store-readiness review.
-**Reviewed:** 2026-10-17.
+**Initial review:** 2026-10-17. **Deletion-policy implementation update:** 2026-10-25.
 
 This inventory records data flows evidenced in the repository and a read-only review of the current Railway project. Purposes are described from application behavior and may be inferred. It is not a privacy policy, legal retention schedule, or store disclosure. Runtime secrets, live records, provider retention settings, and built iOS/Android manifests were not inspected.
 
@@ -23,7 +23,7 @@ This inventory records data flows evidenced in the repository and a read-only re
 
 - **Fields:** parts/catalog identifiers and descriptions; store names, types and location details; inventory quantities and thresholds; work-order numbers and customer names; stock movements, notes and actor references; transfers; equipment serial numbers, calibration/service details, notes, assignment and equipment history; company announcements and dismissals.
 - **Purpose:** inventory, stock movement, work-order, equipment and company operations (inferred from screens, routes and schemas).
-- **Access and lifecycle:** SaaS tables are tenant-scoped under RLS. Several legacy records support reversible archiving by setting `archived_at`; archiving preserves data and is not an erasure schedule. No general tenant-data retention or deletion job exists.
+- **Access and lifecycle:** SaaS tables are tenant-scoped under RLS. Parts, stores and users support reversible archiving/deactivation, and equipment uses a reversible `status='deleted'` marker with an admin restore flow. The admin archived-records panel exposes restoration. Archiving preserves data and is not an erasure schedule. No general tenant-data retention or deletion job exists.
 
 ### Sessions and security metadata
 
@@ -71,6 +71,7 @@ This inventory records data flows evidenced in the repository and a read-only re
 ## Decisions and verification still required
 
 - Set and approve retention periods and deletion behavior for accounts, organizations, sessions, invitations/outbox, activity/audit records, local log files, backups and restore copies. Existing cleanup mechanisms do not define a complete retention policy.
+- Decide and legally review the separate customer account/tenant erasure process, including request verification, audit/history obligations, other tenants' references, backups and legal holds. The normal Delete actions archive operational records; no self-service permanent-erasure route or retention period is implemented.
 - Select and provision the SaaS PostgreSQL provider; verify actual backup schedule/expiry, restore procedure, access controls, operational owner, and a deletion ledger that survives restore.
 - Identify the configured SMTP provider and verify its data processing, region, retention and access terms. Review the Resend terms/configuration for invitation mail before making a processor disclosure.
 - Confirm whether activity details, customer/work-order fields, equipment notes and exports contain additional personal data in ordinary use; do not infer example production content from schema fields.
