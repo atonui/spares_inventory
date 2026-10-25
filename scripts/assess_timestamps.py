@@ -130,6 +130,8 @@ def assess_database(path: Path) -> dict:
                 counts = Counter({name: 0 for name in COUNTS})
                 issues = []
                 for row_id, value in rows:
+                    if key and not isinstance(row_id, int):
+                        raise AssessmentError('Temporal table contains an unsupported noninteger row identity.')
                     if field.json_key:
                         try:
                             payload = json.loads(value)
