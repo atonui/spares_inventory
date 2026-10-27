@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from backend.services.mail_outbox import enqueue_mail
 from backend.services.mail_payloads import encrypt_mail_payload
+from backend.services.platform_audit import record_platform_audit_event
 from backend.temporal import serialize_instant, utc_now
 
 INVITATION_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -188,11 +189,9 @@ def create_organization_with_owner_invitation(
         email=owner_email, company_role="owner", frontend_url=frontend_url,
         encryption_key=encryption_key,
     )
-    conn.execute(
-        """INSERT INTO platform_audit_events
-           (actor_user_id, organization_id, action, result, details)
-           VALUES (%s, %s, 'organization_created', 'success', %s::jsonb)""",
-        (actor_user_id, organization["id"], '{"invitation_created":true}'),
+    record_platform_audit_event(
+        conn, actor_user_id, "organization_created", "success", organization["id"],
+        {"invitation_created": True},
     )
     return {"id": str(organization["id"]), "name": organization["name"],
             "slug": organization["slug"], "owner_invitation": invitation}

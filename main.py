@@ -466,6 +466,7 @@ app.include_router(create_organization_settings_router(
 
 from backend.routes.invitations import create_invitation_router
 from backend.routes.platform_organizations import create_platform_organizations_router
+from backend.routes.platform_audit import create_platform_audit_router
 
 app.include_router(create_invitation_router(
     get_connection=lambda: get_db_connection(),
@@ -486,6 +487,9 @@ app.include_router(create_platform_organizations_router(
     csrf_dependency=verify_authenticated_csrf,
     encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
     frontend_url=settings.INVITATION_BASE_URL or FRONTEND_URL,
+))
+app.include_router(create_platform_audit_router(
+    get_connection=lambda: get_db_connection(), current_user=get_current_user,
 ))
 
 app.include_router(create_stores_router(
