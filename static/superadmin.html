@@ -50,10 +50,15 @@
   <div class="confirm-box">
     <h3 id="confirm-title" x-text="dlg.title"></h3>
     <p id="confirm-description" x-text="dlg.msg"></p>
+    <div class="form-group dialog-reason" x-show="dlg.reason_required">
+      <label for="platform-action-reason">Reason (10–500 characters)</label>
+      <textarea id="platform-action-reason" rows="3" minlength="10" maxlength="500" x-model="dlg.reason" :required="dlg.reason_required" :disabled="dialogBusy" aria-describedby="platform-action-reason-help"></textarea>
+      <small id="platform-action-reason-help">This reason will be recorded in the platform audit trail.</small>
+    </div>
     <p x-show="dialogError" class="action-error" role="alert" x-text="dialogError"></p>
     <div class="confirm-actions">
       <button class="btn btn-outline" @click="dlg.open=false" :disabled="dialogBusy">Cancel</button>
-      <button class="btn btn-red" @click="submitDialog()" :disabled="dialogBusy" x-text="dialogBusy ? 'Working…' : (dlg.action||'Confirm')"></button>
+      <button class="btn" :class="dlg.button_class || 'btn-red'" @click="submitDialog()" :disabled="dialogBusy" x-text="dialogBusy ? 'Working…' : (dlg.action||'Confirm')"></button>
     </div>
   </div>
 </div>
@@ -159,13 +164,13 @@
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
-        <span x-show="loading || panelLoads[tab]?.loading" class="spin"></span>
-        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading)" class="spin"></span>
+        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
         <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
       </div>
     </div>
 
-    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading">
+    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading)">
 
       <!-- ══════════ DASHBOARD ══════════ -->
       <div x-show="tab==='dashboard' && !me?.saas_mode">
@@ -273,12 +278,32 @@
           </div>
         </div>
         <div class="panel">
-          <div class="panel-header"><span class="panel-title">Organizations</span><button class="btn btn-sm btn-outline" @click="loadOrganizations()" :disabled="loading">Refresh</button></div>
+          <div class="panel-header"><span class="panel-title">Organizations</span><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset)" :disabled="organizationLoading">Refresh</button></div>
           <div class="panel-body" style="overflow:auto">
-            <table class="organizations-table"><thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Created</th></tr></thead>
-              <tbody><template x-for="org in organizations" :key="org.id"><tr><td data-label="Name" x-text="org.name"></td><td data-label="Slug" x-text="org.slug"></td><td data-label="Status" x-text="org.is_active ? 'Active' : 'Inactive'"></td><td data-label="Created" x-text="org.created_at"></td></tr></template></tbody>
-            </table>
-            <p x-show="!organizations.length && !loading">No organizations have been provisioned.</p>
+            <form class="list-filters organization-filters" @submit.prevent="loadOrganizations(0)">
+              <label>Search organizations<input type="search" maxlength="100" placeholder="Name or slug" x-model="organizationFilters.search" :disabled="organizationLoading"></label>
+              <label>Status<select x-model="organizationFilters.status" :disabled="organizationLoading"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label>
+              <div class="filter-actions"><button class="btn btn-success" type="submit" :disabled="organizationLoading">Search</button><button class="btn btn-outline" type="button" @click="organizationFilters={search:'',status:'all'};loadOrganizations(0)" :disabled="organizationLoading">Clear</button></div>
+            </form>
+            <p x-show="organizationLoading" role="status" class="list-count">Loading organizations…</p>
+            <div x-show="organizationError" class="action-error" role="alert"><span x-text="organizationError"></span> <button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset)" :disabled="organizationLoading">Retry</button></div>
+            <div x-show="!organizationLoading && !organizationError && !organizations.length" class="empty">No organizations match these filters.</div>
+            <div style="overflow:auto" x-show="!organizationLoading && !organizationError && organizations.length">
+              <table class="organizations-table tbl"><thead><tr><th>Organization</th><th>Status</th><th>Active members</th><th>Invitation email</th><th>Created (UTC)</th><th>Actions</th></tr></thead>
+                <tbody><template x-for="org in organizations" :key="org.id"><tr>
+                  <td data-label="Organization"><strong x-text="org.name"></strong><small class="organization-slug" x-text="org.slug"></small></td>
+                  <td data-label="Status"><span class="organization-status" :class="org.is_active ? 'is-active' : 'is-suspended'" x-text="org.is_active ? 'Active' : 'Suspended'"></span></td>
+                  <td data-label="Active members" x-text="org.active_member_count"></td>
+                  <td data-label="Invitation email"><span class="invitation-count">Pending <strong x-text="org.pending_invitation_mail_count"></strong></span><span class="invitation-count">Failed <strong x-text="org.failed_invitation_mail_count"></strong></span></td>
+                  <td data-label="Created (UTC)" x-text="org.created_at"></td>
+                  <td data-label="Actions"><button class="btn btn-sm btn-outline" :class="org.is_active ? 'organization-suspend' : 'organization-reactivate'" @click="requestOrganizationStatus(org)" :disabled="dialogBusy || actionPending['organization:'+org.id]" x-text="org.is_active ? 'Suspend' : 'Reactivate'"></button></td>
+                </tr></template></tbody>
+              </table>
+            </div>
+            <div class="organization-pagination" x-show="organizationTotal>0 && !organizationError">
+              <span role="status" x-text="`Showing ${organizationOffset+1}–${Math.min(organizationOffset+organizations.length,organizationTotal)} of ${organizationTotal}`"></span>
+              <div class="filter-actions"><button class="btn btn-sm btn-outline" @click="loadOrganizations(Math.max(0,organizationOffset-organizationLimit))" :disabled="organizationLoading || organizationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset+organizationLimit)" :disabled="organizationLoading || organizationOffset+organizationLimit>=organizationTotal">Next</button></div>
+            </div>
           </div>
         </div>
       </div>

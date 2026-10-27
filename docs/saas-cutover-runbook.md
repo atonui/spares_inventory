@@ -122,6 +122,7 @@ GRANT SELECT (id, idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
 GRANT UPDATE (idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
 GRANT USAGE ON SEQUENCE mail_outbox_id_seq TO web_runtime_role;
 GRANT SELECT ON platform_mail_outbox_counts TO web_runtime_role;
+GRANT SELECT ON platform_organization_invitation_mail_counts TO web_runtime_role;
 
 REVOKE ALL PRIVILEGES ON TABLE email_change_requests FROM web_runtime_role;
 GRANT SELECT (id, user_id, proposed_email, token_hash, delivery_suppressed,
@@ -150,6 +151,10 @@ request handling uses the web runtime identity. The worker must not receive
 the migration identity.
 The `platform_mail_outbox_counts` view returns exactly one row containing only
 integer `pending` and `failed` counts; the view is not a per-message API.
+The `platform_organization_invitation_mail_counts` view exposes only pending
+and failed invitation-mail totals grouped by organization for the platform
+directory. Query it only through platform-authorized application routes; it
+does not expose message rows, recipients, or payloads.
 
 ## Rehearsal
 

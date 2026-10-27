@@ -65,6 +65,29 @@ test('platform organization form sends name slug and owner invitation',async()=>
  assert.deepEqual(calls,[['/platform/organizations','POST',{name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'}],'organizations','dashboard']);
  assert.deepEqual(JSON.parse(JSON.stringify(a.organizationForm)),{name:'',slug:'',owner_email:''});
 });
+test('platform organization directory sends search/status filters with bounded pagination and errors',async()=>{
+ const a=app();a.organizationFilters={search:'Acme & Sons',status:'suspended'};let path='';
+ a.api=async value=>{path=value;return {rows:[{id:'org-1',name:'Acme & Sons'}],total:31,limit:25,offset:25};};
+ await a.loadOrganizations(25);assert.match(path,/search=Acme\+%26\+Sons/);assert.match(path,/status=suspended/);assert.match(path,/limit=25/);assert.match(path,/offset=25/);
+ assert.equal(a.organizations[0].id,'org-1');assert.equal(a.organizationTotal,31);assert.equal(a.organizationOffset,25);
+ a.api=async()=>{throw Error('offline');};await a.loadOrganizations(0);assert.equal(a.organizationError,'offline');assert.equal(a.organizationLoading,false);
+});
+test('organization suspension waits for a reason and confirms before posting',async()=>{
+ const a=app();a.toast=()=>{};const org={id:'org-1',name:'Acme',is_active:true};const calls=[];
+ a.api=async(path,options)=>{calls.push([path,options.method,JSON.parse(options.body)]);return {success:true,is_active:false,changed:true};};
+ a.loadOrganizations=async()=>calls.push('organizations');a.loadPlatformDashboard=async()=>calls.push('dashboard');
+ a.requestOrganizationStatus(org);assert.equal(a.dlg.open,true);assert.equal(a.dlg.reason_required,true);assert.equal(calls.length,0);
+ a.dlg.reason='too short';await a.submitDialog();assert.equal(calls.length,0);assert.equal(a.dlg.open,true);assert.match(a.dialogError,/10/);
+ a.dlg.reason='Customer requested suspension';await a.submitDialog();
+ assert.deepEqual(calls,[['/platform/organizations/org-1/status','PUT',{action:'suspend',reason:'Customer requested suspension'}],'organizations','dashboard']);
+ assert.equal(a.dlg.open,false);
+});
+test('organization directory shows lifecycle controls and aggregate-only operational fields',()=>{
+ const directory=html.split("x-show=\"tab==='organizations' && me?.saas_mode\"")[1].split("x-show=\"tab==='platformAudit'")[0];
+ assert.match(directory,/Active members/);assert.match(directory,/Invitation email/);assert.match(directory,/Pending/);assert.match(directory,/Failed/);
+ assert.match(directory,/requestOrganizationStatus\(org\)/);assert.doesNotMatch(directory,/organization_users|inventory_rows/);
+ assert.match(html,/x-model="dlg\.reason"/);
+});
 test('dialog traps focus in both directions',()=>{const a=app();let focused;const first={focus:()=>focused='first'},last={focus:()=>focused='last'};const el={querySelectorAll:()=>[first,last]};let prevented=false;const event={target:last,shiftKey:false,preventDefault:()=>prevented=true};a.trapDialogFocus(event,el);assert.equal(focused,'first');assert.equal(prevented,true);event.target=first;event.shiftKey=true;a.trapDialogFocus(event,el);assert.equal(focused,'last');});
 
 test('dialog focuses a control once and restores the opener on close',()=>{const a=app();let focused=0,restored=0;const opener={isConnected:true,focus:()=>restored++};const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:opener},WeakMap};vm.createContext(c);loadPageScripts('superadmin.html',c);const panel=c.superPanel();panel.$nextTick=fn=>fn();const el={querySelector:()=>({focus:()=>focused++})};panel.syncDialog(el,true);panel.syncDialog(el,true);assert.equal(focused,1);panel.syncDialog(el,false);assert.equal(restored,1);});

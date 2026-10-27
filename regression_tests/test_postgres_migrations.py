@@ -78,13 +78,28 @@ def test_mobile_stock_adjustment_migration_adds_a_unique_retry_key():
 def test_platform_audit_indexes_cover_order_and_common_filters():
     from backend.postgres_migrations.registry import MIGRATIONS
 
-    migration = MIGRATIONS[-1]
+    migration = next(migration for migration in MIGRATIONS if migration.version == 13)
     assert (migration.version, migration.name) == (13, "platform_audit_indexes")
     sql = "\n".join(migration.statements)
     assert "platform_audit_events(created_at DESC, id DESC)" in sql
     assert "platform_audit_events(actor_user_id, created_at DESC, id DESC)" in sql
     assert "platform_audit_events(organization_id, created_at DESC, id DESC)" in sql
     assert "platform_audit_events(action, created_at DESC, id DESC)" in sql
+
+
+def test_organization_invitation_mail_migration_exposes_aggregate_view_only():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = MIGRATIONS[-1]
+    assert (migration.version, migration.name) == (14, "organization_invitation_mail_counts")
+    sql = "\n".join(migration.statements)
+    assert "platform_organization_invitation_mail_counts" in sql
+    assert "organization_id" in sql
+    assert "message_type = 'organization_invitation'" in sql
+    assert "encrypted_payload" not in sql
+    assert "recipient_email" not in sql
+    assert "REVOKE ALL ON platform_organization_invitation_mail_counts FROM PUBLIC" in sql
+    assert "idx_mail_outbox_invitation_org_status" in sql
 
 
 def test_email_change_request_constraints_are_append_only_and_single_active(postgres_schema):
@@ -96,7 +111,7 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 14))
+    assert status.applied_versions == tuple(range(1, 15))
     assert status.pending_versions == ()
 
     user_id = connection.execute(
@@ -130,7 +145,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 14))
+    assert status.applied_versions == tuple(range(1, 15))
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -184,7 +199,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 14))
+    assert status.applied_versions == tuple(range(1, 15))
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -308,7 +323,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == tuple(range(1, 14))
+    assert status.applied_versions == tuple(range(1, 15))
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -443,7 +458,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 14))
+    assert status.applied_versions == tuple(range(1, 15))
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -494,7 +509,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 14))
+    assert status.applied_versions == tuple(range(1, 15))
     session_columns = {
         row["column_name"]
         for row in connection.execute(
