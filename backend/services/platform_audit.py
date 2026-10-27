@@ -5,7 +5,7 @@ import json
 
 _DETAIL_FIELDS = {
     "organization_created": {"invitation_created"},
-    "company_role_changed": {"target_user_id", "role"},
+    "company_role_changed": {"target_user_id", "role", "reason"},
     "platform_admin_granted": {"target_user_id"},
     "platform_admin_revoked": {"target_user_id"},
     "organization_suspended": {"reason"},

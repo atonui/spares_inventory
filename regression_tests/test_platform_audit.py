@@ -27,6 +27,15 @@ def test_platform_organization_status_requires_valid_action_and_reason():
         PlatformOrganizationStatusRequest(action="suspend", reason="short")
 
 
+def test_platform_company_role_change_requires_reason():
+    from backend.schemas.platform_organizations import PlatformCompanyRoleUpdateRequest
+
+    with pytest.raises(ValidationError):
+        PlatformCompanyRoleUpdateRequest(role="engineer")
+    request = PlatformCompanyRoleUpdateRequest(role="manager", reason="Customer requested correction")
+    assert request.reason == "Customer requested correction"
+
+
 def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlists():
     from backend.services.platform_audit import record_platform_audit_event, safe_platform_audit_details
 

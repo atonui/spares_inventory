@@ -33,7 +33,7 @@
 
 - **Authority separation:** The code follows the safer model: PostgreSQL uses platform_admins and company roles in organization_memberships. authenticated_platform_transaction clears organization context; tenant transactions require a company principal. This conflicts with the attached document’s description of unrestricted global access, but matches the existing SaaS design and is the intended boundary.
 - **Provisioning:** /api/platform supports dashboard counts (organizations, identities, platform admins, invitation-mail queue), organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI currently exposes the platform dashboard and organization creation/list only; broader service-health, latency, and payment metrics are absent.
-- **Organization lifecycle:** Platform admins can now suspend/reactivate organizations through a reason-audited API. Principal resolution carries organization status and shared tenant authorization rejects suspended organizations. The organization-directory UI workflow remains in Task 4.
+- **Organization lifecycle:** Platform admins can now suspend/reactivate organizations through a reason-audited API. Principal resolution carries organization status and shared tenant authorization rejects suspended organizations. The SaaS organization directory now provides server-side search, status filtering, pagination, operational aggregates, and reason-confirmed suspension/reactivation.
 - **Audit:** platform_audit_events backs a read-only platform audit endpoint and SaaS UI with bounded filters/pagination and allowlisted details. Existing platform mutation writes share one service. Legacy superadmin audit continues to read activity_logs in SQLite mode.
 - **Announcements:** platform_announcements exists in PostgreSQL but is unused. The existing announcement service stores the notice in system_settings and the legacy superadmin UI manages it; that UI is hidden in SaaS mode.
 - **Legacy/API boundary:** main.py mounts both platform routes and the legacy superadmin router. Hiding legacy sections in Alpine does not disable their API routes. All legacy `/api/superadmin` operations except public `GET /announcement` use the SQLite/global-role model and are guarded to fail with 503 outside SQLite mode. Public announcement reads remain cross-mode compatible until Task 6 moves delivery onto the platform announcement table; account-targeted dismissal remains SQLite-only in the interim.
@@ -88,14 +88,15 @@
 ### Task 4: Improve the organization directory without opening tenant data
 
 **Files**
-- Modify: backend/routes/platform_organizations.py, static/superadmin.html, static/js/pages/superadmin.js, static/superadmin.css
+- Modify: backend/routes/platform_organizations.py, backend/schemas/platform_organizations.py, backend/services/platform_audit.py, static/superadmin.html, static/js/pages/superadmin.js, static/superadmin.css
+- Add: backend/postgres_migrations/v0014_organization_invitation_mail_counts.py and update the runtime-role grant instructions
 - Test: regression_tests/test_platform_organizations.py and regression_tests/test_superadmin_ui.cjs
 
-- [ ] Add server-side search, status filters, and bounded pagination to GET /api/platform/organizations.
-- [ ] Add aggregate organization detail needed for operations (status, creation time, active-member count, pending/failed invitation-mail counts); do not expose inventory rows or enumerate company users.
-- [ ] Add clear active/suspended states and a reason-confirmed suspend/reactivate flow in the SaaS UI.
-- [ ] Keep company-role change as a narrow target-ID operation, require a support reason, preserve owner-transfer protection, and audit it. Do not add a tenant roster browser under this plan.
-- [ ] Test pagination/filter validation, stale updates, organization-not-found behavior, and no user/inventory payload in organization responses.
+- [x] Add server-side search, status filters, and bounded pagination to GET /api/platform/organizations.
+- [x] Add aggregate organization detail needed for operations (status, creation time, active-member count, pending/failed invitation-mail counts); do not expose inventory rows or enumerate company users.
+- [x] Add clear active/suspended states and a reason-confirmed suspend/reactivate flow in the SaaS UI.
+- [x] Keep company-role change as a narrow target-ID operation, require a support reason, preserve owner-transfer protection, and audit it. Do not add a tenant roster browser under this plan.
+- [x] Test pagination/filter validation, stale updates, organization-not-found behavior, and no user/inventory payload in organization responses. PostgreSQL integration execution requires a disposable TEST_DATABASE_URL and remains pending in this workspace.
 
 **Acceptance:** Platform admins can locate and manage organization state while company data stays behind company membership and RLS.
 

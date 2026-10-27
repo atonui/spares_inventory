@@ -17,6 +17,7 @@ from . import (
     v0011_mobile_device_sessions,
     v0012_mobile_stock_adjustments,
     v0013_platform_audit_indexes,
+    v0014_organization_invitation_mail_counts,
 )
 
 
@@ -48,6 +49,7 @@ MIGRATIONS = tuple(
         v0011_mobile_device_sessions,
         v0012_mobile_stock_adjustments,
         v0013_platform_audit_indexes,
+        v0014_organization_invitation_mail_counts,
     )
 )
 

@@ -23,6 +23,10 @@ function superPanel() {
       this.dialogBusy = true;
       this.dialogError = '';
       try {
+        if (this.dlg.reason_required && String(this.dlg.reason || '').trim().length < 10) {
+          this.dialogError = 'Enter a reason of at least 10 characters.';
+          return;
+        }
         await this.dlg.resolve();
         this.dlg.open = false;
       } catch (error) {
@@ -81,6 +85,9 @@ function superPanel() {
     // data stores
     dashboard: {},
     organizations: [],
+    organizationTotal: 0, organizationLimit: 25, organizationOffset: 0,
+    organizationLoading: false, organizationError: '',
+    organizationFilters: { search: '', status: 'all' },
     platformAuditRows: [], platformAuditTotal: 0, platformAuditOffset: 0,
     platformAuditLoading: false, platformAuditError: '',
     platformAuditFilters: { actor_user_id: '', organization_id: '', action: '', result: '', start_at: '', end_at: '' },
@@ -295,11 +302,54 @@ async submitPasswordReset() {
       finally { this.loading = false; }
     },
 
-    async loadOrganizations() {
-      this.loading = true;
-      try { this.organizations = await this.api('/platform/organizations'); }
-      catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
+    async loadOrganizations(offset = this.organizationOffset) {
+      if (this.organizationLoading) return;
+      const query = new URLSearchParams({
+        limit: String(this.organizationLimit), offset: String(offset),
+        status: this.organizationFilters.status,
+      });
+      if (this.organizationFilters.search.trim()) query.set('search', this.organizationFilters.search.trim());
+      this.organizationLoading = true;
+      this.organizationError = '';
+      try {
+        const data = await this.api(`/platform/organizations?${query.toString()}`);
+        this.organizations = Array.isArray(data.rows) ? data.rows : [];
+        this.organizationTotal = Number.isInteger(data.total) ? data.total : 0;
+        this.organizationOffset = data.offset || 0;
+      } catch (error) {
+        this.organizations = [];
+        this.organizationTotal = 0;
+        this.organizationError = error.message || 'Unable to load organizations.';
+      } finally {
+        this.organizationLoading = false;
+      }
+    },
+
+    requestOrganizationStatus(org) {
+      if (this.dialogBusy) return;
+      const action = org.is_active ? 'suspend' : 'reactivate';
+      const label = org.is_active ? 'Suspend' : 'Reactivate';
+      this.dialogError = '';
+      this.dlg = {
+        open: true,
+        title: `${label} ${org.name}?`,
+        msg: org.is_active
+          ? 'Tenant access will be blocked for all members while the organization is suspended.'
+          : 'Members will regain tenant access after the organization is reactivated.',
+        action: `${label} organization`,
+        button_class: org.is_active ? 'btn-red' : 'btn-green',
+        reason_required: true,
+        reason: '',
+        resolve: async () => {
+          await this.api(`/platform/organizations/${encodeURIComponent(org.id)}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ action, reason: this.dlg.reason.trim() }),
+          });
+          this.toast(`Organization ${action === 'suspend' ? 'suspended' : 'reactivated'}.`, 'ok');
+          await this.loadOrganizations(this.organizationOffset);
+          await this.loadPlatformDashboard();
+        },
+      };
     },
 
     async loadPlatformAudit(offset = 0) {
@@ -336,8 +386,9 @@ async submitPasswordReset() {
           }),
         });
         this.organizationForm = { name: '', slug: '', owner_email: '' };
+        this.organizationFilters = { search: '', status: 'all' };
         this.toast('Organization created and owner invitation queued.', 'ok');
-        await this.loadOrganizations();
+        await this.loadOrganizations(0);
         await this.loadPlatformDashboard();
       });
     },

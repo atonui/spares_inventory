@@ -25,7 +25,10 @@ The web role has no table-level `SELECT`, `UPDATE`, or `DELETE` on
 `idempotency_key`; column-level `SELECT` on `id` and `idempotency_key`;
 column-level `UPDATE` on `idempotency_key`; required sequence `USAGE`; and
 `SELECT` on `platform_mail_outbox_counts`, which exposes only pending and failed
-integer counts. The worker role has schema `USAGE`, column-level `SELECT` on
+integer counts, and `SELECT` on `platform_organization_invitation_mail_counts`,
+which exposes only pending and failed invitation-mail totals grouped by
+organization for platform-authorized directory requests. The worker role has
+schema `USAGE`, column-level `SELECT` on
 `id`, `organization_id`, `message_type`, `recipient_email`,
 `encrypted_payload`, `status`, `attempt_count`, `available_at`,
 `lease_expires_at`, and `claim_token`, and column-level `UPDATE` on `status`,

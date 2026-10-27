@@ -62,6 +62,7 @@ def platform_api(postgres_schema):
         "SELECT (id, idempotency_key), UPDATE (idempotency_key) ON mail_outbox TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT ON platform_mail_outbox_counts TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_organization_invitation_mail_counts TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT USAGE, SELECT ON SEQUENCE organization_invitations_id_seq, mail_outbox_id_seq, platform_audit_events_id_seq TO {}"
     ).format(sql.Identifier(runtime_role)))
@@ -133,6 +134,75 @@ def test_platform_dashboard_preserves_mail_count_fields_from_counts_view(platfor
         "mail_pending",
         "mail_failed",
     } == set(result)
+
+
+def test_platform_organization_directory_search_filters_paginates_and_returns_aggregates(platform_api):
+    api = platform_api
+    acme_id = api.admin.execute(
+        "INSERT INTO organizations(name,slug) VALUES ('Acme Repair','acme-repair') RETURNING id"
+    ).fetchone()["id"]
+    api.admin.execute("INSERT INTO organization_settings(organization_id) VALUES (%s)", (acme_id,))
+    for email, active in (("acme-one@example.test", True), ("acme-two@example.test", False)):
+        user_id = api.admin.execute(
+            "INSERT INTO users(email,name,password_hash) VALUES (%s,%s,'hash') RETURNING id",
+            (email, email),
+        ).fetchone()["id"]
+        api.admin.execute(
+            "INSERT INTO organization_memberships(organization_id,user_id,company_role,is_active) VALUES (%s,%s,'engineer',%s)",
+            (acme_id, user_id, active),
+        )
+    api.admin.execute(
+        """INSERT INTO mail_outbox
+           (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key,status)
+           VALUES (%s,'organization_invitation','a@example.test','cipher','acme-pending','pending'),
+                  (%s,'organization_invitation','b@example.test','cipher','acme-failed','failed')""",
+        (acme_id, acme_id),
+    )
+    api.admin.execute(
+        "INSERT INTO organizations(name,slug,is_active) VALUES ('Zebra Parts','zebra-parts',FALSE)"
+    )
+    api.admin.commit()
+
+    list_orgs = api.endpoint("GET", "/api/platform/organizations")
+    filtered = asyncio.run(list_orgs(
+        request=api.request, actor=api.principal,
+        search="Acme", status="active", limit=10, offset=0,
+    ))
+    assert filtered["total"] == 1
+    assert filtered["rows"][0]["name"] == "Acme Repair"
+    assert filtered["rows"][0]["active_member_count"] == 1
+    assert filtered["rows"][0]["pending_invitation_mail_count"] == 1
+    assert filtered["rows"][0]["failed_invitation_mail_count"] == 1
+    assert set(filtered["rows"][0]) == {
+        "id", "name", "slug", "is_active", "created_at", "active_member_count",
+        "pending_invitation_mail_count", "failed_invitation_mail_count",
+    }
+
+    page = asyncio.run(list_orgs(
+        request=api.request, actor=api.principal, status="all", limit=1, offset=1,
+    ))
+    assert page["total"] == 3
+    assert page["offset"] == 1
+    assert len(page["rows"]) == 1
+    assert page["rows"][0]["name"] == "Existing Tenant"
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"limit": 0}, {"limit": 101}, {"offset": -1},
+    {"status": "all-tenants"}, {"search": "x" * 101},
+])
+def test_platform_organization_directory_rejects_invalid_filters_before_connecting(kwargs):
+    from backend.routes.platform_organizations import create_platform_organizations_router
+
+    router = create_platform_organizations_router(
+        get_connection=lambda: pytest.fail("invalid directory filters must fail before connecting"),
+        current_user=lambda: None, csrf_dependency=lambda: None,
+        encryption_key="unused", frontend_url="https://example.test",
+    )
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/organizations")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(request=SimpleNamespace(cookies={}), actor=1, **kwargs))
+    assert error.value.status_code == 422
 
 
 def test_platform_suspend_reactivate_audits_reason_and_is_idempotent(platform_api):
@@ -277,13 +347,13 @@ def test_platform_web_role_can_idempotently_enqueue_mail(platform_api):
 
 
 def test_platform_role_update_requires_explicit_tenant_path(platform_api):
-    from backend.schemas.invitations import CompanyRoleUpdateRequest
+    from backend.schemas.platform_organizations import PlatformCompanyRoleUpdateRequest
 
     api = platform_api
     route = api.endpoint("PUT", "/api/platform/organizations/{organization_id}/members/{user_id}/role")
     result = asyncio.run(route(
         organization_id=str(api.org_id), user_id=api.member_id,
-        body=CompanyRoleUpdateRequest(role="engineer"), request=api.request,
+        body=PlatformCompanyRoleUpdateRequest(role="engineer", reason="Correct role after customer review"), request=api.request,
         actor=api.principal, csrf_valid=True,
     ))
     assert result["success"] is True
@@ -292,6 +362,8 @@ def test_platform_role_update_requires_explicit_tenant_path(platform_api):
         (api.org_id, api.member_id),
     ).fetchone()
     assert membership["company_role"] == "engineer"
-    assert api.admin.execute(
-        "SELECT action FROM platform_audit_events ORDER BY id DESC LIMIT 1"
-    ).fetchone()["action"] == "company_role_changed"
+    audit = api.admin.execute(
+        "SELECT action, details FROM platform_audit_events ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert audit["action"] == "company_role_changed"
+    assert audit["details"]["reason"] == "Correct role after customer review"

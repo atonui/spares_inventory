@@ -4,8 +4,11 @@ from backend.services.session_credentials import get_request_credential
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.database_sql import is_postgres
-from backend.schemas.invitations import CompanyRoleUpdateRequest, OrganizationCreateRequest
-from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
+from backend.schemas.invitations import OrganizationCreateRequest
+from backend.schemas.platform_organizations import (
+    PlatformCompanyRoleUpdateRequest,
+    PlatformOrganizationStatusRequest,
+)
 from backend.services.invitations import create_organization_with_owner_invitation
 from backend.services.mail_payloads import validate_mail_encryption_key
 from backend.services.platform_transactions import authenticated_platform_transaction
@@ -57,16 +60,58 @@ def create_platform_organizations_router(
     @router.get("/organizations")
     async def list_organizations(
         request: Request, actor=Depends(current_user),
+        search: str | None = None, status: str = "all",
+        limit: int = 25, offset: int = 0,
     ):
+        search = search.strip() if search is not None else None
+        if search == "":
+            search = None
+        if search is not None and len(search) > 100:
+            raise HTTPException(status_code=422, detail="search must be at most 100 characters")
+        if status not in {"all", "active", "suspended"}:
+            raise HTTPException(status_code=422, detail="status must be all, active, or suspended")
+        if not 1 <= limit <= 100:
+            raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
+        if not 0 <= offset <= 100000:
+            raise HTTPException(status_code=422, detail="offset must be between 0 and 100000")
         require_postgres()
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
         ) as (conn, _principal):
+            filters = []
+            row_filters = []
+            params = []
+            if search:
+                filters.append("(strpos(lower(name), lower(%s)) > 0 OR strpos(lower(slug), lower(%s)) > 0)")
+                row_filters.append("(strpos(lower(o.name), lower(%s)) > 0 OR strpos(lower(o.slug), lower(%s)) > 0)")
+                params.extend((search, search))
+            if status == "active":
+                filters.append("is_active = TRUE")
+                row_filters.append("o.is_active = TRUE")
+            elif status == "suspended":
+                filters.append("is_active = FALSE")
+                row_filters.append("o.is_active = FALSE")
+            where = " WHERE " + " AND ".join(filters) if filters else ""
+            row_where = " WHERE " + " AND ".join(row_filters) if row_filters else ""
+            total = conn.execute(
+                "SELECT count(*) AS total FROM organizations" + where, tuple(params)
+            ).fetchone()["total"]
+            page_offset = min(offset, max(0, ((total - 1) // limit) * limit)) if total else 0
             rows = conn.execute(
-                "SELECT id, name, slug, is_active, created_at FROM organizations ORDER BY name, id"
+                """SELECT o.id, o.name, o.slug, o.is_active, o.created_at,
+                          (SELECT count(*) FROM organization_memberships om
+                           WHERE om.organization_id = o.id AND om.is_active = TRUE) AS active_member_count,
+                          COALESCE(m.pending, 0) AS pending_invitation_mail_count,
+                          COALESCE(m.failed, 0) AS failed_invitation_mail_count
+                   FROM organizations o
+                   LEFT JOIN platform_organization_invitation_mail_counts m ON m.organization_id = o.id"""
+                + row_where
+                + " ORDER BY o.name, o.id LIMIT %s OFFSET %s",
+                (*params, limit, page_offset),
             ).fetchall()
-            return [dict(row) for row in rows]
+            return {"rows": [dict(row) for row in rows], "total": total,
+                    "limit": limit, "offset": page_offset}
 
     @router.get("/admins")
     async def list_platform_admins(
@@ -117,7 +162,7 @@ def create_platform_organizations_router(
 
     @router.put("/organizations/{organization_id}/members/{user_id}/role")
     async def change_company_role(
-        organization_id: str, user_id: int, body: CompanyRoleUpdateRequest,
+        organization_id: str, user_id: int, body: PlatformCompanyRoleUpdateRequest,
         request: Request, actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
         from uuid import UUID
@@ -145,7 +190,7 @@ def create_platform_organizations_router(
             )
             record_platform_audit_event(
                 conn, principal.user_id, "company_role_changed", "success", org_id,
-                {"target_user_id": user_id, "role": body.role},
+                {"target_user_id": user_id, "role": body.role, "reason": body.reason},
             )
             return {"success": True}
 
