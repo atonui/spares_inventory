@@ -21,7 +21,7 @@ def migrated_tenant_schema(postgres_schema):
     apply_postgres_migrations(postgres_schema[0])
 
 
-def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, active=True):
+def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, active=True, organization_active=True):
     from backend.temporal import serialize_instant, utc_now
     from backend.services.session_credentials import hash_session_credential
 
@@ -29,6 +29,8 @@ def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, a
         "INSERT INTO organizations(name, slug) VALUES (%s, %s) RETURNING id",
         ("Tenant", f"tenant-{role}-{platform_admin}-{membership}-{active}"),
     ).fetchone()["id"]
+    if not organization_active:
+        conn.execute("UPDATE organizations SET is_active = FALSE WHERE id = %s", (org_id,))
     user_id = conn.execute(
         """INSERT INTO users(email, name, password_hash)
            VALUES (%s, %s, %s) RETURNING id""",
@@ -106,6 +108,34 @@ def test_non_platform_user_with_inactive_membership_is_denied(postgres_schema):
     assert error.value.status_code == 403
 
 
+def test_suspended_organization_is_carried_by_principal_and_blocks_existing_session(postgres_schema):
+    from backend.services.principals import resolve_principal
+    from backend.services.tenant_context import authenticated_tenant_transaction, require_company_principal
+
+    connection, schema = postgres_schema
+    org_id, user_id, token = seed_user(connection, organization_active=False)
+
+    with connection.transaction():
+        principal = resolve_principal(connection, token)
+    assert principal.organization_id == UUID(str(org_id))
+    assert principal.company_role == "engineer"
+    assert principal.organization_is_active is False
+    with pytest.raises(HTTPException) as denied:
+        require_company_principal(principal)
+    assert denied.value.status_code == 403
+
+    connection.commit()
+    def get_connection():
+        conn = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+        conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        conn.commit()
+        return conn
+    with pytest.raises(HTTPException) as denied_transaction:
+        with authenticated_tenant_transaction(get_connection, session_token=token, expected_user_id=user_id):
+            pytest.fail("a suspended organization must not enter a tenant transaction")
+    assert denied_transaction.value.status_code == 403
+
+
 def test_platform_admin_without_membership_has_no_company_context(postgres_schema):
     from backend.services.principals import resolve_principal
     from backend.services.tenant_context import require_company_principal
@@ -133,6 +163,17 @@ def test_company_context_rejects_platform_only_principals():
     with pytest.raises(HTTPException) as error:
         require_company_principal(principal)
 
+    assert error.value.status_code == 403
+
+
+def test_company_context_rejects_suspended_organization_principal():
+    from uuid import uuid4
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.tenant_context import require_company_principal
+
+    principal = AuthenticatedPrincipal(9, uuid4(), "owner", False, organization_is_active=False)
+    with pytest.raises(HTTPException) as error:
+        require_company_principal(principal)
     assert error.value.status_code == 403
 
 

@@ -169,6 +169,11 @@ def create_invitation_router(
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             with conn.transaction():
+                organization = conn.execute(
+                    "SELECT is_active FROM organizations WHERE id = %s", (organization_id,)
+                ).fetchone()
+                if organization is None or not organization["is_active"]:
+                    raise HTTPException(status_code=400, detail="Invitation is invalid or expired")
                 set_tenant_context(conn, organization_id)
                 try:
                     return accept_invitation(

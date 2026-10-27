@@ -8,6 +8,8 @@ _DETAIL_FIELDS = {
     "company_role_changed": {"target_user_id", "role"},
     "platform_admin_granted": {"target_user_id"},
     "platform_admin_revoked": {"target_user_id"},
+    "organization_suspended": {"reason"},
+    "organization_reactivated": {"reason"},
 }
 
 
@@ -42,5 +44,7 @@ def safe_platform_audit_details(action: str, details) -> dict:
         elif key == "target_user_id" and isinstance(value, int) and not isinstance(value, bool) and value > 0:
             safe[key] = value
         elif key == "role" and isinstance(value, str) and value in {"owner", "admin", "manager", "engineer"}:
+            safe[key] = value
+        elif key == "reason" and isinstance(value, str) and 10 <= len(value) <= 500:
             safe[key] = value
     return safe

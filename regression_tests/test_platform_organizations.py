@@ -54,7 +54,7 @@ def platform_api(postgres_schema):
         "GRANT SELECT ON users, sessions, platform_admins TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_memberships TO {}").format(sql.Identifier(runtime_role)))
-    admin.execute(sql.SQL("GRANT SELECT, INSERT ON organizations TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT, INSERT, UPDATE ON organizations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT ON organization_settings, organization_invitations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_invitations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
@@ -133,6 +133,81 @@ def test_platform_dashboard_preserves_mail_count_fields_from_counts_view(platfor
         "mail_pending",
         "mail_failed",
     } == set(result)
+
+
+def test_platform_suspend_reactivate_audits_reason_and_is_idempotent(platform_api):
+    from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
+
+    api = platform_api
+    status = api.endpoint("PUT", "/api/platform/organizations/{organization_id}/status")
+    suspend = PlatformOrganizationStatusRequest(action="suspend", reason="Customer requested a temporary pause")
+    result = asyncio.run(status(
+        organization_id=str(api.org_id), body=suspend, request=api.request,
+        actor=api.principal, csrf_valid=True,
+    ))
+    assert result == {"success": True, "is_active": False, "changed": True}
+    assert api.admin.execute("SELECT is_active FROM organizations WHERE id=%s", (api.org_id,)).fetchone()["is_active"] is False
+    audit = api.admin.execute(
+        "SELECT action, details FROM platform_audit_events ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert audit["action"] == "organization_suspended"
+    assert audit["details"] == {"reason": "Customer requested a temporary pause"}
+
+    repeated = asyncio.run(status(
+        organization_id=str(api.org_id), body=suspend, request=api.request,
+        actor=api.principal, csrf_valid=True,
+    ))
+    assert repeated == {"success": True, "is_active": False, "changed": False}
+    assert api.admin.execute("SELECT count(*) AS n FROM platform_audit_events").fetchone()["n"] == 1
+
+    reactivate = PlatformOrganizationStatusRequest(action="reactivate", reason="Customer confirmed reopening")
+    result = asyncio.run(status(
+        organization_id=str(api.org_id), body=reactivate, request=api.request,
+        actor=api.principal, csrf_valid=True,
+    ))
+    assert result == {"success": True, "is_active": True, "changed": True}
+    assert api.admin.execute("SELECT count(*) AS n FROM platform_audit_events").fetchone()["n"] == 2
+
+
+def test_platform_status_unknown_organization_returns_404(platform_api):
+    from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
+
+    api = platform_api
+    status = api.endpoint("PUT", "/api/platform/organizations/{organization_id}/status")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(status(
+            organization_id=str(uuid4()),
+            body=PlatformOrganizationStatusRequest(action="suspend", reason="Security incident review"),
+            request=api.request, actor=api.principal, csrf_valid=True,
+        ))
+    assert error.value.status_code == 404
+
+
+def test_platform_status_requires_platform_admin(platform_api):
+    from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
+    from backend.services.session_credentials import hash_session_credential
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    user_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Tenant','hash') RETURNING id",
+        (f"tenant-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    token = "tenant-token-" + uuid4().hex
+    api.admin.execute(
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (user_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
+    )
+    api.admin.commit()
+    status = api.endpoint("PUT", "/api/platform/organizations/{organization_id}/status")
+    request = SimpleNamespace(cookies={"session_token": token})
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(status(
+            organization_id=str(api.org_id),
+            body=PlatformOrganizationStatusRequest(action="suspend", reason="Security incident review"),
+            request=request, actor=user_id, csrf_valid=True,
+        ))
+    assert error.value.status_code == 403
 
 
 def test_platform_web_role_cannot_read_mail_outbox_rows(platform_api):

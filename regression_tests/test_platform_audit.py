@@ -10,9 +10,21 @@ from uuid import uuid4
 import psycopg
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from psycopg import sql
 
 pytest_plugins = ("regression_tests.postgres_fixtures",)
+
+
+def test_platform_organization_status_requires_valid_action_and_reason():
+    from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
+
+    request = PlatformOrganizationStatusRequest(action="suspend", reason="  Billing dispute confirmed  ")
+    assert request.reason == "Billing dispute confirmed"
+    with pytest.raises(ValidationError):
+        PlatformOrganizationStatusRequest(action="pause", reason="not valid")
+    with pytest.raises(ValidationError):
+        PlatformOrganizationStatusRequest(action="suspend", reason="short")
 
 
 def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlists():
@@ -32,6 +44,9 @@ def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlist
     assert safe_platform_audit_details("company_role_changed", {
         "target_user_id": True, "role": ["malformed"], "password": "secret",
     }) == {}
+    assert safe_platform_audit_details("organization_suspended", {
+        "reason": "Customer requested a temporary pause", "token": "secret",
+    }) == {"reason": "Customer requested a temporary pause"}
 
 
 @pytest.fixture
@@ -62,7 +77,7 @@ def platform_api(postgres_schema):
     admin.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
         sql.Identifier(schema), sql.Identifier(runtime_role)
     ))
-    admin.execute(sql.SQL("GRANT SELECT ON users, sessions, platform_admins, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON users, sessions, platform_admins, organizations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE platform_audit_events_id_seq TO {}").format(sql.Identifier(runtime_role)))
     admin.commit()
 
