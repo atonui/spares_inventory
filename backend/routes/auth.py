@@ -800,7 +800,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     )
                     from backend.services.principals import resolve_principal
                     principal = resolve_principal(session_conn, raw_credential)
-                    user_role = principal.company_role or "platform_admin"
+                    if (principal.company_role is not None and not principal.organization_is_active
+                            and not principal.is_platform_admin):
+                        raise HTTPException(status_code=403, detail="Organization is suspended")
+                    user_role = (
+                        principal.company_role
+                        if principal.company_role is not None and principal.organization_is_active
+                        else "platform_admin"
+                    )
             finally:
                 session_conn.close()
         else:
@@ -913,6 +920,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         refresh_hash = hash_session_credential(payload.refresh_token)
         result = None
         error_status = None
+        error_detail = "Invalid or expired refresh credential"
         try:
             with postgres_transaction(conn):
                 credential = conn.execute(
@@ -940,6 +948,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                             """SELECT u.archived_at,
                                       EXISTS (SELECT 1 FROM organization_memberships om
                                               WHERE om.user_id = u.id AND om.is_active = TRUE) AS has_membership,
+                                      EXISTS (SELECT 1 FROM organization_memberships om
+                                              JOIN organizations o ON o.id = om.organization_id
+                                              WHERE om.user_id = u.id AND om.is_active = TRUE
+                                                AND o.is_active = TRUE) AS organization_active,
                                       EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = u.id) AS is_platform_admin
                                FROM users u WHERE u.id = %s""",
                             (session["user_id"],),
@@ -948,6 +960,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                                 or not (account["has_membership"] or account["is_platform_admin"])):
                             conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
                             error_status = 401
+                        elif account["has_membership"] and not account["organization_active"] and not account["is_platform_admin"]:
+                            error_status = 403
+                            error_detail = "Organization is suspended"
                         elif credential["consumed_at"] is not None:
                             retry_expires = (
                                 parse_native_refresh_instant(credential["retry_response_expires_at"], "retry_response_expires_at")
@@ -1005,7 +1020,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             conn.close()
 
         if error_status:
-            raise HTTPException(status_code=error_status, detail="Invalid or expired refresh credential")
+            raise HTTPException(status_code=error_status, detail=error_detail)
         return JSONResponse(content=result, headers={"Cache-Control": "no-store", "X-Request-ID": request_id})
 
 
@@ -1013,6 +1028,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         "/api/auth/native/refresh", native_refresh, methods=["POST"],
         response_model=NativeRefreshResponse,
         responses={401: {"description": "Invalid, expired, or replayed refresh credential"},
+                   403: {"description": "Organization is suspended"},
                    422: {"description": "Invalid request or missing request ID"},
                    503: {"description": "Native refresh is unavailable"}},
     )
@@ -1303,7 +1319,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 )
                 from backend.services.principals import resolve_principal
                 principal = resolve_principal(conn, access_token)
-                if principal.user_id != user["id"] or not (principal.company_role or principal.is_platform_admin):
+                has_active_company = principal.company_role is not None and principal.organization_is_active
+                if principal.user_id != user["id"] or not (has_active_company or principal.is_platform_admin):
                     raise HTTPException(status_code=403, detail="The account has no active company access")
                 set_mobile_pairing_user_scope(conn, user["id"])
                 conn.execute(

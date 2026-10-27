@@ -149,3 +149,22 @@ def test_manager_cannot_list_invitations(invitation_api):
     with pytest.raises(HTTPException) as error:
         asyncio.run(listing(request=api.request("manager"), user_id=api.principal("manager")))
     assert error.value.status_code == 403
+
+
+def test_suspended_organization_cannot_accept_pending_invitation(invitation_api):
+    from backend.schemas.invitations import InvitationAcceptRequest
+
+    api = invitation_api
+    api.admin.execute("UPDATE organizations SET is_active = FALSE WHERE id = %s", (api.org_id,))
+    api.admin.commit()
+    accept = api.endpoint("POST", "/api/invitations/accept")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(accept(
+            body=InvitationAcceptRequest(
+                organization_id=str(api.org_id), token="pending-token", name="Invitee",
+                password="correct-password",
+            ),
+            request=SimpleNamespace(cookies={}), csrf_valid=True,
+        ))
+    assert error.value.status_code == 400
+    assert api.admin.execute("SELECT count(*) AS n FROM organization_memberships").fetchone()["n"] == 3

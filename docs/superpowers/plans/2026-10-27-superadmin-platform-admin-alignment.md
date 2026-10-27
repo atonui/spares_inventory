@@ -33,7 +33,7 @@
 
 - **Authority separation:** The code follows the safer model: PostgreSQL uses platform_admins and company roles in organization_memberships. authenticated_platform_transaction clears organization context; tenant transactions require a company principal. This conflicts with the attached document’s description of unrestricted global access, but matches the existing SaaS design and is the intended boundary.
 - **Provisioning:** /api/platform supports dashboard counts (organizations, identities, platform admins, invitation-mail queue), organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI currently exposes the platform dashboard and organization creation/list only; broader service-health, latency, and payment metrics are absent.
-- **Organization lifecycle:** organizations.is_active exists, but no platform suspend/reactivate endpoint or UI exists. Current principal resolution checks membership activity but does not check organization activity, so toggling is_active alone would not reliably stop tenant access.
+- **Organization lifecycle:** Platform admins can now suspend/reactivate organizations through a reason-audited API. Principal resolution carries organization status and shared tenant authorization rejects suspended organizations. The organization-directory UI workflow remains in Task 4.
 - **Audit:** platform_audit_events backs a read-only platform audit endpoint and SaaS UI with bounded filters/pagination and allowlisted details. Existing platform mutation writes share one service. Legacy superadmin audit continues to read activity_logs in SQLite mode.
 - **Announcements:** platform_announcements exists in PostgreSQL but is unused. The existing announcement service stores the notice in system_settings and the legacy superadmin UI manages it; that UI is hidden in SaaS mode.
 - **Legacy/API boundary:** main.py mounts both platform routes and the legacy superadmin router. Hiding legacy sections in Alpine does not disable their API routes. All legacy `/api/superadmin` operations except public `GET /announcement` use the SQLite/global-role model and are guarded to fail with 503 outside SQLite mode. Public announcement reads remain cross-mode compatible until Task 6 moves delivery onto the platform announcement table; account-targeted dismissal remains SQLite-only in the interim.
@@ -77,11 +77,11 @@
 - Modify: backend/routes/platform_organizations.py, backend/services/principals.py, backend/services/tenant_context.py, and the relevant auth path in backend/routes/auth.py
 - Test: extend regression_tests/test_platform_organizations.py, regression_tests/test_platform_transactions.py, and tenant-context/auth tests
 
-- [ ] Add a validated status request with action and required reason; use the existing organizations.is_active field and record the reason in platform_audit_events.
-- [ ] Add a platform endpoint for activate/suspend that is idempotent for the requested state and returns 404 for an unknown organization.
-- [ ] Carry organization activity into the resolved company principal and reject suspended organizations in the shared tenant authorization boundary. Ensure login does not create a usable tenant session for a suspended organization.
-- [ ] Keep platform transactions independent of that organization’s state so the platform admin can reactivate it.
-- [ ] Test existing sessions, new login attempts, reactivation, repeated state changes, unauthorized callers, and the continued denial of platform-only tenant access.
+- [x] Add a validated status request with action and required reason; use the existing organizations.is_active field and record the reason in platform_audit_events.
+- [x] Add a platform endpoint for activate/suspend that is idempotent for the requested state and returns 404 for an unknown organization.
+- [x] Carry organization activity into the resolved company principal and reject suspended organizations in the shared tenant authorization boundary. Ensure login does not create a usable tenant session for a suspended organization.
+- [x] Keep platform transactions independent of that organization’s state so the platform admin can reactivate it.
+- [x] Add regression coverage for existing sessions, new login attempts, reactivation, repeated state changes, unauthorized callers, refresh behavior, invitation acceptance, and platform-only tenant denial. PostgreSQL integration tests require TEST_DATABASE_URL and could not run in this workspace.
 
 **Acceptance:** Suspension blocks all tenant-scoped routes consistently; reactivation restores tenant access without changing membership roles or bypassing RLS.
 

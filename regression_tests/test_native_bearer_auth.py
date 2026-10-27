@@ -231,6 +231,31 @@ def test_web_login_keeps_cookie_contract_and_does_not_return_bearer(native_auth_
     assert set(payload) == {"success", "user"}
 
 
+@pytest.mark.parametrize("path", ["/api/auth/login", "/api/auth/native/login"])
+def test_suspended_organization_member_cannot_create_new_session(native_auth_api, path):
+    from backend.schemas.auth import UserLogin
+
+    api = native_auth_api
+    api.connection.execute(
+        "UPDATE organizations SET is_active = FALSE WHERE id = %s", (api.organization_id,)
+    )
+    api.connection.commit()
+    login = api.endpoint(path)
+    before = api.connection.execute(
+        "SELECT count(*) AS n FROM sessions WHERE user_id = %s", (api.user_id,)
+    ).fetchone()["n"]
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(login(
+            UserLogin(email="native@example.test", password="correct-password", remember_me=False),
+            login_request(), csrf_valid=True,
+        ))
+    assert error.value.status_code == 403
+    after = api.connection.execute(
+        "SELECT count(*) AS n FROM sessions WHERE user_id = %s", (api.user_id,)
+    ).fetchone()["n"]
+    assert after == before
+
+
 def test_native_refresh_rotates_credentials_and_same_request_retry_returns_same_result(native_auth_api):
     from backend.schemas.auth import NativeRefreshRequest, UserLogin
     from backend.services.session_credentials import hash_session_credential
@@ -274,6 +299,40 @@ def test_native_refresh_rotates_credentials_and_same_request_retry_returns_same_
     assert len(credentials) == 2
     assert credentials[0]["consumed_at"] is not None
     assert credentials[1]["token_hash"] == hash_session_credential(rotated["refresh_token"])
+
+
+def test_suspended_organization_blocks_native_refresh_without_revoking_session(native_auth_api):
+    from backend.schemas.auth import NativeRefreshRequest, UserLogin
+
+    api = native_auth_api
+    login = asyncio.run(api.endpoint("/api/auth/native/login")(
+        UserLogin(email="native@example.test", password="correct-password"),
+        login_request(), csrf_valid=True,
+    ))
+    original = json.loads(login.body)
+    api.connection.execute(
+        "UPDATE organizations SET is_active = FALSE WHERE id = %s", (api.organization_id,)
+    )
+    api.connection.commit()
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/native/refresh",
+        "headers": [(b"x-request-id", b"suspended-refresh-01")],
+        "client": ("127.0.0.1", 1234),
+    })
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]),
+            request, "suspended-refresh-01",
+        ))
+    assert error.value.status_code == 403
+    session = api.connection.execute(
+        "SELECT is_active FROM sessions WHERE user_id=%s", (api.user_id,)
+    ).fetchone()
+    assert session["is_active"] is True
+    assert api.connection.execute(
+        """SELECT count(*) AS n FROM session_refresh_credentials WHERE session_id = (
+             SELECT id FROM sessions WHERE user_id=%s)""", (api.user_id,)
+    ).fetchone()["n"] == 1
 
 
 def test_concurrent_native_refresh_same_request_id_rotates_only_once(native_auth_api):

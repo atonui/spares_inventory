@@ -32,6 +32,18 @@ def test_company_admin_guard_rejects_non_admin_and_platform_only(role):
     assert error.value.status_code == 403
 
 
+def test_company_admin_guard_rejects_suspended_organization():
+    from uuid import uuid4
+
+    from backend.services.authorization import require_company_admin
+    from backend.services.principals import AuthenticatedPrincipal
+
+    principal = AuthenticatedPrincipal(1, uuid4(), "owner", False, organization_is_active=False)
+    with pytest.raises(HTTPException) as error:
+        require_company_admin(principal)
+    assert error.value.status_code == 403
+
+
 def test_platform_admin_status_is_independent_of_company_role():
     from uuid import uuid4
 

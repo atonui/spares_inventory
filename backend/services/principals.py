@@ -17,6 +17,7 @@ class AuthenticatedPrincipal:
     organization_id: UUID | None
     company_role: str | None
     is_platform_admin: bool
+    organization_is_active: bool = True
 
 
 SESSION_EXPIRES_FIELD = TemporalField(
@@ -36,10 +37,12 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
     row = conn.execute(
         """SELECT s.user_id, s.expires_at, u.archived_at,
                   om.organization_id, om.company_role, om.is_active AS membership_active,
+                  o.is_active AS organization_active,
                   (pa.user_id IS NOT NULL) AS is_platform_admin
            FROM sessions AS s
            JOIN users AS u ON u.id = s.user_id
            LEFT JOIN organization_memberships AS om ON om.user_id = u.id
+           LEFT JOIN organizations AS o ON o.id = om.organization_id
            LEFT JOIN platform_admins AS pa ON pa.user_id = u.id
            WHERE s.session_token_hash = %s AND s.is_active = TRUE""",
         (session_token_hash,),
@@ -62,4 +65,5 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
         organization_id=UUID(str(row["organization_id"])) if has_membership else None,
         company_role=row["company_role"] if has_membership else None,
         is_platform_admin=is_platform_admin,
+        organization_is_active=bool(row["organization_active"]) if has_membership else True,
     )

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.database_sql import is_postgres
 from backend.schemas.invitations import CompanyRoleUpdateRequest, OrganizationCreateRequest
+from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
 from backend.services.invitations import create_organization_with_owner_invitation
 from backend.services.mail_payloads import validate_mail_encryption_key
 from backend.services.platform_transactions import authenticated_platform_transaction
@@ -147,6 +148,40 @@ def create_platform_organizations_router(
                 {"target_user_id": user_id, "role": body.role},
             )
             return {"success": True}
+
+    @router.put("/organizations/{organization_id}/status")
+    async def set_organization_status(
+        organization_id: str, body: PlatformOrganizationStatusRequest,
+        request: Request, actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+    ):
+        from uuid import UUID
+        try:
+            org_id = UUID(organization_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=404, detail="Organization not found") from None
+        require_postgres()
+        desired_active = body.action == "reactivate"
+        with authenticated_platform_transaction(
+            get_connection, session_token=get_request_credential(request).value,
+            expected_user_id=getattr(actor, "user_id", actor),
+        ) as (conn, principal):
+            organization = conn.execute(
+                "SELECT is_active FROM organizations WHERE id = %s FOR UPDATE", (org_id,)
+            ).fetchone()
+            if organization is None:
+                raise HTTPException(status_code=404, detail="Organization not found")
+            current_active = bool(organization["is_active"])
+            if current_active == desired_active:
+                return {"success": True, "is_active": current_active, "changed": False}
+            conn.execute(
+                "UPDATE organizations SET is_active = %s WHERE id = %s",
+                (desired_active, org_id),
+            )
+            event = "organization_reactivated" if desired_active else "organization_suspended"
+            record_platform_audit_event(
+                conn, principal.user_id, event, "success", org_id, {"reason": body.reason},
+            )
+            return {"success": True, "is_active": desired_active, "changed": True}
 
     @router.put("/admins/{target_user_id}")
     async def grant_platform_admin(
