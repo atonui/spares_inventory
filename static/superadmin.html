@@ -126,6 +126,9 @@
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg></span> Organizations
         </button>
+        <button type="button" class="nav-item" :class="tab==='platformAudit'&&'active'" @click="tab='platformAudit'; loadPlatformAudit()" :aria-current="tab==='platformAudit' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#audit"></use></svg></span> Platform Audit
+        </button>
       </div>
     </nav>
 
@@ -151,7 +154,7 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" x-model="tab" @change="selectSection($event.target.value)">
-          <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','organizations'].includes(key)" x-text="title"></option></template>
+          <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','organizations','platformAudit'].includes(key)" x-text="title"></option></template>
         </select>
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
@@ -276,6 +279,36 @@
               <tbody><template x-for="org in organizations" :key="org.id"><tr><td data-label="Name" x-text="org.name"></td><td data-label="Slug" x-text="org.slug"></td><td data-label="Status" x-text="org.is_active ? 'Active' : 'Inactive'"></td><td data-label="Created" x-text="org.created_at"></td></tr></template></tbody>
             </table>
             <p x-show="!organizations.length && !loading">No organizations have been provisioned.</p>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='platformAudit' && me?.saas_mode">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Platform audit events</span><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset)" :disabled="platformAuditLoading">Refresh</button></div>
+          <div class="panel-body">
+            <p>Platform-level administrative changes across organizations. Timestamps use UTC.</p>
+            <form @submit.prevent="loadPlatformAudit(0)" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;align-items:end">
+              <div class="form-group"><label for="platform-audit-actor">Actor user ID</label><input id="platform-audit-actor" type="number" min="1" x-model="platformAuditFilters.actor_user_id"></div>
+              <div class="form-group"><label for="platform-audit-org">Organization ID</label><input id="platform-audit-org" x-model="platformAuditFilters.organization_id" maxlength="36"></div>
+              <div class="form-group"><label for="platform-audit-action">Action</label><input id="platform-audit-action" x-model="platformAuditFilters.action" maxlength="100"></div>
+              <div class="form-group"><label for="platform-audit-result">Result</label><input id="platform-audit-result" x-model="platformAuditFilters.result" maxlength="100"></div>
+              <div class="form-group"><label for="platform-audit-start">From (UTC ISO timestamp)</label><input id="platform-audit-start" placeholder="2026-10-01T00:00:00Z" x-model="platformAuditFilters.start_at" maxlength="40"></div>
+              <div class="form-group"><label for="platform-audit-end">Until (UTC ISO timestamp)</label><input id="platform-audit-end" placeholder="2026-11-01T00:00:00Z" x-model="platformAuditFilters.end_at" maxlength="40"></div>
+              <div style="display:flex;gap:.5rem"><button class="btn btn-success" type="submit" :disabled="platformAuditLoading">Apply filters</button><button class="btn btn-outline" type="button" @click="platformAuditFilters={actor_user_id:'',organization_id:'',action:'',result:'',start_at:'',end_at:''};loadPlatformAudit(0)" :disabled="platformAuditLoading">Clear</button></div>
+            </form>
+            <p x-show="platformAuditLoading" role="status">Loading platform audit events…</p>
+            <div x-show="platformAuditError" role="alert" class="action-error"><span x-text="platformAuditError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset)" :disabled="platformAuditLoading">Retry</button></div>
+            <div style="overflow:auto" x-show="!platformAuditLoading && !platformAuditError">
+              <table class="tbl audit-table"><thead><tr><th>Time (UTC)</th><th>Actor ID</th><th>Organization ID</th><th>Action</th><th>Result</th><th>Details</th></tr></thead>
+                <tbody><template x-for="event in platformAuditRows" :key="event.id"><tr><td x-text="event.created_at"></td><td x-text="event.actor_user_id ?? 'System'"></td><td x-text="event.organization_id || '—'"></td><td x-text="event.action"></td><td x-text="event.result"></td><td x-text="JSON.stringify(event.details || {})"></td></tr></template></tbody>
+              </table>
+              <p x-show="!platformAuditRows.length">No platform audit events match these filters.</p>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem" x-show="platformAuditTotal>0">
+              <span x-text="`${platformAuditOffset+1}–${Math.min(platformAuditOffset+platformAuditRows.length,platformAuditTotal)} of ${platformAuditTotal}`"></span>
+              <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(Math.max(0,platformAuditOffset-50))" :disabled="platformAuditLoading || platformAuditOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset+50)" :disabled="platformAuditLoading || platformAuditOffset+50>=platformAuditTotal">Next</button></div>
+            </div>
           </div>
         </div>
       </div>

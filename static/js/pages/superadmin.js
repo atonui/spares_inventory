@@ -75,12 +75,15 @@ function superPanel() {
       users:     'All Users',    tables: 'Database Tables',
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
-      organizations: 'Organizations',
+      organizations: 'Organizations', platformAudit: 'Platform Audit',
     },
 
     // data stores
     dashboard: {},
     organizations: [],
+    platformAuditRows: [], platformAuditTotal: 0, platformAuditOffset: 0,
+    platformAuditLoading: false, platformAuditError: '',
+    platformAuditFilters: { actor_user_id: '', organization_id: '', action: '', result: '', start_at: '', end_at: '' },
     organizationForm: { name: '', slug: '', owner_email: '' },
     locked: [], selectedLocked: [],
     sessions: [],
@@ -173,6 +176,7 @@ function superPanel() {
       if (this.me?.saas_mode) {
         await this.loadPlatformDashboard();
         await this.loadOrganizations();
+        await this.loadPlatformAudit();
         return;
       }
       await this.loadTimezoneContext();
@@ -184,6 +188,7 @@ function superPanel() {
       const loaders = {
         dashboard: () => this.loadDashboard(),
         organizations: () => this.loadOrganizations(),
+        platformAudit: () => this.loadPlatformAudit(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
@@ -295,6 +300,27 @@ async submitPasswordReset() {
       try { this.organizations = await this.api('/platform/organizations'); }
       catch (e) { this.toast(e.message, 'danger'); }
       finally { this.loading = false; }
+    },
+
+    async loadPlatformAudit(offset = 0) {
+      if (this.platformAuditLoading) return;
+      const request = new URLSearchParams({ limit: '50', offset: String(offset) });
+      for (const [key, value] of Object.entries(this.platformAuditFilters)) {
+        if (String(value).trim()) request.set(key, String(value).trim());
+      }
+      this.platformAuditLoading = true;
+      this.platformAuditError = '';
+      try {
+        const data = await this.api(`/platform/audit-events?${request.toString()}`);
+        this.platformAuditRows = Array.isArray(data.rows) ? data.rows : [];
+        this.platformAuditTotal = Number.isInteger(data.total) ? data.total : 0;
+        this.platformAuditOffset = data.offset || 0;
+      } catch (error) {
+        this.platformAuditRows = [];
+        this.platformAuditError = error.message || 'Unable to load platform audit events.';
+      } finally {
+        this.platformAuditLoading = false;
+      }
     },
 
     async provisionOrganization() {

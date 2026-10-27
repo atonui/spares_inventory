@@ -1,8 +1,6 @@
 """Platform-level tenant provisioning and global administrator management."""
 from backend.services.session_credentials import get_request_credential
 
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.database_sql import is_postgres
@@ -10,6 +8,7 @@ from backend.schemas.invitations import CompanyRoleUpdateRequest, OrganizationCr
 from backend.services.invitations import create_organization_with_owner_invitation
 from backend.services.mail_payloads import validate_mail_encryption_key
 from backend.services.platform_transactions import authenticated_platform_transaction
+from backend.services.platform_audit import record_platform_audit_event
 
 
 def create_platform_organizations_router(
@@ -143,11 +142,9 @@ def create_platform_organizations_router(
                 "UPDATE organization_memberships SET company_role = %s WHERE organization_id = %s AND user_id = %s",
                 (body.role, org_id, user_id),
             )
-            conn.execute(
-                """INSERT INTO platform_audit_events
-                   (actor_user_id, organization_id, action, result, details)
-                   VALUES (%s, %s, 'company_role_changed', 'success', %s::jsonb)""",
-                (principal.user_id, org_id, json.dumps({"target_user_id": user_id, "role": body.role})),
+            record_platform_audit_event(
+                conn, principal.user_id, "company_role_changed", "success", org_id,
+                {"target_user_id": user_id, "role": body.role},
             )
             return {"success": True}
 
@@ -170,11 +167,9 @@ def create_platform_organizations_router(
                 "INSERT INTO platform_admins (user_id) VALUES (%s) ON CONFLICT (user_id) DO NOTHING",
                 (target_user_id,),
             )
-            conn.execute(
-                """INSERT INTO platform_audit_events
-                   (actor_user_id, action, result, details)
-                   VALUES (%s, 'platform_admin_granted', 'success', %s::jsonb)""",
-                (principal.user_id, json.dumps({"target_user_id": target_user_id})),
+            record_platform_audit_event(
+                conn, principal.user_id, "platform_admin_granted", "success",
+                details={"target_user_id": target_user_id},
             )
             return {"success": True}
 
@@ -201,11 +196,9 @@ def create_platform_organizations_router(
             if active_admins <= 1:
                 raise HTTPException(status_code=409, detail="The last platform administrator cannot be removed")
             conn.execute("DELETE FROM platform_admins WHERE user_id = %s", (target_user_id,))
-            conn.execute(
-                """INSERT INTO platform_audit_events
-                   (actor_user_id, action, result, details)
-                   VALUES (%s, 'platform_admin_revoked', 'success', %s::jsonb)""",
-                (principal.user_id, json.dumps({"target_user_id": target_user_id})),
+            record_platform_audit_event(
+                conn, principal.user_id, "platform_admin_revoked", "success",
+                details={"target_user_id": target_user_id},
             )
             return {"success": True}
 

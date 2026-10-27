@@ -34,7 +34,7 @@
 - **Authority separation:** The code follows the safer model: PostgreSQL uses platform_admins and company roles in organization_memberships. authenticated_platform_transaction clears organization context; tenant transactions require a company principal. This conflicts with the attached document’s description of unrestricted global access, but matches the existing SaaS design and is the intended boundary.
 - **Provisioning:** /api/platform supports dashboard counts (organizations, identities, platform admins, invitation-mail queue), organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI currently exposes the platform dashboard and organization creation/list only; broader service-health, latency, and payment metrics are absent.
 - **Organization lifecycle:** organizations.is_active exists, but no platform suspend/reactivate endpoint or UI exists. Current principal resolution checks membership activity but does not check organization activity, so toggling is_active alone would not reliably stop tenant access.
-- **Audit:** platform_audit_events exists and platform routes write events for provisioning, role changes, and platform-admin grants/revocations. There is no platform audit reader or SaaS UI for that table. The existing superadmin audit route reads activity_logs for the legacy superadmin identity.
+- **Audit:** platform_audit_events backs a read-only platform audit endpoint and SaaS UI with bounded filters/pagination and allowlisted details. Existing platform mutation writes share one service. Legacy superadmin audit continues to read activity_logs in SQLite mode.
 - **Announcements:** platform_announcements exists in PostgreSQL but is unused. The existing announcement service stores the notice in system_settings and the legacy superadmin UI manages it; that UI is hidden in SaaS mode.
 - **Legacy/API boundary:** main.py mounts both platform routes and the legacy superadmin router. Hiding legacy sections in Alpine does not disable their API routes. All legacy `/api/superadmin` operations except public `GET /announcement` use the SQLite/global-role model and are guarded to fail with 503 outside SQLite mode. Public announcement reads remain cross-mode compatible until Task 6 moves delivery onto the platform announcement table; account-targeted dismissal remains SQLite-only in the interim.
 - **Absent capabilities:** No implemented impersonation, feature-flag/tenant-limit console, billing portfolio or overrides, OAuth integration management, global MFA policy, or tenant data-erasure workflow.
@@ -63,11 +63,11 @@
 - Modify: backend/routes/platform_organizations.py, main.py, static/superadmin.html, static/js/pages/superadmin.js, static/superadmin.css
 - Test: new regression_tests/test_platform_audit.py; extend regression_tests/test_superadmin_ui.cjs
 
-- [ ] Add a shared record_platform_audit_event(conn, actor_user_id, action, result, organization_id=None, details=None) service and move existing platform-route inserts through it without changing event meanings.
-- [ ] Add GET /api/platform/audit-events using authenticated_platform_transaction(readonly=True), with bounded pagination and filters for actor, organization, action, result, and UTC time range. Add migration indexes for created_at and the most-used filter combinations after checking the query plan.
-- [ ] Return only safe event fields. Never return invitation tokens, encrypted mail payloads, credentials, or arbitrary SQL. Render details with text binding, not HTML.
-- [ ] Add a Platform Audit section to the SaaS superadmin UI with loading, empty, error, retry, filters, and pagination states.
-- [ ] Test non-platform denial, date/filter validation, stable ordering, pagination totals, cross-organization coverage, and secret redaction.
+- [x] Add a shared record_platform_audit_event(conn, actor_user_id, action, result, organization_id=None, details=None) service and move existing platform-route inserts through it without changing event meanings.
+- [x] Add GET /api/platform/audit-events using authenticated_platform_transaction(readonly=True), with bounded pagination and filters for actor, organization, action, result, and UTC time range. Add migration indexes for created_at and the most-used filter combinations. Live EXPLAIN validation remains pending a disposable TEST_DATABASE_URL.
+- [x] Return only safe event fields. Never return invitation tokens, encrypted mail payloads, credentials, or arbitrary SQL. Render details with text binding, not HTML.
+- [x] Add a Platform Audit section to the SaaS superadmin UI with loading, empty, error, retry, filters, and pagination states.
+- [x] Add tests for non-platform denial, date/filter validation, stable ordering, pagination totals, cross-organization coverage, and secret redaction. PostgreSQL integration tests require TEST_DATABASE_URL and could not run in this workspace.
 
 **Acceptance:** The SaaS console can inspect platform events already being written, and new platform mutations use the same audited service.
 

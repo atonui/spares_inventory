@@ -55,7 +55,7 @@ def platform_api(postgres_schema):
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_memberships TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT ON organizations TO {}").format(sql.Identifier(runtime_role)))
-    admin.execute(sql.SQL("GRANT INSERT ON organization_settings, organization_invitations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT, INSERT ON organization_settings, organization_invitations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_invitations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT INSERT (organization_id, message_type, recipient_email, encrypted_payload, idempotency_key), "

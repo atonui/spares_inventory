@@ -37,17 +37,25 @@ test('settings cannot save before a successful load or during refresh',async()=>
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
 test('mobile navigation reaches every existing panel and loads its data',()=>{const a=app();for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,12);assert.match(html,/aria-current/);});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,13);assert.match(html,/aria-current/);});
 test('SaaS platform boot loads only platform data',async()=>{
  const a=app(),calls=[];
  a.getCsrf=async()=>calls.push('csrf');
  a.getMe=async()=>{a.me={saas_mode:true,is_platform_admin:true};calls.push('me');return true;};
  a.loadPlatformDashboard=async()=>calls.push('platform-dashboard');
  a.loadOrganizations=async()=>calls.push('organizations');
+ a.loadPlatformAudit=async()=>calls.push('platform-audit');
  a.loadTimezoneContext=async()=>assert.fail('legacy tenant timezone must not load');
  a.loadDashboard=async()=>assert.fail('legacy dashboard must not load');
  await a.init();
- assert.deepEqual(calls,['csrf','me','platform-dashboard','organizations']);
+ assert.deepEqual(calls,['csrf','me','platform-dashboard','organizations','platform-audit']);
+});
+test('platform audit filters are encoded, paginated, and recoverable after failure',async()=>{
+ const a=app();a.platformAuditFilters={actor_user_id:'7',organization_id:'org / id',action:'organization_created',result:'success',start_at:'2026-10-01T00:00:00Z',end_at:''};
+ let path='';a.api=async value=>{path=value;return {rows:[{id:9}],total:101,offset:50};};
+ await a.loadPlatformAudit(50);assert.match(path,/limit=50/);assert.match(path,/offset=50/);assert.match(path,/organization_id=org\+%2F\+id/);assert.equal(a.platformAuditRows[0].id,9);assert.equal(a.platformAuditTotal,101);
+ a.api=async()=>{throw Error('offline');};await a.loadPlatformAudit(0);assert.equal(a.platformAuditRows.length,0);assert.equal(a.platformAuditError,'offline');assert.equal(a.platformAuditLoading,false);
+ assert.match(html,/x-text="JSON.stringify\(event\.details \|\| \{\}\)"/);assert.doesNotMatch(html,/x-html="JSON.stringify\(event\.details/);
 });
 test('platform organization form sends name slug and owner invitation',async()=>{
  const a=app();a.toast=()=>{};a.organizationForm={name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'};
