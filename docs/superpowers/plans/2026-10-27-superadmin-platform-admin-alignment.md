@@ -16,7 +16,7 @@
 - Tenant queries continue to use server-resolved membership and PostgreSQL RLS; never add a blanket RLS bypass.
 - Do not add global support/billing roles until concrete workflows and permission boundaries are specified.
 - Do not expose deployment secrets or environment variables in the application UI.
-- Do not implement direct tenant hard deletion, impersonation, feature entitlements, or billing overrides in this core plan; each needs its own approved design.
+- Keep tenant support access out of the routine platform console. Add it only through the dedicated, read-only-by-default support workflow in Task 7. Do not implement direct tenant hard deletion, feature entitlements, or billing overrides in this core plan; each needs its own approved design.
 - Preserve current SQLite behavior until the separately reviewed database cutover.
 
 ## Review Focus
@@ -129,11 +129,35 @@
 
 ---
 
+### Task 7: Design controlled, audited tenant support access
+
+**Scope:** This is an approved product direction, but it needs a focused security design and separate implementation slice. It does not grant routine tenant-data browsing to platform admins.
+
+**Design requirements**
+- Platform admins may view platform-level tenant metadata in the normal console. Tenant user or inventory data requires an explicit support session for one organization and a documented reason.
+- Start with read-only access to a narrowly listed set of support resources. Do not create a generic tenant browser, database console, or customer-identity impersonation session.
+- Keep the platform administrator authenticated as themselves. Every support request must retain both the actor and target organization; show a persistent support-access banner and provide an immediate end/revoke action.
+- Store support-session state server-side, bind it to the authenticated platform session and one organization, and impose a short configurable maximum lifetime. Never encode support authority in a client-editable JWT claim.
+- Authorize every support request against that live support session and its allowed resource/action set. Expiry, revocation, platform-admin revocation, or logout must end access. Tenant transactions must remain explicitly scoped and must not use a blanket RLS bypass.
+- Audit support-session start, each data access (resource/action), denied access, and end/expiry, including actor, organization, reason, timestamp, and request correlation ID. Redact sensitive field values from audit details.
+- Any write capability, broader resource set, or true impersonation requires a separate design and explicit approval; do not silently expand the read-only workflow.
+
+**Implementation planning steps**
+- [ ] Inventory concrete support cases and agree on the minimum resource/field allowlist before coding.
+- [ ] Trace how the allowlisted reads can be performed while preserving organization scoping and PostgreSQL RLS; if this requires a new trusted database policy/context, document and review that policy before implementation.
+- [ ] Specify the server-side support-session lifecycle, maximum lifetime, revocation behavior, audit schema, UI banner, and failure behavior.
+- [ ] Write abuse-case tests for cross-tenant access, missing/expired/revoked sessions, actor revocation, logout, context cleanup after errors, and attempts to write or access unlisted resources.
+- [ ] Put the resulting approved design in a separate spec and implementation plan; then implement the narrow read-only workflow in its own reviewable PR.
+
+**Acceptance:** A support case can be handled against one tenant with explicit authorization and an audit trail, while ordinary platform-admin access still reveals no tenant roster or inventory.
+
+---
+
 ## Later, Separate Design Work
 
 These are not prerequisites for the core platform console and should each get its own design/plan before implementation:
 
-1. **Support access and impersonation:** The attached JWT example is incompatible with the app’s opaque server-side session credentials and is not sufficient auditing. If approved later, use a dedicated short-lived server-side support context, mandatory reason, visible impersonation banner, preserved actor and target identities, read-only default, narrowly scoped tenant access, and an auditable end action.
+1. **Support-access expansion:** Task 7 covers the initial read-only workflow. Broader data access, write actions, or true impersonation remain separate design decisions; the attached JWT example is incompatible with the app’s opaque server-side session credentials and does not provide adequate auditability.
 2. **Feature flags and usage limits:** Define the actual flags/metrics and override semantics first. Use typed, tenant-scoped entitlements with expiry and audit history; avoid arbitrary per-tenant constants.
 3. **Billing portfolio and overrides:** Build after the separately scoped Stripe billing service exists. Plan changes, credits, and refunds must call idempotent billing operations and reconcile with provider state; do not add an unrelated admin-side balance table.
 4. **Tenant termination/data erasure:** Define retention, export, recovery window, legal hold, backup handling, and evidence requirements. Do not provide instant hard deletion as a generic button.
