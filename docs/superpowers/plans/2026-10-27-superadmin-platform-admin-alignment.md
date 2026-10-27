@@ -32,7 +32,7 @@
 ## Current Alignment
 
 - **Authority separation:** The code follows the safer model: PostgreSQL uses platform_admins and company roles in organization_memberships. authenticated_platform_transaction clears organization context; tenant transactions require a company principal. This conflicts with the attached document’s description of unrestricted global access, but matches the existing SaaS design and is the intended boundary.
-- **Provisioning:** /api/platform supports dashboard metrics, organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI currently exposes the platform dashboard and organization creation/list only.
+- **Provisioning:** /api/platform supports dashboard counts (organizations, identities, platform admins, invitation-mail queue), organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI currently exposes the platform dashboard and organization creation/list only; broader service-health, latency, and payment metrics are absent.
 - **Organization lifecycle:** organizations.is_active exists, but no platform suspend/reactivate endpoint or UI exists. Current principal resolution checks membership activity but does not check organization activity, so toggling is_active alone would not reliably stop tenant access.
 - **Audit:** platform_audit_events exists and platform routes write events for provisioning, role changes, and platform-admin grants/revocations. There is no platform audit reader or SaaS UI for that table. The existing superadmin audit route reads activity_logs for the legacy superadmin identity.
 - **Announcements:** platform_announcements exists in PostgreSQL but is unused. The existing announcement service stores the notice in system_settings and the legacy superadmin UI manages it; that UI is hidden in SaaS mode.
@@ -64,7 +64,7 @@
 - Test: new regression_tests/test_platform_audit.py; extend regression_tests/test_superadmin_ui.cjs
 
 - [ ] Add a shared record_platform_audit_event(conn, actor_user_id, action, result, organization_id=None, details=None) service and move existing platform-route inserts through it without changing event meanings.
-- [ ] Add GET /api/platform/audit-events using authenticated_platform_transaction(readonly=True), with bounded pagination and filters for actor, organization, action, result, and UTC time range.
+- [ ] Add GET /api/platform/audit-events using authenticated_platform_transaction(readonly=True), with bounded pagination and filters for actor, organization, action, result, and UTC time range. Add migration indexes for created_at and the most-used filter combinations after checking the query plan.
 - [ ] Return only safe event fields. Never return invitation tokens, encrypted mail payloads, credentials, or arbitrary SQL. Render details with text binding, not HTML.
 - [ ] Add a Platform Audit section to the SaaS superadmin UI with loading, empty, error, retry, filters, and pagination states.
 - [ ] Test non-platform denial, date/filter validation, stable ordering, pagination totals, cross-organization coverage, and secret redaction.
@@ -139,6 +139,7 @@ These are not prerequisites for the core platform console and should each get it
 4. **Tenant termination/data erasure:** Define retention, export, recovery window, legal hold, backup handling, and evidence requirements. Do not provide instant hard deletion as a generic button.
 5. **Integration/OAuth controls:** Add only when integrations and webhook credentials exist, with per-connection revoke/rotate controls.
 6. **Infrastructure and multi-region configuration:** Keep secrets, deployment variables, and region routing in the infrastructure control plane. The app may expose safe versioned product settings, never secret values.
+7. **Operational health dashboard:** Define supported health signals (for example, API availability, database connectivity, mail delivery age/failures, and recent error rates) and their authoritative sources before adding a dashboard. Do not infer health from organization counts.
 
 ## Design Recommendations
 
