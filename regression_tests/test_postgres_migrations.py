@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 5514)
+Total output lines: 546
+
 """Versioned PostgreSQL schema migration contracts."""
 
 import pytest
@@ -98,16 +101,18 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
         (user_id, "next@example.test", "token-hash-1", expiration),
     )
     with pytest.raises(UniqueViolation):
-        connection.execute(
-            "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
-            "VALUES (%s, %s, %s, %s)",
-            (user_id, "other@example.test", "token-hash-2", expiration),
-        )
+        with connection.transaction():
+            connection.execute(
+                "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
+                "VALUES (%s, %s, %s, %s)",
+                (user_id, "other@example.test", "token-hash-2", expiration),
+            )
     with pytest.raises(UniqueViolation):
-        connection.execute(
-            "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s)",
-            ("casesensitive@example.test", "Case collision", "unused"),
-        )
+        with connection.transaction():
+            connection.execute(
+                "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s)",
+                ("casesensitive@example.test", "Case collision", "unused"),
+            )
 
 
 def test_password_reset_outbox_message_type_is_supported(postgres_schema):
@@ -240,57 +245,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
     from uuid import uuid4
 
     from backend.postgres_migrations import registry
-    from backend.postgres_migrations.runner import apply_postgres_migrations
-    from backend.temporal import serialize_instant, utc_now
-
-    connection, _ = postgres_schema
-    all_migrations = registry.MIGRATIONS
-    monkeypatch.setattr(registry, "MIGRATIONS", all_migrations[:5])
-    apply_postgres_migrations(connection)
-    user_id = connection.execute(
-        "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s) RETURNING id",
-        (f"renewal-{uuid4().hex}@example.test", "Renewal test", "unused"),
-    ).fetchone()["id"]
-    session_expiry = serialize_instant(utc_now() + timedelta(hours=1))
-    connection.execute(
-        "INSERT INTO sessions(user_id, session_token_hash, expires_at) VALUES (%s, %s, %s)",
-        (user_id, f"access-hash-{uuid4().hex}", session_expiry),
-    )
-    connection.commit()
-
-    monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
-    status = apply_postgres_migrations(connection)
-
-    session_columns = {
-        row["column_name"]
-        for row in connection.execute(
-            """SELECT column_name FROM information_schema.columns
-               WHERE table_schema = current_schema() AND table_name = 'sessions'"""
-        ).fetchall()
-    }
-    refresh_columns = {
-        row["column_name"]
-        for row in connection.execute(
-            """SELECT column_name FROM information_schema.columns
-               WHERE table_schema = current_schema()
-                 AND table_name = 'session_refresh_credentials'"""
-        ).fetchall()
-    }
-    session_id = connection.execute(
-        "SELECT id FROM sessions WHERE user_id = %s", (user_id,)
-    ).fetchone()["id"]
-    migrated_expiry = connection.execute(
-        "SELECT absolute_expires_at FROM sessions WHERE id = %s", (session_id,)
-    ).fetchone()["absolute_expires_at"]
-    connection.execute(
-        """INSERT INTO session_refresh_credentials
-           (session_id, token_hash, issued_at, expires_at)
-           VALUES (%s, %s, %s, %s)""",
-        (
-            session_id,
-            f"{uuid4().hex}{uuid4().hex}",
-            serialize_instant(utc_now()),
-            serialize_instant(utc_now() + timedelta(hours=24)),
+    from backend.postgres_migrations.runner import apply_postg…514 tokens truncated…ze_instant(utc_now() + timedelta(hours=24)),
         ),
     )
 
