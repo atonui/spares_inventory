@@ -666,6 +666,8 @@ from backend.schemas.superadmin import (
 
 from backend.routes.superadmin import create_superadmin_router
 
+# Keep the legacy console mounted for SQLite deployments; its router fails closed
+# for non-SQLite admin operations while the public announcement read is migrated.
 app.include_router(create_superadmin_router(
     get_connection=lambda: get_db_connection(),
     database_path=lambda: DATABASE,

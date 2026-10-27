@@ -278,14 +278,17 @@ def test_superadmin_routes_owned_once_by_extracted_router():
     put = next(r for r in routes if r.path == PREFIX + '/security-config/{key}')
     assert get.endpoint is not put.endpoint
     assert get.endpoint.__name__ == 'get_security_config'
-    assert {d.call for d in get.dependant.dependencies} == {main.get_current_user}
+    get_dependencies = {d.call.__name__ for d in get.dependant.dependencies}
+    assert get_dependencies == {'get_current_user', 'require_legacy_sqlite_mode'}
     assert next(r for r in main.app.routes if getattr(r, 'path', '') == '/api/inventory/add' and 'POST' in getattr(r, 'methods', set())).endpoint.__module__ == 'backend.routes.inventory_writes'
 
 
 def test_superadmin_dependency_override_identity(super_api):
     client, path, control = super_api
     route = next(r for r in main.app.routes if getattr(r, 'path', '') == PREFIX + '/security-config/{key}')
-    assert {d.call for d in route.dependant.dependencies} == {main.get_current_user, main.verify_authenticated_csrf}
+    assert {d.call.__name__ for d in route.dependant.dependencies} == {
+        'get_current_user', 'verify_authenticated_csrf', 'require_legacy_sqlite_mode',
+    }
     assert client.put(PREFIX + '/security-config/max_login_attempts', json={'value': '7'}).status_code == 200
     control['damage'] = "UPDATE sessions SET is_active=0 WHERE session_token='root-token'"
     assert client.put(PREFIX + '/security-config/max_login_attempts', json={'value': '8'}).status_code == 401

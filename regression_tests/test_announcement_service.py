@@ -17,6 +17,19 @@ def test_legacy_notice_defaults_are_stable():
     assert n['starts_at'] is None and n['expires_at'] is None
     assert n['revision']==normalize_notice(raw)['revision']
 
+def test_load_notice_accepts_postgres_mapping_rows():
+    payload=json.dumps({'message':'Public notice','level':'info','set_at':'2026-10-14T12:00:00.000000Z'})
+
+    class Result:
+        def fetchone(self):
+            return {'setting_value': payload}
+
+    class Connection:
+        def execute(self, _sql):
+            return Result()
+
+    assert load_notice(Connection())['message']=='Public notice'
+
 def test_save_revision_resets_dismissals(db):
     n=save_notice(db,{'message':'Notice','level':'info'},actor_id=7,expected_revision=None)
     dismiss_notice(db,user_id=7,revision=n['revision'],now=datetime.now(timezone.utc))
