@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 17654)
-Total output lines: 1578
-
 """Authentication routes composed with explicit application dependencies."""
 from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
@@ -499,7 +496,650 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 logger.error("Failed to send password reset email")
                 # Don't reveal email send failure to prevent information disclosure
 
-        return {"message": "If the email exists, a reset link has been…7654 tokens truncated…now() >= stored_instant(row["expires_at"], "expires_at"):
+        return {"message": "If the email exists, a reset link has been sent"}
+
+
+    @router.post("/api/reset-password")
+    @limiter.limit("5/hour")  # 5 password reset attempts per hour
+    async def reset_password(
+        request_data: ResetPasswordRequest,
+        csrf_valid: bool = Depends(verify_public_csrf),
+        request: Request = None,
+    ):
+        """Reset password using token"""
+        ip_address = request.client.host if hasattr(request, "client") else None
+        user_agent = request.headers.get("user-agent", "")[:200]
+
+        conn = get_db_connection()
+        register_sqlite_instant_comparison(conn)
+        cursor = conn.cursor()
+
+        # Validate token
+        execute_cursor(conn, cursor,
+            """SELECT id, name, email, reset_token_expires
+               FROM users
+               WHERE reset_token = ? AND archived_at IS NULL""",
+            (request_data.token,),
+        )
+        user = cursor.fetchone()
+
+        if not user:
+            # Log failed attempt
+            log_activity(
+                user_id=0,
+                username="unknown",
+                action="password_reset_failed",
+                details={"reason": "invalid_token"},
+                status="error",
+                error_message="Invalid or expired token",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            conn.close()
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+        # Check if token expired
+        expires_at = stored_instant(user["reset_token_expires"], "reset_token_expires")
+        if utc_now() > expires_at:
+            log_activity(
+                user_id=user["id"],
+                username=user["name"],
+                action="password_reset_failed",
+                details={"reason": "token_expired", "email": user["email"]},
+                status="error",
+                error_message="Token has expired",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            conn.close()
+            raise HTTPException(status_code=400, detail="Token has expired")
+
+        # Validate new password
+        if len(request_data.new_password) < 8:
+            log_activity(
+                user_id=user["id"],
+                username=user["name"],
+                action="password_reset_failed",
+                details={"reason": "weak_password", "email": user["email"]},
+                status="error",
+                error_message="Password too short",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            conn.close()
+            raise HTTPException(
+                status_code=400, detail="Password must be at least 8 characters long"
+            )
+
+        # Hash before taking the write lock, then reject revoked tokens atomically.
+        new_hash = hash_password(request_data.new_password)
+        if utc_now() > expires_at:
+            conn.close()
+            raise HTTPException(status_code=400,detail='Token has expired')
+        # Update password and clear token
+        execute_cursor(conn, cursor,
+            """UPDATE users
+               SET password_hash = ?,
+                   reset_token = NULL,
+                   reset_token_expires = NULL,
+                   session_token = NULL,
+                   session_expires = NULL
+               WHERE id = ? AND reset_token = ? AND archived_at IS NULL""",
+            (new_hash, user["id"], request_data.token),
+        )
+
+        if cursor.rowcount != 1:
+            conn.rollback()
+            conn.close()
+            raise HTTPException(status_code=400,detail='Invalid or expired token')
+
+        execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
+
+        conn.commit()
+        conn.close()
+
+        # Log successful password reset
+        log_activity(
+            user_id=user["id"],
+            username=user["name"],
+            action="password_reset_success",
+            details={"email": user["email"]},
+            status="success",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        logger.info(
+            f"Password successfully reset for user {user['name']} ({user['email']})"
+        )
+
+        return {"message": "Password reset successfully"}
+
+
+    @router.get("/api/verify-reset-token/{token}")
+    @instant_response
+    async def verify_reset_token(token: str, request: Request = None):
+        """Verify if a reset token is valid"""
+        ip_address = request.client.host if hasattr(request, "client") else None
+
+        conn = get_db_connection()
+        register_sqlite_instant_comparison(conn)
+        cursor = conn.cursor()
+
+        execute_cursor(conn, cursor,
+            """SELECT id, name, reset_token_expires
+               FROM users
+               WHERE reset_token = ? AND archived_at IS NULL""",
+            (token,),
+        )
+        user = cursor.fetchone()
+        conn.close()
+
+        if not user:
+            log_activity(
+                user_id=0,
+                username="unknown",
+                action="verify_reset_token_failed",
+                details={"reason": "invalid_token"},
+                status="error",
+                ip_address=ip_address,
+            )
+            raise HTTPException(status_code=400, detail="Invalid token")
+
+        expires_at = stored_instant(user["reset_token_expires"], "reset_token_expires")
+        if utc_now() > expires_at:
+            log_activity(
+                user_id=user["id"],
+                username=user["name"],
+                action="verify_reset_token_failed",
+                details={"reason": "token_expired"},
+                status="error",
+                ip_address=ip_address,
+            )
+            raise HTTPException(status_code=400, detail="Token has expired")
+
+        return {"valid": True}
+
+
+    def perform_login(user_login: UserLogin, request: Request, *, native: bool):
+        from backend.database_sql import execute, is_postgres
+        from backend.postgres_database import postgres_transaction
+
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "")[:200]
+        cfg = get_security_config()
+        conn = get_db_connection()
+        postgres = is_postgres(conn)
+        if native and not postgres:
+            conn.close()
+            raise HTTPException(status_code=503, detail="Native login requires PostgreSQL")
+        if native:
+            from backend.services.native_refresh import encrypt_retry_response
+            try:
+                encrypt_retry_response(native_refresh_encryption_key, {}, "validation")
+            except (ValueError, TypeError):
+                conn.close()
+                raise HTTPException(status_code=503, detail="Native refresh is unavailable") from None
+        if not postgres:
+            register_sqlite_instant_comparison(conn)
+
+        if postgres:
+            query = """SELECT u.id, u.email, u.name,
+                              COALESCE(om.company_role, CASE WHEN pa.user_id IS NOT NULL THEN 'platform_admin' END) AS role,
+                              u.territory, u.password_hash, u.failed_login_attempts,
+                              u.account_locked_until
+                       FROM users AS u
+                       LEFT JOIN organization_memberships AS om ON om.user_id = u.id AND om.is_active = TRUE
+                       LEFT JOIN platform_admins AS pa ON pa.user_id = u.id
+                       WHERE u.email = ? AND u.archived_at IS NULL"""
+        else:
+            query = """SELECT id, email, name, role, territory, password_hash,
+                              failed_login_attempts, account_locked_until
+                       FROM users WHERE email = ? AND archived_at IS NULL"""
+        user = execute(conn, query, (user_login.email,)).fetchone()
+
+        if user and user["account_locked_until"]:
+            lockout_time = stored_instant(user["account_locked_until"], "account_locked_until")
+            if utc_now() < lockout_time:
+                remaining_minutes = int((lockout_time - utc_now()).total_seconds() / 60)
+                log_activity(
+                    user_id=user["id"], username=user["name"], action="login_blocked",
+                    status="error", error_message="Account locked", ip_address=ip_address,
+                    user_agent=user_agent,
+                )
+                conn.close()
+                raise HTTPException(
+                    status_code=423,
+                    detail=f"Account locked. Try again in {remaining_minutes} minutes.",
+                )
+
+        if not user or not verify_password(user_login.password, user["password_hash"]):
+            if user:
+                failed_attempts = user["failed_login_attempts"] + 1
+                if failed_attempts >= cfg["max_login_attempts"]:
+                    lockout_until = utc_now() + timedelta(minutes=cfg["lockout_duration_minutes"])
+                    execute(
+                        conn,
+                        "UPDATE users SET failed_login_attempts = ?, account_locked_until = ? WHERE id = ?",
+                        (failed_attempts, serialize_instant(lockout_until), user["id"]),
+                    )
+                    conn.commit()
+                    log_activity(
+                        user_id=user["id"], username=user["name"], action="account_locked",
+                        status="error", error_message="Too many failed attempts",
+                        ip_address=ip_address, user_agent=user_agent,
+                    )
+                    conn.close()
+                    raise HTTPException(
+                        status_code=423,
+                        detail=("Account locked due to too many failed attempts. "
+                                f"Try again in {cfg['lockout_duration_minutes']} minutes."),
+                    )
+                execute(
+                    conn, "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
+                    (failed_attempts, user["id"]),
+                )
+                conn.commit()
+            log_activity(
+                user_id=user["id"] if user else 0, username=user_login.email,
+                action="login_failed", status="error", error_message="Invalid credentials",
+                ip_address=ip_address, user_agent=user_agent,
+            )
+            conn.close()
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        raw_credential = secrets.token_urlsafe(32)
+        raw_refresh_credential = secrets.token_urlsafe(32) if native else None
+        if user_login.remember_me:
+            expires = utc_now() + timedelta(days=cfg["remember_me_duration_days"])
+            max_age = cfg["remember_me_duration_days"] * 24 * 60 * 60
+        else:
+            expires = utc_now() + timedelta(hours=cfg["session_duration_hours"])
+            max_age = cfg["session_duration_hours"] * 60 * 60
+        absolute_expires = expires
+        if native:
+            absolute_expires = expires
+            if user_login.remember_me:
+                absolute_expires = utc_now() + timedelta(days=cfg["remember_me_duration_days"])
+            else:
+                absolute_expires = utc_now() + timedelta(hours=cfg["session_duration_hours"])
+            expires = min(utc_now() + timedelta(minutes=15), absolute_expires)
+        conn.close()
+
+        if postgres:
+            session_conn = get_db_connection()
+            try:
+                with postgres_transaction(session_conn):
+                    active = session_conn.execute(
+                        "SELECT id FROM users WHERE id = %s AND archived_at IS NULL FOR UPDATE",
+                        (user["id"],),
+                    ).fetchone()
+                    if active is None:
+                        raise HTTPException(status_code=401, detail="Invalid credentials")
+                    session_id = session_conn.execute(
+                        """INSERT INTO sessions (user_id, session_token_hash, expires_at,
+                                                  absolute_expires_at, ip_address, user_agent)
+                           VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+                        (user["id"], hash_session_credential(raw_credential),
+                         serialize_instant(expires), serialize_instant(absolute_expires),
+                         ip_address, user_agent),
+                    ).fetchone()["id"]
+                    if native:
+                        session_conn.execute(
+                            """INSERT INTO session_refresh_credentials
+                               (session_id, token_hash, issued_at, expires_at)
+                               VALUES (%s, %s, %s, %s)""",
+                            (session_id, hash_session_credential(raw_refresh_credential),
+                             serialize_instant(utc_now()), serialize_instant(absolute_expires)),
+                        )
+                    session_conn.execute(
+                        """UPDATE users SET failed_login_attempts = 0,
+                                  account_locked_until = NULL, last_login = %s
+                           WHERE id = %s""",
+                        (serialize_instant(utc_now()), user["id"]),
+                    )
+                    from backend.services.principals import resolve_principal
+                    principal = resolve_principal(session_conn, raw_credential)
+                    user_role = principal.company_role or "platform_admin"
+            finally:
+                session_conn.close()
+        else:
+            with stock_write_transaction() as session_conn:
+                active = execute(
+                    session_conn,
+                    "SELECT 1 FROM users WHERE id = ? AND archived_at IS NULL",
+                    (user["id"],),
+                ).fetchone()
+                if not active:
+                    raise HTTPException(status_code=401, detail="Invalid credentials")
+                execute(
+                    session_conn,
+                    """INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (user["id"], raw_credential, serialize_instant(expires), ip_address, user_agent),
+                )
+                execute(
+                    session_conn,
+                    """UPDATE users SET failed_login_attempts = 0,
+                              account_locked_until = NULL,
+                              last_login = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
+                       WHERE id = ?""",
+                    (user["id"],),
+                )
+            user_role = user["role"]
+
+        log_activity(
+            user_id=user["id"], username=user["name"], action="login",
+            details={"role": user_role, "remember_me": user_login.remember_me},
+            ip_address=ip_address, user_agent=user_agent,
+        )
+        logger.info("User %s (%s) logged in from %s", user["name"], user["id"], ip_address)
+
+        response_data = {
+            "success": True,
+            "user": {
+                "id": user["id"], "email": user["email"], "name": user["name"],
+                "role": user_role, "territory": user["territory"],
+            },
+        }
+        if native:
+            response_data.update({
+                "token_type": "Bearer",
+                "access_token": raw_credential,
+                "expires_at": serialize_instant(expires),
+                "refresh_token": raw_refresh_credential,
+            })
+            return JSONResponse(content=response_data, headers={"Cache-Control": "no-store"})
+
+        response = JSONResponse(content=response_data)
+        response.set_cookie(
+            key="session_token", value=raw_credential, httponly=True,
+            secure=cookie_secure(), samesite="lax", max_age=max_age,
+        )
+        return response
+
+
+    @router.post("/api/auth/login")
+    @limiter.limit("5/minute")
+    async def login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_public_csrf)):
+        """Authenticate a browser and set its existing HTTP-only session cookie."""
+        return perform_login(user_login, request, native=False)
+
+
+    @router.post(
+        "/api/auth/native/login",
+        response_model=NativeLoginResponse,
+        responses={
+            401: {"description": "Invalid credentials or inactive account"},
+            403: {"description": "No active company membership or platform-admin access"},
+            423: {"description": "Account temporarily locked"},
+            503: {"description": "Native login requires PostgreSQL"},
+        },
+    )
+    @limiter.limit("5/minute")
+    async def native_login(user_login: UserLogin, request: Request, csrf_valid: bool = Depends(verify_public_csrf)):
+        """Issue an opaque bearer session. Requires the normal CSRF token; tenant context is server-derived."""
+        return perform_login(user_login, request, native=True)
+
+
+    @limiter.limit("5/minute")
+    async def native_refresh(
+        payload: NativeRefreshRequest,
+        request: Request,
+        request_id: str = Header(..., alias="X-Request-ID", min_length=1, max_length=64),
+    ):
+        """Rotate a native credential pair with a bounded exact-request retry."""
+        from backend.database_sql import is_postgres
+        from backend.postgres_database import postgres_transaction
+        from backend.services.native_refresh import (
+            encrypt_retry_response, decrypt_retry_response, parse_native_refresh_instant,
+        )
+
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", request_id):
+            raise HTTPException(status_code=422, detail="Invalid X-Request-ID")
+        try:
+            # Validate configuration before locking or consuming any refresh credential.
+            encrypt_retry_response(native_refresh_encryption_key, {}, "validation")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=503, detail="Native refresh is unavailable") from None
+
+        conn = get_db_connection()
+        if not is_postgres(conn):
+            conn.close()
+            raise HTTPException(status_code=503, detail="Native refresh requires PostgreSQL")
+
+        now = utc_now()
+        now_text = serialize_instant(now)
+        refresh_hash = hash_session_credential(payload.refresh_token)
+        result = None
+        error_status = None
+        try:
+            with postgres_transaction(conn):
+                credential = conn.execute(
+                    """SELECT id, session_id, token_hash, expires_at, consumed_at, retry_request_id,
+                              retry_response_ciphertext, retry_response_expires_at
+                       FROM session_refresh_credentials WHERE token_hash = %s FOR UPDATE""",
+                    (refresh_hash,),
+                ).fetchone()
+                if credential is None:
+                    error_status = 401
+                else:
+                    session = conn.execute(
+                        """SELECT id, user_id, is_active, absolute_expires_at
+                           FROM sessions WHERE id = %s FOR UPDATE""",
+                        (credential["session_id"],),
+                    ).fetchone()
+                    if session is None or not session["is_active"]:
+                        error_status = 401
+                    elif (now >= parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at")
+                          or now >= parse_native_refresh_instant(credential["expires_at"], "refresh_expires_at")):
+                        conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
+                        error_status = 401
+                    else:
+                        account = conn.execute(
+                            """SELECT u.archived_at,
+                                      EXISTS (SELECT 1 FROM organization_memberships om
+                                              WHERE om.user_id = u.id AND om.is_active = TRUE) AS has_membership,
+                                      EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = u.id) AS is_platform_admin
+                               FROM users u WHERE u.id = %s""",
+                            (session["user_id"],),
+                        ).fetchone()
+                        if (account is None or account["archived_at"] is not None
+                                or not (account["has_membership"] or account["is_platform_admin"])):
+                            conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
+                            error_status = 401
+                        elif credential["consumed_at"] is not None:
+                            retry_expires = (
+                                parse_native_refresh_instant(credential["retry_response_expires_at"], "retry_response_expires_at")
+                                if credential["retry_response_expires_at"] else None
+                            )
+                            if (credential["retry_request_id"] == request_id
+                                    and retry_expires is not None and now < retry_expires
+                                    and credential["retry_response_ciphertext"]):
+                                try:
+                                    result = decrypt_retry_response(
+                                        native_refresh_encryption_key,
+                                        credential["retry_response_ciphertext"], refresh_hash,
+                                    )
+                                except Exception:
+                                    error_status = 503
+                            else:
+                                conn.execute("UPDATE sessions SET is_active = FALSE WHERE id = %s", (session["id"],))
+                                error_status = 401
+                        else:
+                            absolute_expires = parse_native_refresh_instant(session["absolute_expires_at"], "absolute_expires_at")
+                            access = secrets.token_urlsafe(32)
+                            refresh = secrets.token_urlsafe(32)
+                            access_expires = min(now + timedelta(minutes=15), absolute_expires)
+                            body = {
+                                "success": True,
+                                "token_type": "Bearer",
+                                "access_token": access,
+                                "refresh_token": refresh,
+                                "expires_at": serialize_instant(access_expires),
+                            }
+                            encrypted = encrypt_retry_response(
+                                native_refresh_encryption_key, body, refresh_hash,
+                            )
+                            conn.execute(
+                                """UPDATE session_refresh_credentials
+                                   SET consumed_at = %s, retry_request_id = %s,
+                                       retry_response_ciphertext = %s, retry_response_expires_at = %s
+                                   WHERE id = %s""",
+                                (now_text, request_id, encrypted,
+                                 serialize_instant(now + timedelta(seconds=60)), credential["id"]),
+                            )
+                            conn.execute(
+                                """INSERT INTO session_refresh_credentials
+                                   (session_id, token_hash, issued_at, expires_at)
+                                   VALUES (%s, %s, %s, %s)""",
+                                (session["id"], hash_session_credential(refresh), now_text,
+                                 serialize_instant(absolute_expires)),
+                            )
+                            conn.execute(
+                                "UPDATE sessions SET session_token_hash = %s, expires_at = %s WHERE id = %s",
+                                (hash_session_credential(access), serialize_instant(access_expires), session["id"]),
+                            )
+                            result = body
+        finally:
+            conn.close()
+
+        if error_status:
+            raise HTTPException(status_code=error_status, detail="Invalid or expired refresh credential")
+        return JSONResponse(content=result, headers={"Cache-Control": "no-store", "X-Request-ID": request_id})
+
+
+    router.add_api_route(
+        "/api/auth/native/refresh", native_refresh, methods=["POST"],
+        response_model=NativeRefreshResponse,
+        responses={401: {"description": "Invalid, expired, or replayed refresh credential"},
+                   422: {"description": "Invalid request or missing request ID"},
+                   503: {"description": "Native refresh is unavailable"}},
+    )
+
+
+    @router.post("/api/profile/mobile-pairings", status_code=201, response_model=MobilePairingCreated)
+    @account_rate_limit("5/hour")
+    async def create_mobile_pairing(
+        request: Request,
+        user=Depends(email_change_user),
+        _csrf=Depends(verify_csrf),
+    ):
+        """Create a short-lived QR capability; it does not grant a mobile session."""
+        from io import BytesIO
+        from urllib.parse import quote
+
+        import qrcode
+        from qrcode.image.svg import SvgPathImage
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hash_session_credential(token)
+        request_id = secrets.token_urlsafe(18)
+        created_at = utc_now()
+        expires_at = created_at + timedelta(minutes=2)
+        qr_data = f"sparesflow://pair?token={quote(token, safe='')}"
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=7, border=3)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        output = BytesIO()
+        qr.make_image(image_factory=SvgPathImage).save(output)
+        qr_svg = output.getvalue().decode("utf-8")
+
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as (conn, _principal):
+            require_mobile_pairing_postgres(conn)
+            user_id = authenticated_user_id(user)
+            set_mobile_pairing_user_scope(conn, user_id)
+            conn.execute(
+                """UPDATE mobile_pairing_requests SET status = 'cancelled'
+                   WHERE user_id = %s AND status IN ('created', 'pending', 'approved')""",
+                (user_id,),
+            )
+            conn.execute(
+                """INSERT INTO mobile_pairing_requests
+                   (request_id, user_id, qr_token_hash, status, created_at, expires_at)
+                   VALUES (%s, %s, %s, 'created', %s, %s)""",
+                (request_id, user_id, token_hash, serialize_instant(created_at), serialize_instant(expires_at)),
+            )
+        return JSONResponse(
+            status_code=201,
+            content={
+                "request_id": request_id,
+                "qr_data": qr_data,
+                "qr_svg": qr_svg,
+                "expires_at": serialize_instant(expires_at),
+            },
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Referrer-Policy": "no-referrer"},
+        )
+
+
+    @router.get("/api/profile/mobile-devices", response_model=list[MobileDeviceResponse])
+    async def list_mobile_devices(request: Request, user=Depends(email_change_user)):
+        with authenticated_account_write_transaction(user, get_request_credential(request).value) as (conn, _principal):
+            require_mobile_pairing_postgres(conn)
+            user_id = authenticated_user_id(user)
+            set_mobile_pairing_user_scope(conn, user_id)
+            rows = conn.execute(
+                """SELECT d.request_id AS device_id, d.device_name, d.paired_at, s.last_activity
+                   FROM mobile_device_sessions d JOIN sessions s ON s.id = d.session_id
+                   WHERE d.user_id = %s AND d.revoked_at IS NULL AND s.is_active = TRUE
+                   ORDER BY d.paired_at DESC""",
+                (user_id,),
+            ).fetchall()
+        return JSONResponse(
+            content=[dict(row) for row in rows],
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
+
+
+    @router.delete("/api/profile/mobile-devices/{request_id}")
+    async def revoke_mobile_device(
+        request_id: str, request: Request, user=Depends(email_change_user), _csrf=Depends(verify_csrf),
+    ):
+        with authenticated_account_write_transaction(user, get_request_credential(request).value) as (conn, _principal):
+            require_mobile_pairing_postgres(conn)
+            user_id = authenticated_user_id(user)
+            set_mobile_pairing_user_scope(conn, user_id)
+            device = conn.execute(
+                """SELECT session_id FROM mobile_device_sessions
+                   WHERE request_id = %s AND user_id = %s AND revoked_at IS NULL FOR UPDATE""",
+                (request_id, user_id),
+            ).fetchone()
+            if device is None:
+                raise HTTPException(status_code=404, detail="Paired device not found")
+            conn.execute(
+                "UPDATE sessions SET is_active = FALSE WHERE id = %s AND user_id = %s",
+                (device["session_id"], user_id),
+            )
+            conn.execute(
+                "UPDATE mobile_device_sessions SET revoked_at = %s WHERE request_id = %s",
+                (serialize_instant(utc_now()), request_id),
+            )
+        return JSONResponse(content={"success": True}, headers={"Cache-Control": "no-store"})
+
+
+    @router.get("/api/profile/mobile-pairings/{request_id}", response_model=MobilePairingDesktopStatus)
+    @instant_response
+    async def get_mobile_pairing_status(
+        request_id: str,
+        request: Request,
+        user=Depends(email_change_user),
+    ):
+        with authenticated_account_write_transaction(
+            user, get_request_credential(request).value
+        ) as (conn, _principal):
+            require_mobile_pairing_postgres(conn)
+            set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
+            row = conn.execute(
+                """SELECT status, device_name, expires_at FROM mobile_pairing_requests
+                   WHERE request_id = %s AND user_id = %s""",
+                (request_id, authenticated_user_id(user)),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Pairing request not found")
+            status = row["status"]
+            if status in {"created", "pending"} and utc_now() >= stored_instant(row["expires_at"], "expires_at"):
                 status = "expired"
             return JSONResponse(
                 content={"status": status, "device_name": row["device_name"], "expires_at": row["expires_at"]},
