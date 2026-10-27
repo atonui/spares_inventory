@@ -87,18 +87,23 @@ def restore_pair(tmp_path,*,legacy=False):
 
 def test_restore_legacy_without_ledger(tmp_path):
     from regression_tests.migration_fixtures import snapshot
+    from backend.migrations.registry import MIGRATIONS
     live,upload=restore_pair(tmp_path,legacy=True)
     restore_database(upload,live,7)
     with sqlite3.connect(live) as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==6
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==len(MIGRATIONS)
         assert c.execute('SELECT quantity FROM inventory').fetchone()[0]==19
         assert c.execute('PRAGMA foreign_key_check').fetchall()==[]
 
 
 def test_restore_current_migrated_backup(tmp_path):
+    from backend.migrations.registry import MIGRATIONS
     live,upload=restore_pair(tmp_path)
     restore_database(upload,live,7)
-    with sqlite3.connect(live) as c:assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,),(6,)]
+    with sqlite3.connect(live) as c:
+        assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[
+            (migration.version,) for migration in MIGRATIONS
+        ]
 
 
 def test_restore_preserves_backup_timezone_preferences(tmp_path):

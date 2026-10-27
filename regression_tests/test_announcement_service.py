@@ -28,8 +28,10 @@ def test_save_revision_resets_dismissals(db):
     assert e.value.status_code==409
     remove_notice(db,expected_revision=m['revision']);assert load_notice(db) is None
 
-def test_migration_v6_idempotent(db):
-    assert check_database(db).current_version==6
+def test_migrations_are_idempotent_at_current_schema_version(db):
+    status=check_database(db)
+    assert 6 in status.applied
+    assert status.current_version==status.target_version
     db.commit();apply_migrations(db);assert check_database(db).pending==()
     assert db.execute('PRAGMA foreign_key_list(announcement_dismissals)').fetchone()[2]=='users'
 

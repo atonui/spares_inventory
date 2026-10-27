@@ -180,7 +180,11 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
         for route in main.app.routes
         if isinstance(route, APIRoute)
         and route.path.startswith("/api/v1/")
-        and route.path not in {"/api/v1/inventory", "/api/v1/openapi.json"}
+        and route.path not in {
+            "/api/v1/inventory",
+            "/api/v1/inventory/adjustments",
+            "/api/v1/openapi.json",
+        }
     ):
         routes.setdefault(route.path, set()).update(route.methods)
     assert set(routes) == {
@@ -309,6 +313,7 @@ def test_v1_openapi_is_filtered_and_versioned():
         "/api/v1/auth/mobile-pairing/complete",
         "/api/v1/me",
         "/api/v1/inventory",
+        "/api/v1/inventory/adjustments",
         "/api/v1/auth/logout",
         "/api/v1/me/email-change-requests",
         "/api/v1/me/email-change-request",
