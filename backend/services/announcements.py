@@ -29,7 +29,7 @@ def normalize_notice(payload):
 
 def load_notice(conn):
     row=conn.execute("SELECT setting_value FROM system_settings WHERE setting_key='system_announcement'").fetchone()
-    return normalize_notice(json.loads(row[0])) if row else None
+    return normalize_notice(json.loads(row['setting_value'])) if row else None
 
 def check_revision(conn,expected_revision):
     old=load_notice(conn)
@@ -74,9 +74,9 @@ def notice_status(notice,*,now):
     if notice['starts_at'] and now<parse_api_instant(notice['starts_at']):return 'scheduled'
     return 'active'
 
-def eligible_notice(conn,notice,*,viewer,now):
+def eligible_notice(conn,notice,*,viewer,now,check_dismissal=True):
     if not notice or notice_status(notice,now=now)!='active':return None
     if notice['audience']=='authenticated' and viewer is None:return None
     if notice['audience']=='roles' and (viewer is None or viewer['role'] not in notice['roles']):return None
-    if viewer and conn.execute('SELECT 1 FROM announcement_dismissals WHERE user_id=? AND revision=?',(viewer['user_id'],notice['revision'])).fetchone():return None
+    if check_dismissal and viewer and conn.execute('SELECT 1 FROM announcement_dismissals WHERE user_id=? AND revision=?',(viewer['user_id'],notice['revision'])).fetchone():return None
     return notice

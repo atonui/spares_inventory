@@ -13,6 +13,7 @@ from backend.temporal_contract import date_metadata, date_predicates, register_i
 from backend.services.timezone_policy import resolve_business_context
 from backend.temporal import utc_now, serialize_instant
 from backend.services import announcements as notices
+from backend.database_sql import is_postgres
 from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -41,7 +42,19 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
     log_authenticated_activity = authenticated_activity
     require_session = session_validator
 
-    @superadmin_router.post("/users/{target_id}/reset-password")
+    def require_legacy_sqlite_mode(_actor=Depends(get_current_user)):
+        """Fail closed before legacy global-admin code reaches a PostgreSQL database."""
+        conn = get_db_connection()
+        try:
+            if is_postgres(conn) or not isinstance(conn, sqlite3.Connection):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Legacy superadmin operations are available only in SQLite mode",
+                )
+        finally:
+            conn.close()
+
+    @superadmin_router.post("/users/{target_id}/reset-password", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def superadmin_reset_password(
         target_id: int,
         body: SuperadminPasswordReset,
@@ -79,7 +92,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "message": f"Password reset for {target['email']}"}
 
 
-    @superadmin_router.get("/dashboard")
+    @superadmin_router.get("/dashboard", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def superadmin_dashboard(
         user_id: int = Depends(get_current_user),
@@ -152,7 +165,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         }
 
 
-    @superadmin_router.get("/locked-accounts")
+    @superadmin_router.get("/locked-accounts", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def get_locked_accounts(
         user_id: int = Depends(get_current_user),
@@ -175,7 +188,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         return rows
 
 
-    @superadmin_router.post("/unlock-account")
+    @superadmin_router.post("/unlock-account", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def unlock_account(
         body: AccountUnlockRequest,
         user_id: int = Depends(get_current_user),
@@ -203,7 +216,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "message": f"Account {target['email']} unlocked"}
 
 
-    @superadmin_router.post("/unlock-accounts/bulk")
+    @superadmin_router.post("/unlock-accounts/bulk", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def bulk_unlock_accounts(
         body: BulkUnlockRequest,
         user_id: int = Depends(get_current_user),
@@ -229,7 +242,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "unlocked_count": unlocked}
 
 
-    @superadmin_router.get("/sessions")
+    @superadmin_router.get("/sessions", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def get_all_sessions(
         user_id: int = Depends(get_current_user),
@@ -253,7 +266,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         return rows
 
 
-    @superadmin_router.post("/sessions/force-logout")
+    @superadmin_router.post("/sessions/force-logout", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def force_logout_user(
         body: ForceLogoutRequest,
         user_id: int = Depends(get_current_user),
@@ -281,7 +294,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "sessions_terminated": killed}
 
 
-    @superadmin_router.post("/sessions/force-logout-all")
+    @superadmin_router.post("/sessions/force-logout-all", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def force_logout_all(
         user_id: int = Depends(get_current_user),
         csrf_valid: bool = Depends(verify_csrf),
@@ -308,7 +321,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "sessions_terminated": killed}
 
 
-    @superadmin_router.get("/security-config")
+    @superadmin_router.get("/security-config", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def get_security_config(
         user_id: int = Depends(get_current_user),
@@ -331,7 +344,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {row["setting_key"]: dict(row) for row in rows}
 
 
-    @superadmin_router.put("/security-config/{key}")
+    @superadmin_router.put("/security-config/{key}", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def update_security_config(
         key: str,
         body: SystemSettingUpdate,
@@ -374,7 +387,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "key": key, "value": val}
 
 
-    @superadmin_router.get("/users")
+    @superadmin_router.get("/users", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def superadmin_get_users(
         user_id: int = Depends(get_current_user),
@@ -395,7 +408,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         return rows
 
 
-    @superadmin_router.put("/users/{target_id}/role")
+    @superadmin_router.put("/users/{target_id}/role", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def update_user_role(
         target_id: int,
         body: UserRoleUpdate,
@@ -424,7 +437,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {"success": True, "message": f"Role updated from {old_role} → {body.role}"}
 
 
-    @superadmin_router.get("/database/tables")
+    @superadmin_router.get("/database/tables", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def get_db_tables(
         user_id: int = Depends(get_current_user),
@@ -449,7 +462,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         return result
 
 
-    @superadmin_router.post("/database/query")
+    @superadmin_router.post("/database/query", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def run_readonly_query(
         body: DatabaseQueryRequest,
         user_id: int = Depends(get_current_user),
@@ -490,7 +503,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         return {"columns": columns, "rows": result, "count": len(result)}
 
 
-    @superadmin_router.get("/database/backup")
+    @superadmin_router.get("/database/backup", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def download_db_backup(
         user_id: int = Depends(get_current_user),
@@ -517,7 +530,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
                             media_type="application/octet-stream")
 
 
-    @superadmin_router.post("/database/restore")
+    @superadmin_router.post("/database/restore", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def restore_uploaded_database(
         request: Request,
         file: UploadFile = File(...),
@@ -556,7 +569,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         return response
 
 
-    @superadmin_router.post("/database/vacuum")
+    @superadmin_router.post("/database/vacuum", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def vacuum_database(
         user_id: int = Depends(get_current_user),
         csrf_valid: bool = Depends(verify_csrf),
@@ -579,7 +592,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
         }
 
 
-    @superadmin_router.delete("/database/logs/purge")
+    @superadmin_router.delete("/database/logs/purge", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def purge_all_logs(
         days: int = 0,
         user_id: int = Depends(get_current_user),
@@ -618,7 +631,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             }
 
 
-    @superadmin_router.post("/announcement")
+    @superadmin_router.post("/announcement", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def set_announcement(
         body: SystemAnnouncementRequest,
         user_id: int = Depends(get_current_user),
@@ -653,7 +666,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             log_activity(user_id, 'superadmin', 'save_announcement', details={'revision':saved['revision'],'audience':saved['audience']}, conn=conn)
             return {'success':True,'revision':saved['revision']}
 
-    @superadmin_router.delete("/announcement")
+    @superadmin_router.delete("/announcement", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def clear_announcement(
         expected_revision: str | None = None,
         user_id: int = Depends(get_current_user),
@@ -666,7 +679,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             log_activity(user_id,'superadmin','remove_announcement',details={'revision':expected_revision},conn=conn)
             return {'success':True}
 
-    @superadmin_router.get("/announcement/manage")
+    @superadmin_router.get("/announcement/manage", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def manage_announcement(user_id: int = Depends(get_current_user)):
         with closing(get_db_connection()) as conn:
@@ -681,17 +694,35 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
     async def get_announcement(request: Request):
         with closing(get_db_connection()) as conn:
             conn.execute('BEGIN')
+            postgres_mode = is_postgres(conn)
             viewer=None
             credential=get_optional_request_credential(request)
             token=credential.value if credential else None
             if token:
-                try:viewer=session_validator(conn,token)
+                try:
+                    if postgres_mode:
+                        from backend.services.principals import resolve_principal
+
+                        principal = resolve_principal(conn, token)
+                        role = principal.company_role or (
+                            'superadmin' if principal.is_platform_admin else None
+                        )
+                        viewer = {'user_id': principal.user_id, 'role': role}
+                    else:
+                        viewer=session_validator(conn,token)
                 except HTTPException as error:
                     if error.status_code!=401:raise
-            notice=notices.eligible_notice(conn,notices.load_notice(conn),viewer=viewer,now=notices.utc_now())
-            return {'announcement':notice,'dismissal_mode':'account' if viewer else 'browser','viewer_key':'user:'+str(viewer['user_id']) if viewer else 'anonymous'}
+            notice=notices.eligible_notice(
+                conn, notices.load_notice(conn), viewer=viewer, now=notices.utc_now(),
+                check_dismissal=not postgres_mode,
+            )
+            return {
+                'announcement': notice,
+                'dismissal_mode': 'account' if viewer and not postgres_mode else 'browser',
+                'viewer_key': 'user:' + str(viewer['user_id']) if viewer else 'anonymous',
+            }
 
-    @superadmin_router.post("/announcement/dismiss")
+    @superadmin_router.post("/announcement/dismiss", dependencies=[Depends(require_legacy_sqlite_mode)])
     async def dismiss_announcement(body: AnnouncementDismissRequest, request: Request,
                                    user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf)):
         with authenticated_write_transaction(user_id,get_request_credential(request).value) as conn:
@@ -706,7 +737,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             return {'success':True}
 
 
-    @superadmin_router.get("/audit-log")
+    @superadmin_router.get("/audit-log", dependencies=[Depends(require_legacy_sqlite_mode)])
     @instant_response
     async def get_superadmin_audit(
         limit: int = Query(default=200, ge=1, le=200),

@@ -36,7 +36,7 @@
 - **Organization lifecycle:** organizations.is_active exists, but no platform suspend/reactivate endpoint or UI exists. Current principal resolution checks membership activity but does not check organization activity, so toggling is_active alone would not reliably stop tenant access.
 - **Audit:** platform_audit_events exists and platform routes write events for provisioning, role changes, and platform-admin grants/revocations. There is no platform audit reader or SaaS UI for that table. The existing superadmin audit route reads activity_logs for the legacy superadmin identity.
 - **Announcements:** platform_announcements exists in PostgreSQL but is unused. The existing announcement service stores the notice in system_settings and the legacy superadmin UI manages it; that UI is hidden in SaaS mode.
-- **Legacy/API boundary:** main.py mounts both platform routes and the legacy superadmin router. Hiding legacy sections in Alpine does not disable their API routes. Several legacy operations directly use SQLite-specific interfaces (sqlite_master, PRAGMA, SQLite backup/restore/VACUUM) and PostgreSQL does not have the legacy users.role model.
+- **Legacy/API boundary:** main.py mounts both platform routes and the legacy superadmin router. Hiding legacy sections in Alpine does not disable their API routes. All legacy `/api/superadmin` operations except public `GET /announcement` use the SQLite/global-role model and are guarded to fail with 503 outside SQLite mode. Public announcement reads remain cross-mode compatible until Task 6 moves delivery onto the platform announcement table; account-targeted dismissal remains SQLite-only in the interim.
 - **Absent capabilities:** No implemented impersonation, feature-flag/tenant-limit console, billing portfolio or overrides, OAuth integration management, global MFA policy, or tenant data-erasure workflow.
 
 ## Delivery Plan
@@ -45,13 +45,13 @@
 
 **Files**
 - Modify: main.py and backend/routes/superadmin.py
-- Test: regression_tests/test_superadmin_router.py and a new regression_tests/test_superadmin_mode_boundaries.py
+- Modify: backend/services/announcements.py for PostgreSQL mapping-row compatibility on the public read path
+- Test: regression_tests/test_superadmin_router.py, regression_tests/test_superadmin_mode_boundaries.py, and regression_tests/test_announcement_service.py
 
-- [ ] Add failing tests proving representative SQLite-only table inspection, SQL console, backup, restore, and VACUUM operations remain available in SQLite mode.
-- [ ] Add failing PostgreSQL-mode tests proving those unsupported legacy operations fail closed with a documented 404/503 response rather than reaching SQLite-specific code and returning 500.
-- [ ] Inventory every /api/superadmin route and classify it as SQLite-only, PostgreSQL-platform, or public compatibility behavior. Preserve public announcement reads until the platform announcement path is ready.
-- [ ] Add route-level mode guards or compose mode-specific routers from that inventory. Do not rely on the browser hiding a tab.
-- [ ] Keep /api/platform as the PostgreSQL platform surface. Do not migrate global users.role assumptions into PostgreSQL.
+- [x] Reuse the existing SQLite-mode coverage for table inspection, SQL console, backup, restore, and VACUUM; add failing PostgreSQL-mode tests proving those operations fail closed with a documented 503 before reaching SQLite-specific code.
+- [x] Inventory every /api/superadmin route and classify it as SQLite-only or public compatibility behavior. Preserve public announcement reads for anonymous and authenticated PostgreSQL users until the platform announcement path is ready.
+- [x] Add route-level mode guards for every SQLite-only route. Do not rely on the browser hiding a tab.
+- [x] Keep /api/platform as the PostgreSQL platform surface. Do not migrate global users.role assumptions into PostgreSQL.
 
 **Acceptance:** Existing SQLite regression tests still pass; PostgreSQL calls to SQLite-only routes fail deliberately; public notice delivery remains intact.
 
