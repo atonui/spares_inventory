@@ -75,6 +75,28 @@ def test_import_preserves_tenant_data_maps_roles_and_rehearsal_rolls_back(sqlite
         assert snapshot(source) == before
 
 
+def test_import_cli_reports_failure_type_without_exception_details(monkeypatch, capsys):
+    from backend.migration_import import sqlite_to_postgres
+
+    def fail_import(*args, **kwargs):
+        raise ValueError("sensitive row value and database password")
+
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://secret")
+    monkeypatch.setattr(sqlite_to_postgres, "import_sqlite_snapshot", fail_import)
+
+    result = sqlite_to_postgres.main([
+        "import-sqlite", "--source", "ignored.db", "--target-dsn-env",
+        "MIGRATION_DATABASE_URL", "--organization-name", "First Company",
+        "--platform-admin-email", "admin@example.com",
+    ])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "failure_type=ValueError" in captured.err
+    assert "sensitive row value" not in captured.err
+    assert "database password" not in captured.err
+
+
 def test_import_apply_maps_first_superadmin_to_platform_and_company_owner(sqlite_snapshot, migrated_target):
     from backend.migration_import.sqlite_to_postgres import import_sqlite_snapshot
 
@@ -93,6 +115,12 @@ def test_import_apply_maps_first_superadmin_to_platform_and_company_owner(sqlite
     assert identity["session_token"] is None and identity["reset_token"] is None
     assert admin.execute("SELECT user_id FROM activity_logs WHERE action='legacy-anonymous'").fetchone()["user_id"] is None
     assert admin.execute("SELECT quantity FROM inventory WHERE id=1").fetchone()["quantity"] == 19
+    store_type_flags = admin.execute(
+        "SELECT is_active FROM store_types WHERE organization_id=%s ORDER BY id",
+        (report.organization_id,),
+    ).fetchall()
+    assert store_type_flags
+    assert all(isinstance(row["is_active"], bool) for row in store_type_flags)
     if _before.get("organisation_settings"):
         assert admin.execute("SELECT business_timezone,revision FROM organization_settings").fetchone() == {
             "business_timezone": "Europe/London", "revision": 9,

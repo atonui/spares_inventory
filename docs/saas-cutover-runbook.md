@@ -71,9 +71,42 @@ Do not grant database ownership or DDL rights to the runtime login.
 The web role needs access to global identity/session and platform tables as
 well as tenant tables. RLS policies and server-derived transaction-local
 organization context are the tenant boundary; SQL grants do not replace those
-policies. Verify the web role with the restricted-role PostgreSQL tests,
-including missing context, wrong-tenant context, and connection reuse after
-rollback.
+policies. After migrations, grant the web role table access to the application
+tables below. The migration ledger stays migration-owner-only:
+
+```sql
+GRANT USAGE ON SCHEMA public TO web_runtime_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  users, sessions, parts, stores, store_types, work_orders, inventory,
+  movements, stock_transfers, equipment, equipment_history, activity_logs,
+  system_logs, system_settings, platform_admins, platform_audit_events,
+  platform_announcements, organizations, organization_memberships,
+  organization_settings, company_announcements, announcement_dismissals,
+  organization_invitations, session_refresh_credentials,
+  mobile_pairing_requests, mobile_device_sessions
+TO web_runtime_role;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO web_runtime_role;
+```
+
+Set matching defaults for ordinary application tables and sequences created
+later by the migration owner. Run these as the migration owner, replacing
+`migration_owner` with its actual role name:
+
+```sql
+ALTER DEFAULT PRIVILEGES FOR ROLE migration_owner IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO web_runtime_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE migration_owner IN SCHEMA public
+  GRANT USAGE ON SEQUENCES TO web_runtime_role;
+```
+
+A migration that creates a restricted table must revoke the web role's default
+table grant in that same migration, then grant only its required columns. In
+particular, the mail and email-change restrictions below must be re-applied
+after any future migration that changes those tables. Do not grant the web
+role privileges on `postgres_schema_migrations`.
+
+Verify the web role with the restricted-role PostgreSQL tests, including
+missing context, wrong-tenant context, and connection reuse after rollback.
 
 For `mail_outbox`, revoke any prior broad grants from the web role, then grant
 only the permissions needed for transactional enqueueing and aggregate health
