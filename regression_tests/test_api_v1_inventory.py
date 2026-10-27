@@ -206,9 +206,9 @@ def test_mobile_stock_adjustment_is_idempotent_and_checks_expected_quantity(v1_i
 
 def test_mobile_stock_adjustment_requires_bearer_and_rejects_invalid_operation_id(v1_inventory_client):
     client, _database_path = v1_inventory_client
-    payload = {"operation_id": "bad", "inventory_id": 1, "expected_quantity": 4, "new_quantity": 7}
+    payload = {"operation_id": "a347f43a-2230-4ce6-aa0a-cb42d45f94c6", "inventory_id": 1, "expected_quantity": 4, "new_quantity": 7}
     unauthorized = client.post("/api/v1/inventory/adjustments", json=payload)
-    invalid = client.post("/api/v1/inventory/adjustments", json=payload,
+    invalid = client.post("/api/v1/inventory/adjustments", json={**payload, "operation_id": "bad"},
                           headers={"Authorization": "Bearer admin-token"})
 
     assert unauthorized.status_code == 401

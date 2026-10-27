@@ -286,6 +286,12 @@ def import_sqlite_snapshot(
             if table == "activity_logs":
                 _insert_rows(target, table, columns_for_table, rows, organization_id=organization_id,
                              transforms={"user_id": lambda value: None if value == 0 else value})
+            elif table == "store_types":
+                # SQLite represents BOOLEAN columns as integer 0/1; psycopg adapts
+                # those integers as smallint, which PostgreSQL will not implicitly
+                # cast to BOOLEAN.
+                _insert_rows(target, table, columns_for_table, rows, organization_id=organization_id,
+                             transforms={"is_active": lambda value: None if value is None else bool(value)})
             else:
                 _insert_rows(target, table, columns_for_table, rows, organization_id=organization_id)
             if table in tables:
@@ -390,8 +396,15 @@ def main(argv=None) -> int:
             args.source, dsn, organization_name=args.organization_name,
             platform_admin_email=args.platform_admin_email, dry_run=not args.apply,
         )
-    except Exception:
-        print("Import stopped: validation or database operation failed; no row values or credentials were logged.", file=sys.stderr)
+    except Exception as error:
+        # Driver exception messages can contain SQL values or connection details.
+        # Emit only the class to help diagnose failures without exposing payloads.
+        print(
+            "Import stopped: validation or database operation failed "
+            f"(failure_type={type(error).__name__}); "
+            "details withheld to protect row values and credentials.",
+            file=sys.stderr,
+        )
         return 1
     print(json.dumps(asdict(report), sort_keys=True))
     return 0

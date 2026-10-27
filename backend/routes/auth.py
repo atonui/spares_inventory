@@ -234,7 +234,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         try:
             with authenticated_account_write_transaction(
                 user, get_request_credential(request).value
-            ) as conn:
+            ) as (conn, _principal):
                 require_postgres(conn)
                 set_email_change_user_scope(conn, authenticated_user_id(user))
                 request_email_change(
@@ -272,7 +272,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
-        ) as conn:
+        ) as (conn, _principal):
             require_postgres(conn)
             set_email_change_user_scope(conn, authenticated_user_id(user))
             result = get_pending_email_change(conn, user_id=authenticated_user_id(user))
@@ -296,7 +296,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
-        ) as conn:
+        ) as (conn, _principal):
             require_postgres(conn)
             set_email_change_user_scope(conn, authenticated_user_id(user))
             cancel_email_change(conn, user_id=authenticated_user_id(user))
@@ -1047,7 +1047,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
-        ) as conn:
+        ) as (conn, _principal):
             require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
@@ -1076,7 +1076,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
     @router.get("/api/profile/mobile-devices", response_model=list[MobileDeviceResponse])
     async def list_mobile_devices(request: Request, user=Depends(email_change_user)):
-        with authenticated_account_write_transaction(user, get_request_credential(request).value) as conn:
+        with authenticated_account_write_transaction(user, get_request_credential(request).value) as (conn, _principal):
             require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
@@ -1097,7 +1097,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     async def revoke_mobile_device(
         request_id: str, request: Request, user=Depends(email_change_user), _csrf=Depends(verify_csrf),
     ):
-        with authenticated_account_write_transaction(user, get_request_credential(request).value) as conn:
+        with authenticated_account_write_transaction(user, get_request_credential(request).value) as (conn, _principal):
             require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
@@ -1128,7 +1128,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
-        ) as conn:
+        ) as (conn, _principal):
             require_mobile_pairing_postgres(conn)
             set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
             row = conn.execute(
@@ -1156,7 +1156,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
-        ) as conn:
+        ) as (conn, _principal):
             require_mobile_pairing_postgres(conn)
             set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
             row = conn.execute(
@@ -1185,7 +1185,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
-        ) as conn:
+        ) as (conn, _principal):
             require_mobile_pairing_postgres(conn)
             set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
             result = conn.execute(

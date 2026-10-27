@@ -98,16 +98,18 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
         (user_id, "next@example.test", "token-hash-1", expiration),
     )
     with pytest.raises(UniqueViolation):
-        connection.execute(
-            "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
-            "VALUES (%s, %s, %s, %s)",
-            (user_id, "other@example.test", "token-hash-2", expiration),
-        )
+        with connection.transaction():
+            connection.execute(
+                "INSERT INTO email_change_requests(user_id, proposed_email, token_hash, expires_at) "
+                "VALUES (%s, %s, %s, %s)",
+                (user_id, "other@example.test", "token-hash-2", expiration),
+            )
     with pytest.raises(UniqueViolation):
-        connection.execute(
-            "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s)",
-            ("casesensitive@example.test", "Case collision", "unused"),
-        )
+        with connection.transaction():
+            connection.execute(
+                "INSERT INTO users(email, name, password_hash) VALUES (%s, %s, %s)",
+                ("casesensitive@example.test", "Case collision", "unused"),
+            )
 
 
 def test_password_reset_outbox_message_type_is_supported(postgres_schema):

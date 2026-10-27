@@ -17,10 +17,12 @@ def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 @pytest.mark.parametrize('command',['status','check'])
 def test_status_and_check_are_readonly(tmp_path,command):
     from backend.database import initialize_database,DEFAULT_SETTINGS
+    from backend.migrations.registry import MIGRATIONS
     p=tmp_path/'db with spaces.db';legacy_connection(p).close();initialize_database(p,defaults=DEFAULT_SETTINGS);before=digest(p)
     result=run(command,p)
     assert result.returncode==0,result.stderr
-    assert 'Current version: 6; target version: 6' in result.stdout
+    target_version=MIGRATIONS[-1].version
+    assert f'Current version: {target_version}; target version: {target_version}' in result.stdout
     assert digest(p)==before
 
 @pytest.mark.parametrize('command',['status','check'])
@@ -34,11 +36,12 @@ def test_check_pending_returns_nonzero(tmp_path):
     assert 'pending' in result.stdout.lower() and digest(p)==before
 
 def test_upgrade_requires_create_for_missing_path(tmp_path):
+    from backend.migrations.registry import MIGRATIONS
     p=tmp_path/'missing.db'
     assert run('upgrade',p).returncode==1 and not p.exists()
     result=run('upgrade',p,'--create');assert result.returncode==0,result.stderr
     with sqlite3.connect(p) as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==6
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==len(MIGRATIONS)
         assert c.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0
 
 @pytest.mark.parametrize('command',['status','check','upgrade'])
