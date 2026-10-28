@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.database_sql import is_postgres
 from backend.schemas.invitations import OrganizationCreateRequest
 from backend.schemas.platform_organizations import (
+    PlatformAdminGrantRequest,
     PlatformCompanyRoleUpdateRequest,
     PlatformOrganizationStatusRequest,
 )
@@ -28,6 +29,19 @@ def create_platform_organizations_router(
                 raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
         finally:
             conn.close()
+
+    def add_platform_admin(conn, actor_user_id: int, target_user_id: int) -> bool:
+        inserted = conn.execute(
+            """INSERT INTO platform_admins (user_id) VALUES (%s)
+               ON CONFLICT (user_id) DO NOTHING RETURNING user_id""",
+            (target_user_id,),
+        ).fetchone()
+        if inserted is not None:
+            record_platform_audit_event(
+                conn, actor_user_id, "platform_admin_granted", "success",
+                details={"target_user_id": target_user_id},
+            )
+        return inserted is not None
 
     @router.get("/dashboard")
     async def platform_dashboard(
@@ -228,8 +242,29 @@ def create_platform_organizations_router(
             )
             return {"success": True, "is_active": desired_active, "changed": True}
 
-    @router.put("/admins/{target_user_id}")
+    @router.post("/admins")
     async def grant_platform_admin(
+        body: PlatformAdminGrantRequest, request: Request,
+        actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
+    ):
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=get_request_credential(request).value,
+            expected_user_id=getattr(actor, "user_id", actor),
+        ) as (conn, principal):
+            target = conn.execute(
+                """SELECT id FROM users
+                   WHERE lower(btrim(email)) = lower(%s) AND archived_at IS NULL
+                   FOR UPDATE""",
+                (str(body.email),),
+            ).fetchone()
+            if target is None:
+                raise HTTPException(status_code=404, detail="No active account exists with that email")
+            created = add_platform_admin(conn, principal.user_id, target["id"])
+            return {"success": True, "created": created}
+
+    @router.put("/admins/{target_user_id}")
+    async def grant_platform_admin_by_id(
         target_user_id: int, request: Request,
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
@@ -243,15 +278,8 @@ def create_platform_organizations_router(
             ).fetchone()
             if target is None:
                 raise HTTPException(status_code=404, detail="User not found")
-            conn.execute(
-                "INSERT INTO platform_admins (user_id) VALUES (%s) ON CONFLICT (user_id) DO NOTHING",
-                (target_user_id,),
-            )
-            record_platform_audit_event(
-                conn, principal.user_id, "platform_admin_granted", "success",
-                details={"target_user_id": target_user_id},
-            )
-            return {"success": True}
+            created = add_platform_admin(conn, principal.user_id, target_user_id)
+            return {"success": True, "created": created}
 
     @router.delete("/admins/{target_user_id}")
     async def revoke_platform_admin(
@@ -263,6 +291,8 @@ def create_platform_organizations_router(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
+            if target_user_id == principal.user_id:
+                raise HTTPException(status_code=409, detail="You cannot remove your own platform administrator access")
             conn.execute("LOCK TABLE platform_admins IN EXCLUSIVE MODE")
             active_admins = conn.execute(
                 """SELECT count(*) AS n FROM platform_admins pa JOIN users u ON u.id = pa.user_id

@@ -131,6 +131,9 @@
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg></span> Organizations
         </button>
+        <button type="button" class="nav-item" :class="tab==='platformAdmins'&&'active'" @click="tab='platformAdmins'; loadPlatformAdmins()" :aria-current="tab==='platformAdmins' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg></span> Platform Admins
+        </button>
         <button type="button" class="nav-item" :class="tab==='platformAudit'&&'active'" @click="tab='platformAudit'; loadPlatformAudit()" :aria-current="tab==='platformAudit' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#audit"></use></svg></span> Platform Audit
         </button>
@@ -159,18 +162,18 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" x-model="tab" @change="selectSection($event.target.value)">
-          <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','organizations','platformAudit'].includes(key)" x-text="title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','organizations','platformAdmins','platformAudit'].includes(key)" x-text="title"></option></template>
         </select>
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
-        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading)" class="spin"></span>
-        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading)" class="spin"></span>
+        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
         <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
       </div>
     </div>
 
-    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading)">
+    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading)">
 
       <!-- ══════════ DASHBOARD ══════════ -->
       <div x-show="tab==='dashboard' && !me?.saas_mode">
@@ -303,6 +306,33 @@
             <div class="organization-pagination" x-show="organizationTotal>0 && !organizationError">
               <span role="status" x-text="`Showing ${organizationOffset+1}–${Math.min(organizationOffset+organizations.length,organizationTotal)} of ${organizationTotal}`"></span>
               <div class="filter-actions"><button class="btn btn-sm btn-outline" @click="loadOrganizations(Math.max(0,organizationOffset-organizationLimit))" :disabled="organizationLoading || organizationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset+organizationLimit)" :disabled="organizationLoading || organizationOffset+organizationLimit>=organizationTotal">Next</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='platformAdmins' && me?.saas_mode">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Platform administrators</span><button class="btn btn-sm btn-outline" @click="loadPlatformAdmins()" :disabled="platformAdminLoading">Refresh</button></div>
+          <div class="panel-body">
+            <p>These identities can administer the SaaS platform. This list includes only existing platform administrators; there is no global user search.</p>
+            <form class="platform-admin-grant" @submit.prevent="requestPlatformAdminGrant()">
+              <div class="form-group"><label for="platform-admin-email">Exact email of an existing account</label><input id="platform-admin-email" type="email" autocomplete="email" x-model="platformAdminEmail" required :disabled="actionPending.platformAdminGrant"></div>
+              <button class="btn btn-success" type="submit" :disabled="platformAdminLoading || actionPending.platformAdminGrant">Grant platform admin</button>
+            </form>
+            <p x-show="actionErrors.platformAdminGrant" class="action-error" role="alert" x-text="actionErrors.platformAdminGrant"></p>
+            <p x-show="platformAdminLoading" role="status">Loading platform administrators…</p>
+            <div x-show="platformAdminError" class="action-error" role="alert"><span x-text="platformAdminError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformAdmins()" :disabled="platformAdminLoading">Retry</button></div>
+            <div x-show="!platformAdminLoading && !platformAdminError && !platformAdmins.length" class="empty">No platform administrators found.</div>
+            <div class="platform-admin-table-wrap" x-show="!platformAdminLoading && !platformAdminError && platformAdmins.length">
+              <table class="tbl platform-admins-table"><thead><tr><th>Name</th><th>Email</th><th>Access</th><th>Action</th></tr></thead>
+                <tbody><template x-for="admin in platformAdmins" :key="admin.id"><tr>
+                  <td data-label="Name" x-text="admin.name"></td>
+                  <td data-label="Email" x-text="admin.email"></td>
+                  <td data-label="Access"><span x-show="admin.id === me?.id" class="tag tag-blue">You</span><span x-show="admin.id !== me?.id" class="tag tag-green">Platform admin</span></td>
+                  <td data-label="Action"><button x-show="admin.id !== me?.id" class="btn btn-sm btn-outline btn-red" @click="requestPlatformAdminRevoke(admin)" :disabled="dialogBusy || actionPending[`platformAdminRevoke:${admin.id}`]" x-text="actionPending[`platformAdminRevoke:${admin.id}`] ? 'Revoking…' : 'Revoke access'"></button><span x-show="admin.id === me?.id">Cannot revoke your own access</span><p class="action-error" x-show="actionErrors[`platformAdminRevoke:${admin.id}`]" role="alert" x-text="actionErrors[`platformAdminRevoke:${admin.id}`]"></p></td>
+                </tr></template></tbody>
+              </table>
             </div>
           </div>
         </div>

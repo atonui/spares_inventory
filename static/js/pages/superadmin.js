@@ -79,7 +79,7 @@ function superPanel() {
       users:     'All Users',    tables: 'Database Tables',
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
-      organizations: 'Organizations', platformAudit: 'Platform Audit',
+      organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
     },
 
     // data stores
@@ -92,6 +92,7 @@ function superPanel() {
     platformAuditLoading: false, platformAuditError: '',
     platformAuditFilters: { actor_user_id: '', organization_id: '', action: '', result: '', start_at: '', end_at: '' },
     organizationForm: { name: '', slug: '', owner_email: '' },
+    platformAdmins: [], platformAdminLoading: false, platformAdminError: '', platformAdminEmail: '',
     locked: [], selectedLocked: [],
     sessions: [],
     panelLoads: {
@@ -184,6 +185,7 @@ function superPanel() {
         await this.loadPlatformDashboard();
         await this.loadOrganizations();
         await this.loadPlatformAudit();
+        await this.loadPlatformAdmins();
         return;
       }
       await this.loadTimezoneContext();
@@ -195,6 +197,7 @@ function superPanel() {
       const loaders = {
         dashboard: () => this.loadDashboard(),
         organizations: () => this.loadOrganizations(),
+        platformAdmins: () => this.loadPlatformAdmins(),
         platformAudit: () => this.loadPlatformAudit(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
@@ -350,6 +353,76 @@ async submitPasswordReset() {
           await this.loadPlatformDashboard();
         },
       };
+    },
+
+    async loadPlatformAdmins() {
+      if (this.platformAdminLoading) return;
+      this.platformAdminLoading = true;
+      this.platformAdminError = '';
+      try {
+        const rows = await this.api('/platform/admins');
+        this.platformAdmins = Array.isArray(rows) ? rows : [];
+      } catch (error) {
+        this.platformAdmins = [];
+        this.platformAdminError = error.message || 'Unable to load platform administrators.';
+      } finally {
+        this.platformAdminLoading = false;
+      }
+    },
+
+    requestPlatformAdminGrant() {
+      if (this.dialogBusy || this.actionPending.platformAdminGrant) return;
+      const email = String(this.platformAdminEmail || '').trim();
+      if (!email) {
+        this.actionErrors.platformAdminGrant = 'Enter the exact email address of an existing account.';
+        return;
+      }
+      this.actionErrors.platformAdminGrant = '';
+      this.dlg = {
+        open: true,
+        title: 'Grant platform administrator access?',
+        msg: `Grant global platform administration to the existing account ${email}? This does not create an account.`,
+        action: 'Grant access',
+        button_class: 'btn-green',
+        resolve: async () => {
+          if (!await this.grantPlatformAdmin(email)) throw new Error(this.actionErrors.platformAdminGrant || 'Unable to grant access.');
+        },
+      };
+    },
+
+    async grantPlatformAdmin(email) {
+      return this.runAction('platformAdminGrant', async () => {
+        const result = await this.api('/platform/admins', {
+          method: 'POST', body: JSON.stringify({ email }),
+        });
+        this.platformAdminEmail = '';
+        this.toast(result.created ? 'Platform administrator access granted.' : 'That account already has platform administrator access.', 'ok');
+        await this.loadPlatformAdmins();
+      });
+    },
+
+    requestPlatformAdminRevoke(admin) {
+      if (admin.id === this.me?.id || this.dialogBusy || this.actionPending[`platformAdminRevoke:${admin.id}`]) return;
+      this.dlg = {
+        open: true,
+        title: `Revoke access from ${admin.name || admin.email}?`,
+        msg: `This removes platform-wide administrator access from ${admin.email}. Their tenant membership, if any, is unchanged.`,
+        action: 'Revoke access',
+        button_class: 'btn-red',
+        resolve: async () => {
+          const key = `platformAdminRevoke:${admin.id}`;
+          if (!await this.revokePlatformAdmin(admin)) throw new Error(this.actionErrors[key] || 'Unable to revoke access.');
+        },
+      };
+    },
+
+    async revokePlatformAdmin(admin) {
+      const key = `platformAdminRevoke:${admin.id}`;
+      return this.runAction(key, async () => {
+        await this.api(`/platform/admins/${encodeURIComponent(admin.id)}`, { method: 'DELETE' });
+        this.toast(`Platform administrator access revoked for ${admin.email}.`, 'ok');
+        await this.loadPlatformAdmins();
+      });
     },
 
     async loadPlatformAudit(offset = 0) {

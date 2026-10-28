@@ -32,7 +32,7 @@
 ## Current Alignment
 
 - **Authority separation:** The code follows the safer model: PostgreSQL uses platform_admins and company roles in organization_memberships. authenticated_platform_transaction clears organization context; tenant transactions require a company principal. This conflicts with the attached document’s description of unrestricted global access, but matches the existing SaaS design and is the intended boundary.
-- **Provisioning:** /api/platform supports dashboard counts (organizations, identities, platform admins, invitation-mail queue), organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI currently exposes the platform dashboard and organization creation/list only; broader service-health, latency, and payment metrics are absent.
+- **Provisioning:** /api/platform supports dashboard counts (organizations, identities, platform admins, invitation-mail queue), organization listing, organization creation with an initial owner invitation, platform-admin listing/grant/revoke, and a narrowly scoped company-role update. The SaaS UI exposes platform dashboard, organization lifecycle, and platform-admin management; broader service-health, latency, and payment metrics are absent.
 - **Organization lifecycle:** Platform admins can now suspend/reactivate organizations through a reason-audited API. Principal resolution carries organization status and shared tenant authorization rejects suspended organizations. The SaaS organization directory now provides server-side search, status filtering, pagination, operational aggregates, and reason-confirmed suspension/reactivation.
 - **Audit:** platform_audit_events backs a read-only platform audit endpoint and SaaS UI with bounded filters/pagination and allowlisted details. Existing platform mutation writes share one service. Legacy superadmin audit continues to read activity_logs in SQLite mode.
 - **Announcements:** platform_announcements exists in PostgreSQL but is unused. The existing announcement service stores the notice in system_settings and the legacy superadmin UI manages it; that UI is hidden in SaaS mode.
@@ -106,10 +106,10 @@
 - Modify: backend/routes/platform_organizations.py, backend/schemas/invitations.py or a focused platform-admin schema module, static/superadmin.html, static/js/pages/superadmin.js, static/superadmin.css
 - Test: regression_tests/test_platform_organizations.py and regression_tests/test_superadmin_ui.cjs
 
-- [ ] Add an exact-email grant operation so the UI can grant an existing identity without adding a global user-directory endpoint. Keep current admin listing limited to platform admins.
-- [ ] Wire GET /api/platform/admins and grant/revoke controls into the SaaS-only UI with explicit confirmation and clear pending/error states.
-- [ ] Preserve the existing last-active-admin protection; test duplicate grants, unknown/archived identities, last-admin removal, self-removal, and concurrent revoke attempts.
-- [ ] Record grant/revoke events through the shared audit service.
+- [x] Add an exact-email grant operation so the UI can grant an existing identity without adding a global user-directory endpoint. Keep current admin listing limited to platform admins.
+- [x] Wire GET /api/platform/admins and grant/revoke controls into the SaaS-only UI with explicit confirmation and clear pending/error states.
+- [x] Preserve the last-active-admin protection and prohibit self-removal; add regression coverage for duplicate grants, unknown/archived identities, last-admin removal, self-removal, and concurrent revoke attempts. PostgreSQL integration execution requires a disposable TEST_DATABASE_URL and remains pending in this workspace.
+- [x] Record grant/revoke events through the shared audit service.
 
 **Acceptance:** Platform-admin access is manageable from the SaaS console without exposing a searchable tenant user directory.
 
