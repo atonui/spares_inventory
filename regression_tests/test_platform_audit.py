@@ -58,6 +58,23 @@ def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlist
     }) == {"reason": "Customer requested a temporary pause"}
 
 
+def test_platform_settings_audit_details_are_curated():
+    from backend.services.platform_audit import safe_platform_audit_details
+
+    assert safe_platform_audit_details("platform_announcement_saved", {
+        "revision": "revision-1", "audience": "roles", "message": "private draft",
+    }) == {"revision": "revision-1", "audience": "roles"}
+    assert safe_platform_audit_details("platform_announcement_removed", {
+        "revision": "revision-2", "message": "private draft",
+    }) == {"revision": "revision-2"}
+    assert safe_platform_audit_details("global_security_setting_changed", {
+        "key": "max_login_attempts", "value": 8, "secret": "no",
+    }) == {"key": "max_login_attempts", "value": 8}
+    assert safe_platform_audit_details("global_security_setting_changed", {
+        "key": "password_policy", "value": 8,
+    }) == {}
+
+
 @pytest.fixture
 def platform_api(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations

@@ -120,13 +120,13 @@
 - Modify: main.py, static/superadmin.html, static/js/pages/superadmin.js
 - Test: regression_tests/test_security_settings.py, announcement tests, and regression_tests/test_superadmin_ui.cjs
 
-- [ ] Use the existing PostgreSQL platform_announcements table for PostgreSQL-mode notice management and delivery, preserving scheduling, audience, role targeting, revision conflicts, and dismissal behavior. Keep SQLite’s existing persistence path until cutover.
-- [ ] Add platform-authorized management endpoints and preserve the public read endpoint/contract used by the rest of the app.
-- [ ] Port only the existing global session/security settings that have defined product behavior; run them through authenticated_platform_transaction and audit mutations.
-- [ ] Do not claim MFA or global password-policy enforcement until the authentication flow actually enforces it. Design those controls separately, with step-up authentication before destructive operations.
-- [ ] Test role targeting, anonymous delivery, dismissal, schedule boundaries, revision conflicts, settings validation, and SQLite compatibility.
+- [x] Use the existing PostgreSQL platform_announcements table for PostgreSQL-mode notice management and delivery, preserving scheduling, audience, role targeting, revision conflicts, and dismissal behavior. Keep SQLite’s existing persistence path until cutover.
+- [x] Add platform-authorized management endpoints and preserve the public read endpoint/contract used by the rest of the app.
+- [x] Port only the existing global session/security settings that have defined product behavior; run them through authenticated_platform_transaction and audit mutations.
+- [x] Do not claim MFA or global password-policy enforcement until the authentication flow actually enforces it. Design those controls separately, with step-up authentication before destructive operations.
+- [x] Add regression coverage for role targeting, anonymous delivery, schedule boundaries, revision conflicts, settings validation, audit allowlists, and SQLite UI route compatibility. PostgreSQL integration tests could not be executed in this workspace because pytest and TEST_DATABASE_URL are unavailable; existing SQLite and UI suites remain the executable compatibility checks.
 
-**Acceptance:** SaaS platform admins can manage global notices and supported security settings, while tenant announcements and company timezone settings remain separate.
+**Acceptance:** SaaS platform admins can manage global notices and supported security settings, while tenant announcements and company timezone settings remain separate. The migration importer continues to leave pre-existing company announcements tenant-scoped; it does not automatically promote them to platform-wide notices.
 
 ---
 

@@ -37,7 +37,7 @@ test('settings cannot save before a successful load or during refresh',async()=>
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
 test('mobile navigation reaches every existing panel and loads its data',()=>{const a=app();for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,14);assert.match(html,/aria-current/);});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,16);assert.match(html,/aria-current/);});
 test('SaaS platform boot loads only platform data',async()=>{
  const a=app(),calls=[];
  a.getCsrf=async()=>calls.push('csrf');
@@ -75,9 +75,42 @@ test('platform admin revocation requires confirmation and hides self-removal act
  await a.submitDialog();assert.deepEqual(calls,[['/platform/admins/3','DELETE'],'admins']);
  assert.match(html,/requestPlatformAdminRevoke\(admin\)/);assert.match(html,/Cannot revoke your own access/);
 });
+test('SaaS settings load and save use platform routes while SQLite keeps legacy routes',async()=>{
+ const a=app(),paths=[];a.me={saas_mode:true};
+ a.api=async(path,options={})=>{paths.push([path,options.method||'GET']);return path.endsWith('/security-config')?{}:{success:true};};
+ await a.loadConfig();a.panelLoads.config.loaded=true;a.cfgVals.max_login_attempts='8';await a.saveConfig('max_login_attempts');
+ assert.deepEqual(paths,[['/platform/security-config','GET'],['/platform/security-config/max_login_attempts','PUT'],['/platform/security-config','GET']]);
+ paths.length=0;a.me={saas_mode:false};a.api=async(path,options={})=>{paths.push([path,options.method||'GET']);return {};};
+ await a.loadConfig();assert.deepEqual(paths,[['/superadmin/security-config','GET']]);
+ assert.match(html,/MFA and global password policy are not managed here/);
+});
+test('SaaS announcement management uses platform routes and accepts fixed UTC timezone revision',async()=>{
+ const a=app(),paths=[];a.me={saas_mode:true};
+ const manage={announcement:null,status:'none',business_timezone:'UTC',timezone_revision:0};
+ a.api=async(path,options={})=>{paths.push([path,options.method||'GET',options.body&&JSON.parse(options.body)]);return path.endsWith('/manage')?manage:{success:true,revision:'new'};};
+ await a.loadAnnouncement();assert.equal(a.announcementReady,true);assert.equal(a.announcementTimezone,'UTC');assert.equal(a.announcementTimezoneRevision,0);
+ a.annForm={message:'Maintenance window',level:'warning',audience:'everyone',roles:[],starts_local:'',expires_local:'',dismissible:false};
+ await a.saveAnnouncement();
+ assert.equal(paths[0][0],'/platform/announcement/manage');
+ assert.equal(paths[1][0],'/platform/announcement');assert.equal(paths[1][1],'POST');assert.equal(paths[1][2].timezone_revision,0);
+ assert.equal(paths[2][0],'/platform/announcement/manage');
+});
+test('SaaS announcement removal uses platform route and SQLite removal remains compatible',async()=>{
+ const a=app(),paths=[];a.me={saas_mode:true};a.announcementReady=true;a.savedAnnouncement={revision:'current'};
+ a.api=async(path,options={})=>{paths.push([path,options.method]);return {success:true};};await a.clearAnnouncement();
+ assert.deepEqual(paths,[['/platform/announcement?expected_revision=current','DELETE']]);
+ paths.length=0;a.me={saas_mode:false};a.announcementReady=true;a.savedAnnouncement={revision:'legacy'};a.api=async(path,options={})=>{paths.push([path,options.method]);return {success:true};};await a.clearAnnouncement();
+ assert.deepEqual(paths,[['/superadmin/announcement?expected_revision=legacy','DELETE']]);
+});
 test('SaaS platform admin section does not expose tenant identity search',()=>{
  const section=html.split('x-show="tab===\'platformAdmins\' && me?.saas_mode"')[1].split('x-show="tab===\'platformAudit\'')[0];
  assert.match(section,/Grant platform admin/);assert.match(section,/type="email"/);assert.match(section,/platformAdmins/);assert.doesNotMatch(section,/filteredUsers|allUsers|userFilters/);
+});
+test('SaaS navigation exposes only supported platform settings and announcement controls',()=>{
+ const platform=html.split('x-show="me?.saas_mode && me?.is_platform_admin"')[1].split('</nav>')[0];
+ assert.match(platform,/Security Settings/);assert.match(platform,/System Announcement/);
+ assert.match(html,/\['dashboard','config','announcement','organizations','platformAdmins','platformAudit'\]/);
+ assert.match(html,/Scheduled announcements use UTC/);
 });
 test('platform audit filters are encoded, paginated, and recoverable after failure',async()=>{
  const a=app();a.platformAuditFilters={actor_user_id:'7',organization_id:'org / id',action:'organization_created',result:'success',start_at:'2026-10-01T00:00:00Z',end_at:''};
