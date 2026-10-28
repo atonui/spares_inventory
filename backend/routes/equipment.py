@@ -614,7 +614,8 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
     ):
         """Get calibration reminder days setting"""
         conn = get_db_connection()
-        register_instant_comparison(conn)
+        if not is_postgres(conn):
+            register_instant_comparison(conn)
         cursor = conn.cursor()
 
         cursor.execute("""
