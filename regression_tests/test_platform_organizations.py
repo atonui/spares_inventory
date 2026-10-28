@@ -53,6 +53,9 @@ def platform_api(postgres_schema):
     admin.execute(sql.SQL(
         "GRANT SELECT ON users, sessions, platform_admins TO {}"
     ).format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL(
+        "GRANT INSERT, DELETE ON platform_admins TO {}"
+    ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_memberships TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT, UPDATE ON organizations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT ON organization_settings, organization_invitations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
@@ -205,6 +208,16 @@ def test_platform_organization_directory_rejects_invalid_filters_before_connecti
     assert error.value.status_code == 422
 
 
+def test_platform_admin_grant_request_trims_and_validates_exact_email():
+    from pydantic import ValidationError
+    from backend.schemas.platform_organizations import PlatformAdminGrantRequest
+
+    request = PlatformAdminGrantRequest(email="  Ops.Team+Platform@example.test  ")
+    assert request.email == "Ops.Team+Platform@example.test"
+    with pytest.raises(ValidationError):
+        PlatformAdminGrantRequest(email="not-an-email")
+
+
 def test_platform_suspend_reactivate_audits_reason_and_is_idempotent(platform_api):
     from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
 
@@ -278,6 +291,180 @@ def test_platform_status_requires_platform_admin(platform_api):
             request=request, actor=user_id, csrf_valid=True,
         ))
     assert error.value.status_code == 403
+
+
+def test_platform_admin_list_does_not_expose_non_admin_identities(platform_api):
+    api = platform_api
+    tenant_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Private tenant identity','hash') RETURNING id",
+        (f"private-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    api.admin.commit()
+    list_admins = api.endpoint("GET", "/api/platform/admins")
+    rows = asyncio.run(list_admins(request=api.request, actor=api.principal))
+    assert rows == [{
+        "id": api.principal.user_id,
+        "email": "platform@example.test",
+        "name": "Platform",
+    }]
+    assert tenant_id not in {row["id"] for row in rows}
+
+
+def test_platform_admin_grant_matches_exact_active_email_and_is_idempotent(platform_api):
+    from backend.schemas.platform_organizations import PlatformAdminGrantRequest
+
+    api = platform_api
+    target_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Platform candidate','hash') RETURNING id",
+        (f"candidate+platform-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    decoy_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Similar address','hash') RETURNING id",
+        (f"candidate@example.test",),
+    ).fetchone()["id"]
+    target_email = api.admin.execute(
+        "SELECT email FROM users WHERE id = %s", (target_id,)
+    ).fetchone()["email"]
+    api.admin.commit()
+
+    grant = api.endpoint("POST", "/api/platform/admins")
+    body = PlatformAdminGrantRequest(email=f"  {target_email.upper()}  ")
+    first = asyncio.run(grant(body=body, request=api.request, actor=api.principal, csrf_valid=True))
+    assert first == {"success": True, "created": True}
+    second = asyncio.run(grant(body=body, request=api.request, actor=api.principal, csrf_valid=True))
+    assert second == {"success": True, "created": False}
+    assert api.admin.execute(
+        "SELECT count(*) AS total FROM platform_admins WHERE user_id = %s", (target_id,)
+    ).fetchone()["total"] == 1
+    assert api.admin.execute(
+        "SELECT count(*) AS total FROM platform_admins WHERE user_id = %s", (decoy_id,)
+    ).fetchone()["total"] == 0
+    assert api.admin.execute(
+        "SELECT count(*) AS total FROM platform_audit_events WHERE action = 'platform_admin_granted'"
+    ).fetchone()["total"] == 1
+
+
+@pytest.mark.parametrize("archived", [False, True])
+def test_platform_admin_grant_rejects_unknown_or_archived_email(platform_api, archived):
+    from backend.schemas.platform_organizations import PlatformAdminGrantRequest
+
+    api = platform_api
+    email = f"archived-{uuid4().hex}@example.test" if archived else f"missing-{uuid4().hex}@example.test"
+    if archived:
+        api.admin.execute(
+            "INSERT INTO users(email,name,password_hash,archived_at) VALUES (%s,'Archived','hash',%s)",
+            (email, "2026-10-27T00:00:00Z"),
+        )
+        api.admin.commit()
+    grant = api.endpoint("POST", "/api/platform/admins")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(grant(
+            body=PlatformAdminGrantRequest(email=email), request=api.request,
+            actor=api.principal, csrf_valid=True,
+        ))
+    assert error.value.status_code == 404
+
+
+def test_platform_admin_cannot_remove_own_access_even_when_another_admin_exists(platform_api):
+    api = platform_api
+    other_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Other admin','hash') RETURNING id",
+        (f"other-admin-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    api.admin.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (other_id,))
+    api.admin.commit()
+
+    revoke = api.endpoint("DELETE", "/api/platform/admins/{target_user_id}")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(revoke(
+            target_user_id=api.principal.user_id, request=api.request,
+            actor=api.principal, csrf_valid=True,
+        ))
+    assert error.value.status_code == 409
+    assert api.admin.execute(
+        "SELECT count(*) AS total FROM platform_admins"
+    ).fetchone()["total"] == 2
+
+
+def test_last_platform_admin_cannot_be_removed(platform_api):
+    api = platform_api
+    revoke = api.endpoint("DELETE", "/api/platform/admins/{target_user_id}")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(revoke(
+            target_user_id=api.principal.user_id, request=api.request,
+            actor=api.principal, csrf_valid=True,
+        ))
+    assert error.value.status_code == 409
+    assert api.admin.execute("SELECT count(*) AS total FROM platform_admins").fetchone()["total"] == 1
+
+
+def test_platform_admin_grant_requires_platform_authority(platform_api):
+    from backend.schemas.platform_organizations import PlatformAdminGrantRequest
+    from backend.services.session_credentials import hash_session_credential
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    tenant_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Tenant identity','hash') RETURNING id",
+        (f"tenant-grant-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    token = "tenant-grant-token-" + uuid4().hex
+    api.admin.execute(
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (tenant_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
+    )
+    api.admin.commit()
+    grant = api.endpoint("POST", "/api/platform/admins")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(grant(
+            body=PlatformAdminGrantRequest(email="target@example.test"),
+            request=SimpleNamespace(cookies={"session_token": token}),
+            actor=tenant_id, csrf_valid=True,
+        ))
+    assert error.value.status_code == 403
+
+
+def test_concurrent_platform_admin_revokes_cannot_remove_last_admin(platform_api):
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.services.session_credentials import hash_session_credential
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    second_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Second admin','hash') RETURNING id",
+        (f"second-admin-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    api.admin.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (second_id,))
+    second_token = "second-admin-token-" + uuid4().hex
+    api.admin.execute(
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (second_id, hash_session_credential(second_token), serialize_instant(utc_now() + timedelta(hours=1))),
+    )
+    api.admin.commit()
+    revoke = api.endpoint("DELETE", "/api/platform/admins/{target_user_id}")
+
+    def attempt(target_id, request, actor):
+        try:
+            return asyncio.run(revoke(
+                target_user_id=target_id, request=request, actor=actor, csrf_valid=True,
+            ))
+        except HTTPException as error:
+            return error.status_code
+
+    second_request = SimpleNamespace(cookies={"session_token": second_token})
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda args: attempt(*args), [
+            (second_id, api.request, api.principal),
+            (api.principal.user_id, second_request, second_id),
+        ]))
+    assert sum(result == {"success": True} for result in results) == 1
+    assert 409 in results
+    assert api.admin.execute(
+        "SELECT count(*) AS total FROM platform_admins pa JOIN users u ON u.id=pa.user_id WHERE u.archived_at IS NULL"
+    ).fetchone()["total"] == 1
+    assert api.admin.execute(
+        "SELECT count(*) AS total FROM platform_audit_events WHERE action = 'platform_admin_revoked'"
+    ).fetchone()["total"] == 1
 
 
 def test_platform_web_role_cannot_read_mail_outbox_rows(platform_api):

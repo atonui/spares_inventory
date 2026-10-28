@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class PlatformOrganizationStatusRequest(BaseModel):
@@ -33,3 +33,12 @@ class PlatformCompanyRoleUpdateRequest(BaseModel):
         if not cleaned:
             raise ValueError("A reason is required")
         return cleaned
+
+
+class PlatformAdminGrantRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def trim_email(cls, value):
+        return value.strip() if isinstance(value, str) else value

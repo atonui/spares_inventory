@@ -37,7 +37,7 @@ test('settings cannot save before a successful load or during refresh',async()=>
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
 test('mobile navigation reaches every existing panel and loads its data',()=>{const a=app();for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,13);assert.match(html,/aria-current/);});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,14);assert.match(html,/aria-current/);});
 test('SaaS platform boot loads only platform data',async()=>{
  const a=app(),calls=[];
  a.getCsrf=async()=>calls.push('csrf');
@@ -45,10 +45,39 @@ test('SaaS platform boot loads only platform data',async()=>{
  a.loadPlatformDashboard=async()=>calls.push('platform-dashboard');
  a.loadOrganizations=async()=>calls.push('organizations');
  a.loadPlatformAudit=async()=>calls.push('platform-audit');
+ a.loadPlatformAdmins=async()=>calls.push('platform-admins');
  a.loadTimezoneContext=async()=>assert.fail('legacy tenant timezone must not load');
  a.loadDashboard=async()=>assert.fail('legacy dashboard must not load');
  await a.init();
- assert.deepEqual(calls,['csrf','me','platform-dashboard','organizations','platform-audit']);
+ assert.deepEqual(calls,['csrf','me','platform-dashboard','organizations','platform-audit','platform-admins']);
+});
+test('platform administrator list distinguishes loading, failure and successful retry',async()=>{
+ const a=app();let release,calls=0;a.api=()=>{calls++;return new Promise(r=>release=r);};
+ const pending=a.loadPlatformAdmins();assert.equal(a.platformAdminLoading,true);await a.loadPlatformAdmins();assert.equal(calls,1);
+ release([{id:1,email:'platform@example.test',name:'Platform'}]);await pending;
+ assert.equal(a.platformAdmins.length,1);assert.equal(a.platformAdminLoading,false);assert.equal(a.platformAdminError,'');
+ a.api=async()=>{throw Error('offline');};await a.loadPlatformAdmins();assert.equal(a.platformAdminError,'offline');
+ a.api=async()=>[{id:1,email:'platform@example.test',name:'Platform'}];await a.loadPlatformAdmins();assert.equal(a.platformAdminError,'');
+});
+test('grant platform admin requires confirmation and posts an exact email',async()=>{
+ const a=app();a.me={id:2};a.toast=()=>{};a.platformAdminEmail='  Ops.Team@example.test  ';const calls=[];
+ a.api=async(path,options)=>{calls.push([path,options.method,JSON.parse(options.body)]);return {success:true,created:true};};
+ a.loadPlatformAdmins=async()=>calls.push('admins');
+ a.requestPlatformAdminGrant();assert.equal(calls.length,0);assert.match(a.dlg.msg,/Ops.Team@example.test/);
+ await a.submitDialog();
+ assert.deepEqual(calls,[['/platform/admins','POST',{email:'Ops.Team@example.test'}],'admins']);
+ assert.equal(a.platformAdminEmail,'');
+});
+test('platform admin revocation requires confirmation and hides self-removal action',async()=>{
+ const a=app();a.me={id:2};a.toast=()=>{};const calls=[];a.api=async(path,options)=>{calls.push([path,options.method]);return {success:true};};a.loadPlatformAdmins=async()=>calls.push('admins');
+ a.requestPlatformAdminRevoke({id:2,name:'Me',email:'me@example.test'});assert.equal(a.dlg.open,false);
+ a.requestPlatformAdminRevoke({id:3,name:'Other',email:'other@example.test'});assert.equal(calls.length,0);assert.match(a.dlg.title,/Other/);
+ await a.submitDialog();assert.deepEqual(calls,[['/platform/admins/3','DELETE'],'admins']);
+ assert.match(html,/requestPlatformAdminRevoke\(admin\)/);assert.match(html,/Cannot revoke your own access/);
+});
+test('SaaS platform admin section does not expose tenant identity search',()=>{
+ const section=html.split('x-show="tab===\'platformAdmins\' && me?.saas_mode"')[1].split('x-show="tab===\'platformAudit\'')[0];
+ assert.match(section,/Grant platform admin/);assert.match(section,/type="email"/);assert.match(section,/platformAdmins/);assert.doesNotMatch(section,/filteredUsers|allUsers|userFilters/);
 });
 test('platform audit filters are encoded, paginated, and recoverable after failure',async()=>{
  const a=app();a.platformAuditFilters={actor_user_id:'7',organization_id:'org / id',action:'organization_created',result:'success',start_at:'2026-10-01T00:00:00Z',end_at:''};

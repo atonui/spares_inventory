@@ -320,6 +320,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('POST', '/api/invitations/accept'),
         ('POST', '/api/platform/organizations'),
         ('PUT', '/api/platform/organizations/{organization_id}/members/{user_id}/role'),
+        ('POST', '/api/platform/admins'),
         ('PUT', '/api/platform/admins/{target_user_id}'),
         ('DELETE', '/api/platform/admins/{target_user_id}'),
     })
