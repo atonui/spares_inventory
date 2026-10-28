@@ -562,7 +562,8 @@ async submitPasswordReset() {
     // ── Security config ────────────────────────────────────────
     async loadConfig() {
       return this.loadPanel('config', async () => {
-        this.secConfig = await this.api('/superadmin/security-config');
+        const path = this.me?.saas_mode ? '/platform/security-config' : '/superadmin/security-config';
+        this.secConfig = await this.api(path);
         for (const k of Object.keys(this.cfgMeta))
           this.cfgVals[k] = this.secConfig[k]?.setting_value ?? '';
       });
@@ -573,7 +574,8 @@ async submitPasswordReset() {
       const val = this.cfgVals[key];
       if (!val) { this.toast('Please enter a value', 'warn'); return; }
       return this.runAction('config:' + key, async () => {
-        await this.api(`/superadmin/security-config/${key}`, {
+        const path = this.me?.saas_mode ? `/platform/security-config/${key}` : `/superadmin/security-config/${key}`;
+        await this.api(path, {
           method: 'PUT', body: JSON.stringify({ value: String(val) }),
         });
         this.toast(`${key} updated to ${val}`, 'ok');
@@ -703,8 +705,10 @@ async submitPasswordReset() {
       if (this.announcementLoading || (this.actionPending.announcement && !afterWrite)) return;
       this.announcementLoading = true; this.announcementError = ''; this.announcementReady=false;
       try {
-        const r = await this.api('/superadmin/announcement/manage');
-        if (!InventoryTime.isValidZone(r.business_timezone) || !Number.isInteger(r.timezone_revision) || r.timezone_revision<1) throw Error('Announcement timezone metadata unavailable');
+        const path = this.me?.saas_mode ? '/platform/announcement/manage' : '/superadmin/announcement/manage';
+        const r = await this.api(path);
+        const minRevision = this.me?.saas_mode ? 0 : 1;
+        if (!InventoryTime.isValidZone(r.business_timezone) || !Number.isInteger(r.timezone_revision) || r.timezone_revision<minRevision) throw Error('Announcement timezone metadata unavailable');
         this.announcementTimezone=r.business_timezone;this.announcementTimezoneRevision=r.timezone_revision;
         this.savedAnnouncement=r.announcement;this.announcement=r.announcement;
         this.announcementStatus=r.status;this.annForm=this.announcementFormFor(r.announcement);
@@ -720,7 +724,8 @@ async submitPasswordReset() {
         if (!this.announcementPublishNow && !this.annForm.starts_local) throw Error('Select a start time');
         if (this.announcementHasExpiry && !this.annForm.expires_local) throw Error('Select an expiry time');
         try {
-          await this.api('/superadmin/announcement', {method:'POST',body:JSON.stringify({...this.annForm,
+          const path = this.me?.saas_mode ? '/platform/announcement' : '/superadmin/announcement';
+          await this.api(path, {method:'POST',body:JSON.stringify({...this.annForm,
             starts_local:this.announcementPublishNow?null:this.annForm.starts_local,
             expires_local:this.announcementHasExpiry?this.annForm.expires_local:null,
             timezone_revision:this.announcementTimezoneRevision,expected_revision:this.savedAnnouncement?.revision || null})});
@@ -733,7 +738,8 @@ async submitPasswordReset() {
       if (this.announcementLoading || !this.announcementReady || this.announcementConflict) return;
       return this.runAction('announcement', async () => {
         const query=this.savedAnnouncement?.revision?'?expected_revision='+encodeURIComponent(this.savedAnnouncement.revision):'';
-        try {await this.api('/superadmin/announcement'+query,{method:'DELETE'});}
+        const path = this.me?.saas_mode ? '/platform/announcement' : '/superadmin/announcement';
+        try {await this.api(path+query,{method:'DELETE'});}
         catch(error) {if(error.status===409)this.announcementConflict=true;throw error;}
         this.announcement=null;this.savedAnnouncement=null;this.announcementStatus='none';this.announcementError='';
         this.annForm=this.announcementFormFor(null);this.announcementPublishNow=true;this.announcementHasExpiry=false;

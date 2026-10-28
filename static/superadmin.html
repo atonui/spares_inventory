@@ -13,7 +13,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261018-back-to-top" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261014-announcement-controls" defer></script>
+<script src="js/pages/superadmin.js?v=20261028-platform-settings-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -128,6 +128,12 @@
         <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'; loadPlatformDashboard()" :aria-current="tab==='dashboard' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg></span> Overview
         </button>
+        <button type="button" class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()" :aria-current="tab==='config' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#secconfig"></use></svg></span> Security Settings
+        </button>
+        <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg></span> System Announcement
+        </button>
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg></span> Organizations
         </button>
@@ -162,18 +168,18 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" x-model="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','organizations','platformAdmins','platformAudit'].includes(key)" x-text="title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','config','announcement','organizations','platformAdmins','platformAudit'].includes(key)" x-text="title"></option></template>
         </select>
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
-        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading)" class="spin"></span>
-        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading)" class="spin"></span>
+        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
         <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
       </div>
     </div>
 
-    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading)">
+    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading)">
 
       <!-- ══════════ DASHBOARD ══════════ -->
       <div x-show="tab==='dashboard' && !me?.saas_mode">
@@ -510,6 +516,7 @@
             <span style="font-size:0.75rem;color:var(--brand-slate);">Changes apply to new logins immediately</span>
           </div>
           <div class="panel-body">
+            <p x-show="me?.saas_mode">Controls include login lockout and session lifetimes. MFA and global password policy are not managed here.</p>
             <template x-for="[key, meta] in Object.entries(cfgMeta)">
               <div class="cfg-row">
                 <div>
@@ -838,7 +845,8 @@
                 <label><input type="checkbox" value="admin" x-model="annForm.roles"> Admin</label>
                 <label><input type="checkbox" value="superadmin" x-model="annForm.roles"> Superadmin</label>
               </div>
-              <p>Uses organisation time.</p>
+              <p x-show="!me?.saas_mode">Uses organisation time.</p>
+              <p x-show="me?.saas_mode">Scheduled announcements use UTC.</p>
               <label><input type="checkbox" x-model="announcementPublishNow"> Publish immediately</label>
               <div x-show="!announcementPublishNow"><label for="announcement-start">Start time</label><input id="announcement-start" type="datetime-local" step="1" x-model="annForm.starts_local"></div>
               <label><input type="checkbox" x-model="announcementHasExpiry"> Set an expiry</label>

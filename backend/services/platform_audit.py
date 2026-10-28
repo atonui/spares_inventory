@@ -8,6 +8,9 @@ _DETAIL_FIELDS = {
     "company_role_changed": {"target_user_id", "role", "reason"},
     "platform_admin_granted": {"target_user_id"},
     "platform_admin_revoked": {"target_user_id"},
+    "platform_announcement_saved": {"revision", "audience"},
+    "platform_announcement_removed": {"revision"},
+    "global_security_setting_changed": {"key", "value"},
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},
 }
@@ -47,4 +50,23 @@ def safe_platform_audit_details(action: str, details) -> dict:
             safe[key] = value
         elif key == "reason" and isinstance(value, str) and 10 <= len(value) <= 500:
             safe[key] = value
+        elif key == "revision" and isinstance(value, str) and 1 <= len(value) <= 100:
+            safe[key] = value
+        elif key == "audience" and isinstance(value, str) and value in {"everyone", "authenticated", "roles"}:
+            safe[key] = value
+        elif key == "key" and isinstance(value, str) and value in {
+            "max_login_attempts", "lockout_duration_minutes",
+            "session_duration_hours", "remember_me_duration_days",
+        }:
+            safe[key] = value
+        elif key == "value" and isinstance(value, int) and not isinstance(value, bool):
+            limits = {
+                "max_login_attempts": 100,
+                "lockout_duration_minutes": 1440,
+                "session_duration_hours": 720,
+                "remember_me_duration_days": 365,
+            }
+            setting_key = details.get("key")
+            if setting_key in limits and 1 <= value <= limits[setting_key]:
+                safe[key] = value
     return safe

@@ -640,29 +640,11 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
     ):
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             require_superadmin(user_id, conn)
-            message = body.message.strip()
-            if not message or len(message) > 2000:
-                raise HTTPException(400, "Message must contain 1 to 2000 characters")
-            if body.level not in {"info", "warning", "danger"}:
-                raise HTTPException(400, "Level must be info, warning or danger")
-            if body.audience not in {'everyone','authenticated','roles'} or any(role not in notices.ROLES for role in body.roles) or (body.audience=='roles' and not body.roles):
-                raise HTTPException(400, 'Select a valid audience and at least one valid role for role targeting')
             context = resolve_business_context(conn, actor_id=user_id)
             if body.timezone_revision != context.revision:
                 raise HTTPException(409, 'Organisation timezone changed. Reload before saving.')
-            start = notices.resolve_local_instant(body.starts_local, zone=context.timezone)
-            end = notices.resolve_local_instant(body.expires_local, zone=context.timezone)
-            now = notices.utc_now()
-            if end is not None and end <= (start or now):
-                raise HTTPException(400, 'Expiry must follow the effective start and be in the future')
-            if end is not None and end <= now:
-                raise HTTPException(400, 'Expiry must be in the future')
-            saved = notices.save_notice(conn, {
-                'message':message,'level':body.level,'audience':body.audience,
-                'roles':sorted(set(body.roles)) if body.audience=='roles' else [],
-                'starts_at':serialize_instant(start) if start else None,
-                'expires_at':serialize_instant(end) if end else None,'dismissible':body.dismissible,
-            }, actor_id=user_id, expected_revision=body.expected_revision)
+            notice = notices.notice_from_request(body, timezone=context.timezone)
+            saved = notices.save_notice(conn, notice, actor_id=user_id, expected_revision=body.expected_revision)
             log_activity(user_id, 'superadmin', 'save_announcement', details={'revision':saved['revision'],'audience':saved['audience']}, conn=conn)
             return {'success':True,'revision':saved['revision']}
 
