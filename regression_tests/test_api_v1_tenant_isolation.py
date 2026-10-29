@@ -83,7 +83,7 @@ def v1_postgres_api(postgres_schema, monkeypatch):
         )
     )
     connection.execute(
-        sql.SQL("GRANT SELECT ON users, sessions, organization_memberships, platform_admins, inventory, parts, stores, work_orders TO {}").format(
+        sql.SQL("GRANT SELECT ON users, sessions, organization_memberships, organizations, platform_admins, inventory, parts, stores, work_orders TO {}").format(
             sql.Identifier(runtime_role)
         )
     )
