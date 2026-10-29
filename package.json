@@ -1,0 +1,16 @@
+{
+  "name": "spares-tracker-assets",
+  "version": "1.0.0",
+  "scripts": {
+    "build:css": "node scripts/build-css.cjs",
+    "check:css": "node scripts/build-css.cjs --check"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "clean-css": "5.3.3"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  }
+}
