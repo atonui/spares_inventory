@@ -279,8 +279,12 @@ def seed_support_operations(api):
             owner.execute("UPDATE equipment SET equipment_name='OTHER TENANT' WHERE id=%s",(equipment,))
         # Cross-tenant staff references must never produce an unrelated identity.
         owner.execute('UPDATE equipment SET assigned_user_id=%s WHERE id=%s',(actor,equipment))
-        for _ in range(30):
-            owner.execute('INSERT INTO inventory(store_id,part_id,quantity,work_order_id,organization_id) VALUES (%s,%s,3,%s,%s)',(store,part,work,org))
+        for row_number in range(30):
+            allocated_work = owner.execute(
+                "INSERT INTO work_orders(work_order_number,organization_id) VALUES (%s,%s) RETURNING id",
+                (f'SUPPORT-{index}-{row_number}', org),
+            ).fetchone()['id']
+            owner.execute('INSERT INTO inventory(store_id,part_id,quantity,work_order_id,organization_id) VALUES (%s,%s,3,%s,%s)',(store,part,allocated_work,org))
             owner.execute("INSERT INTO equipment_history(equipment_id,action,created_by,notes,organization_id) VALUES (%s,'calibrated',%s,'SECRET NOTES',%s)",(equipment,actor,org))
             if index:
                 owner.execute("UPDATE equipment_history SET action='OTHER TENANT' WHERE equipment_id=%s",(equipment,))
