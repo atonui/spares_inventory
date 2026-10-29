@@ -2,6 +2,7 @@
 
 import json
 from uuid import UUID
+from uuid import uuid4
 
 
 _DETAIL_FIELDS = {
@@ -9,6 +10,7 @@ _DETAIL_FIELDS = {
     "support_data_read": {"support_session_id", "resource", "operation", "request_id"},
     "support_access_denied": {"support_session_id", "resource", "operation", "request_id"},
     "support_session_ended": {"support_session_id", "operation", "request_id", "end_reason", "target_user_id"},
+    "user_logout": {"operation", "request_id"},
     "organization_created": {"invitation_created"},
     "company_role_changed": {"target_user_id", "role", "reason"},
     "platform_admin_granted": {"target_user_id"},
@@ -38,6 +40,17 @@ def record_platform_audit_event(
     )
 
 
+def record_user_logout(conn, actor_user_id: int) -> None:
+    """Record an account-level logout without inventing tenant activity context."""
+    record_platform_audit_event(
+        conn,
+        actor_user_id,
+        "user_logout",
+        "success",
+        details={"operation": "logout", "request_id": str(uuid4())},
+    )
+
+
 def safe_platform_audit_details(action: str, details) -> dict:
     """Strip unknown keys from historical rows before returning them."""
     allowed = _DETAIL_FIELDS.get(action, set())
@@ -54,7 +67,7 @@ def safe_platform_audit_details(action: str, details) -> dict:
                 pass
         elif key == "resource" and isinstance(value, str) and value in {"session", "accounts", "inventory", "work-orders", "equipment", "equipment-history", "movements"}:
             safe[key] = value
-        elif key == "operation" and isinstance(value, str) and value in {"start", "lookup", "end"}:
+        elif key == "operation" and isinstance(value, str) and value in {"start", "lookup", "end", "logout"}:
             safe[key] = value
         elif key == "end_reason" and isinstance(value, str) and value in {
             "user_logout", "password_changed", "sessions_revoked", "platform_admin_revoked", "expired",
