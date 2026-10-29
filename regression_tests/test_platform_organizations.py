@@ -54,10 +54,10 @@ def platform_api(postgres_schema):
         "GRANT SELECT, UPDATE ON users TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
-        "GRANT SELECT ON sessions, platform_admins TO {}"
+        "GRANT SELECT ON sessions TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
-        "GRANT INSERT, DELETE ON platform_admins TO {}"
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON platform_admins TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_memberships TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT, UPDATE ON organizations TO {}").format(sql.Identifier(runtime_role)))
