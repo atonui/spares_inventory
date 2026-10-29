@@ -13,7 +13,7 @@ test('inventory summary and Add Stock are separated from filter and export contr
     assert.match(controls, /class="inventory-filter-row-actions" role="group" aria-label="Inventory filters and exports"/);
     assert.match(controls, /class="btn inventory-filter-action"[^>]*:aria-expanded="showInventoryFilters" aria-controls="inventory-filter-panel"/);
     assert.match(controls, /<svg class="inventory-action-icon"[\s\S]*?<\/svg>\s*Filters/);
-    assert.match(controls, /class="btn inventory-export-action"[^>]*:aria-expanded="showExportMenu" aria-haspopup="true"[\s\S]*?<\/svg>\s*Export/);
+    assert.match(controls, /class="btn inventory-export-action"[^>]*:aria-expanded="showExportMenu" aria-controls="inventory-export-options"[\s\S]*?<\/svg>\s*Export/);
     assert.doesNotMatch(controls, /Export CSV|inventory-export-chevron|⌄/);
     assert.match(controls, /class="inventory-export-menu__items"/);
     assert.match(controls, /exportInventoryCSV\(\)/);

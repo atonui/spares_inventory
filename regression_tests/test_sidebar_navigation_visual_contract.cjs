@@ -9,7 +9,7 @@ const buttonCss = fs.readFileSync('static/buttons.css', 'utf8');
 
 test('authenticated app uses a labeled sidebar and a separate content column', () => {
   assert.match(html, /class="workspace-layout"/);
-  assert.match(html, /@keydown\.escape\.window="[^"]*mobileNavigationOpen[^"]*">\s*<aside/);
+  assert.match(html, /@keydown\.escape\.window="[^"]*mobileNavigationOpen[^"]*">\s*<a class="skip-link"[^>]*>Skip to main content<\/a>\s*<aside/);
   assert.match(html, /<aside[^>]*class="workspace-sidebar"/);
   assert.match(html, /class="container workspace-main"/);
   assert.match(html, /class="sidebar-brand"[^>]*>[^<]*<img[^>]*><span[^>]*>Spares Tracker<\/span>/s);

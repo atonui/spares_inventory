@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="mystyle.css?v=20261029-calibration-mobile">
+    <link rel="stylesheet" href="mystyle.css?v=20261029-keyboard-controls">
     <link rel="stylesheet" href="login.css?v=20261023-approved-brand-v1">
     <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
     <style>[x-cloak] { display: none !important; }</style>
@@ -115,6 +115,7 @@
              x-data="{ mobileNavigationOpen: false, trapNavigationFocus(event, drawer) { const focusable = [...drawer.querySelectorAll('a[href], button:not([disabled])')].filter((element) => element.getClientRects().length); if (!focusable.length) return; const first = focusable[0]; const last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } } }"
              @click.outside="if (mobileNavigationOpen) mobileNavigationOpen = false"
              @keydown.escape.window="if (mobileNavigationOpen) { mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus()) }">
+            <a class="skip-link" href="#workspace-content">Skip to main content</a>
             <aside class="workspace-sidebar" :class="mobileNavigationOpen ? 'is-open' : ''" @keydown.tab="if (mobileNavigationOpen) trapNavigationFocus($event, $el)"
                    :inert="window.matchMedia('(max-width: 1024px)').matches && !mobileNavigationOpen"
                    :role="mobileNavigationOpen ? 'dialog' : null"
@@ -149,7 +150,7 @@
                 </section>
             </aside>
             <div class="sidebar-backdrop" x-show="mobileNavigationOpen" x-cloak @click="mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus())" aria-hidden="true"></div>
-            <main class="container workspace-main" :inert="window.matchMedia('(max-width: 1024px)').matches && mobileNavigationOpen">
+            <main id="workspace-content" tabindex="-1" class="container workspace-main" :inert="window.matchMedia('(max-width: 1024px)').matches && mobileNavigationOpen">
             <!-- Header -->
             <div class="header">
                 <div class="user-info">
@@ -207,21 +208,25 @@
                             <svg class="inventory-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="17" r="2"/></svg>
                             Filters
                         </button>
-                        <div class="inventory-export-menu" x-data="{ showExportMenu: false }">
-                            <button type="button" class="btn inventory-export-action" @click="showExportMenu = !showExportMenu" :aria-expanded="showExportMenu" aria-haspopup="true">
+                        <div class="inventory-export-menu" x-data="{ showExportMenu: false }"
+                             @focusout="if (!$el.contains($event.relatedTarget)) showExportMenu = false"
+                             @keydown.escape.stop="if (showExportMenu) { showExportMenu = false; $refs.inventoryExportTrigger.focus() }">
+                            <button x-ref="inventoryExportTrigger" type="button" class="btn inventory-export-action" @click="showExportMenu = !showExportMenu" :aria-expanded="showExportMenu" aria-controls="inventory-export-options">
                                 <svg class="inventory-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v11m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>
                                 Export
                             </button>
-                                <div class="inventory-export-menu__items" x-show="showExportMenu" @click.outside="showExportMenu = false">
-                                    <button class="inventory-export-menu__item" @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Current View</button>
-                                    <button class="inventory-export-menu__item" @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Parts Catalog</button>
-                                    <button class="inventory-export-menu__item" @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Stores</button>
-                                    <button class="inventory-export-menu__item" @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Movement History</button>
-                                    <button class="inventory-export-menu__item" @click="exportUsersCSV(); showExportMenu = false">Users</button>
-                                    <button class="inventory-export-menu__item" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
-                                    <button class="inventory-export-menu__item" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
-                                    <button class="inventory-export-menu__item" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
-                                    <button class="inventory-export-menu__item" @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg> Comprehensive Report</button>
+                                <div class="inventory-export-menu__items" id="inventory-export-options" role="group" aria-label="Export options"
+                                     x-show="showExportMenu" x-cloak @click.outside="showExportMenu = false"
+                                     @click="if ($event.target.closest('button')) $refs.inventoryExportTrigger.focus()">
+                                    <button type="button" class="inventory-export-menu__item" @click="exportInventoryCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Current View</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportAllPartsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Parts Catalog</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportStoresCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> All Stores</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportMovementsCSV(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Movement History</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportUsersCSV(); showExportMenu = false">Users</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportLowStockCSV(); showExportMenu = false">Low stock</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportMyPartsCSV(); showExportMenu = false">My parts</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportStoreTypesCSV(); showExportMenu = false">Store types</button>
+                                    <button type="button" class="inventory-export-menu__item" @click="exportComprehensiveReport(); showExportMenu = false"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg> Comprehensive Report</button>
                                 </div>
                         </div>
                     </div>
@@ -364,7 +369,7 @@
                         <button class="btn btn-sm" @click="downloadPartTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Download Template</button>
                         <label class="btn btn-sm" style="cursor: pointer;">
                             <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg> Import CSV
-                            <input type="file" accept=".csv" @change="importParts($event)" style="display: none;">
+                            <input type="file" class="file-upload-control" accept=".csv" @change="importParts($event)">
                         </label>
                         <button class="btn btn-success"
                                 @click="editingPart = null; partForm = { part_number: '', description: '', category: '', unit_cost: '' }; showPartModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg>
@@ -415,7 +420,7 @@
                         <button class="btn btn-sm" @click="downloadStoreTemplate()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg> Download Template</button>
                         <label class="btn btn-sm" style="cursor: pointer;">
                             <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg> Import CSV
-                            <input type="file" accept=".csv" @change="importStores($event)" style="display: none;">
+                            <input type="file" class="file-upload-control" accept=".csv" @change="importStores($event)">
                         </label>
                         <button class="btn btn-success"
                                 @click="editingStore = null; storeForm = { name: '', type: 'customer_site', location: '', assigned_user_id: '' }; showStoreModal = true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#plus"></use></svg>
@@ -515,10 +520,9 @@
                         style="cursor: pointer;">
 
                         <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#upload"></use></svg> Import CSV
-                        <input type="file"
+                        <input type="file" class="file-upload-control"
                             accept=".csv"
-                            @change="importPartsToStore($event, selectedStore?.id)"
-                            style="display: none;">
+                            @change="importPartsToStore($event, selectedStore?.id)">
                     </label>
                     <button class="btn btn-sm store-inventory-action" @click="exportStoreInventoryCSV(selectedStore?.id)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#download"></use></svg>
                         Export CSV
