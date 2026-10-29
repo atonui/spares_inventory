@@ -25,6 +25,8 @@ def test_every_mutation_route_requires_csrf():
 
 def test_login_and_logout_reject_missing_and_invalid_tokens(auth_api):
     client,db,actor=auth_api
+    # The application marks cookies Secure; exercise browser cookie rotation over HTTPS.
+    client.base_url = "https://testserver"
     main.app.dependency_overrides.pop(main.verify_csrf)
     main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     for path,body in [('/api/auth/login',{'email':'user1@example.com','password':'test-password'}),('/api/auth/logout',{})]:
