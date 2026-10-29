@@ -183,6 +183,11 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
         and route.path not in {
             "/api/v1/inventory",
             "/api/v1/inventory/adjustments",
+            "/api/v1/inventory/add",
+            "/api/v1/inventory/consume",
+            "/api/v1/inventory/transfer",
+            "/api/v1/inventory/transfers/{transfer_id}/receive",
+            "/api/v1/inventory/transfers/{transfer_id}/return",
             "/api/v1/openapi.json",
         }
     ):
@@ -315,6 +320,11 @@ def test_v1_openapi_is_filtered_and_versioned():
         "/api/v1/me",
         "/api/v1/inventory",
         "/api/v1/inventory/adjustments",
+        "/api/v1/inventory/add",
+        "/api/v1/inventory/consume",
+        "/api/v1/inventory/transfer",
+        "/api/v1/inventory/transfers/{transfer_id}/receive",
+        "/api/v1/inventory/transfers/{transfer_id}/return",
         "/api/v1/auth/logout",
         "/api/v1/me/email-change-requests",
         "/api/v1/me/email-change-request",

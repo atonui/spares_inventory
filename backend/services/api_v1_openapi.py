@@ -14,6 +14,11 @@ _V1_PATHS = {
     "/api/v1/me",
     "/api/v1/inventory",
     "/api/v1/inventory/adjustments",
+    "/api/v1/inventory/add",
+    "/api/v1/inventory/consume",
+    "/api/v1/inventory/transfer",
+    "/api/v1/inventory/transfers/{transfer_id}/receive",
+    "/api/v1/inventory/transfers/{transfer_id}/return",
     "/api/v1/auth/logout",
     "/api/v1/me/email-change-requests",
     "/api/v1/me/email-change-request",
@@ -48,6 +53,9 @@ _ERRORS_BY_PATH = {
     "/api/v1/me/email-change-request": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/auth/email-change/confirm": ("400", "409", "422", "429", "500", "503"),
 }
+
+for _operation in ('add', 'consume', 'transfer', 'transfers/{transfer_id}/receive', 'transfers/{transfer_id}/return'):
+    _ERRORS_BY_PATH[f'/api/v1/inventory/{_operation}'] = ('400', '401', '403', '404', '409', '422', '429', '500', '503')
 
 _ERROR_SCHEMA = {
     "title": "ApiV1ErrorResponse",
