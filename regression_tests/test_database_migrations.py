@@ -189,7 +189,7 @@ def test_main_wrappers_respect_database_override(tmp_path,monkeypatch):
     import main
     p=tmp_path/'override.db';monkeypatch.setattr(main,'DATABASE',str(p));assert main.init_db() is None
     with main.get_db_connection() as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==9
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==10
         assert c.execute('PRAGMA foreign_keys').fetchone()[0]==1
 
 
