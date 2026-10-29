@@ -1198,13 +1198,13 @@ label.btn {
     .equipment-table tbody { display: block; }
     .equipment-table tr {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         grid-template-areas:
-            "name name actions"
-            "model model model"
-            "serial serial assigned"
-            "last last next"
-            "status status status";
+            "name name name actions"
+            "model model model model"
+            "serial serial assigned assigned"
+            "last last next next"
+            "status status status status";
         align-items: start;
         gap: 0 var(--space-3);
     }
