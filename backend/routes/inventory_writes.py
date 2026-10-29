@@ -497,6 +497,43 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                        'new_quantity': data.new_quantity})
             return {'success': True, 'duplicate': False, 'quantity': data.new_quantity}
 
+    def require_native_session(request: Request):
+        if get_request_credential(request).transport != 'bearer':
+            raise HTTPException(status_code=401, detail='Not authenticated')
+
+    @router.post('/api/v1/inventory/consume')
+    async def consume_stock_v1(data: ConsumeStockRequest, request: Request,
+                               user_id=Depends(get_current_user)):
+        """Issue stock using the shared work-order, access and audit rules."""
+        require_native_session(request)
+        return await consume_stock(data, user_id=user_id, csrf_valid=True, request=request)
+
+    @router.post('/api/v1/inventory/add')
+    async def add_stock_v1(data: AddStockRequest, request: Request,
+                           user_id=Depends(get_current_user)):
+        """Receive stock using the shared access, allocation and audit rules."""
+        require_native_session(request)
+        return await add_stock(data, user_id=user_id, csrf_valid=True, request=request)
+
+    @router.post('/api/v1/inventory/transfer')
+    async def transfer_stock_v1(data: TransferStockRequest, request: Request,
+                                user_id=Depends(get_current_user)):
+        """Dispatch stock through the shared pending-transfer lifecycle."""
+        require_native_session(request)
+        return await transfer_stock(data, user_id=user_id, csrf_valid=True, request=request)
+
+    @router.post('/api/v1/inventory/transfers/{transfer_id}/receive')
+    async def receive_transfer_v1(transfer_id: int, data: TransferConfirmationRequest,
+                                   request: Request, user_id=Depends(get_current_user)):
+        require_native_session(request)
+        return await receive_transfer(transfer_id, data, user_id=user_id, csrf_valid=True, request=request)
+
+    @router.post('/api/v1/inventory/transfers/{transfer_id}/return')
+    async def return_transfer_v1(transfer_id: int, data: TransferConfirmationRequest,
+                                  request: Request, user_id=Depends(get_current_user)):
+        require_native_session(request)
+        return await return_transfer(transfer_id, data, user_id=user_id, csrf_valid=True, request=request)
+
     router.consume_stock = consume_stock
     router.import_stock_balances = import_stock_balances
     router.add_stock = add_stock
