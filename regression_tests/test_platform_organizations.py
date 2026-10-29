@@ -51,7 +51,10 @@ def platform_api(postgres_schema):
         sql.Identifier(schema), sql.Identifier(runtime_role)
     ))
     admin.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, platform_admins TO {}"
+        "GRANT SELECT, UPDATE ON users TO {}"
+    ).format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL(
+        "GRANT SELECT ON sessions, platform_admins TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT INSERT, DELETE ON platform_admins TO {}"
