@@ -177,6 +177,7 @@ def test_platform_audit_reader_filters_pages_and_redacts_details(platform_api):
            VALUES (%s,%s,'platform_admin_revoked','success','{}'::jsonb,%s)""",
         (api.principal.user_id, other_org_id, serialize_instant(now)),
     )
+    api.admin.commit()
     router = create_platform_audit_router(get_connection=api.runtime_connection, current_user=lambda: None)
     endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/audit-events")
     result = asyncio.run(endpoint(
