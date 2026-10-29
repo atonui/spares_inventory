@@ -47,7 +47,7 @@ test('equipment table keeps labeled fields visible in mobile cards',()=>{
  assert.match(panel,/<table class="stock-table equipment-table" aria-label="Equipment records">/);
  for(const label of ['Equipment Name','Make / model','Serial number','Assigned to','Last calibration','Next calibration','Status','Actions']) assert.ok(panel.includes(`data-label="${label}"`),label);
  assert.doesNotMatch(css,/\.equipment-table (?:th|td):nth-child\(\d+\)\s*\{\s*display:\s*none;/);
- assert.match(css,/\.equipment-table tr\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)\s+44px/s);
+ assert.match(css,/\.equipment-table tr\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s);
  assert.match(css,/\.equipment-table td\[data-label="Assigned to"\]\s*\{\s*grid-area:\s*assigned;/);
  assert.match(css,/\.equipment-table td\[data-label="Next calibration"\]\s*\{\s*grid-area:\s*next;/);
  assert.match(css,/\.equipment-table \.stock-action-trigger\s*\{[^}]*min-height:\s*44px/s);
