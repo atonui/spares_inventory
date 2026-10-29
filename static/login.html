@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/static/index.html">
+    <title>Spares Tracker — Inventory</title>
+    <link rel="stylesheet" href="login-base.css?v=20261029-login-split">
+    <link rel="stylesheet" href="login.css?v=20261023-approved-brand-v1">
+    <style>[x-cloak] { display: none !important; }</style>
+<link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
+    <link rel="stylesheet" href="password-visibility.css?v=20261029-password-visibility">
+<link rel="stylesheet" href="buttons.css?v=20261023-app-button-system-v1">
+<link rel="stylesheet" href="typography.css?v=20261023-font-scale-v1">
+    <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="brand/generated/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="brand/generated/favicon-16.png">
+    <link rel="shortcut icon" href="brand/generated/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="brand/generated/apple-touch-icon.png">
+<script src="js/shared/csrf.js?v=20261014-frontend-21" defer></script>
+<script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
+<script src="js/pages/login.js?v=20261029-login-split" defer></script>
+<script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
+</head>
+<body class="with-site-announcement">
+<section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
+  <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
+  <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
+  <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
+</section>
+
+    <div x-data="loginPage()" x-init="checkAuth()">
+        <div class="auth-bootstrap" x-show="authState === 'checking'" x-cloak role="status" aria-live="polite">
+            <span class="auth-bootstrap-indicator" aria-hidden="true"></span>
+            <span>Checking your session…</span>
+        </div>
+        <div class="auth-bootstrap auth-bootstrap-error" x-show="authState === 'error'" x-cloak role="alert">
+            <p x-text="error || 'Unable to check your session.'"></p>
+            <button type="button" class="auth-retry" @click="checkAuth()" :disabled="authState === 'checking'">Retry session check</button>
+        </div>
+        <!-- Login Screen -->
+        <section x-show="authState === 'anonymous'" class="login-screen" role="main" aria-labelledby="login-title" x-cloak>
+            <div class="login-intro">
+                <a class="login-brand" href="/" aria-label="Spares Tracker home">
+                    <img src="brand/source/logo-white.svg" alt="" width="720" height="180">
+                </a>
+                <div class="login-intro-copy">
+                    <p class="login-eyebrow">SPARE PARTS &amp; EQUIPMENT</p>
+                    <h1>Everything<br> in its place.</h1>
+                    <p>Keep track of your stock, wherever the work takes you.</p>
+                </div>
+                <div class="login-intro-footer"><span class="login-accent-line" aria-hidden="true"></span>Stores. Sites. Engineers.</div>
+            </div>
+            <div class="login-panel">
+                <div class="login-heading">
+                    <p class="login-eyebrow">YOUR WORKSPACE</p>
+                    <h2 id="login-title">Welcome back</h2>
+                    <p>Sign in to manage your inventory.</p>
+                </div>
+                <form @submit.prevent="login()" class="login-form" :aria-busy="loading">
+                    <div x-show="error" class="login-error" role="alert" x-text="error" x-cloak></div>
+                    <div class="login-field">
+                        <label for="login-email">Email address</label>
+                        <input id="login-email" name="email" type="email" x-model="loginForm.email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="you@company.com" required>
+                    </div>
+                    <div class="login-field">
+                        <label for="login-password">Password</label>
+                        <div class="password-field-control"><input id="login-password" name="password" type="password" x-model="loginForm.password" autocomplete="current-password" placeholder="Enter your password" required><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="login-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+                    </div>
+                    <div class="login-options">
+                        <label class="login-remember" for="login-remember"><input id="login-remember" type="checkbox" x-model="loginForm.remember_me"><span>Remember me</span></label>
+                        <a href="/static/forgot_password.html">Forgot password?</a>
+                    </div>
+                    <button type="submit" class="login-submit" :disabled="loading">
+                        <span x-show="!loading">Sign in</span><span x-show="loading" role="status">Signing in…</span>
+                        <svg x-show="!loading" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                </form>
+                <p class="login-footnote">Your inventory, ready for the next job.</p>
+            </div>
+        </section>
+
+</div>
+</body>
+</html>
