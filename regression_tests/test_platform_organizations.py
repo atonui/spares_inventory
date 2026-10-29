@@ -316,11 +316,11 @@ def test_platform_admin_grant_matches_exact_active_email_and_is_idempotent(platf
     api = platform_api
     target_id = api.admin.execute(
         "INSERT INTO users(email,name,password_hash) VALUES (%s,'Platform candidate','hash') RETURNING id",
-        (f"candidate+platform-{uuid4().hex}@example.test",),
+        (f"candidate+platform-{uuid4().hex}@example.com",),
     ).fetchone()["id"]
     decoy_id = api.admin.execute(
         "INSERT INTO users(email,name,password_hash) VALUES (%s,'Similar address','hash') RETURNING id",
-        (f"candidate@example.test",),
+        (f"candidate@example.com",),
     ).fetchone()["id"]
     target_email = api.admin.execute(
         "SELECT email FROM users WHERE id = %s", (target_id,)
