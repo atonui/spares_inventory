@@ -33,4 +33,4 @@ logs
 *.log.*
 
 # Frontend asset build dependencies
-/node_modules/
+/tooling/css/node_modules/

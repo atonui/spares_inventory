@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const CleanCSS = require('clean-css');
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(__dirname, '../..');
 const directory = path.join(root, 'static');
 const outputDirectory = path.join(directory, 'minified');
 const check = process.argv.includes('--check');

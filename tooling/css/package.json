@@ -2,8 +2,8 @@
   "name": "spares-tracker-assets",
   "version": "1.0.0",
   "scripts": {
-    "build:css": "node scripts/build-css.cjs",
-    "check:css": "node scripts/build-css.cjs --check"
+    "build:css": "node build-css.cjs",
+    "check:css": "node build-css.cjs --check"
   },
   "type": "commonjs",
   "devDependencies": {

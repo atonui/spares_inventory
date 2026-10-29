@@ -6,9 +6,9 @@ Readable styles live in `static/*.css`. The generated copies in
 After editing a source stylesheet:
 
 ```sh
-npm ci --ignore-scripts
-npm run build:css
-npm run check:css
+npm --prefix tooling/css ci --ignore-scripts
+npm --prefix tooling/css run build:css
+npm --prefix tooling/css run check:css
 ```
 
 Commit both the source and generated changes. The frontend-assets CI workflow rejects
@@ -22,3 +22,5 @@ rebasing disabled.
 When a visual stylesheet change is made, update its version query in affected HTML
 as before. Minification alone preserves styling, so existing cached source responses
 remain valid and new requests receive the smaller representation.
+
+Build dependencies live under tooling/css so the root remains a Python application for hosting detection.
