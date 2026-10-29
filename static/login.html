@@ -29,7 +29,7 @@
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
   <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
   <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
-  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading || authState !== 'anonymous'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
 </section>
 
     <div class="login-shell login-pending" :class="{ 'login-pending': authState !== 'anonymous' }" x-data="loginPage()" x-init="checkAuth()">
@@ -76,7 +76,7 @@
                         <label class="login-remember" for="login-remember"><input id="login-remember" type="checkbox" x-model="loginForm.remember_me"><span>Remember me</span></label>
                         <a href="/static/forgot_password.html">Forgot password?</a>
                     </div>
-                    <button type="submit" class="login-submit" :disabled="loading">
+                    <button type="submit" class="login-submit" :disabled="loading || authState !== 'anonymous'">
                         <span x-show="!loading">Sign in</span><span x-show="loading" role="status">Signing in…</span>
                         <svg x-show="!loading" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
