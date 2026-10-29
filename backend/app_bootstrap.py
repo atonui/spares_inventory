@@ -102,7 +102,7 @@ def create_inventory_app(
         allow_origins=list(cors_allowed_origins),
         allow_credentials=True,
         allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
+        allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Request-ID"],
     )
 
     @app.middleware("http")
