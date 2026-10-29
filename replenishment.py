@@ -1,10 +1,13 @@
 """Minimum settings and a read-only, globally allocated replenishment plan."""
 import json
-from contextlib import closing
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from stock_audit import balance_snapshot, change_after, record_stock_audit
+from backend.database_sql import execute, is_postgres
+from backend.services.principals import AuthenticatedPrincipal
 from backend.services.session_credentials import get_request_credential
+from backend.services.tenant_context import authenticated_database_transaction
+from backend.temporal import serialize_instant, utc_now
 
 class MinimumRequest(BaseModel):
     store_id: int = Field(gt=0, strict=True)
@@ -13,15 +16,21 @@ class MinimumRequest(BaseModel):
     expected_minimum: int = Field(ge=0, le=2147483647, strict=True)
 
 def build_plan(conn, user_id):
-    actor = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+    if isinstance(user_id, AuthenticatedPrincipal):
+        actor_id = user_id.user_id
+        admin = user_id.company_role in ('owner', 'admin')
+    else:
+        actor_id = user_id
+        actor = execute(conn, 'SELECT role FROM users WHERE id=?', (actor_id,)).fetchone()
+        admin = bool(actor and actor['role'] in ('admin', 'superadmin'))
     def permitted(row):
-        return bool(actor and (actor['role'] in ('admin','superadmin') or row['store_owner']==user_id or row['store_type']=='central'))
-    stock = [dict(r) for r in conn.execute('''SELECT i.id AS inventory_id,i.store_id,i.part_id,i.quantity,i.min_threshold,
+        return bool(admin or row['store_owner']==actor_id or row['store_type']=='central')
+    stock = [dict(r) for r in execute(conn, '''SELECT i.id AS inventory_id,i.store_id,i.part_id,i.quantity,i.min_threshold,
         s.name AS store_name,s.type AS store_type,s.assigned_user_id AS store_owner,p.part_number,p.description
         FROM inventory i JOIN stores s ON s.id=i.store_id JOIN parts p ON p.id=i.part_id
         WHERE i.work_order_id IS NULL AND s.archived_at IS NULL AND p.archived_at IS NULL
         ORDER BY s.name,s.id,p.part_number,i.id''')]
-    incoming = {(r['store_id'],r['part_id']):r['quantity'] for r in conn.execute('''SELECT m.to_store_id AS store_id,m.part_id,SUM(m.quantity) AS quantity
+    incoming = {(r['store_id'],r['part_id']):r['quantity'] for r in execute(conn, '''SELECT m.to_store_id AS store_id,m.part_id,SUM(m.quantity) AS quantity
         FROM stock_transfers t JOIN movements m ON m.id=t.movement_id
         WHERE t.status='in_transit' AND m.work_order_id IS NULL GROUP BY m.to_store_id,m.part_id''')}
     donors = sorted(stock, key=lambda r:(r['store_type']!='central',r['store_name'],r['store_id'],r['inventory_id']))
@@ -62,34 +71,46 @@ def require_planned_dispatch(conn, user_id, inventory_id, to_store_id, quantity)
 
 def register_replenishment_routes(app, *, get_connection, write_transaction, require_active, require_access, current_user, verify_csrf):
     @app.get('/api/inventory/replenishment')
-    async def replenishment(user_id: int = Depends(current_user)):
-        with closing(get_connection()) as conn:
-            conn.execute('BEGIN')
-            require_active(conn,'users',user_id)
-            return build_plan(conn,user_id)
+    async def replenishment(user_id: int = Depends(current_user), request: Request = None):
+        with authenticated_database_transaction(
+            get_connection,
+            principal_or_user=user_id,
+            session_token=get_request_credential(request).value if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            if not isinstance(principal, AuthenticatedPrincipal):
+                require_active(conn,'users',principal)
+            return build_plan(conn,principal)
 
     @app.put('/api/inventory/minimum')
     async def minimum(data: MinimumRequest, user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
         with write_transaction(user_id, get_request_credential(request).value) as conn:
-            require_active(conn,'users',user_id)
+            actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
+            require_active(conn,'users',actor_id)
             require_active(conn,'stores',data.store_id)
             require_active(conn,'parts',data.part_id)
-            store = conn.execute('SELECT type,assigned_user_id FROM stores WHERE id=?',(data.store_id,)).fetchone()
-            require_access(conn,user_id,store['type'],store['assigned_user_id'])
+            org_column = ',organization_id' if is_postgres(conn) else ',NULL AS organization_id'
+            store = execute(conn,'SELECT type,assigned_user_id'+org_column+' FROM stores WHERE id=?',(data.store_id,)).fetchone()
+            require_access(conn,user_id,store['type'],store['assigned_user_id'],store_organization_id=store['organization_id'])
             before_balance = balance_snapshot(conn,data.store_id,data.part_id,None)
-            item = conn.execute('SELECT id,min_threshold FROM inventory WHERE store_id=? AND part_id=? AND work_order_id IS NULL',(data.store_id,data.part_id)).fetchone()
+            item = execute(conn,'SELECT id,min_threshold FROM inventory WHERE store_id=? AND part_id=? AND work_order_id IS NULL',(data.store_id,data.part_id)).fetchone()
             before = item['min_threshold'] if item else 0
+            updated_at = serialize_instant(utc_now())
             if before != data.expected_minimum:
                 raise HTTPException(409,'Minimum stock changed; reload before saving')
             if item:
                 identifier = item['id']
-                conn.execute("UPDATE inventory SET min_threshold=?,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?",(data.min_threshold,identifier))
+                execute(conn,'UPDATE inventory SET min_threshold=?,updated_at=? WHERE id=?',(data.min_threshold,updated_at,identifier))
             elif data.min_threshold:
-                identifier = conn.execute('INSERT INTO inventory(store_id,part_id,quantity,min_threshold) VALUES(?,?,0,?)',(data.store_id,data.part_id,data.min_threshold)).lastrowid
+                if is_postgres(conn):
+                    identifier = execute(conn,'INSERT INTO inventory(organization_id,store_id,part_id,quantity,min_threshold) VALUES(?,?,?,0,?) RETURNING id',
+                        (store['organization_id'],data.store_id,data.part_id,data.min_threshold)).fetchone()['id']
+                else:
+                    identifier = execute(conn,'INSERT INTO inventory(store_id,part_id,quantity,min_threshold) VALUES(?,?,0,?)',(data.store_id,data.part_id,data.min_threshold)).lastrowid
             else:
                 identifier = None
             # A later physical return must honor minimum edits made during transit.
-            conn.execute('''UPDATE stock_transfers SET source_min_threshold=? WHERE status='in_transit'
+            execute(conn,'''UPDATE stock_transfers SET source_min_threshold=? WHERE status='in_transit'
                 AND movement_id IN (SELECT id FROM movements WHERE from_store_id=? AND part_id=? AND work_order_id IS NULL)''',
                 (data.min_threshold,data.store_id,data.part_id))
             record_stock_audit(conn,user_id,'set_stock_minimum',[change_after(conn,before_balance)],
