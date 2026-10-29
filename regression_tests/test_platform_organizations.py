@@ -352,7 +352,7 @@ def test_platform_admin_grant_rejects_unknown_or_archived_email(platform_api, ar
     from backend.schemas.platform_organizations import PlatformAdminGrantRequest
 
     api = platform_api
-    email = f"archived-{uuid4().hex}@example.test" if archived else f"missing-{uuid4().hex}@example.test"
+    email = f"archived-{uuid4().hex}@example.com" if archived else f"missing-{uuid4().hex}@example.com"
     if archived:
         api.admin.execute(
             "INSERT INTO users(email,name,password_hash,archived_at) VALUES (%s,'Archived','hash',%s)",
@@ -420,7 +420,7 @@ def test_platform_admin_grant_requires_platform_authority(platform_api):
     grant = api.endpoint("POST", "/api/platform/admins")
     with pytest.raises(HTTPException) as error:
         asyncio.run(grant(
-            body=PlatformAdminGrantRequest(email="target@example.test"),
+            body=PlatformAdminGrantRequest(email="target@example.com"),
             request=SimpleNamespace(cookies={"session_token": token}),
             actor=tenant_id, csrf_valid=True,
         ))
