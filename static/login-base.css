@@ -49,3 +49,12 @@
         
 
 [x-cloak] { display: none !important; }
+
+/* Keep the final card geometry while the session request is pending. */
+.login-shell { width: min(100%, 960px); }
+.login-shell .login-panel { position: relative; }
+.login-pending .login-panel > :not(.login-session-status) { visibility: hidden; }
+.login-session-status { position: absolute; inset: 24px; display: flex; align-items: center; justify-content: center; }
+.login-session-status .auth-bootstrap { width: 100%; margin: 0; }
+.login-shell .login-brand { width: clamp(150px, 22vw, 220px); max-width: 100%; }
+.login-shell .login-brand img { width: 100%; aspect-ratio: 4 / 1; }
