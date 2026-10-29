@@ -10,6 +10,7 @@ import main
 import database_restore
 from backend.database import connect_database
 from backend.services.session_access import require_session
+from backend.security import hash_session_credential
 from regression_tests.session_fixtures import session_database,record_state
 from regression_tests.test_session_write_routes import session_api,database_state
 
@@ -100,7 +101,7 @@ def test_write_first_is_in_pre_restore_snapshot(session_api,tmp_path,monkeypatch
 def test_restored_ids_do_not_authorize_original_token(session_api,tmp_path):
     client,live,_=session_api;upload=tmp_path/'upload.db';shutil.copyfile(live,upload)
     with closing(connect_database(upload)) as conn,conn:
-        conn.execute("UPDATE sessions SET session_token='replacement-token' WHERE id=1")
+        conn.execute("UPDATE sessions SET session_token=? WHERE id=1",(hash_session_credential('replacement-token'),))
         conn.execute("UPDATE users SET name='Restored different identity' WHERE id=1")
     database_restore.restore_database(upload,live,2,validate_actor=restore_validator)
     main.app.dependency_overrides[main.get_current_user]=lambda:1  # An ID retained before restore.
