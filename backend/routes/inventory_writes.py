@@ -30,6 +30,11 @@ def _organization_id(conn, user):
     return None
 
 
+def _store_organization_id(conn, record):
+    """Read the store tenant from the database row on PostgreSQL."""
+    return record["organization_id"] if is_postgres(conn) else None
+
+
 def _locked(conn, statement, table_alias=None):
     if not is_postgres(conn):
         return statement
@@ -87,7 +92,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             if not item:
                 raise HTTPException(status_code=404, detail="Inventory item not found")
 
-            require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
+            require_stock_access(conn, user_id, item["type"], item["assigned_user_id"],
+                                 store_organization_id=_store_organization_id(conn, item))
             require_active_record(conn,"stores",item["store_id"])
             require_active_record(conn,"parts",item["part_id"])
 
@@ -170,11 +176,13 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         """Set previewed unallocated stock balances as one transaction."""
         with authenticated_write_transaction(user_id, get_request_credential(request).value,
                 busy_detail='Database busy; no balances saved. Try again') as conn:
-            store = execute(conn, "SELECT type,assigned_user_id FROM stores WHERE id=?",
+            organization_column = ",organization_id" if is_postgres(conn) else ""
+            store = execute(conn, f"SELECT type,assigned_user_id{organization_column} FROM stores WHERE id=?",
                             (request_data.store_id,)).fetchone()
             if not store:
                 raise HTTPException(status_code=404, detail="Store not found")
-            require_stock_access(conn, user_id, store["type"], store["assigned_user_id"])
+            require_stock_access(conn, user_id, store["type"], store["assigned_user_id"],
+                                 store_organization_id=_store_organization_id(conn, store))
             require_active_record(conn,"stores",request_data.store_id)
             seen, changes = set(), []
             for row in request_data.rows:
@@ -246,10 +254,9 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             cursor = conn.cursor()
 
             # Check if user can edit this store
+            organization_column = ", organization_id" if is_postgres(conn) else ""
             execute_cursor(conn, cursor,
-                """
-                SELECT type, assigned_user_id FROM stores WHERE id = ?
-            """,
+                f"SELECT type, assigned_user_id{organization_column} FROM stores WHERE id = ?",
                 (request_data.store_id,),
             )
             store = cursor.fetchone()
@@ -257,7 +264,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             if not store:
                 raise HTTPException(status_code=404, detail="Store not found")
 
-            require_stock_access(conn, user_id, store["type"], store["assigned_user_id"])
+            require_stock_access(conn, user_id, store["type"], store["assigned_user_id"],
+                                 store_organization_id=_store_organization_id(conn, store))
 
             # Get work order ID if provided
             work_order_id = None
@@ -334,7 +342,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             if not item:
                 raise HTTPException(status_code=404, detail="Inventory item not found")
 
-            require_stock_access(conn, user_id, item["type"], item["assigned_user_id"])
+            require_stock_access(conn, user_id, item["type"], item["assigned_user_id"],
+                                 store_organization_id=_store_organization_id(conn, item))
             require_active_record(conn,"stores",item["store_id"])
             require_active_record(conn,"parts",item["part_id"])
 
@@ -382,7 +391,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                            (request_data.inventory_id,)).fetchone()
             if not item:
                 raise HTTPException(status_code=404, detail="Source inventory item not found")
-            require_stock_access(conn,user_id,item['type'],item['assigned_user_id'])
+            require_stock_access(conn,user_id,item['type'],item['assigned_user_id'],
+                                 store_organization_id=_store_organization_id(conn, item))
             if item['store_id']==request_data.to_store_id:
                 raise HTTPException(status_code=400, detail="Source and destination stores must differ")
             if item['quantity']<request_data.quantity:
@@ -447,7 +457,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                 (data.inventory_id,)).fetchone()
             if not item:
                 raise HTTPException(status_code=404, detail='Inventory item not found')
-            require_stock_access(conn, user_id, item['type'], item['assigned_user_id'])
+            require_stock_access(conn, user_id, item['type'], item['assigned_user_id'],
+                                 store_organization_id=_store_organization_id(conn, item))
             require_active_record(conn, 'stores', item['store_id'])
             require_active_record(conn, 'parts', item['part_id'])
             if item['work_order_id'] is not None:
