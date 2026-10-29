@@ -75,6 +75,40 @@ def test_mobile_stock_adjustment_migration_adds_a_unique_retry_key():
     assert "CREATE UNIQUE INDEX uq_movements_created_operation" in sql
 
 
+def test_user_can_belong_to_only_one_organization(postgres_schema):
+    """The v1 tenancy contract requires one membership per global identity."""
+    from psycopg.errors import UniqueViolation
+
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection, _ = postgres_schema
+    apply_postgres_migrations(connection)
+    organization_ids = [
+        connection.execute(
+            "INSERT INTO organizations (name, slug) VALUES (%s, %s) RETURNING id",
+            (name, slug),
+        ).fetchone()["id"]
+        for name, slug in (("First", "membership-first"), ("Second", "membership-second"))
+    ]
+    user_id = connection.execute(
+        "INSERT INTO users (email, name, password_hash) VALUES (%s, %s, %s) RETURNING id",
+        ("single-membership@example.test", "Member", "unused"),
+    ).fetchone()["id"]
+    connection.execute(
+        "INSERT INTO organization_memberships (organization_id, user_id, company_role) "
+        "VALUES (%s, %s, 'engineer')",
+        (organization_ids[0], user_id),
+    )
+
+    with pytest.raises(UniqueViolation):
+        with connection.transaction():
+            connection.execute(
+                "INSERT INTO organization_memberships (organization_id, user_id, company_role) "
+                "VALUES (%s, %s, 'engineer')",
+                (organization_ids[1], user_id),
+            )
+
+
 def test_platform_audit_indexes_cover_order_and_common_filters():
     from backend.postgres_migrations.registry import MIGRATIONS
 
