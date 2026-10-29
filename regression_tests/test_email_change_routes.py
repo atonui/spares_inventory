@@ -289,7 +289,10 @@ def test_public_confirmation_uses_fragment_token_capability_and_notifies_old_add
     assert [row["message_type"] for row in notices] == ["email_change_verification", "email_changed_notice"]
     assert notices[1]["recipient_email"] == "first@example.com"
     assert token not in notices[1]["encrypted_payload"]
-    replay = client.post("/api/auth/email-change/confirm", json={"token": token})
+    replay = client.post(
+        "/api/auth/email-change/confirm", json={"token": token},
+        headers={"X-CSRF-Token": "csrf-fixture"},
+    )
     assert replay.status_code == 400
 
 
@@ -298,6 +301,7 @@ def test_malformed_confirmation_never_echoes_token_material(email_change_api):
     response = api["client"].post(
         "/api/auth/email-change/confirm",
         json={"token": {"secret": "should-not-be-echoed"}},
+        headers={"X-CSRF-Token": "csrf-fixture"},
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "The confirmation link is invalid or expired."}
