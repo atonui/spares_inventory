@@ -90,3 +90,20 @@ def test_inventory_rejects_inactive_records_without_committing(conn,table,identi
     assert conn.in_transaction
     assert conn.execute('SELECT quantity FROM inventory WHERE id=11').fetchone()[0]==10
     conn.rollback()
+
+def test_access_wrapper_preserves_store_organization_scope():
+    from uuid import uuid4
+    from backend.services.principals import AuthenticatedPrincipal
+
+    organization_id = uuid4()
+    other_organization_id = uuid4()
+    principal = AuthenticatedPrincipal(9, organization_id, "engineer", False)
+
+    main.require_stock_access(
+        None, principal, "central", None, store_organization_id=organization_id
+    )
+    with pytest.raises(HTTPException) as caught:
+        main.require_stock_access(
+            None, principal, "central", None, store_organization_id=other_organization_id
+        )
+    assert caught.value.status_code == 403

@@ -207,8 +207,11 @@ def authenticated_write_transaction(user_id: int, session_token: str | None, *, 
         session_token=session_token, busy_detail=busy_detail)
 
 
-def require_stock_access(conn, user_id, store_type, store_owner):
-    return _require_stock_access(conn,user_id,store_type,store_owner)
+def require_stock_access(conn, user_id, store_type, store_owner, *, store_organization_id=None):
+    return _require_stock_access(
+        conn, user_id, store_type, store_owner,
+        store_organization_id=store_organization_id,
+    )
 
 
 def get_security_config() -> dict:
