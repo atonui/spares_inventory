@@ -244,7 +244,9 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     policies = connection.execute(
         """SELECT tablename FROM pg_policies WHERE schemaname = current_schema()"""
     ).fetchall()
-    assert {row["tablename"] for row in policies} == expected | {"email_change_requests"}
+    assert {row["tablename"] for row in policies} == expected | {
+        "email_change_requests", "mobile_pairing_requests", "mobile_device_sessions"
+    }
     assert rls["email_change_requests"] == (True, False)
     constraints = {
         row["conname"]
