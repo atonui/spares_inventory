@@ -174,8 +174,8 @@ def test_two_workers_apply_once(tmp_path):
     p=tmp_path/'live.db';legacy_connection(p).close()
     def run():
         with sqlite3.connect(p,timeout=10) as c:return runner().apply_migrations(c).current_version
-    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[9,9]
-    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==9
+    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[10,10]
+    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==10
 
 def test_write_lock_timeout_leaves_database_unchanged(tmp_path):
     from backend.migrations.validation import MigrationError
