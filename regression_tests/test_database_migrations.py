@@ -123,7 +123,7 @@ def test_v9_upgrade_hashes_live_sqlite_sessions_without_revoking_them(tmp_path, 
     monkeypatch.setattr(registry,'MIGRATIONS',migrations[:9])
     runner().apply_migrations(c)
     c.execute(
-        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'still-valid','2099-01-01T00:00:00Z')"
+        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'still-valid','2099-01-01T00:00:00.000000Z')"
     )
     c.commit()
     monkeypatch.setattr(registry,'MIGRATIONS',migrations)
