@@ -28,7 +28,7 @@ def runtime_role(postgres_schema):
     ))
     connection.execute(sql.SQL("GRANT SELECT, INSERT ON stores TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins TO {}"
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations TO {}"
     ).format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE stores_id_seq TO {}").format(
         sql.Identifier(role)

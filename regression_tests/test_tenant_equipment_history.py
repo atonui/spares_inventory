@@ -36,7 +36,7 @@ def test_equipment_create_and_history_use_session_company(postgres_schema, migra
         sql.Identifier(schema), sql.Identifier(role)
     ))
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, equipment TO {}"
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations, equipment TO {}"
     ).format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT ON equipment, equipment_history TO {}").format(
         sql.Identifier(role)

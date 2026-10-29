@@ -7,6 +7,10 @@ from regression_tests.test_stock_safety import api
 TOKEN_AUTHENTICATED_MUTATIONS = {
     ('/api/auth/native/refresh', frozenset({'POST'})),
     ('/api/v1/auth/native/refresh', frozenset({'POST'})),
+    # One-time pairing credentials and native bearer sessions authorize these writes.
+    ('/api/v1/auth/mobile-pairing/claim', frozenset({'POST'})),
+    ('/api/v1/auth/mobile-pairing/complete', frozenset({'POST'})),
+    ('/api/v1/inventory/adjustments', frozenset({'POST'})),
 }
 
 def dependencies(dependant):
@@ -21,6 +25,8 @@ def test_every_mutation_route_requires_csrf():
 
 def test_login_and_logout_reject_missing_and_invalid_tokens(auth_api):
     client,db,actor=auth_api
+    # The application marks cookies Secure; exercise browser cookie rotation over HTTPS.
+    client.base_url = "https://testserver"
     main.app.dependency_overrides.pop(main.verify_csrf)
     main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     for path,body in [('/api/auth/login',{'email':'user1@example.com','password':'test-password'}),('/api/auth/logout',{})]:

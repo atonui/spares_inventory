@@ -103,7 +103,7 @@ def test_inventory_read_route_only_returns_session_company_rows(postgres_schema,
         sql.Identifier(schema), sql.Identifier(role)
     ))
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, inventory, parts, stores, work_orders TO {}"
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations, inventory, parts, stores, work_orders TO {}"
     ).format(sql.Identifier(role)))
     connection.commit()
 
@@ -170,7 +170,7 @@ def test_add_stock_route_writes_only_to_session_company(postgres_schema, migrate
         sql.Identifier(schema), sql.Identifier(role)
     ))
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, stores, parts, inventory, work_orders TO {}"
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations, stores, parts, inventory, work_orders TO {}"
     ).format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT, UPDATE ON inventory, work_orders TO {}").format(
         sql.Identifier(role)

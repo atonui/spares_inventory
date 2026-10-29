@@ -6,6 +6,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 import main
 from backend.database import connect_database
+from backend.security import hash_session_credential
 from regression_tests.session_fixtures import session_database
 
 
@@ -24,7 +25,7 @@ def session_api(tmp_path,monkeypatch):
     path=session_database(tmp_path/'http.db');monkeypatch.setattr(main,'DATABASE',str(path))
     with closing(connect_database(path)) as conn,conn:
         conn.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES(4,'manager@example.test','Manager','unused','manager')")
-        conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(4,4,'manager-token','2099-01-01T00:00:00.000000Z')")
+        conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(4,4,?,'2099-01-01T00:00:00.000000Z')", (hash_session_credential('manager-token'),))
         conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(2,'Car','engineer',3),(3,'Empty','central',NULL)")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(2,'EMPTY','Empty part','test',0)")
         conn.execute("INSERT INTO store_types(type_code,type_name) VALUES('unused','Unused')")
@@ -325,14 +326,29 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('POST', '/api/platform/admins'),
         ('PUT', '/api/platform/admins/{target_user_id}'),
         ('DELETE', '/api/platform/admins/{target_user_id}'),
+        ('PUT', '/api/platform/organizations/{organization_id}/status'),
         ('POST', '/api/platform/announcement'),
         ('DELETE', '/api/platform/announcement'),
         ('PUT', '/api/platform/security-config/{key}'),
+        ('POST', '/api/profile/mobile-pairings'),
+        ('POST', '/api/profile/mobile-pairings/{request_id}/approve'),
+        ('POST', '/api/profile/mobile-pairings/{request_id}/cancel'),
+        ('DELETE', '/api/profile/mobile-devices/{request_id}'),
+        ('POST', '/api/profile/email-change-requests'),
+        ('DELETE', '/api/profile/email-change-request'),
+        ('POST', '/api/v1/me/email-change-requests'),
+        ('DELETE', '/api/v1/me/email-change-request'),
+        ('POST', '/api/auth/email-change/confirm'),
+        ('POST', '/api/v1/auth/email-change/confirm'),
+        ('POST', '/api/v1/auth/mobile-pairing/claim'),
+        ('POST', '/api/v1/auth/mobile-pairing/complete'),
+        ('POST', '/api/v1/inventory/adjustments'),
+        ('POST', '/api/users/{target_user_id}/remove'),
     })
     exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/v1/auth/native/login','/api/auth/native/refresh','/api/v1/auth/native/refresh','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
     bearer_only={('POST', '/api/v1/auth/logout')}
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==68
+    assert len(protected)==84
     assert registered==protected|exempt|bearer_only
 
 

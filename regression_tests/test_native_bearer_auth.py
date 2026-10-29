@@ -88,7 +88,10 @@ def native_auth_api(postgres_schema):
         authenticated_csrf_dependency=lambda: None,
         csrf_token_factory=lambda: "csrf",
         password_hash=lambda value: "hashed:" + value,
-        password_verify=lambda plain, hashed: plain == "correct-password" and hashed == "stored-hash",
+        password_verify=lambda plain, hashed: (
+            (plain == "correct-password" and hashed == "stored-hash")
+            or (hashed.startswith("hashed:") and plain == hashed.removeprefix("hashed:"))
+        ),
         security_config=lambda: {
             "max_login_attempts": 5,
             "lockout_duration_minutes": 15,

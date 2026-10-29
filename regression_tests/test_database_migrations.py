@@ -123,13 +123,13 @@ def test_v9_upgrade_hashes_live_sqlite_sessions_without_revoking_them(tmp_path, 
     monkeypatch.setattr(registry,'MIGRATIONS',migrations[:9])
     runner().apply_migrations(c)
     c.execute(
-        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'still-valid','2099-01-01T00:00:00Z')"
+        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'still-valid','2099-01-01T00:00:00.000000Z')"
     )
     c.commit()
     monkeypatch.setattr(registry,'MIGRATIONS',migrations)
     status=runner().apply_migrations(c)
     assert status.current_version==10
-    assert c.execute('SELECT session_token,is_active FROM sessions').fetchone()==(
+    assert tuple(c.execute('SELECT session_token,is_active FROM sessions').fetchone())==(
         hash_session_credential('still-valid'),1
     )
 
@@ -174,8 +174,8 @@ def test_two_workers_apply_once(tmp_path):
     p=tmp_path/'live.db';legacy_connection(p).close()
     def run():
         with sqlite3.connect(p,timeout=10) as c:return runner().apply_migrations(c).current_version
-    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[9,9]
-    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==9
+    with ThreadPoolExecutor(2) as pool:assert list(pool.map(lambda _:run(),range(2)))==[10,10]
+    with sqlite3.connect(p) as c:assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==10
 
 def test_write_lock_timeout_leaves_database_unchanged(tmp_path):
     from backend.migrations.validation import MigrationError
@@ -189,7 +189,7 @@ def test_main_wrappers_respect_database_override(tmp_path,monkeypatch):
     import main
     p=tmp_path/'override.db';monkeypatch.setattr(main,'DATABASE',str(p));assert main.init_db() is None
     with main.get_db_connection() as c:
-        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==9
+        assert c.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0]==10
         assert c.execute('PRAGMA foreign_keys').fetchone()[0]==1
 
 

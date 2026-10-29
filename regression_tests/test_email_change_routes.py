@@ -116,6 +116,11 @@ def email_change_api(postgres_schema):
             raise HTTPException(status_code=403, detail="CSRF token missing or invalid")
         return True
 
+    async def public_csrf(x_csrf_token: str | None = Header(None)):
+        if x_csrf_token != "csrf-fixture":
+            raise HTTPException(status_code=403, detail="CSRF token missing or invalid")
+        return True
+
     key = Fernet.generate_key().decode("ascii")
     router = create_auth_router(
         get_connection=get_connection,
@@ -127,7 +132,7 @@ def email_change_api(postgres_schema):
         ),
         stock_writer=lambda: None,
         current_user=current_user,
-        csrf_dependency=csrf,
+        csrf_dependency=public_csrf,
         authenticated_csrf_dependency=csrf,
         csrf_token_factory=lambda: "csrf-fixture",
         password_hash=lambda value: "hash:" + value,
@@ -269,6 +274,11 @@ def test_public_confirmation_uses_fragment_token_capability_and_notifies_old_add
     # A page GET cannot submit or consume the capability.
     assert client.get("/api/auth/email-change/confirm").status_code == 405
     response = client.post("/api/auth/email-change/confirm", json={"token": token})
+    assert response.status_code == 403, response.text
+    response = client.post(
+        "/api/auth/email-change/confirm", json={"token": token},
+        headers={"X-CSRF-Token": "csrf-fixture"},
+    )
     assert response.status_code == 200, response.text
     assert response.json()["success"] is True
     assert response.headers["cache-control"] == "no-store"
@@ -279,7 +289,10 @@ def test_public_confirmation_uses_fragment_token_capability_and_notifies_old_add
     assert [row["message_type"] for row in notices] == ["email_change_verification", "email_changed_notice"]
     assert notices[1]["recipient_email"] == "first@example.com"
     assert token not in notices[1]["encrypted_payload"]
-    replay = client.post("/api/auth/email-change/confirm", json={"token": token})
+    replay = client.post(
+        "/api/auth/email-change/confirm", json={"token": token},
+        headers={"X-CSRF-Token": "csrf-fixture"},
+    )
     assert replay.status_code == 400
 
 
@@ -288,6 +301,7 @@ def test_malformed_confirmation_never_echoes_token_material(email_change_api):
     response = api["client"].post(
         "/api/auth/email-change/confirm",
         json={"token": {"secret": "should-not-be-echoed"}},
+        headers={"X-CSRF-Token": "csrf-fixture"},
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "The confirmation link is invalid or expired."}

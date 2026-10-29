@@ -51,14 +51,19 @@ def platform_api(postgres_schema):
         sql.Identifier(schema), sql.Identifier(runtime_role)
     ))
     admin.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, platform_admins TO {}"
+        "GRANT SELECT, UPDATE ON users TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
-        "GRANT INSERT, DELETE ON platform_admins TO {}"
+        "GRANT SELECT ON sessions TO {}"
+    ).format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON platform_admins TO {}"
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_memberships TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT, UPDATE ON organizations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, INSERT ON organization_settings, organization_invitations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_support_sessions TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT UPDATE (ended_at) ON platform_support_sessions TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_invitations TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT INSERT (organization_id, message_type, recipient_email, encrypted_payload, idempotency_key), "
@@ -212,8 +217,8 @@ def test_platform_admin_grant_request_trims_and_validates_exact_email():
     from pydantic import ValidationError
     from backend.schemas.platform_organizations import PlatformAdminGrantRequest
 
-    request = PlatformAdminGrantRequest(email="  Ops.Team+Platform@example.test  ")
-    assert request.email == "Ops.Team+Platform@example.test"
+    request = PlatformAdminGrantRequest(email="  Ops.Team+Platform@example.com  ")
+    assert request.email == "Ops.Team+Platform@example.com"
     with pytest.raises(ValidationError):
         PlatformAdminGrantRequest(email="not-an-email")
 
@@ -316,11 +321,11 @@ def test_platform_admin_grant_matches_exact_active_email_and_is_idempotent(platf
     api = platform_api
     target_id = api.admin.execute(
         "INSERT INTO users(email,name,password_hash) VALUES (%s,'Platform candidate','hash') RETURNING id",
-        (f"candidate+platform-{uuid4().hex}@example.test",),
+        (f"candidate+platform-{uuid4().hex}@example.com",),
     ).fetchone()["id"]
     decoy_id = api.admin.execute(
         "INSERT INTO users(email,name,password_hash) VALUES (%s,'Similar address','hash') RETURNING id",
-        (f"candidate@example.test",),
+        (f"candidate@example.com",),
     ).fetchone()["id"]
     target_email = api.admin.execute(
         "SELECT email FROM users WHERE id = %s", (target_id,)
@@ -349,7 +354,7 @@ def test_platform_admin_grant_rejects_unknown_or_archived_email(platform_api, ar
     from backend.schemas.platform_organizations import PlatformAdminGrantRequest
 
     api = platform_api
-    email = f"archived-{uuid4().hex}@example.test" if archived else f"missing-{uuid4().hex}@example.test"
+    email = f"archived-{uuid4().hex}@example.com" if archived else f"missing-{uuid4().hex}@example.com"
     if archived:
         api.admin.execute(
             "INSERT INTO users(email,name,password_hash,archived_at) VALUES (%s,'Archived','hash',%s)",
@@ -417,7 +422,7 @@ def test_platform_admin_grant_requires_platform_authority(platform_api):
     grant = api.endpoint("POST", "/api/platform/admins")
     with pytest.raises(HTTPException) as error:
         asyncio.run(grant(
-            body=PlatformAdminGrantRequest(email="target@example.test"),
+            body=PlatformAdminGrantRequest(email="target@example.com"),
             request=SimpleNamespace(cookies={"session_token": token}),
             actor=tenant_id, csrf_valid=True,
         ))

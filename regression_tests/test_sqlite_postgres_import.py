@@ -18,6 +18,7 @@ def sqlite_snapshot(tmp_path, request):
 
     path = tmp_path / ("legacy.sqlite3" if not request.param else "current.sqlite3")
     source = legacy_connection(path, current=request.param)
+    source.execute("INSERT INTO store_types(type_code,type_name) VALUES ('central','Central')")
     source.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES (8,'staff@example.com','Staff','staff-hash','engineer')")
     source.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES (7,'must-not-survive',?)",
                    (serialize_instant(utc_now() + timedelta(hours=1)),))
