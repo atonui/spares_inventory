@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 function setup(fetch){
  const timers=[];
- const c={console,Intl,Date,URLSearchParams,fetch,setTimeout:(fn)=>timers.push(fn),window:{location:{href:''}}};
+ const c={console,Intl,Date,URLSearchParams,Headers,fetch,setTimeout:(fn)=>timers.push(fn),window:{location:{href:''}}};
  vm.createContext(c);loadPageScripts('profile.html',c);
  return {p:c.profileManager(),c,timers};
 }

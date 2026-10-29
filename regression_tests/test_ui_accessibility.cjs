@@ -239,12 +239,12 @@ test('all date and date-time fields share mobile sizing', () => {
 
 test('platform organization table becomes labeled cards on mobile', () => {
     const html = read('superadmin.html');
-    const start = html.indexOf('<table class="organizations-table">');
+    const start = html.indexOf('<table class="organizations-table tbl">');
     const end = html.indexOf('</table>', start);
     assert.ok(start >= 0 && end > start, 'Missing organization table');
     const table = html.slice(start, end);
     assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
-        'Name', 'Slug', 'Status', 'Created'
+        'Organization', 'Status', 'Active members', 'Invitation email', 'Created (UTC)', 'Actions'
     ]);
     const css = read('superadmin.css');
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.organizations-table[^}]*display:\s*block/s.test(css), 'Organization table should switch to a mobile card layout');

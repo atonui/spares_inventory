@@ -38,9 +38,11 @@
 <script src="js/inventory/navigation.js?v=20261014-frontend-21" defer></script>
 <script src="js/pages/inventory-v21.js?v=20261014-frontend-21" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
+    <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
 <link rel="stylesheet" href="icons.css?v=20261017-sparesflow-button-contrast">
+    <link rel="stylesheet" href="password-visibility.css?v=20261029-password-visibility">
 <link rel="stylesheet" href="buttons.css?v=20261023-app-button-system-v1">
 <link rel="stylesheet" href="typography.css?v=20261023-font-scale-v1">
     <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
@@ -93,7 +95,7 @@
                     </div>
                     <div class="login-field">
                         <label for="login-password">Password</label>
-                        <input id="login-password" name="password" type="password" x-model="loginForm.password" autocomplete="current-password" placeholder="Enter your password" required>
+                        <div class="password-field-control"><input id="login-password" name="password" type="password" x-model="loginForm.password" autocomplete="current-password" placeholder="Enter your password" required><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="login-password" aria-label="Show password" aria-pressed="false">Show</button></div>
                     </div>
                     <div class="login-options">
                         <label class="login-remember" for="login-remember"><input id="login-remember" type="checkbox" x-model="loginForm.remember_me"><span>Remember me</span></label>
@@ -1525,7 +1527,7 @@
                         </div>
                         <div class="form-group" x-show="!currentUser?.saas_mode">
                             <label for="user-password" x-text="editingUser ? 'New Password (leave blank to keep current)' : 'Password'"></label>
-                            <input id="user-password" type="password" x-model="userForm.password" :required="!editingUser">
+                            <div class="password-field-control"><input id="user-password" type="password" x-model="userForm.password" :required="!editingUser"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="user-password" aria-label="Show password" aria-pressed="false">Show</button></div>
                         </div>
                         <div class="form-group">
                             <label for="user-role">Role</label>

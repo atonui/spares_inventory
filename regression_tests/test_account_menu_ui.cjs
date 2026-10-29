@@ -13,6 +13,8 @@ test('header account menu keeps profile, authorized superadmin, and logout actio
   assert.match(html,/<div class="account-menu-panel" id="account-menu-panel"[^>]*x-show="accountMenuOpen"[^>]*x-cloak\b/);
   assert.match(html,/<a[^>]*href="\/static\/profile\.html"[^>]*>[^<]*<svg[\s\S]*?Profile<\/a>/);
   assert.match(html,/x-show="\(currentUser\?\.is_platform_admin \|\| currentUser\?\.role === 'superadmin'\)"[^>]*class="account-menu-item"[^>]*href="\/static\/superadmin\.html"/);
+  assert.match(html,/class="sidebar-management" x-show="\['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\)"/);
+  assert.doesNotMatch(html,/class="sidebar-management"[^>]*x-show="[^"]*is_platform_admin/);
   assert.match(html,/<button[^>]*class="account-menu-item account-menu-signout"[^>]*@click="accountMenuOpen = false; logout\(\)"/);
   assert.match(html,/@keydown\.escape\.window="if \(accountMenuOpen\) \{ accountMenuOpen = false; \$refs\.accountMenuTrigger\.focus\(\) \}"/);
   assert.doesNotMatch(html,/class="header-actions"[\s\S]{0,1400}Logout[\s\S]{0,500}Profile[\s\S]{0,500}Superadmin/);
@@ -28,4 +30,12 @@ test('account menu uses an accessible icon-only mobile trigger and usable touch 
   assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-panel\s*\{[^}]*width:\s*min\(280px,\s*calc\(100vw\s*-\s*24px\)\)/s);
   assert.match(css,/@media\s*\(max-width:\s*480px\)[\s\S]*?\.account-menu-item\s*\{[^}]*min-height:\s*48px/s);
   assert.match(css,/\.account-menu-panel\s*\{[^}]*position:\s*absolute/s);
+});
+
+test('tenant management and platform administration use separate API role fields',()=>{
+  const auth=fs.readFileSync('backend/routes/auth.py','utf8');
+  assert.match(auth,/"role": principal\.company_role or "platform_admin"/);
+  assert.match(auth,/"is_platform_admin": principal\.is_platform_admin/);
+  assert.match(html,/class="sidebar-management" x-show="\['owner','admin','superadmin'\]\.includes\(currentUser\?\.role\)"/);
+  assert.match(html,/x-show="\(currentUser\?\.is_platform_admin \|\| currentUser\?\.role === 'superadmin'\)"[^>]*href="\/static\/superadmin\.html"/);
 });
