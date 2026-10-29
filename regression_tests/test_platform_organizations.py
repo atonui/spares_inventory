@@ -212,8 +212,8 @@ def test_platform_admin_grant_request_trims_and_validates_exact_email():
     from pydantic import ValidationError
     from backend.schemas.platform_organizations import PlatformAdminGrantRequest
 
-    request = PlatformAdminGrantRequest(email="  Ops.Team+Platform@example.test  ")
-    assert request.email == "Ops.Team+Platform@example.test"
+    request = PlatformAdminGrantRequest(email="  Ops.Team+Platform@example.com  ")
+    assert request.email == "Ops.Team+Platform@example.com"
     with pytest.raises(ValidationError):
         PlatformAdminGrantRequest(email="not-an-email")
 
