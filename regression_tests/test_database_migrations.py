@@ -129,7 +129,7 @@ def test_v9_upgrade_hashes_live_sqlite_sessions_without_revoking_them(tmp_path, 
     monkeypatch.setattr(registry,'MIGRATIONS',migrations)
     status=runner().apply_migrations(c)
     assert status.current_version==10
-    assert c.execute('SELECT session_token,is_active FROM sessions').fetchone()==(
+    assert tuple(c.execute('SELECT session_token,is_active FROM sessions').fetchone())==(
         hash_session_credential('still-valid'),1
     )
 
