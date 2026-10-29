@@ -73,10 +73,12 @@ def test_postgres_principal_lookup_hashes_presented_credential():
             return {
                 "user_id": 23,
                 "expires_at": "2099-01-01T00:00:00Z",
+                "absolute_expires_at": "2099-01-01T00:00:00Z",
                 "archived_at": None,
                 "organization_id": organization_id,
                 "company_role": "engineer",
                 "membership_active": True,
+                "organization_active": True,
                 "is_platform_admin": False,
             }
 

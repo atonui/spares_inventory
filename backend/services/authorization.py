@@ -56,12 +56,46 @@ def require_archive_admin(conn,user_id):
         raise HTTPException(status_code=403,detail='Admin access required')
 
 
-def require_user_management(user_id: int, requested_role=None, target_user_id=None, *, conn=None, get_connection=None):
+def require_user_management(user_id: int | AuthenticatedPrincipal, requested_role=None,
+                            target_user_id=None, *, conn=None, get_connection=None):
     """Protect legacy SQLite user-role management and superadmin accounts.
 
-    PostgreSQL tenant-member management must use a resolved company principal
-    and the organization-membership workflow in the user routes.
+    PostgreSQL management is scoped to the actor's current organization membership.
     """
+    if isinstance(user_id, AuthenticatedPrincipal):
+        if user_id.organization_id is None:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if conn is None:
+            raise ValueError("A tenant transaction connection is required for company user management")
+        actor = conn.execute(
+            """SELECT om.company_role FROM organization_memberships AS om
+               JOIN organizations AS o ON o.id = om.organization_id
+               WHERE om.organization_id = %s AND om.user_id = %s
+                 AND om.is_active = TRUE AND o.is_active = TRUE""",
+            (user_id.organization_id, user_id.user_id),
+        ).fetchone()
+        if actor is None or actor["company_role"] not in {"owner", "admin"}:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        actor_role = actor["company_role"]
+        if requested_role == "superadmin":
+            raise HTTPException(status_code=403, detail="Platform administrator access required")
+        if requested_role == "admin" and actor_role != "owner":
+            raise HTTPException(status_code=403, detail="Only the owner can assign the admin role")
+        if target_user_id is None:
+            return
+        target = conn.execute(
+            """SELECT company_role FROM organization_memberships
+               WHERE organization_id = %s AND user_id = %s""",
+            (user_id.organization_id, target_user_id),
+        ).fetchone()
+        if target is None:
+            raise HTTPException(status_code=404, detail="Company member not found")
+        if target["company_role"] == "owner":
+            raise HTTPException(status_code=403, detail="Use the ownership transfer operation")
+        if target["company_role"] == "admin" and actor_role != "owner":
+            raise HTTPException(status_code=403, detail="Only the owner can manage an admin")
+        return
+
     close = conn is None
     if close:
         conn = get_connection()

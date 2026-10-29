@@ -123,6 +123,32 @@ def _request(token):
     return SimpleNamespace(cookies={"session_token": token}, client=None, headers={})
 
 
+def test_archive_user_management_uses_current_company_roles(tenant_user_api):
+    from backend.services.authorization import require_user_management
+
+    api = tenant_user_api
+    owner = api.principal(api.owner_id, company_role="owner")
+    admin = api.principal(api.admin_id, company_role="admin")
+
+    # Both users retain the legacy global role "engineer".
+    require_user_management(owner, target_user_id=api.admin_id, conn=api.connection)
+    require_user_management(admin, target_user_id=api.manager_id, conn=api.connection)
+
+    with pytest.raises(HTTPException) as denied_admin_target:
+        require_user_management(admin, target_user_id=api.admin_id, conn=api.connection)
+    assert denied_admin_target.value.status_code == 403
+
+    with pytest.raises(HTTPException) as denied_owner_target:
+        require_user_management(owner, target_user_id=api.owner_id, conn=api.connection)
+    assert denied_owner_target.value.status_code == 403
+
+    # A stale owner principal cannot overrule the current membership role.
+    stale_owner = api.principal(api.admin_id, company_role="owner")
+    with pytest.raises(HTTPException) as denied_stale_role:
+        require_user_management(stale_owner, requested_role="admin", conn=api.connection)
+    assert denied_stale_role.value.status_code == 403
+
+
 def test_company_user_update_rejects_foreign_membership_id(tenant_user_api):
     from backend.schemas.users import UpdateUserRequest
 
