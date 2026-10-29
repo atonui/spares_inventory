@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from uuid import uuid4
 
 import pytest
 import main
@@ -37,6 +38,18 @@ def test_plan_uses_each_surplus_once_and_preserves_donor_minimums_and_reservatio
     with sqlite3.connect(api[1]) as c:
         assert c.execute('SELECT SUM(quantity) FROM inventory').fetchone()[0]==117
         assert c.execute('SELECT COUNT(*) FROM movements').fetchone()[0]==0
+
+
+def test_plan_accepts_authenticated_company_principal(api):
+    from backend.services.principals import AuthenticatedPrincipal
+
+    seed(api)
+    api[2]['id'] = AuthenticatedPrincipal(3, uuid4(), 'engineer', False)
+
+    result = plan(api)
+
+    assert result['rows'][0]['can_set_minimum'] is True
+    assert result['rows'][1]['can_set_minimum'] is False
 
 
 def test_incoming_unallocated_stock_reduces_purchasing_need_without_becoming_available(api):
