@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261023-approved-brand-v2">
-<link rel="stylesheet" href="superadmin.css?v=20261023-app-button-system-v1">
+<link rel="stylesheet" href="superadmin.css?v=20261029-platform-support-v1">
 <link rel="stylesheet" href="back-to-top.css?v=20261018-back-to-top">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
@@ -13,7 +13,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261018-back-to-top" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261028-platform-settings-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261029-platform-support-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.js" defer></script>
@@ -63,7 +63,18 @@
   </div>
 </div>
 
-<div class="shell" :inert="dlg.open || resetModal.open">
+<div class="confirm-overlay" x-show="supportStartOpen" style="display:none" x-cloak role="dialog" aria-modal="true" aria-labelledby="support-start-title" tabindex="-1" x-effect="syncDialog($el, supportStartOpen)" @keydown.tab="trapDialogFocus($event, $el)" @keydown.escape.stop="if (!supportStartPending) { supportStartOpen=false; supportStartForm.current_password=''; }">
+  <form class="confirm-box support-start-box" @submit.prevent="startSupportSession()">
+    <h3 id="support-start-title">Start customer support session</h3>
+    <p>Read-only access to <strong x-text="supportStartOrg?.name"></strong> for up to 15 minutes. This access is recorded in the platform audit trail.</p>
+    <div class="form-group"><label for="support-start-reason">Reason (10–500 characters)</label><textarea id="support-start-reason" rows="3" minlength="10" maxlength="500" x-model="supportStartForm.reason" required :disabled="supportStartPending"></textarea></div>
+    <div class="form-group"><label for="support-start-password">Confirm your current password</label><input id="support-start-password" type="password" autocomplete="current-password" x-model="supportStartForm.current_password" required maxlength="1024" :disabled="supportStartPending"></div>
+    <p x-show="supportStartError" class="action-error" role="alert" x-text="supportStartError"></p>
+    <div class="confirm-actions"><button type="button" class="btn btn-outline" @click="supportStartOpen=false;supportStartForm.current_password=''" :disabled="supportStartPending">Cancel</button><button type="submit" class="btn btn-red" :disabled="supportStartPending" x-text="supportStartPending ? 'Starting…' : 'Start support session'"></button></div>
+  </form>
+</div>
+
+<div class="shell" :inert="dlg.open || resetModal.open || supportStartOpen">
 
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
@@ -137,6 +148,9 @@
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg></span> Organizations
         </button>
+        <button type="button" class="nav-item" x-show="supportSession" :class="tab==='support'&&'active'" @click="selectSection('support')" :aria-current="tab==='support' ? 'page' : null">
+          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#lock"></use></svg></span> Customer Support
+        </button>
         <button type="button" class="nav-item" :class="tab==='platformAdmins'&&'active'" @click="tab='platformAdmins'; loadPlatformAdmins()" :aria-current="tab==='platformAdmins' ? 'page' : null">
           <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg></span> Platform Admins
         </button>
@@ -167,19 +181,24 @@
     <div class="topbar">
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
-        <select id="superadmin-section" aria-label="Superadmin section" x-model="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="!me?.saas_mode || ['dashboard','config','announcement','organizations','platformAdmins','platformAudit'].includes(key)" x-text="title"></option></template>
+        <select id="superadmin-section" aria-label="Superadmin section" :value="tab" @change="selectSection($event.target.value)">
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support') || (me?.saas_mode && (['dashboard','config','announcement','organizations','platformAdmins','platformAudit'].includes(key) || (key==='support' && supportSession)))" x-text="title"></option></template>
         </select>
       </div>
       <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
       <div class="topbar-right">
-        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading)" class="spin"></span>
-        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
+        <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)" class="spin"></span>
+        <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
         <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
       </div>
     </div>
 
-    <main class="content" id="panel-content" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading)">
+    <div class="support-banner" x-show="me?.saas_mode && supportSession" role="status" aria-live="polite">
+      <div><strong>Support session active</strong><span x-text="supportSession?.organization?.name"></span><span x-text="supportSession?.reason"></span><span>Expires in <strong x-text="supportTimeRemaining()"></strong></span></div>
+      <button type="button" class="btn btn-sm btn-red" @click="endSupportSession()" :disabled="supportLoading" x-text="supportLoading ? 'Ending…' : 'End support session'"></button>
+    </div>
+
+    <main class="content" id="panel-content" x-effect="if (tab !== 'support' && supportRows.length) clearSupportResults()" :aria-busy="loading || !!panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)">
 
       <!-- ══════════ DASHBOARD ══════════ -->
       <div x-show="tab==='dashboard' && !me?.saas_mode">
@@ -305,13 +324,35 @@
                   <td data-label="Active members" x-text="org.active_member_count"></td>
                   <td data-label="Invitation email"><span class="invitation-count">Pending <strong x-text="org.pending_invitation_mail_count"></strong></span><span class="invitation-count">Failed <strong x-text="org.failed_invitation_mail_count"></strong></span></td>
                   <td data-label="Created (UTC)" x-text="org.created_at"></td>
-                  <td data-label="Actions"><button class="btn btn-sm btn-outline" :class="org.is_active ? 'organization-suspend' : 'organization-reactivate'" @click="requestOrganizationStatus(org)" :disabled="dialogBusy || actionPending['organization:'+org.id]" x-text="org.is_active ? 'Suspend' : 'Reactivate'"></button></td>
+                  <td data-label="Actions"><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openSupportStart(org)" :disabled="!!supportSession || !me?.is_platform_admin">Start support session</button><button class="btn btn-sm btn-outline" :class="org.is_active ? 'organization-suspend' : 'organization-reactivate'" @click="requestOrganizationStatus(org)" :disabled="dialogBusy || actionPending['organization:'+org.id]" x-text="org.is_active ? 'Suspend' : 'Reactivate'"></button></div></td>
                 </tr></template></tbody>
               </table>
             </div>
             <div class="organization-pagination" x-show="organizationTotal>0 && !organizationError">
               <span role="status" x-text="`Showing ${organizationOffset+1}–${Math.min(organizationOffset+organizations.length,organizationTotal)} of ${organizationTotal}`"></span>
               <div class="filter-actions"><button class="btn btn-sm btn-outline" @click="loadOrganizations(Math.max(0,organizationOffset-organizationLimit))" :disabled="organizationLoading || organizationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset+organizationLimit)" :disabled="organizationLoading || organizationOffset+organizationLimit>=organizationTotal">Next</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='support' && me?.saas_mode && supportSession">
+        <div class="panel support-workspace">
+          <div class="panel-header"><span class="panel-title">Customer support — <span x-text="supportSession?.organization?.name"></span></span></div>
+          <div class="panel-body">
+            <p>Read-only, organization-scoped lookups. Each search is audited. Search by an exact tenant identifier.</p>
+            <form class="support-lookup-form" @submit.prevent="loadSupportLookup()">
+              <label for="support-lookup-kind">Lookup type<select id="support-lookup-kind" x-model="supportLookupKind" @change="supportRows=[];supportError='';supportLookupValue='';supportHasSearched=false" :disabled="supportLoading"><template x-for="kind in supportLookupKinds" :key="kind.key"><option :value="kind.key" x-text="kind.label"></option></template></select></label>
+              <label for="support-lookup-value">Exact lookup value<input id="support-lookup-value" x-model="supportLookupValue" :maxlength="supportLookupKind==='accounts' ? 254 : 100" :placeholder="supportLookupKinds.find(kind=>kind.key===supportLookupKind)?.placeholder || ''" required :disabled="supportLoading"></label>
+              <button class="btn btn-success" type="submit" :disabled="supportLoading || !supportSession"><span x-text="supportLoading ? 'Searching…' : 'Search'">Search</span></button>
+            </form>
+            <p x-show="supportLoading" role="status">Searching this organization…</p>
+            <div x-show="supportError" class="action-error" role="alert"><span x-text="supportError"></span><button type="button" class="btn btn-sm btn-outline" @click="loadSupportLookup()" :disabled="supportLoading">Retry</button></div>
+            <div x-show="!supportLoading && !supportError && supportRows.length===0" class="empty" x-text="supportHasSearched ? 'No matching records were found.' : 'No results yet. Enter an exact identifier and search.'"></div>
+            <div class="support-results" x-show="!supportLoading && supportRows.length">
+              <template x-for="(row,index) in supportRows" :key="index"><article class="support-result">
+                <dl><template x-for="entry in Object.entries(row)" :key="entry[0]"><div><dt x-text="entry[0].replaceAll('_',' ')"></dt><dd x-text="entry[1] ?? '—'"></dd></div></template></dl>
+              </article></template>
             </div>
           </div>
         </div>

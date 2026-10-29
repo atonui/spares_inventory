@@ -305,6 +305,11 @@ def create_platform_organizations_router(
                 raise HTTPException(status_code=404, detail="Platform administrator not found")
             if active_admins <= 1:
                 raise HTTPException(status_code=409, detail="The last platform administrator cannot be removed")
+            from backend.services.platform_support import end_support_sessions
+            end_support_sessions(
+                conn, actor_user_id=principal.user_id,
+                target_user_id=target_user_id, end_reason="platform_admin_revoked",
+            )
             conn.execute("DELETE FROM platform_admins WHERE user_id = %s", (target_user_id,))
             record_platform_audit_event(
                 conn, principal.user_id, "platform_admin_revoked", "success",

@@ -1,9 +1,14 @@
 """Curated platform audit writes and safe reads."""
 
 import json
+from uuid import UUID
 
 
 _DETAIL_FIELDS = {
+    "support_session_started": {"support_session_id", "reason", "request_id", "operation"},
+    "support_data_read": {"support_session_id", "resource", "operation", "request_id"},
+    "support_access_denied": {"support_session_id", "resource", "operation", "request_id"},
+    "support_session_ended": {"support_session_id", "operation", "request_id", "end_reason", "target_user_id"},
     "organization_created": {"invitation_created"},
     "company_role_changed": {"target_user_id", "role", "reason"},
     "platform_admin_granted": {"target_user_id"},
@@ -42,7 +47,21 @@ def safe_platform_audit_details(action: str, details) -> dict:
     for key, value in details.items():
         if key not in allowed:
             continue
-        if key == "invitation_created" and value is True:
+        if key in {"support_session_id", "request_id"} and isinstance(value, str):
+            try:
+                safe[key] = str(UUID(value))
+            except (ValueError, TypeError):
+                pass
+        elif key == "resource" and isinstance(value, str) and value in {"session", "accounts", "inventory", "work-orders", "equipment", "equipment-history", "movements"}:
+            safe[key] = value
+        elif key == "operation" and isinstance(value, str) and value in {"start", "lookup", "end"}:
+            safe[key] = value
+        elif key == "end_reason" and isinstance(value, str) and value in {
+            "user_logout", "password_changed", "sessions_revoked", "platform_admin_revoked", "expired",
+            "membership_removed", "membership_deactivated",
+        }:
+            safe[key] = value
+        elif key == "invitation_created" and value is True:
             safe[key] = True
         elif key == "target_user_id" and isinstance(value, int) and not isinstance(value, bool) and value > 0:
             safe[key] = value

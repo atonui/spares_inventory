@@ -219,3 +219,18 @@ def test_non_platform_identity_cannot_read_platform_audit(platform_api):
     with pytest.raises(HTTPException) as error:
         asyncio.run(endpoint(request=request, actor=SimpleNamespace(user_id=user_id)))
     assert error.value.status_code == 403
+
+
+def test_support_audit_detail_allowlist_excludes_queries_and_rows():
+    from backend.services.platform_audit import safe_platform_audit_details
+    session_id, request_id = str(uuid4()), str(uuid4())
+    details = {'support_session_id':session_id,'request_id':request_id,'resource':'accounts','operation':'lookup','query':'private@example.test','rows':[{'email':'private@example.test'}]}
+    assert safe_platform_audit_details('support_data_read',details) == {k:v for k,v in details.items() if k in {'support_session_id','request_id','resource','operation'}}
+    assert safe_platform_audit_details('support_data_read',{'support_session_id':'invalid','request_id':'client-controlled','resource':'users','operation':'sql','reason':'private search text'}) == {}
+    assert safe_platform_audit_details('support_session_ended', {
+        'support_session_id': session_id, 'operation': 'end', 'end_reason': 'sessions_revoked',
+        'target_user_id': 42, 'token': 'secret',
+    }) == {
+        'support_session_id': session_id, 'operation': 'end', 'end_reason': 'sessions_revoked',
+        'target_user_id': 42,
+    }

@@ -295,3 +295,54 @@ customer data, and follow the incident notification process. Do not query or
 export another tenant's data while investigating. Restore service only after
 the authorization path, RLS context, and restricted database role have been
 verified with the isolation matrix.
+
+After migration 15, narrow support-session grants after any blanket/default grants.
+The support table uses application-generated UUIDs and needs no sequence grant.
+The web role must retain its existing `SELECT` and `UPDATE` on `sessions` to
+validate credentials and lock login rows when serializing session starts.
+
+```sql
+REVOKE ALL PRIVILEGES ON TABLE platform_support_sessions FROM web_runtime_role;
+GRANT SELECT ON TABLE platform_support_sessions TO web_runtime_role;
+GRANT INSERT (id, actor_user_id, auth_session_id, organization_id, reason, created_at, expires_at)
+  ON TABLE platform_support_sessions TO web_runtime_role;
+GRANT UPDATE (ended_at) ON TABLE platform_support_sessions TO web_runtime_role;
+```
+
+Support reads use the restricted web role and the existing tenant RLS policies.
+Do not grant schema DDL, table ownership, or `BYPASSRLS`. Audit writes retain the
+existing `platform_audit_events` insert and `platform_audit_events_id_seq` usage
+grants. Support access requires a live login, current platform-admin authority,
+and a live session bound to that login before tenant context is set.
+
+### Platform support session operations
+
+Migration 15 creates `platform_support_sessions`. Starting a session requires a
+current-password check and a 10–500 character reason. Each session is bound to
+one platform administrator, one active authentication-session row, and one
+organization. Its lifetime is fixed at 15 minutes; there is no extension or
+cleanup worker. Expiry is enforced on every support request, and the first
+request after expiry marks the session ended and records the end event.
+
+The platform support page shows the organization, reason, and countdown while
+the session is active. Use **End support session** to close it immediately.
+Logout, password change or reset, revocation of the bound login, removal or
+deactivation of a company membership that revokes the user's login, and
+platform-administrator revocation end affected support rows in the same
+transaction as the corresponding account change. A platform administrator whose access is
+revoked loses support access immediately, even if the browser still displays
+stale UI state.
+
+The platform audit actions are `support_session_started`, `support_data_read`,
+`support_access_denied`, and `support_session_ended`. Read events contain only
+the session ID, resource class, operation, and server-generated request ID.
+Session end events contain the session ID, fixed end reason, and target admin
+ID only when another administrator initiated revocation. Customer query values
+and returned rows are never written to audit details.
+
+If a support session needs to be interrupted, end it from its active browser
+session. For suspected administrator compromise, revoke that platform-admin
+record from the Platform Admins screen; this ends that administrator's active
+support sessions and prevents future reads. If the browser is stale, reload the
+page and verify the session banner is gone. Support API responses use
+`Cache-Control: no-store`, including error responses.

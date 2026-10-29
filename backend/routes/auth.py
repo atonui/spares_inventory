@@ -1,4 +1,5 @@
 """Authentication routes composed with explicit application dependencies."""
+from contextlib import contextmanager
 from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
@@ -66,6 +67,12 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
     def authenticated_user_id(user):
         return getattr(user, "user_id", user)
+
+    @contextmanager
+    def authenticated_account_write(user, token):
+        """Account lifecycle writes must work for platform-only identities too."""
+        with authenticated_account_write_transaction(user, token) as scope:
+            yield scope[0] if isinstance(scope, tuple) else scope
 
     def email_change_account_key(request: Request) -> str:
         user_id = getattr(request.state, "email_change_user_id", None)
@@ -353,7 +360,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         """Change user password"""
         actor_id = authenticated_user_id(user_id)
-        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+        with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Get current user
@@ -384,6 +391,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             # Deactivate all sessions for this user i.e. force logout from all devices
             execute_cursor(conn, cursor, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (actor_id,))
+            if is_postgres(conn):
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=actor_id, end_reason="password_changed")
 
 
             logger.info(f"Password changed successfully for user {actor_id}")
@@ -399,7 +409,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         # Revoke all sessions except the current one
         actor_id = authenticated_user_id(user_id)
-        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+        with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             current_token = get_request_credential(request).value
@@ -407,13 +417,22 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             current_key = hash_session_credential(current_token) if is_postgres(conn) else current_token
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
 
-            cursor = execute(
-                conn,
-                f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ? AND is_active = 1",
-                (actor_id, current_key),
-            )
-
-            revoked_count = cursor.rowcount
+            if is_postgres(conn):
+                revoked = conn.execute(
+                    f"UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND {token_column} != %s AND is_active = TRUE RETURNING id",
+                    (actor_id, current_key),
+                ).fetchall()
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
+                                     auth_session_ids=[row["id"] for row in revoked])
+                revoked_count = len(revoked)
+            else:
+                cursor = execute(
+                    conn,
+                    f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ? AND is_active = 1",
+                    (actor_id, current_key),
+                )
+                revoked_count = cursor.rowcount
 
 
             return {
@@ -594,6 +613,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=400,detail='Invalid or expired token')
 
         execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
+        if is_postgres(conn):
+            from backend.services.platform_support import end_support_sessions
+            end_support_sessions(conn, actor_user_id=user["id"], end_reason="password_changed")
 
         conn.commit()
         conn.close()
@@ -1396,21 +1418,28 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         """Revoke a specific session"""
         actor_id = authenticated_user_id(user_id)
-        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+        with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             # Verify session belongs to user
-            execute_cursor(conn, cursor,
-                """
-                UPDATE sessions
-                SET is_active = 0
-                WHERE id = ? AND user_id = ?
-            """,
-                (session_id, actor_id),
-            )
-
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Session not found")
+            if is_postgres(conn):
+                revoked = conn.execute(
+                    "UPDATE sessions SET is_active=FALSE WHERE id=%s AND user_id=%s RETURNING id",
+                    (session_id, actor_id),
+                ).fetchone()
+                if revoked:
+                    from backend.services.platform_support import end_support_sessions
+                    end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
+                                         auth_session_ids=[revoked["id"]])
+                else:
+                    raise HTTPException(status_code=404, detail="Session not found")
+            else:
+                execute_cursor(conn, cursor,
+                    "UPDATE sessions SET is_active = 0 WHERE id = ? AND user_id = ?",
+                    (session_id, actor_id),
+                )
+                if cursor.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Session not found")
 
 
             return {"success": True, "message": "Session revoked"}
@@ -1424,7 +1453,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         """Revoke all sessions except current"""
         actor_id = authenticated_user_id(user_id)
-        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+        with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
             current_token = get_request_credential(request).value
@@ -1432,13 +1461,22 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             current_key = hash_session_credential(current_token) if is_postgres(conn) else current_token
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
 
-            cursor = execute(
-                conn,
-                f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ?",
-                (actor_id, current_key),
-            )
-
-            revoked_count = cursor.rowcount
+            if is_postgres(conn):
+                revoked = conn.execute(
+                    f"UPDATE sessions SET is_active=FALSE WHERE user_id=%s AND {token_column} != %s AND is_active=TRUE RETURNING id",
+                    (actor_id, current_key),
+                ).fetchall()
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
+                                     auth_session_ids=[row["id"] for row in revoked])
+                revoked_count = len(revoked)
+            else:
+                cursor = execute(
+                    conn,
+                    f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ?",
+                    (actor_id, current_key),
+                )
+                revoked_count = cursor.rowcount
 
 
             return {"success": True, "revoked_count": revoked_count}
@@ -1450,18 +1488,29 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         """Logout and clear session cookie"""
         actor_id = authenticated_user_id(user_id)
         credential = get_request_credential(request).value
-        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+        with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
             from backend.database_sql import execute, is_postgres
             if not is_postgres(conn):
                 execute(conn, "UPDATE users SET session_token = NULL, session_expires = NULL WHERE id = ?", (actor_id,))
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
             token_value = hash_session_credential(credential) if is_postgres(conn) else credential
+            support_auth_id = None
+            if is_postgres(conn):
+                row = conn.execute(
+                    f"SELECT id FROM sessions WHERE user_id=%s AND {token_column}=%s AND is_active=TRUE FOR UPDATE",
+                    (actor_id, token_value),
+                ).fetchone()
+                support_auth_id = row["id"] if row else None
             execute(
                 conn,
                 f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} = ?",
                 (actor_id, token_value),
             )
+            if is_postgres(conn) and support_auth_id is not None:
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=actor_id, end_reason="user_logout",
+                                     auth_session_ids=[support_auth_id])
 
             response = JSONResponse(content={"success": True})
             # Browser logout clears its ambient cookie; native logout uses only
