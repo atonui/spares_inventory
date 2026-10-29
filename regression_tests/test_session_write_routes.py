@@ -6,6 +6,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 import main
 from backend.database import connect_database
+from backend.security import hash_session_credential
 from regression_tests.session_fixtures import session_database
 
 
@@ -24,7 +25,7 @@ def session_api(tmp_path,monkeypatch):
     path=session_database(tmp_path/'http.db');monkeypatch.setattr(main,'DATABASE',str(path))
     with closing(connect_database(path)) as conn,conn:
         conn.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES(4,'manager@example.test','Manager','unused','manager')")
-        conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(4,4,'manager-token','2099-01-01T00:00:00.000000Z')")
+        conn.execute("INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(4,4,?,'2099-01-01T00:00:00.000000Z')", (hash_session_credential('manager-token'),))
         conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(2,'Car','engineer',3),(3,'Empty','central',NULL)")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(2,'EMPTY','Empty part','test',0)")
         conn.execute("INSERT INTO store_types(type_code,type_name) VALUES('unused','Unused')")

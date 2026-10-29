@@ -2,6 +2,7 @@
 import sqlite3
 from contextlib import closing
 from backend.database import initialize_database, connect_database
+from backend.security import hash_session_credential
 
 
 def session_database(path):
@@ -10,7 +11,7 @@ def session_database(path):
         conn.executemany('INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)',
             [(1,'admin@example.test','Admin','unused','admin'),(2,'root@example.test','Root','unused','superadmin'),(3,'engineer@example.test','Engineer','unused','engineer')])
         conn.executemany('INSERT INTO sessions(id,user_id,session_token,expires_at) VALUES(?,?,?,?)',
-            [(1,1,'admin-token','2099-01-01T00:00:00.000000Z'),(2,2,'root-token','2099-01-01T00:00:00.000000Z'),(3,3,'engineer-token','2099-01-01T00:00:00.000000Z')])
+            [(1,1,hash_session_credential('admin-token'),'2099-01-01T00:00:00.000000Z'),(2,2,hash_session_credential('root-token'),'2099-01-01T00:00:00.000000Z'),(3,3,hash_session_credential('engineer-token'),'2099-01-01T00:00:00.000000Z')])
         conn.execute("INSERT INTO stores(id,name,type) VALUES(1,'Warehouse','central')")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(1,'PART','Test part','test',0)")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(1,1,1,10)')

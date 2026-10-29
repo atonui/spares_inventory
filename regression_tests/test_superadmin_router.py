@@ -91,7 +91,8 @@ def test_superadmin_security_config_get_requires_active_session(super_api, token
         client.cookies.set('session_token', token)
     if token == 'root-token':
         with closing(connect_database(path)) as conn, conn:
-            conn.execute("UPDATE sessions SET is_active=0 WHERE session_token='root-token'")
+            from backend.security import hash_session_credential
+            conn.execute("UPDATE sessions SET is_active=0 WHERE session_token=?",(hash_session_credential('root-token'),))
     before = database_state(path)
     response = client.get(PREFIX + '/security-config')
     assert response.status_code == 401, response.text
@@ -212,7 +213,8 @@ def test_superadmin_dynamic_database_paths(super_api, tmp_path, monkeypatch):
     assert 'max-age=0' in response.headers['set-cookie'].lower()
     with closing(connect_database(path)) as conn:
         assert conn.execute('SELECT name FROM users WHERE id=1').fetchone()[0] == 'Admin'
-        assert conn.execute("SELECT is_active FROM sessions WHERE session_token='root-token'").fetchone()[0] == 1
+        from backend.security import hash_session_credential
+        assert conn.execute("SELECT is_active FROM sessions WHERE session_token=?",(hash_session_credential('root-token'),)).fetchone()[0] == 1
     with closing(connect_database(second)) as conn:
         assert conn.execute('SELECT name FROM users WHERE id=1').fetchone()[0] == 'Second database'
         assert conn.execute('SELECT COUNT(*) FROM sessions WHERE is_active=1').fetchone()[0] == 0
@@ -290,7 +292,8 @@ def test_superadmin_dependency_override_identity(super_api):
         'get_current_user', 'verify_authenticated_csrf', 'require_legacy_sqlite_mode',
     }
     assert client.put(PREFIX + '/security-config/max_login_attempts', json={'value': '7'}).status_code == 200
-    control['damage'] = "UPDATE sessions SET is_active=0 WHERE session_token='root-token'"
+    from backend.security import hash_session_credential
+    control['damage'] = "UPDATE sessions SET is_active=0 WHERE session_token='"+hash_session_credential('root-token')+"'"
     assert client.put(PREFIX + '/security-config/max_login_attempts', json={'value': '8'}).status_code == 401
     assert database_state(path) == control['before']
 

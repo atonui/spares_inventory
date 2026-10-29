@@ -2,6 +2,7 @@ from contextlib import closing
 import pytest
 import main
 from backend.database import connect_database
+from backend.security import hash_session_credential
 from regression_tests.test_session_write_routes import session_api,database_state
 from regression_tests.test_superadmin_router import super_api
 
@@ -66,7 +67,7 @@ def test_role_change_revocation_and_non_dismissible(super_api):
     assert c.post(PREFIX+'/dismiss',json={'revision':n['revision']}).status_code==403
     with closing(connect_database(path)) as db,db:db.execute("UPDATE users SET role='manager' WHERE id=3")
     assert c.get(PREFIX).json()['announcement'] is None
-    with closing(connect_database(path)) as db,db:db.execute("UPDATE sessions SET is_active=0 WHERE session_token='root-token'")
+    with closing(connect_database(path)) as db,db:db.execute("UPDATE sessions SET is_active=0 WHERE session_token=?",(hash_session_credential('root-token'),))
     c.cookies.set('session_token','root-token');assert c.get(PREFIX).json()['announcement'] is None
     assert c.get(PREFIX+'/manage').status_code==401
 
