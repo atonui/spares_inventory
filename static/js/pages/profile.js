@@ -129,7 +129,7 @@ function profileManager() {
             this.mobilePairingBusy=true;this.mobilePairingError='';this.mobilePairingSuccess='';
             this.stopMobilePairingPolling();this.mobilePairing=null;
             try {
-                const response=await fetch('/api/profile/mobile-pairings',{method:'POST',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const response=await InventoryCsrf.request(this,'/api/profile/mobile-pairings',{method:'POST',cache:'no-store'});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'A mobile pairing code could not be generated.');
                 if (typeof data.request_id!=='string' || typeof data.qr_svg!=='string' || typeof data.expires_at!=='string') throw Error('The server returned an invalid pairing code.');
@@ -167,7 +167,7 @@ function profileManager() {
             if (!this.mobilePairing || this.mobilePairing.status!=='pending' || this.mobilePairingBusy || !this.csrfToken) return;
             const requestId=this.mobilePairing.requestId;this.mobilePairingBusy=true;this.mobilePairingError='';
             try {
-                const response=await fetch(`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/approve`,{method:'POST',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const response=await InventoryCsrf.request(this,`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/approve`,{method:'POST',cache:'no-store'});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'This device could not be approved.');
                 if (this.mobilePairing?.requestId===requestId) {this.mobilePairing.status='approved';this.mobilePairingMessage='Approved. Finish signing in on the phone.';}
@@ -178,7 +178,7 @@ function profileManager() {
             if (!this.mobilePairing || this.mobilePairingBusy) return;
             const requestId=this.mobilePairing.requestId;this.mobilePairingBusy=true;this.mobilePairingError='';
             try {
-                const response=await fetch(`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/cancel`,{method:'POST',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const response=await InventoryCsrf.request(this,`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/cancel`,{method:'POST',cache:'no-store'});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'This pairing request could not be canceled.');
                 this.stopMobilePairingPolling();this.mobilePairing=null;this.mobilePairingMessage='';this.mobilePairingSuccess='Mobile pairing canceled.';
@@ -206,7 +206,7 @@ function profileManager() {
             if (!deviceId || this.mobileDeviceRevoking || !this.csrfToken) return;
             this.mobileDeviceRevoking=true;this.mobileDevicesError='';this.mobileDevicesSuccess='';
             try {
-                const response=await fetch(`/api/profile/mobile-devices/${encodeURIComponent(deviceId)}`,{method:'DELETE',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const response=await InventoryCsrf.request(this,`/api/profile/mobile-devices/${encodeURIComponent(deviceId)}`,{method:'DELETE',cache:'no-store'});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Device access could not be revoked.');
                 this.pendingMobileDeviceRevocation=null;this.mobileDevicesSuccess='Device access revoked.';
@@ -230,7 +230,7 @@ function profileManager() {
             if (!this.profile.saas_mode || this.emailChangeSaving || this.emailChangeStatusLoading || this.saving || this.timezoneSaving || this.csrfLoading || !this.csrfToken) return;
             this.emailChangeSaving=true;this.emailChangeError='';this.emailChangeMessage='';
             try {
-                const response=await fetch('/api/profile/email-change-requests',{method:'POST',credentials:'include',cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':this.csrfToken},body:JSON.stringify({email:this.emailChangeDraft.trim()})});
+                const response=await InventoryCsrf.request(this,'/api/profile/email-change-requests',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.emailChangeDraft.trim()})});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Email change could not be requested.');
                 this.emailChangeMessage=data.message || 'If the address can be used, a confirmation email has been sent.';
@@ -243,7 +243,7 @@ function profileManager() {
             if (!this.profile.saas_mode || !this.pendingEmailChange || this.emailChangeSaving || this.saving || this.timezoneSaving || this.csrfLoading || !this.csrfToken) return;
             this.emailChangeSaving=true;this.emailChangeError='';this.emailChangeMessage='';
             try {
-                const response=await fetch('/api/profile/email-change-request',{method:'DELETE',credentials:'include',cache:'no-store',headers:{'X-CSRF-Token':this.csrfToken}});
+                const response=await InventoryCsrf.request(this,'/api/profile/email-change-request',{method:'DELETE',cache:'no-store'});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Pending email change could not be canceled.');
                 this.pendingEmailChange=null;this.emailChangeMessage='Pending email change canceled.';
@@ -254,7 +254,7 @@ function profileManager() {
             if (this.timezoneSaving || this.saving || this.timezoneLoading || this.csrfLoading || !this.csrfToken || !this.timezoneContext || !this.displayTimezoneDirty) return;
             this.displayTimezoneSaving=true;this.clearDisplayTimezoneFeedback();
             try {
-                const response=await fetch('/api/profile',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':this.csrfToken},body:JSON.stringify({display_timezone:this.displayTimezoneDraft || null})});
+                const response=await InventoryCsrf.request(this,'/api/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_timezone:this.displayTimezoneDraft || null})});
                 const data=await response.json();
                 this.handleSecurityRejection(response, data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Display timezone could not be saved.');
@@ -268,7 +268,7 @@ function profileManager() {
             if (this.timezoneSaving || this.saving || this.timezoneLoading || this.csrfLoading || !this.csrfToken || this.timezoneConflict || !this.timezoneContext || !this.canManageBusinessTimezone || !this.businessTimezoneDirty) return;
             this.businessTimezoneSaving=true;this.clearBusinessTimezoneFeedback();
             try {
-                const response=await fetch('/api/organisation/timezone',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':this.csrfToken},body:JSON.stringify({timezone:this.businessTimezoneDraft,expected_revision:this.timezoneContext.revision})});
+                const response=await InventoryCsrf.request(this,'/api/organisation/timezone',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({timezone:this.businessTimezoneDraft,expected_revision:this.timezoneContext.revision})});
                 const data=await response.json();
                 this.handleSecurityRejection(response, data);
                 if (!response.ok) {if(response.status===409)this.timezoneConflict=true;throw Error(typeof data.detail==='string' ? data.detail : 'Business timezone could not be saved.');}
@@ -285,7 +285,7 @@ function profileManager() {
             if (this.passwordForm.new_password.length<8) {this.error='Password must be at least 8 characters long';return;}
             this.saving=true;
             try {
-                const response=await fetch('/api/profile/change-password',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':this.csrfToken},body:JSON.stringify({current_password:this.passwordForm.current_password,new_password:this.passwordForm.new_password})});
+                const response=await InventoryCsrf.request(this,'/api/profile/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password:this.passwordForm.current_password,new_password:this.passwordForm.new_password})});
                 const data=await response.json();
                 this.handleSecurityRejection(response, data);
                 if (response.ok) {
