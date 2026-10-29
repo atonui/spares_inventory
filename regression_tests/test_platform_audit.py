@@ -127,7 +127,7 @@ def platform_api(postgres_schema):
     admin.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
         sql.Identifier(schema), sql.Identifier(runtime_role)
     ))
-    admin.execute(sql.SQL("GRANT SELECT ON users, sessions, platform_admins, organizations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE platform_audit_events_id_seq TO {}").format(sql.Identifier(runtime_role)))
     admin.commit()
 
@@ -258,3 +258,4 @@ def test_support_audit_detail_allowlist_excludes_queries_and_rows():
         'support_session_id': session_id, 'operation': 'end', 'end_reason': 'sessions_revoked',
         'target_user_id': 42,
     }
+
