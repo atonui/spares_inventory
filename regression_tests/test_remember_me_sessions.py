@@ -20,17 +20,18 @@ def test_configured_cookie_lifetime_and_session_expiry(auth_api,monkeypatch,reme
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE system_settings SET setting_value='3' WHERE setting_key='session_duration_hours'")
         conn.execute("UPDATE system_settings SET setting_value='7' WHERE setting_key='remember_me_duration_days'")
-    with TestClient(main.app,base_url='https://inventory.test') as client:
+    with TestClient(main.app,base_url='https://www.sparestracker.com') as client:
         r=client.post('/api/auth/login',json={'email':'user1@example.com','password':'test-password','remember_me':remember})
         assert r.status_code==200
         cookie=SimpleCookie(r.headers['set-cookie'])['session_token']
         assert int(cookie['max-age'])==seconds and cookie['httponly'] and cookie['secure']
         assert cookie['path']=='/' and cookie['samesite']=='lax'
         with sqlite3.connect(db) as conn:
-            expires=datetime.fromisoformat(conn.execute('SELECT expires_at FROM sessions WHERE session_token=?',(cookie.value,)).fetchone()[0])
+            from backend.services.session_credentials import hash_session_credential
+            expires=datetime.fromisoformat(conn.execute('SELECT expires_at FROM sessions WHERE session_token=?',(hash_session_credential(cookie.value),)).fetchone()[0])
         assert expires==now+timedelta(seconds=seconds)
         # A new client represents reopening with the persisted cookie, no user cache.
-        with TestClient(main.app,base_url='https://inventory.test',cookies=client.cookies) as reopened:
+        with TestClient(main.app,base_url='https://www.sparestracker.com',cookies=client.cookies) as reopened:
             monkeypatch.setattr(access,'utc_now',lambda:expires-timedelta(microseconds=1))
             assert reopened.get('/api/me').status_code==200
             monkeypatch.setattr(access,'utc_now',lambda:expires)
@@ -39,7 +40,7 @@ def test_configured_cookie_lifetime_and_session_expiry(auth_api,monkeypatch,reme
 @pytest.mark.parametrize('action',['logout','revoke','archive','password_change'])
 def test_remembered_cookie_cannot_bypass_session_invalidation(auth_api,action):
     _,db,_=auth_api;main.app.dependency_overrides.pop(main.get_current_user)
-    with TestClient(main.app,base_url='https://inventory.test') as client:
+    with TestClient(main.app,base_url='https://www.sparestracker.com') as client:
         assert client.post('/api/auth/login',json={'email':'user1@example.com','password':'test-password','remember_me':True}).status_code==200
         token=client.cookies.get('session_token')
         if action=='logout':
@@ -49,7 +50,9 @@ def test_remembered_cookie_cannot_bypass_session_invalidation(auth_api,action):
             assert client.post('/api/profile/change-password',json={'current_password':'test-password','new_password':'new-test-password'}).status_code==200
         else:
             with sqlite3.connect(db) as conn:
-                if action=='revoke':conn.execute('UPDATE sessions SET is_active=0 WHERE session_token=?',(token,))
+                if action=='revoke':
+                    from backend.services.session_credentials import hash_session_credential
+                    conn.execute('UPDATE sessions SET is_active=0 WHERE session_token=?',(hash_session_credential(token),))
                 else:conn.execute("UPDATE users SET archived_at='2026-10-14T00:00:00.000000Z' WHERE id=1")
         client.cookies.set('session_token',token,domain='inventory.test',path='/')
         assert client.get('/api/me').status_code==401

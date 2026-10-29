@@ -1,6 +1,6 @@
 """Authentication routes composed with explicit application dependencies."""
 from contextlib import contextmanager
-from backend.services.session_credentials import get_request_credential
+from backend.services.session_credentials import get_optional_request_credential, get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from datetime import timedelta
@@ -31,6 +31,7 @@ from backend.schemas.email_change import (
 )
 from backend.services.session_credentials import hash_session_credential
 from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.security import password_needs_rehash
 
 
 def register_sqlite_instant_comparison(conn):
@@ -131,9 +132,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
     @router.get("/api/csrf-token")
     @instant_response
-    async def get_csrf_token():
+    async def get_csrf_token(request: Request):
         """Get CSRF token for forms"""
-        token = generate_csrf_token()
+        credential = get_optional_request_credential(request)
+        token = generate_csrf_token(credential.value if credential else None)
         return JSONResponse(content={"csrf_token": token}, headers={"Cache-Control": "no-store"})
 
 
@@ -414,7 +416,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             current_token = get_request_credential(request).value
             from backend.database_sql import execute, is_postgres
-            current_key = hash_session_credential(current_token) if is_postgres(conn) else current_token
+            current_key = hash_session_credential(current_token)
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
 
             if is_postgres(conn):
@@ -770,6 +772,17 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
+        # Upgrade legacy bcrypt hashes only after validating the submitted password.
+        # The new format uses a SHA-256 prehash so bcrypt's 72-byte truncation no
+        # longer causes different long passwords to authenticate as the same value.
+        if password_needs_rehash(user["password_hash"]):
+            execute(
+                conn,
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (hash_password(user_login.password), user["id"]),
+            )
+            conn.commit()
+
         raw_credential = secrets.token_urlsafe(32)
         raw_refresh_credential = secrets.token_urlsafe(32) if native else None
         if user_login.remember_me:
@@ -845,7 +858,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     session_conn,
                     """INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
                        VALUES (?, ?, ?, ?, ?)""",
-                    (user["id"], raw_credential, serialize_instant(expires), ip_address, user_agent),
+                    (user["id"], hash_session_credential(raw_credential), serialize_instant(expires), ip_address, user_agent),
                 )
                 execute(
                     session_conn,
@@ -1394,7 +1407,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             session_column = "session_token_hash"
         else:
             register_sqlite_instant_comparison(conn)
-            current_key = credential
+            current_key = hash_session_credential(credential)
             order_by = "utc_instant(last_activity) DESC"
             session_column = "session_token"
         sessions = execute(
@@ -1458,7 +1471,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             current_token = get_request_credential(request).value
             from backend.database_sql import execute, is_postgres
-            current_key = hash_session_credential(current_token) if is_postgres(conn) else current_token
+            current_key = hash_session_credential(current_token)
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
 
             if is_postgres(conn):
@@ -1494,7 +1507,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             if not is_postgres(conn):
                 execute(conn, "UPDATE users SET session_token = NULL, session_expires = NULL WHERE id = ?", (actor_id,))
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
-            token_value = hash_session_credential(credential) if is_postgres(conn) else credential
+            token_value = hash_session_credential(credential)
             support_auth_id = None
             if is_postgres(conn):
                 row = conn.execute(

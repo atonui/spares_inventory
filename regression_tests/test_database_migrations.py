@@ -75,8 +75,8 @@ def runner():
 
 def test_fresh_database_records_current_versions(tmp_path):
     c=sqlite3.connect(tmp_path/'fresh.db');s=runner().apply_migrations(c)
-    assert s.current_version==9 and s.pending==()
-    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,),(6,),(7,),(8,),(9,)]
+    assert s.current_version==10 and s.pending==()
+    assert c.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()==[(1,),(2,),(3,),(4,),(5,),(6,),(7,),(8,),(9,),(10,)]
     assert c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mobile_device_sessions'").fetchone()
     assert 'client_operation_id' in {row[1] for row in c.execute('PRAGMA table_info(movements)')}
 
@@ -88,7 +88,7 @@ def test_v8_database_upgrades_to_mobile_stock_adjustments(tmp_path,monkeypatch):
     assert runner().apply_migrations(c).current_version==8
     monkeypatch.setattr(registry,'MIGRATIONS',migrations)
     status=runner().apply_migrations(c)
-    assert status.current_version==9 and status.pending==()
+    assert status.current_version==10 and status.pending==()
     assert 'client_operation_id' in {row[1] for row in c.execute('PRAGMA table_info(movements)')}
 
 def test_adoption_records_only_validated_versions(tmp_path):
@@ -99,12 +99,39 @@ def test_adoption_records_only_validated_versions(tmp_path):
         projection=','.join('"'+name+'"' for name in original_columns[table])
         from backend.temporal_manifest import TEMPORAL_FIELDS
         from backend.temporal import parse_storage_instant,serialize_instant
+        from backend.services.session_credentials import hash_session_credential
         fields={f.column:f for f in TEMPORAL_FIELDS if f.table==table and f.kind=='instant' and not f.json_key}
         expected=[tuple(serialize_instant(parse_storage_instant(value,field=fields[name])) if name in fields and value is not None else value
                         for name,value in zip(original_columns[table],row)) for row in rows]
+        if table=='sessions':
+            expected=[tuple(hash_session_credential(value) if name=='session_token' and value is not None else value
+                            for name,value in zip(original_columns[table],row)) for row in expected]
+        if table=='users':
+            expected=[tuple(None if name in {'session_token','session_expires'} else value
+                            for name,value in zip(original_columns[table],row)) for row in expected]
         assert [tuple(r) for r in c.execute(f'SELECT {projection} FROM "{table}" ORDER BY rowid')]==expected
     assert c.execute('SELECT business_timezone FROM organisation_settings').fetchone()[0]=='Africa/Nairobi'
-    assert runner().migration_status(c).applied==(1,2,3,4,5,6,7,8,9)
+    assert runner().migration_status(c).applied==(1,2,3,4,5,6,7,8,9,10)
+
+
+def test_v9_upgrade_hashes_live_sqlite_sessions_without_revoking_them(tmp_path, monkeypatch):
+    from backend.migrations import registry
+    from backend.services.session_credentials import hash_session_credential
+
+    c=legacy_connection(tmp_path/'v9.db')
+    migrations=registry.MIGRATIONS
+    monkeypatch.setattr(registry,'MIGRATIONS',migrations[:9])
+    runner().apply_migrations(c)
+    c.execute(
+        "INSERT INTO sessions(user_id,session_token,expires_at) VALUES(7,'still-valid','2099-01-01T00:00:00Z')"
+    )
+    c.commit()
+    monkeypatch.setattr(registry,'MIGRATIONS',migrations)
+    status=runner().apply_migrations(c)
+    assert status.current_version==10
+    assert c.execute('SELECT session_token,is_active FROM sessions').fetchone()==(
+        hash_session_credential('still-valid'),1
+    )
 
 def test_repeat_upgrade_preserves_rows_and_applied_at(tmp_path):
     c=legacy_connection(tmp_path/'live.db');runner().apply_migrations(c);before=snapshot(c);schema=schema_snapshot(c)

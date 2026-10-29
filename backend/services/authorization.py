@@ -1,6 +1,7 @@
 """Administrative authorization guards with explicit connection ownership."""
 
 import sqlite3
+from dataclasses import replace
 from fastapi import HTTPException
 from backend.database_sql import is_postgres
 from .principals import AuthenticatedPrincipal
@@ -13,8 +14,11 @@ def check_admin(user_id: int | AuthenticatedPrincipal, conn=None, get_connection
     ID is supported only by the legacy single-tenant SQLite authorization model.
     """
     if isinstance(user_id, AuthenticatedPrincipal):
-        return (user_id.organization_id is not None and user_id.organization_is_active
-                and user_id.company_role in {"owner", "admin"})
+        try:
+            require_company_admin(user_id, conn=conn)
+            return True
+        except HTTPException:
+            return False
     close = conn is None
     if close:
         conn = get_connection()
@@ -28,12 +32,50 @@ def check_admin(user_id: int | AuthenticatedPrincipal, conn=None, get_connection
             conn.close()
 
 
-def require_company_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
-    """Require an active, server-resolved owner or admin company membership."""
-    if (principal.organization_id is None or not principal.organization_is_active
-            or principal.company_role not in {"owner", "admin"}):
+def current_company_principal(
+    principal: AuthenticatedPrincipal, conn
+) -> AuthenticatedPrincipal:
+    """Refresh tenant authority from the membership inside the scoped transaction."""
+    if not isinstance(principal, AuthenticatedPrincipal) or principal.organization_id is None:
         raise HTTPException(status_code=403, detail="Company administrator access required")
-    return principal
+    scope = conn.execute(
+        "SELECT current_setting('app.organization_id', TRUE) AS organization_id"
+    ).fetchone()
+    if scope is None or scope["organization_id"] != str(principal.organization_id):
+        raise HTTPException(status_code=403, detail="Company tenant context is missing or mismatched")
+    row = conn.execute(
+        """SELECT om.company_role
+           FROM organization_memberships AS om
+           JOIN organizations AS o ON o.id = om.organization_id
+           WHERE om.organization_id = %s AND om.user_id = %s
+             AND om.is_active = TRUE AND o.is_active = TRUE""",
+        (principal.organization_id, principal.user_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=403, detail="Active company membership required")
+    return replace(principal, company_role=row["company_role"], organization_is_active=True)
+
+
+def require_company_admin(
+    principal: AuthenticatedPrincipal, conn=None
+) -> AuthenticatedPrincipal:
+    """Require current owner/admin membership when a scoped connection is available."""
+    current = current_company_principal(principal, conn) if conn is not None else principal
+    if (current.organization_id is None or not current.organization_is_active
+            or current.company_role not in {"owner", "admin"}):
+        raise HTTPException(status_code=403, detail="Company administrator access required")
+    return current
+
+
+def require_company_owner(
+    principal: AuthenticatedPrincipal, conn=None
+) -> AuthenticatedPrincipal:
+    """Require the current owner role, refreshing it from the scoped database transaction."""
+    current = current_company_principal(principal, conn) if conn is not None else principal
+    if (current.organization_id is None or not current.organization_is_active
+            or current.company_role != "owner"):
+        raise HTTPException(status_code=403, detail="Company owner access required")
+    return current
 
 
 def require_platform_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
@@ -45,9 +87,7 @@ def require_platform_admin(principal: AuthenticatedPrincipal) -> AuthenticatedPr
 
 def require_archive_admin(conn,user_id):
     if isinstance(user_id, AuthenticatedPrincipal):
-        if (user_id.organization_id is None or not user_id.organization_is_active
-                or user_id.company_role not in {"owner", "admin"}):
-            raise HTTPException(status_code=403,detail='Admin access required')
+        require_company_admin(user_id, conn=conn)
         return
     if is_postgres(conn):
         raise HTTPException(status_code=403, detail="Company administrator access required")
@@ -119,7 +159,29 @@ def require_user_management(user_id: int | AuthenticatedPrincipal, requested_rol
 def require_superadmin(user_id: int, conn=None, get_connection=None):
     """Require platform authority on PostgreSQL and preserve SQLite compatibility."""
     if isinstance(user_id, AuthenticatedPrincipal):
-        if not user_id.is_platform_admin:
+        close = conn is None
+        if close:
+            conn = get_connection() if get_connection else None
+        if conn is None:
+            if user_id.is_platform_admin:
+                return
+            raise HTTPException(status_code=403, detail="Platform administrator access required")
+        try:
+            import psycopg
+            if isinstance(conn, psycopg.Connection):
+                row = conn.execute(
+                    "SELECT 1 FROM platform_admins WHERE user_id = %s", (user_id.user_id,)
+                ).fetchone()
+                allowed = row is not None
+            else:
+                row = conn.execute(
+                    "SELECT role FROM users WHERE id = ?", (user_id.user_id,)
+                ).fetchone()
+                allowed = bool(row and row["role"] == "superadmin")
+        finally:
+            if close and conn is not None:
+                conn.close()
+        if not allowed:
             raise HTTPException(status_code=403, detail="Platform administrator access required")
         return
     close = conn is None

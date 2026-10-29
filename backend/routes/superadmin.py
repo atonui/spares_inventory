@@ -308,7 +308,7 @@ def create_superadmin_router(*, get_connection, database_path, authenticated_wri
             from backend.database_sql import execute, is_postgres
             from backend.services.session_credentials import hash_session_credential
             token_column = "session_token_hash" if is_postgres(conn) else "session_token"
-            token_value = hash_session_credential(current_token) if is_postgres(conn) else current_token
+            token_value = hash_session_credential(current_token)
             execute(
                 conn,
                 f"UPDATE sessions SET is_active = 0 WHERE {token_column} != ? AND is_active = 1",

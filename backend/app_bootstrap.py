@@ -1,6 +1,7 @@
 """FastAPI application bootstrap wiring."""
 
 import sqlite3
+from ipaddress import ip_address
 from typing import Sequence
 
 from fastapi import FastAPI, Request
@@ -9,11 +10,23 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import PlainTextResponse
+
+
+def rate_limit_client_key(request: Request) -> str:
+    """Use Railway's edge-supplied client IP; ignore untrusted X-Forwarded-For chains."""
+    railway_ip = request.headers.get("x-real-ip")
+    if railway_ip:
+        try:
+            return str(ip_address(railway_ip.strip()))
+        except ValueError:
+            pass
+    return get_remote_address(request)
 
 from backend.services.api_v1_errors import api_v1_error_response
 
@@ -51,6 +64,10 @@ def create_inventory_app(
     *,
     lifespan,
     cors_allowed_origins: Sequence[str],
+    trusted_hosts: Sequence[str] = (
+        "www.sparestracker.com", "sparestracker.com",
+        "sparesinventory-production.up.railway.app", "localhost", "127.0.0.1", "testserver",
+    ),
     static_directory: str = "static",
 ) -> tuple[FastAPI, Limiter]:
     app = FastAPI(
@@ -93,7 +110,7 @@ def create_inventory_app(
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
-    limiter = Limiter(key_func=get_remote_address)
+    limiter = Limiter(key_func=rate_limit_client_key)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
 
@@ -104,6 +121,24 @@ def create_inventory_app(
         allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Request-ID"],
     )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(trusted_hosts))
+
+    @app.middleware("http")
+    async def add_browser_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+            "font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self'; "
+            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+        )
+        return response
 
     @app.middleware("http")
     async def redirect_legacy_frontend_url(request: Request, call_next):

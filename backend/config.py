@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     RESEND_FROM_EMAIL: str | None = None
     INVITATION_BASE_URL: str | None = None
     CORS_ALLOWED_ORIGINS: List[str] = ["https://sparesinventory-production.up.railway.app"]
+    TRUSTED_HOSTS: str = (
+        "www.sparestracker.com,sparestracker.com,"
+        "sparesinventory-production.up.railway.app,localhost,127.0.0.1,testserver"
+    )
 
     @field_validator("CORS_ALLOWED_ORIGINS")
     @classmethod

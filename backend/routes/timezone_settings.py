@@ -5,6 +5,7 @@ from backend.schemas.timezone_settings import BusinessTimezoneUpdate
 from backend.services.timezone_policy import resolve_business_context, resolve_display_zone
 from backend.services.activity import record_activity
 from backend.services.principals import AuthenticatedPrincipal
+from backend.services.authorization import require_company_admin
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.database_sql import execute, is_postgres
 from backend.temporal import serialize_instant, utc_now
@@ -39,7 +40,8 @@ def create_timezone_settings_router(*, get_connection, authenticated_writer, cur
             actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
             actor=execute(conn,'SELECT name FROM users WHERE id=?',(actor_id,)).fetchone()
             if isinstance(user_id, AuthenticatedPrincipal):
-                allowed = user_id.organization_id is not None and user_id.company_role in {'owner', 'admin'}
+                user_id = require_company_admin(user_id, conn)
+                allowed = True
             else:
                 role = execute(conn,'SELECT role FROM users WHERE id=?',(actor_id,)).fetchone()
                 allowed = bool(role and role['role'] in ('admin','superadmin'))

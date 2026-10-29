@@ -279,7 +279,8 @@ def test_v1_logout_revokes_bearer_without_cookie_response(session_api):
     assert "set-cookie" not in response.headers
     with closing(connect_database(database_path)) as conn:
         active = conn.execute(
-            "SELECT is_active FROM sessions WHERE session_token='admin-token'"
+            "SELECT is_active FROM sessions WHERE session_token=?",
+            (__import__('backend.services.session_credentials', fromlist=['hash_session_credential']).hash_session_credential('admin-token'),),
         ).fetchone()[0]
     assert active == 0
 
