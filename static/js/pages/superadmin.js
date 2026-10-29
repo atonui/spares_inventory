@@ -38,6 +38,12 @@ function superPanel() {
     dialogFocus: new WeakMap(),
     selectSection(section) {
       if (!Object.hasOwn(this.tabTitles, section)) return;
+      if (section === 'support' && !this.me?.saas_mode) return;
+      if (this.me?.saas_mode) {
+        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit'];
+        if (section === 'support' && this.supportSession) allowed.push('support');
+        if (!allowed.includes(section)) return;
+      }
       this.tab = section;
       this.refresh();
     },
@@ -58,7 +64,7 @@ function superPanel() {
       }
     },
     trapDialogFocus(event, element) {
-      const controls = Array.from(element.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]'));
+      const controls = Array.from(element.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]'));
       if (!controls.length) { event.preventDefault(); element.focus(); return; }
       const first = controls[0], last = controls[controls.length - 1];
       if (event.shiftKey && (event.target === first || event.target === element)) {
@@ -80,6 +86,7 @@ function superPanel() {
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
       organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
+      support: 'Customer Support',
     },
 
     // data stores
@@ -92,6 +99,19 @@ function superPanel() {
     platformAuditLoading: false, platformAuditError: '',
     platformAuditFilters: { actor_user_id: '', organization_id: '', action: '', result: '', start_at: '', end_at: '' },
     organizationForm: { name: '', slug: '', owner_email: '' },
+    supportSession: null, supportNow: Date.now(), supportExpiryTimer: null,
+    supportStartOrg: null, supportStartOpen: false, supportStartPending: false,
+    supportStartError: '', supportStartForm: { reason: '', current_password: '' },
+    supportLookupKind: 'accounts', supportLookupValue: '', supportRows: [],
+    supportLoading: false, supportError: '', supportRequest: 0, supportHasSearched: false,
+    supportLookupKinds: [
+      { key:'accounts', label:'Account access', placeholder:'Exact email address', param:'email' },
+      { key:'inventory', label:'Inventory and parts', placeholder:'Exact part number', param:'query' },
+      { key:'work-orders', label:'Work orders', placeholder:'Exact work order number', param:'query' },
+      { key:'equipment', label:'Equipment', placeholder:'Exact serial number', param:'query' },
+      { key:'equipment-history', label:'Equipment history', placeholder:'Exact serial number', param:'query' },
+      { key:'movements', label:'Movements and transfers', placeholder:'Exact part number', param:'query' },
+    ],
     platformAdmins: [], platformAdminLoading: false, platformAdminError: '', platformAdminEmail: '',
     locked: [], selectedLocked: [],
     sessions: [],
@@ -182,6 +202,7 @@ function superPanel() {
       await this.getCsrf();
       if (!await this.getMe()) return;
       if (this.me?.saas_mode) {
+        await this.loadCurrentSupportSession();
         await this.loadPlatformDashboard();
         await this.loadOrganizations();
         await this.loadPlatformAudit();
@@ -196,6 +217,7 @@ function superPanel() {
     refresh() {
       const loaders = {
         dashboard: () => this.loadDashboard(),
+        support: () => this.loadCurrentSupportSession(),
         organizations: () => this.loadOrganizations(),
         platformAdmins: () => this.loadPlatformAdmins(),
         platformAudit: () => this.loadPlatformAudit(),
@@ -276,8 +298,15 @@ async submitPasswordReset() {
     async api(path, opts = {}) {
       const headers = { ...opts.headers };
       if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-      const r = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, { ...opts, headers }, this.apiUrl);
-      if (r.status === 401) { location.href = '/static/index.html'; throw new Error('Unauthenticated'); }
+      const supportRequest = path.startsWith('/platform/support-sessions');
+      const r = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, {
+        ...opts, headers, ...(supportRequest ? { cache: 'no-store' } : {}),
+      }, this.apiUrl);
+      if (r.status === 401) {
+        const error = new Error('Unauthenticated'); error.status = 401;
+        if (!path.startsWith('/platform/support-sessions')) location.href = '/static/index.html';
+        throw error;
+      }
       if (!r.ok) { const e = await r.json().catch(() => ({})); const error = new Error(e.detail || `HTTP ${r.status}`); error.status=r.status; throw error; }
       if (r.status === 204) return null;
       return r.json();
@@ -325,6 +354,152 @@ async submitPasswordReset() {
         this.organizationError = error.message || 'Unable to load organizations.';
       } finally {
         this.organizationLoading = false;
+      }
+    },
+
+    openSupportStart(org) {
+      if (!this.me?.saas_mode || !this.me?.is_platform_admin || !org?.id) return;
+      this.supportStartOrg = org;
+      this.supportStartForm = { reason: '', current_password: '' };
+      this.supportStartError = '';
+      this.supportStartOpen = true;
+    },
+
+    async startSupportSession() {
+      if (this.supportStartPending || !this.supportStartOrg) return;
+      const reason = String(this.supportStartForm.reason || '').trim();
+      const password = String(this.supportStartForm.current_password || '');
+      if (reason.length < 10 || reason.length > 500 || !password) {
+        this.supportStartError = 'Enter a reason of 10–500 characters and confirm your password.';
+        this.supportStartForm.current_password = '';
+        return;
+      }
+      this.supportStartPending = true;
+      this.supportStartError = '';
+      try {
+        const data = await this.api('/platform/support-sessions', {
+          method: 'POST',
+          body: JSON.stringify({ organization_id: this.supportStartOrg.id, reason, current_password: password }),
+        });
+        this.clearSupportResults();
+        this.supportSession = data;
+        this.supportStartOpen = false;
+        this.tab = 'support';
+        this.supportNow = Date.now();
+        this.scheduleSupportExpiry();
+      } catch (error) {
+        this.supportStartError = error.message || 'Unable to start support session.';
+      } finally {
+        this.supportStartForm.current_password = '';
+        this.supportStartPending = false;
+      }
+    },
+
+    async loadCurrentSupportSession() {
+      if (!this.me?.saas_mode) return;
+      try {
+        const data = await this.api('/platform/support-sessions/current');
+        this.supportSession = data || null;
+        if (this.supportSession) {
+          this.supportNow = Date.now();
+          this.tab = 'support';
+          this.scheduleSupportExpiry();
+        } else {
+          this.clearSupportSession();
+          if (this.tab === 'support') this.tab = 'dashboard';
+        }
+      } catch (error) {
+        this.clearSupportSession();
+        if (this.tab === 'support' || error.status === 401 || error.status === 403) this.tab = 'dashboard';
+      }
+    },
+
+    scheduleSupportExpiry() {
+      if (this.supportExpiryTimer) clearTimeout(this.supportExpiryTimer);
+      this.supportExpiryTimer = setTimeout(() => {
+        this.supportNow = Date.now();
+        if (!this.supportSession) return;
+        if (this.supportNow >= Date.parse(this.supportSession.expires_at)) {
+          this.clearSupportSession();
+          this.tab = 'dashboard';
+          this.toast('Support session expired. Tenant data was cleared.', 'danger');
+          return;
+        }
+        this.scheduleSupportExpiry();
+      }, 1000);
+    },
+
+    supportTimeRemaining() {
+      if (!this.supportSession) return '';
+      const seconds = Math.max(0, Math.ceil((Date.parse(this.supportSession.expires_at) - this.supportNow) / 1000));
+      return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    },
+
+    clearSupportResults() {
+      this.supportRequest++;
+      this.supportRows = [];
+      this.supportError = '';
+      this.supportLoading = false;
+      this.supportLookupValue = '';
+      this.supportHasSearched = false;
+    },
+
+    clearSupportSession() {
+      if (this.supportExpiryTimer) clearTimeout(this.supportExpiryTimer);
+      this.supportExpiryTimer = null;
+      this.supportSession = null;
+      this.clearSupportResults();
+    },
+
+    handleTerminalSupportError(error) {
+      if (![401,403,404].includes(error?.status)) return false;
+      this.clearSupportSession();
+      this.tab = 'dashboard';
+      this.toast('Support session is no longer available. Tenant data was cleared.', 'danger');
+      return true;
+    },
+
+    async endSupportSession() {
+      if (!this.supportSession || this.supportLoading) return;
+      const id = this.supportSession.support_session_id;
+      this.supportLoading = true;
+      try {
+        await this.api(`/platform/support-sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        this.clearSupportSession();
+        this.tab = 'dashboard';
+        this.toast('Support session ended.', 'ok');
+      } catch (error) {
+        if (!this.handleTerminalSupportError(error)) this.supportError = error.message || 'Unable to end support session.';
+      } finally {
+        this.supportLoading = false;
+      }
+    },
+
+    async loadSupportLookup() {
+      if (!this.supportSession || this.supportLoading) return;
+      const kind = this.supportLookupKinds.find(item => item.key === this.supportLookupKind);
+      const value = String(this.supportLookupValue || '').trim();
+      const maximum = kind?.key === 'accounts' ? 254 : 100;
+      if (!kind || !value || value.length > maximum) {
+        this.supportRows = [];
+        this.supportError = `Enter a lookup value of 1–${maximum} characters.`;
+        return;
+      }
+      const request = ++this.supportRequest;
+      this.supportLoading = true;
+      this.supportError = '';
+      this.supportRows = [];
+      this.supportHasSearched = true;
+      try {
+        const query = new URLSearchParams({ [kind.param]: value });
+        const result = await this.api(`/platform/support-sessions/${encodeURIComponent(this.supportSession.support_session_id)}/${kind.key}?${query.toString()}`);
+        if (request === this.supportRequest && this.tab === 'support')
+          this.supportRows = Array.isArray(result.rows) ? result.rows : [];
+      } catch (error) {
+        if (request !== this.supportRequest) return;
+        if (!this.handleTerminalSupportError(error)) this.supportError = error.message || 'Unable to load support results.';
+      } finally {
+        if (request === this.supportRequest) this.supportLoading = false;
       }
     },
 

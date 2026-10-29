@@ -191,3 +191,27 @@ def test_email_change_api_errors_are_marked_no_store(tmp_path):
         response = client.get("/api/profile/email-change-request")
     assert response.status_code == 401
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_platform_support_responses_and_errors_are_never_cached(tmp_path):
+    from fastapi import HTTPException
+    from backend.app_bootstrap import create_inventory_app
+
+    app, _ = create_inventory_app(lifespan=None, cors_allowed_origins=[], static_directory=str(tmp_path))
+
+    @app.get("/api/platform/support-sessions/current")
+    def current_support():
+        return {"support_session_id": "example"}
+
+    @app.get("/api/platform/support-sessions/failure")
+    def support_failure():
+        raise HTTPException(status_code=404, detail="Unavailable")
+
+    with TestClient(app) as client:
+        success = client.get("/api/platform/support-sessions/current")
+        failure = client.get("/api/platform/support-sessions/failure")
+
+    for response in (success, failure):
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["pragma"] == "no-cache"
+        assert response.headers["referrer-policy"] == "no-referrer"

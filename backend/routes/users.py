@@ -297,6 +297,9 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                 if target["company_role"] == "admin" and current_actor.company_role != "owner":
                     raise HTTPException(status_code=403, detail="Only the owner can remove an admin")
                 execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=current_actor.user_id, target_user_id=target_user_id,
+                                     end_reason="membership_removed")
                 execute(
                     conn,
                     "DELETE FROM organization_memberships WHERE organization_id = ? AND user_id = ?",
@@ -340,6 +343,9 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                     (user_id.organization_id, target_user_id),
                 )
                 execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=user_id.user_id, target_user_id=target_user_id,
+                                     end_reason="membership_deactivated")
                 result = {"success": True, "message": "Company membership deactivated"}
                 _record_mutation_activity(conn, user_id, "deactivate_user", "user", result, request)
                 return result

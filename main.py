@@ -468,6 +468,7 @@ from backend.routes.invitations import create_invitation_router
 from backend.routes.platform_organizations import create_platform_organizations_router
 from backend.routes.platform_audit import create_platform_audit_router
 from backend.routes.platform_settings import create_platform_settings_router
+from backend.routes.platform_support import create_platform_support_router
 
 app.include_router(create_invitation_router(
     get_connection=lambda: get_db_connection(),
@@ -491,6 +492,11 @@ app.include_router(create_platform_organizations_router(
 ))
 app.include_router(create_platform_audit_router(
     get_connection=lambda: get_db_connection(), current_user=get_current_user,
+))
+app.include_router(create_platform_support_router(
+    get_connection=lambda: get_db_connection(), current_user=get_current_user,
+    csrf_dependency=verify_authenticated_csrf,
+    password_verify=lambda plain, hashed: verify_password(plain, hashed), limiter=limiter,
 ))
 app.include_router(create_platform_settings_router(
     get_connection=lambda: get_db_connection(),

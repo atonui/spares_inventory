@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from datetime import timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -67,6 +68,10 @@ def tenant_user_api(postgres_schema):
         ))
     connection.execute(sql.SQL("GRANT DELETE ON organization_memberships TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT SELECT ON platform_admins TO {}").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT SELECT ON platform_support_sessions TO {}").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT UPDATE (ended_at) ON platform_support_sessions TO {}").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT INSERT ON platform_audit_events TO {}").format(sql.Identifier(role)))
+    connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE platform_audit_events_id_seq TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE activity_logs_id_seq TO {}").format(
         sql.Identifier(role)
@@ -193,6 +198,49 @@ def test_member_removal_deletes_only_membership_and_revokes_sessions(tenant_user
     assert api.connection.execute(
         "SELECT user_id, action FROM activity_logs WHERE id=%s", (activity_id,)
     ).fetchone() == {"user_id": api.manager_id, "action": "existing-company-history"}
+
+
+@pytest.mark.parametrize(("operation", "end_reason"), [
+    ("remove", "membership_removed"),
+    ("deactivate", "membership_deactivated"),
+])
+def test_member_session_revocation_ends_support_access_in_same_transaction(tenant_user_api, operation, end_reason):
+    from backend.temporal import serialize_instant, utc_now
+
+    api = tenant_user_api
+    auth_id = api.connection.execute(
+        "SELECT id FROM sessions WHERE user_id=%s", (api.manager_id,)
+    ).fetchone()["id"]
+    support_id = uuid4()
+    now = utc_now()
+    api.connection.execute(
+        """INSERT INTO platform_support_sessions
+           (id,actor_user_id,auth_session_id,organization_id,reason,created_at,expires_at)
+           VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (support_id, api.manager_id, auth_id, api.org_a, "Investigate access issue",
+         serialize_instant(now), serialize_instant(now + timedelta(minutes=15))),
+    )
+    api.connection.commit()
+    if operation == "remove":
+        endpoint = api.endpoint("POST", "/api/users/{target_user_id}/remove")
+    else:
+        endpoint = api.endpoint("DELETE", "/api/users/{target_user_id}")
+    asyncio.run(endpoint(
+        target_user_id=api.manager_id,
+        user_id=api.principal(api.owner_id), csrf_valid=True, request=_request(api.owner_token),
+    ))
+    ended = api.connection.execute(
+        "SELECT ended_at FROM platform_support_sessions WHERE id=%s", (support_id,)
+    ).fetchone()["ended_at"]
+    event = api.connection.execute(
+        "SELECT actor_user_id,organization_id,details FROM platform_audit_events WHERE action='support_session_ended'"
+    ).fetchone()
+    assert ended is not None
+    assert event["actor_user_id"] == api.owner_id
+    assert event["organization_id"] == api.org_a
+    assert event["details"]["support_session_id"] == str(support_id)
+    assert event["details"]["target_user_id"] == api.manager_id
+    assert event["details"]["end_reason"] == end_reason
 
 
 def test_member_removal_is_tenant_scoped_and_protects_owner(tenant_user_api):

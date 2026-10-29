@@ -36,20 +36,22 @@ test('settings cannot save before a successful load or during refresh',async()=>
  a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
-test('mobile navigation reaches every existing panel and loads its data',()=>{const a=app();for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,16);assert.match(html,/aria-current/);});
+test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,17);assert.match(html,/aria-current/);});
+test('legacy superadmin cannot navigate to the SaaS support workspace',()=>{const a=app();a.me={saas_mode:false};a.tab='dashboard';a.selectSection('support');assert.equal(a.tab,'dashboard');assert.match(html,/!me\?\.saas_mode && key!=='support'/);});
 test('SaaS platform boot loads only platform data',async()=>{
  const a=app(),calls=[];
  a.getCsrf=async()=>calls.push('csrf');
  a.getMe=async()=>{a.me={saas_mode:true,is_platform_admin:true};calls.push('me');return true;};
  a.loadPlatformDashboard=async()=>calls.push('platform-dashboard');
+  a.loadCurrentSupportSession=async()=>calls.push('support-current');
  a.loadOrganizations=async()=>calls.push('organizations');
  a.loadPlatformAudit=async()=>calls.push('platform-audit');
  a.loadPlatformAdmins=async()=>calls.push('platform-admins');
  a.loadTimezoneContext=async()=>assert.fail('legacy tenant timezone must not load');
  a.loadDashboard=async()=>assert.fail('legacy dashboard must not load');
  await a.init();
- assert.deepEqual(calls,['csrf','me','platform-dashboard','organizations','platform-audit','platform-admins']);
+  assert.deepEqual(calls,['csrf','me','support-current','platform-dashboard','organizations','platform-audit','platform-admins']);
 });
 test('platform administrator list distinguishes loading, failure and successful retry',async()=>{
  const a=app();let release,calls=0;a.api=()=>{calls++;return new Promise(r=>release=r);};
@@ -110,7 +112,43 @@ test('SaaS navigation exposes only supported platform settings and announcement 
  const platform=html.split('x-show="me?.saas_mode && me?.is_platform_admin"')[1].split('</nav>')[0];
  assert.match(platform,/Security Settings/);assert.match(platform,/System Announcement/);
  assert.match(html,/\['dashboard','config','announcement','organizations','platformAdmins','platformAudit'\]/);
+ assert.match(html,/key==='support' && supportSession/);
  assert.match(html,/Scheduled announcements use UTC/);
+});
+test('support start requires organization, reason, and password, then clears the password',async()=>{
+ const a=app(),calls=[];a.me={saas_mode:true,is_platform_admin:true};a.toast=()=>{};
+ const organization={id:'org-a',name:'Northwind'};a.openSupportStart(organization);
+ assert.equal(a.supportStartOpen,true);assert.equal(a.supportStartOrg.id,'org-a');assert.equal(a.supportStartForm.current_password,'');
+ a.supportStartForm={reason:'Investigate sign-in issue',current_password:'secret'};
+ a.api=async(path,options)=>{calls.push([path,options.method,JSON.parse(options.body)]);return {support_session_id:'support-a',organization,reason:'Investigate sign-in issue',expires_at:new Date(Date.now()+60000).toISOString()};};
+ await a.startSupportSession();
+ assert.deepEqual(calls,[['/platform/support-sessions','POST',{organization_id:'org-a',reason:'Investigate sign-in issue',current_password:'secret'}]]);
+ assert.equal(a.supportStartForm.current_password,'');assert.equal(a.tab,'support');assert.equal(a.supportSession.support_session_id,'support-a');
+ a.supportStartForm={reason:'Investigate sign-in issue',current_password:'bad'};a.api=async()=>{throw Error('wrong password');};
+ await a.startSupportSession();assert.equal(a.supportStartForm.current_password,'');assert.equal(a.supportStartError,'wrong password');
+});
+test('active support session restores into the workspace banner state',async()=>{
+ const a=app();a.me={saas_mode:true};a.api=async()=>({support_session_id:'support-a',organization:{id:'org-a',name:'Northwind'},reason:'Investigate sign-in issue',expires_at:new Date(Date.now()+60000).toISOString()});
+ await a.loadCurrentSupportSession();assert.equal(a.tab,'support');assert.equal(a.supportSession.organization.name,'Northwind');assert.match(html,/support-banner/);assert.match(html,/End support session/);
+});
+test('support lookups include the session identifier and never send a free-standing organization ID',async()=>{
+ const a=app(),paths=[];a.tab='support';a.supportSession={support_session_id:'support-a'};a.supportLookupValue='VALUE-1';
+ a.api=async path=>{paths.push(path);return {rows:[{id:1}]};};
+ for(const kind of a.supportLookupKinds){a.supportLookupKind=kind.key;await a.loadSupportLookup();}
+ assert.equal(paths.length,6);for(const path of paths){assert.match(path,/\/support-sessions\/support-a\//);assert.doesNotMatch(path,/organization_id=/);}
+ assert.deepEqual(paths.map(path=>path.split('/').at(-1).split('?')[0]),Array.from(a.supportLookupKinds,kind=>kind.key));
+ assert.ok(a.supportRows.length);a.clearSupportResults();assert.equal(a.supportRows.length,0);
+});
+test('terminal support response clears tenant data and returns to the platform console',async()=>{
+ const a=app();a.me={saas_mode:true};a.tab='support';a.supportRows=[{email:'tenant@example.test'}];a.supportSession={support_session_id:'support-a'};a.supportLookupValue='user@example.test';a.toast=()=>{};
+ a.api=async()=>{const error=Error('unavailable');error.status=404;throw error;};await a.loadSupportLookup();
+ assert.equal(a.supportRows.length,0);assert.equal(a.supportSession,null);assert.equal(a.tab,'dashboard');
+});
+test('support workspace offers only fixed lookups and renders result values as text',()=>{
+ const support=html.split('x-show="tab===\'support\' && me?.saas_mode && supportSession"')[1].split('x-show="tab===\'platformAdmins\'')[0];
+ const script=fs.readFileSync('static/js/pages/superadmin.js','utf8');
+ for(const key of ['accounts','inventory','work-orders','equipment','equipment-history','movements'])assert.ok(script.includes(`key:'${key}'`));
+ assert.match(support,/x-text="entry\[1\]/);assert.doesNotMatch(support,/x-html=/);assert.match(script,/cache: 'no-store'/);
 });
 test('platform audit filters are encoded, paginated, and recoverable after failure',async()=>{
  const a=app();a.platformAuditFilters={actor_user_id:'7',organization_id:'org / id',action:'organization_created',result:'success',start_at:'2026-10-01T00:00:00Z',end_at:''};
@@ -150,7 +188,7 @@ test('organization directory shows lifecycle controls and aggregate-only operati
  assert.match(directory,/requestOrganizationStatus\(org\)/);assert.doesNotMatch(directory,/organization_users|inventory_rows/);
  assert.match(html,/x-model="dlg\.reason"/);
 });
-test('dialog traps focus in both directions',()=>{const a=app();let focused;const first={focus:()=>focused='first'},last={focus:()=>focused='last'};const el={querySelectorAll:()=>[first,last]};let prevented=false;const event={target:last,shiftKey:false,preventDefault:()=>prevented=true};a.trapDialogFocus(event,el);assert.equal(focused,'first');assert.equal(prevented,true);event.target=first;event.shiftKey=true;a.trapDialogFocus(event,el);assert.equal(focused,'last');});
+test('dialog traps focus in both directions and includes textareas',()=>{const a=app();let focused,selector;const first={focus:()=>focused='first'},last={focus:()=>focused='last'};const el={querySelectorAll:value=>{selector=value;return [first,last];}};let prevented=false;const event={target:last,shiftKey:false,preventDefault:()=>prevented=true};a.trapDialogFocus(event,el);assert.equal(focused,'first');assert.equal(prevented,true);assert.match(selector,/textarea:not\(\[disabled\]\)/);event.target=first;event.shiftKey=true;a.trapDialogFocus(event,el);assert.equal(focused,'last');});
 
 test('dialog focuses a control once and restores the opener on close',()=>{const a=app();let focused=0,restored=0;const opener={isConnected:true,focus:()=>restored++};const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:opener},WeakMap};vm.createContext(c);loadPageScripts('superadmin.html',c);const panel=c.superPanel();panel.$nextTick=fn=>fn();const el={querySelector:()=>({focus:()=>focused++})};panel.syncDialog(el,true);panel.syncDialog(el,true);assert.equal(focused,1);panel.syncDialog(el,false);assert.equal(restored,1);});
 test('shared dialog lifecycle restores focus after the background stops being inert',()=>{

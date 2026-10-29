@@ -132,23 +132,28 @@
 
 ### Task 7: Design controlled, audited tenant support access
 
+**Implementation status:** Approved design and implementation are tracked in
+[`2026-10-28-controlled-platform-support-access-design.md`](../specs/2026-10-28-controlled-platform-support-access-design.md)
+and [`2026-10-28-controlled-platform-support-access.md`](2026-10-28-controlled-platform-support-access.md).
+The first implementation slice is fixed at 15 minutes and remains read-only.
+
 **Scope:** This is an approved product direction, but it needs a focused security design and separate implementation slice. It does not grant routine tenant-data browsing to platform admins.
 
 **Design requirements**
 - Platform admins may view platform-level tenant metadata in the normal console. Tenant user or inventory data requires an explicit support session for one organization and a documented reason.
 - Start with read-only access to a narrowly listed set of support resources. Do not create a generic tenant browser, database console, or customer-identity impersonation session.
 - Keep the platform administrator authenticated as themselves. Every support request must retain both the actor and target organization; show a persistent support-access banner and provide an immediate end/revoke action.
-- Store support-session state server-side, bind it to the authenticated platform session and one organization, and impose a short configurable maximum lifetime. Never encode support authority in a client-editable JWT claim.
+- Store support-session state server-side, bind it to the authenticated platform session and one organization, and impose a fixed 15-minute maximum lifetime. Never encode support authority in a client-editable JWT claim.
 - Authorize every support request against that live support session and its allowed resource/action set. Expiry, revocation, platform-admin revocation, or logout must end access. Tenant transactions must remain explicitly scoped and must not use a blanket RLS bypass.
 - Audit support-session start, each data access (resource/action), denied access, and end/expiry, including actor, organization, reason, timestamp, and request correlation ID. Redact sensitive field values from audit details.
 - Any write capability, broader resource set, or true impersonation requires a separate design and explicit approval; do not silently expand the read-only workflow.
 
 **Implementation planning steps**
-- [ ] Inventory concrete support cases and agree on the minimum resource/field allowlist before coding.
-- [ ] Trace how the allowlisted reads can be performed while preserving organization scoping and PostgreSQL RLS; if this requires a new trusted database policy/context, document and review that policy before implementation.
-- [ ] Specify the server-side support-session lifecycle, maximum lifetime, revocation behavior, audit schema, UI banner, and failure behavior.
-- [ ] Write abuse-case tests for cross-tenant access, missing/expired/revoked sessions, actor revocation, logout, context cleanup after errors, and attempts to write or access unlisted resources.
-- [ ] Put the resulting approved design in a separate spec and implementation plan; then implement the narrow read-only workflow in its own reviewable PR.
+- [x] Inventory concrete support cases and agree on the minimum resource/field allowlist before coding.
+- [x] Trace how the allowlisted reads can be performed while preserving organization scoping and PostgreSQL RLS; if this requires a new trusted database policy/context, document and review that policy before implementation.
+- [x] Specify the server-side support-session lifecycle, maximum lifetime, revocation behavior, audit schema, UI banner, and failure behavior.
+- [x] Write abuse-case tests for cross-tenant access, missing/expired/revoked sessions, actor revocation, logout, context cleanup after errors, and attempts to write or access unlisted resources.
+- [x] Put the resulting approved design in a separate spec and implementation plan; then implement the narrow read-only workflow in its own reviewable PR.
 
 **Acceptance:** A support case can be handled against one tenant with explicit authorization and an audit trail, while ordinary platform-admin access still reveals no tenant roster or inventory.
 

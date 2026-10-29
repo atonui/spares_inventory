@@ -90,7 +90,7 @@ def test_platform_audit_indexes_cover_order_and_common_filters():
 def test_organization_invitation_mail_migration_exposes_aggregate_view_only():
     from backend.postgres_migrations.registry import MIGRATIONS
 
-    migration = MIGRATIONS[-1]
+    migration = next(m for m in MIGRATIONS if m.version == 14)
     assert (migration.version, migration.name) == (14, "organization_invitation_mail_counts")
     sql = "\n".join(migration.statements)
     assert "platform_organization_invitation_mail_counts" in sql
@@ -111,7 +111,7 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 15))
+    assert status.applied_versions == tuple(range(1, 16))
     assert status.pending_versions == ()
 
     user_id = connection.execute(
@@ -145,7 +145,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 15))
+    assert status.applied_versions == tuple(range(1, 16))
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -199,7 +199,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 15))
+    assert status.applied_versions == tuple(range(1, 16))
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -323,7 +323,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == tuple(range(1, 15))
+    assert status.applied_versions == tuple(range(1, 16))
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -432,7 +432,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     apply_postgres_migrations(connection)
 
     failing = registry.Migration(
-        version=8,
+        version=16,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -447,7 +447,7 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 8"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 16"
     ).fetchone()["count"] == 0
 
 
@@ -458,7 +458,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 15))
+    assert status.applied_versions == tuple(range(1, 16))
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -509,7 +509,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 15))
+    assert status.applied_versions == tuple(range(1, 16))
     session_columns = {
         row["column_name"]
         for row in connection.execute(
@@ -571,3 +571,18 @@ def test_invitation_rls_denies_reads_without_matching_context(postgres_schema):
     connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
     connection.commit()
+
+
+def test_support_session_migration_creates_indexed_bound_session_table():
+    from backend.postgres_migrations.registry import MIGRATIONS
+    migration = next(m for m in MIGRATIONS if m.version == 15)
+    assert migration.name == 'platform_support_sessions'
+    statements = '\n'.join(migration.statements)
+    for field in ('id UUID PRIMARY KEY', 'actor_user_id BIGINT NOT NULL REFERENCES users(id)',
+                  'auth_session_id BIGINT NOT NULL REFERENCES sessions(id)',
+                  'organization_id UUID NOT NULL REFERENCES organizations(id)',
+                  'reason TEXT NOT NULL', 'created_at TEXT NOT NULL',
+                  'expires_at TEXT NOT NULL', 'ended_at TEXT',
+                  '(actor_user_id, auth_session_id, expires_at)',
+                  '(organization_id, created_at DESC)'):
+        assert field in statements
