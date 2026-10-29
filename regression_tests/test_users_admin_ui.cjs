@@ -29,7 +29,9 @@ test('user management uses the shared responsive heading and retains its access/
 test('actual add/cancel/submit and email/password bindings retain create/edit mode',async()=>{
  const {a,c}=setup();fill(a);const add=clicks().find(e=>e.startsWith('editingUser = null; userForm ='));assert.ok(add);
  vm.runInContext('with(app){'+add+'}',c);assert.deepEqual(plain(a.userForm),initial);assert.equal(a.editingUser,null);assert.equal(a.showUserModal,true);
- const source=html();assert.match(source,/<input[^>]*x-model="userForm.email"[^>]*:disabled="!!editingUser"/);assert.match(source,/<input[^>]*x-model="userForm.password"[^>]*:required="!editingUser"/);
+ const source=html();assert.match(source,/<input[^>]*x-model="userForm.email"[^>]*:disabled="!!editingUser"/);
+ assert.match(source,/<input[^>]*x-model="userForm.name"[^>]*:required="editingUser \|\| !currentUser\?\.saas_mode"/,'name must be required for local account creation and edits, but optional for SaaS invitations');
+ assert.match(source,/<input[^>]*x-model="userForm.password"[^>]*:required="!editingUser && !currentUser\?\.saas_mode"/,'password must be required only when creating a local account');
  const submit=[...source.matchAll(/@submit.prevent="([^"]*)"/g)].map(m=>m[1]).find(e=>e.includes('editingUser ? updateUser()')&&e.includes('inviteUser()'));assert.ok(submit);
  const calls=[];a.createUser=()=>calls.push('create');a.inviteUser=()=>calls.push('invite');a.updateUser=()=>calls.push('update');vm.runInContext('with(app){'+submit+'}',c);a.currentUser.saas_mode=true;vm.runInContext('with(app){'+submit+'}',c);a.editUser(row);vm.runInContext('with(app){'+submit+'}',c);assert.deepEqual(calls,['create','invite','update']);
  const form=a.userForm;assert.equal(form.password,'');assert.equal(form.territory,'');
@@ -40,7 +42,7 @@ test('SaaS invite sends only email and company role, then reloads invitations',a
  const calls=[];a.apiCall=async(path,opts)=>{calls.push([path,opts.method,opts.body&&JSON.parse(opts.body)]);return {};};
  a.loadInvitations=async()=>calls.push('invitations');await a.inviteUser();
  assert.deepEqual(calls,[['/users/invitations','POST',{email:'person@example.test',role:'manager'}],'invitations']);
- assert.equal(a.showUserModal,false);assert.equal(a.userForm.email,'');assert.equal(a.successMessage,'Invitation sent. It expires in seven days.');assert.equal(timers[0].delay,3000);
+ assert.equal(a.showUserModal,false);assert.equal(a.userForm.email,'');assert.equal(a.successMessage,'Invitation queued for delivery. It expires in seven days.');assert.equal(timers[0].delay,3000);
 });
 test('pending invitation resend and cancel use scoped company routes',async()=>{
  const {a}=setup();const calls=[];a.loading=false;a.apiCall=async(path,opts)=>{calls.push([path,opts.method]);return [];};a.loadInvitations=async()=>calls.push('refresh');

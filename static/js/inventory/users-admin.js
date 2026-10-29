@@ -34,7 +34,7 @@ function usersAdminFeature() {
                     method: 'POST',
                     body: JSON.stringify({ email: this.userForm.email, role: this.userForm.role })
                 });
-                this.successMessage = 'Invitation sent. It expires in seven days.';
+                this.successMessage = 'Invitation queued for delivery. It expires in seven days.';
                 this.showUserModal = false;
                 this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
                 await this.loadInvitations();
