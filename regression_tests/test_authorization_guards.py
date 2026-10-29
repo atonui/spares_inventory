@@ -112,6 +112,26 @@ def test_archived_admin_cannot_archive_records(tmp_path):
         assert error.value.detail == 'Admin access required'
 
 
+def test_legacy_admin_guards_fail_closed_for_integer_identity_on_postgres(monkeypatch):
+    import backend.services.authorization as authorization
+
+    class ConnectionThatMustNotBeQueried:
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("legacy users.role guard queried on PostgreSQL")
+
+    conn = ConnectionThatMustNotBeQueried()
+    monkeypatch.setattr(authorization, "is_postgres", lambda _conn: True)
+
+    assert authorization.check_admin(1, conn=conn) is False
+    for guard in (
+        lambda: authorization.require_archive_admin(conn, 1),
+        lambda: authorization.require_user_management(1, conn=conn),
+    ):
+        with pytest.raises(HTTPException) as error:
+            guard()
+        assert error.value.status_code == 403
+
+
 @pytest.mark.parametrize('guard,actor,denied', [
     ('check_admin', 1, False), ('require_superadmin', 2, False),
     ('require_superadmin', 3, True), ('require_user_management', 1, False),

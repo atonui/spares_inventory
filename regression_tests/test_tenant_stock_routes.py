@@ -27,13 +27,42 @@ def test_stock_access_uses_membership_role_and_company_assignments(
     from backend.services.principals import AuthenticatedPrincipal
     from backend.services.stock_access import require_stock_access
 
-    principal = AuthenticatedPrincipal(9, uuid4(), company_role, False)
+    organization_id = uuid4()
+    principal = AuthenticatedPrincipal(9, organization_id, company_role, False)
     if allowed:
-        require_stock_access(None, principal, store_type, store_owner)
+        require_stock_access(None, principal, store_type, store_owner, store_organization_id=organization_id)
     else:
         with pytest.raises(HTTPException) as error:
-            require_stock_access(None, principal, store_type, store_owner)
+            require_stock_access(None, principal, store_type, store_owner, store_organization_id=organization_id)
         assert error.value.status_code == 403
+
+
+@pytest.mark.parametrize("principal,store_organization_id", [
+    ("suspended", "same"),
+    ("platform_only", "same"),
+    ("active", "different"),
+])
+def test_stock_access_rejects_inactive_or_cross_organization_store(principal, store_organization_id):
+    from uuid import uuid4
+    from fastapi import HTTPException
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.stock_access import require_stock_access
+
+    organization_id = uuid4()
+    other_organization_id = uuid4()
+    principals = {
+        "suspended": AuthenticatedPrincipal(9, organization_id, "owner", False, organization_is_active=False),
+        "platform_only": AuthenticatedPrincipal(9, None, None, True),
+        "active": AuthenticatedPrincipal(9, organization_id, "engineer", False),
+    }
+    store_organizations = {"same": organization_id, "different": other_organization_id}
+
+    with pytest.raises(HTTPException) as error:
+        require_stock_access(
+            None, principals[principal], "central", None,
+            store_organization_id=store_organizations[store_organization_id],
+        )
+    assert error.value.status_code == 403
 
 
 @pytest.fixture

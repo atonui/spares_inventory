@@ -16,12 +16,19 @@ def require_active_record(conn,table,identifier):
 
 
 
-def require_stock_access(conn, user_id, store_type, store_owner):
+def require_stock_access(conn, user_id, store_type, store_owner, *, store_organization_id=None):
     if isinstance(user_id, AuthenticatedPrincipal):
         allowed = (
             user_id.organization_id is not None
-            and user_id.company_role in {"owner", "admin"}
-        ) or store_owner == user_id.user_id or store_type == "central"
+            and user_id.organization_is_active
+            and store_organization_id is not None
+            and store_organization_id == user_id.organization_id
+            and (
+                user_id.company_role in {"owner", "admin"}
+                or store_owner == user_id.user_id
+                or store_type == "central"
+            )
+        )
         if allowed:
             return
         raise HTTPException(status_code=403, detail="Permission denied for this store")

@@ -2,11 +2,16 @@
 
 import sqlite3
 from fastapi import HTTPException
+from backend.database_sql import is_postgres
 from .principals import AuthenticatedPrincipal
 
 
-def check_admin(user_id: int, conn=None, get_connection=None) -> bool:
-    """Check current authority, borrowing an owning mutation connection."""
+def check_admin(user_id: int | AuthenticatedPrincipal, conn=None, get_connection=None) -> bool:
+    """Check tenant-admin authority for a PostgreSQL principal or legacy SQLite user.
+
+    PostgreSQL callers must provide a server-resolved principal. An integer user
+    ID is supported only by the legacy single-tenant SQLite authorization model.
+    """
     if isinstance(user_id, AuthenticatedPrincipal):
         return (user_id.organization_id is not None and user_id.organization_is_active
                 and user_id.company_role in {"owner", "admin"})
@@ -14,6 +19,8 @@ def check_admin(user_id: int, conn=None, get_connection=None) -> bool:
     if close:
         conn = get_connection()
     try:
+        if is_postgres(conn):
+            return False
         user = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
         return bool(user and user['role'] in {'admin', 'superadmin'})
     finally:
@@ -42,17 +49,25 @@ def require_archive_admin(conn,user_id):
                 or user_id.company_role not in {"owner", "admin"}):
             raise HTTPException(status_code=403,detail='Admin access required')
         return
+    if is_postgres(conn):
+        raise HTTPException(status_code=403, detail="Company administrator access required")
     actor=conn.execute('SELECT role FROM users WHERE id=? AND archived_at IS NULL',(user_id,)).fetchone()
     if not actor or actor['role'] not in ('admin','superadmin'):
         raise HTTPException(status_code=403,detail='Admin access required')
 
 
 def require_user_management(user_id: int, requested_role=None, target_user_id=None, *, conn=None, get_connection=None):
-    """Protect privileged role assignment and existing superadmin accounts."""
+    """Protect legacy SQLite user-role management and superadmin accounts.
+
+    PostgreSQL tenant-member management must use a resolved company principal
+    and the organization-membership workflow in the user routes.
+    """
     close = conn is None
     if close:
         conn = get_connection()
     try:
+        if is_postgres(conn):
+            raise HTTPException(status_code=403, detail="Company administrator access required")
         actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
         target = (conn.execute("SELECT role FROM users WHERE id = ?", (target_user_id,)).fetchone()
                   if target_user_id is not None else None)
