@@ -324,6 +324,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     async def confirm_profile_email_change(
         data: EmailChangeConfirmation,
         request: Request,
+        _csrf=Depends(verify_public_csrf),
     ):
         from backend.services.email_change import EmailChangeFailure, confirm_email_change
         from backend.postgres_database import postgres_transaction
