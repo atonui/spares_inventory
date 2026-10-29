@@ -61,6 +61,46 @@ def test_root_serves_the_frontend_without_a_static_path(tmp_path):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "Inventory UI" in response.text
+    assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
+def test_trusted_host_middleware_rejects_unrecognized_hosts(tmp_path):
+    from backend.app_bootstrap import create_inventory_app
+
+    (tmp_path / "index.html").write_text("<!doctype html><title>Inventory</title>")
+    app, _ = create_inventory_app(
+        lifespan=None,
+        cors_allowed_origins=[],
+        trusted_hosts=["inventory.example", "testserver"],
+        static_directory=str(tmp_path),
+    )
+    with TestClient(app) as client:
+        assert client.get("/", headers={"Host": "inventory.example"}).status_code == 200
+        assert client.get("/", headers={"Host": "attacker.example"}).status_code == 400
+
+
+def test_rate_limit_key_uses_valid_railway_client_ip_and_ignores_forwarded_chain():
+    from starlette.requests import Request
+    from backend.app_bootstrap import rate_limit_client_key
+
+    request = Request({
+        "type": "http", "method": "GET", "path": "/", "headers": [
+            (b"x-real-ip", b"203.0.113.7"),
+            (b"x-forwarded-for", b"198.51.100.22, 10.0.0.1"),
+        ], "client": ("10.0.0.1", 1234), "server": ("testserver", 80),
+    })
+    assert rate_limit_client_key(request) == "203.0.113.7"
+
+    invalid = Request({
+        "type": "http", "method": "GET", "path": "/", "headers": [
+            (b"x-real-ip", b"not-an-ip"), (b"x-forwarded-for", b"198.51.100.22"),
+        ], "client": ("10.0.0.1", 1234), "server": ("testserver", 80),
+    })
+    assert rate_limit_client_key(invalid) == "10.0.0.1"
 
 
 def test_legacy_railway_frontend_url_redirects_to_the_custom_domain_root(tmp_path):

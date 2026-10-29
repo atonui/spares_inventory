@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.database_sql import is_postgres
 from backend.database_sql import execute
 from backend.schemas.invitations import InvitationAcceptRequest, InvitationCreateRequest
-from backend.services.authorization import require_company_admin
+from backend.services.authorization import require_company_admin, require_company_owner
 from backend.services.invitations import (
     accept_invitation,
     cancel_invitation,
@@ -43,8 +43,14 @@ def create_invitation_router(
                 "SELECT user_id FROM sessions WHERE session_token_hash = ? AND is_active = TRUE"
                 if is_postgres(conn)
                 else "SELECT user_id FROM sessions WHERE session_token = ? AND is_active = TRUE",
-                (hash_session_credential(token) if is_postgres(conn) else token,),
+                (hash_session_credential(token),),
             ).fetchone()
+            if row is None and not is_postgres(conn):
+                row = execute(
+                    conn,
+                    "SELECT user_id FROM sessions WHERE session_token = ? AND is_active = TRUE",
+                    (token,),
+                ).fetchone()
             if row:
                 return "invitation-actor:" + str(row["user_id"])
         except Exception:
@@ -62,10 +68,9 @@ def create_invitation_router(
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
-            principal = user_id
-            require_company_admin(principal)
-            if body.role == "admin" and principal.company_role != "owner":
-                raise HTTPException(status_code=403, detail="Only the owner can invite an admin")
+            principal = require_company_admin(user_id, conn)
+            if body.role == "admin":
+                principal = require_company_owner(principal, conn)
             try:
                 validate_mail_encryption_key(encryption_key)
             except ValueError:
@@ -98,7 +103,7 @@ def create_invitation_router(
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
-            require_company_admin(user_id)
+            user_id = require_company_admin(user_id, conn)
             rows = conn.execute(
                 """SELECT id, email_normalized AS email, company_role AS role,
                           created_at, expires_at, accepted_at, canceled_at
@@ -114,7 +119,7 @@ def create_invitation_router(
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
-            require_company_admin(user_id)
+            user_id = require_company_admin(user_id, conn)
             cancel_invitation(conn, organization_id=user_id.organization_id, invitation_id=invitation_id)
             return {"success": True}
 
@@ -125,7 +130,7 @@ def create_invitation_router(
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
-            require_company_admin(user_id)
+            user_id = require_company_admin(user_id, conn)
             prior = conn.execute(
                 """SELECT email_normalized, company_role FROM organization_invitations
                    WHERE id = %s AND organization_id = %s AND accepted_at IS NULL
@@ -134,8 +139,8 @@ def create_invitation_router(
             ).fetchone()
             if prior is None:
                 raise HTTPException(status_code=404, detail="Invitation not found")
-            if prior["company_role"] == "admin" and user_id.company_role != "owner":
-                raise HTTPException(status_code=403, detail="Only the owner can resend an admin invitation")
+            if prior["company_role"] == "admin":
+                user_id = require_company_owner(user_id, conn)
             cancel_invitation(conn, organization_id=user_id.organization_id, invitation_id=invitation_id)
             try:
                 validate_mail_encryption_key(encryption_key)

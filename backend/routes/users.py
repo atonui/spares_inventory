@@ -32,7 +32,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
-                require_company_admin(user_id)
+                user_id = require_company_admin(user_id, conn)
                 target = execute(
                     conn,
                     """SELECT company_role, is_active FROM organization_memberships
@@ -68,7 +68,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
             session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
             if is_postgres(conn):
-                require_company_admin(principal)
+                principal = require_company_admin(principal, conn)
                 where = "om.organization_id = ?"
                 if not include_archived:
                     where += " AND om.is_active = TRUE AND u.archived_at IS NULL"
@@ -96,7 +96,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         """Create new user (admin only)"""
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
-                require_company_admin(user_id)
+                user_id = require_company_admin(user_id, conn)
                 raise HTTPException(status_code=410, detail="Create users with an invitation instead")
             password_hash = hash_password(request_data.password)
             cursor = conn.cursor()
@@ -151,7 +151,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
                 principal = user_id
-                require_company_admin(principal)
+                principal = require_company_admin(principal, conn)
                 if request_data.password is not None:
                     raise HTTPException(status_code=400, detail="Password changes use the account recovery flow")
                 target = execute(
@@ -262,7 +262,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         """Remove a company membership while retaining the global identity and history."""
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
-                require_company_admin(user_id)
+                user_id = require_company_admin(user_id, conn)
                 organization = execute(
                     conn,
                     "SELECT id FROM organizations WHERE id = ? AND is_active = TRUE FOR UPDATE",
@@ -321,7 +321,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     ):
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
             if is_postgres(conn):
-                require_company_admin(user_id)
+                user_id = require_company_admin(user_id, conn)
                 target = execute(
                     conn,
                     """SELECT company_role, is_active FROM organization_memberships

@@ -115,7 +115,7 @@ def validate_integrity(conn, *, allow_legacy_sentinel=False):
 def validate_legacy(conn):
     validate_tables(conn,legacy=True)
 
-def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None, require_mobile_pairing=None, require_mobile_devices=None, require_mobile_stock_adjustments=None):
+def validate_current(conn, *, require_timezone=None, require_canonical=None, canonical_fields=None, require_announcements=None, require_mobile_pairing=None, require_mobile_devices=None, require_mobile_stock_adjustments=None, require_hashed_sessions=None):
     if require_timezone is None:
         require_timezone=('schema_migrations' in objects(conn) and
                           conn.execute('SELECT 1 FROM schema_migrations WHERE version=4').fetchone() is not None)
@@ -130,6 +130,8 @@ def validate_current(conn, *, require_timezone=None, require_canonical=None, can
         require_mobile_devices=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=8').fetchone() is not None)
     if require_mobile_stock_adjustments is None:
         require_mobile_stock_adjustments=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=9').fetchone() is not None)
+    if require_hashed_sessions is None:
+        require_hashed_sessions=('schema_migrations' in objects(conn) and conn.execute('SELECT 1 FROM schema_migrations WHERE version=10').fetchone() is not None)
     validate_integrity(conn)
     validate_tables(conn,require_timezone=require_timezone,require_canonical=require_canonical,require_announcements=require_announcements,require_mobile_pairing=require_mobile_pairing,require_mobile_devices=require_mobile_devices,require_mobile_stock_adjustments=require_mobile_stock_adjustments)
     if require_announcements:
@@ -141,6 +143,9 @@ def validate_current(conn, *, require_timezone=None, require_canonical=None, can
         for (value,) in conn.execute('SELECT dismissed_at FROM announcement_dismissals'):
             if serialize_instant(parse_api_instant(value))!=value:raise MigrationError('Noncanonical dismissal timestamp')
     if require_canonical:validate_canonical_instants(conn,fields=canonical_fields)
+    if require_hashed_sessions:
+        from .v0010_hashed_sqlite_sessions import validate as validate_hashed_sessions
+        validate_hashed_sessions(conn)
     if require_timezone or 'organisation_settings' in objects(conn):
         from .v0004_timezone_preferences import validate_settings
         validate_settings(conn)

@@ -1,6 +1,7 @@
 from fastapi import Cookie, Depends, Header, HTTPException, Request, Security
 from fastapi.security import APIKeyCookie, HTTPBearer
 from backend.services.session_credentials import (
+    get_optional_request_credential,
     get_request_credential,
     resolve_request_credential,
 )
@@ -102,14 +103,18 @@ def init_db():
 
 
 # ============ CSRF UTILITIES ============
-def generate_csrf_token() -> str:
+def generate_csrf_token(session_token: str | None = None) -> str:
     """Generate CSRF token"""
-    return CsrfHelpers(csrf_serializer).generate_csrf_token()
+    return CsrfHelpers(csrf_serializer).generate_csrf_token(session_token)
 
 
-def verify_csrf_token(token: str, max_age: int = 3600) -> bool:
+def verify_csrf_token(
+    token: str, max_age: int = 3600, session_token: str | None = None
+) -> bool:
     """Verify CSRF token (valid for 1 hour by default)"""
-    return CsrfHelpers(csrf_serializer).verify_csrf_token(token, max_age=max_age)
+    return CsrfHelpers(csrf_serializer).verify_csrf_token(
+        token, max_age=max_age, session_token=session_token
+    )
 
 
 # ============ AUTHENTICATION UTILITIES ============
@@ -322,6 +327,7 @@ async def lifespan(app):
 app, limiter = create_inventory_app(
     lifespan=lifespan,
     cors_allowed_origins=settings.CORS_ALLOWED_ORIGINS,
+    trusted_hosts=[host.strip() for host in settings.TRUSTED_HOSTS.split(",") if host.strip()],
 )
 
 # -----------------------------------------------------------
@@ -393,9 +399,17 @@ async def get_current_user(
 
 
 # csrf middleware
-async def verify_csrf(x_csrf_token: str = Header(None)):
+async def verify_csrf(x_csrf_token: str = Header(None), request: Request = None):
     """Verify CSRF token for state-changing operations"""
-    return require_csrf_token(x_csrf_token, verify_csrf_token)
+    credential = (
+        get_optional_request_credential(request)
+        if request is not None else None
+    )
+    session_token = credential.value if credential else None
+    return require_csrf_token(
+        x_csrf_token,
+        lambda token: verify_csrf_token(token, session_token=session_token),
+    )
 
 
 async def verify_authenticated_csrf(
@@ -407,7 +421,10 @@ async def verify_authenticated_csrf(
     credential = get_request_credential(request)
     if credential.transport == "bearer":
         return True
-    return require_csrf_token(x_csrf_token, verify_csrf_token)
+    return require_csrf_token(
+        x_csrf_token,
+        lambda token: verify_csrf_token(token, session_token=credential.value),
+    )
 
 
 from backend.routes.auth import create_auth_router
@@ -420,7 +437,7 @@ app.include_router(create_auth_router(
     current_user=get_current_user,
     csrf_dependency=verify_csrf,
     authenticated_csrf_dependency=verify_authenticated_csrf,
-    csrf_token_factory=lambda: generate_csrf_token(),
+    csrf_token_factory=lambda session_token=None: generate_csrf_token(session_token),
     password_hash=lambda password: hash_password(password),
     password_verify=lambda plain, hashed: verify_password(plain, hashed),
     security_config=lambda: get_security_config(),

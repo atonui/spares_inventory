@@ -149,6 +149,39 @@ def test_archive_user_management_uses_current_company_roles(tenant_user_api):
     assert denied_stale_role.value.status_code == 403
 
 
+def test_company_admin_guards_refresh_role_inside_the_transaction(tenant_user_api):
+    from backend.services.authorization import check_admin, require_company_admin
+    from backend.services.tenant_context import set_tenant_context
+
+    api = tenant_user_api
+    api.connection.execute("SELECT 1")
+    set_tenant_context(api.connection, api.org_a)
+    stale_admin = api.principal(api.admin_id, company_role="admin")
+    api.connection.execute(
+        """UPDATE organization_memberships SET company_role = 'manager'
+           WHERE organization_id = %s AND user_id = %s""",
+        (api.org_a, api.admin_id),
+    )
+
+    assert check_admin(stale_admin, conn=api.connection) is False
+    with pytest.raises(HTTPException) as error:
+        require_company_admin(stale_admin, conn=api.connection)
+    assert error.value.status_code == 403
+
+
+def test_company_admin_guard_rejects_membership_from_another_tenant(tenant_user_api):
+    from backend.services.authorization import require_company_admin
+    from backend.services.tenant_context import set_tenant_context
+
+    api = tenant_user_api
+    api.connection.execute("SELECT 1")
+    set_tenant_context(api.connection, api.org_a)
+    forged_foreign_owner = api.principal(api.owner_id, organization_id=api.org_b, company_role="owner")
+    with pytest.raises(HTTPException) as error:
+        require_company_admin(forged_foreign_owner, conn=api.connection)
+    assert error.value.status_code == 403
+
+
 def test_company_user_update_rejects_foreign_membership_id(tenant_user_api):
     from backend.schemas.users import UpdateUserRequest
 

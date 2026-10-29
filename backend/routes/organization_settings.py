@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.database_sql import execute, is_postgres
 from backend.schemas.organization_settings import OrganizationSettingsUpdate, OwnerTransferRequest
 from backend.services.activity import record_activity
-from backend.services.authorization import require_company_admin
+from backend.services.authorization import require_company_admin, require_company_owner
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.temporal import serialize_instant, utc_now
@@ -49,7 +49,7 @@ def create_organization_settings_router(
             readonly=True,
         ) as (conn, principal):
             require_saas_postgres(conn)
-            require_company_admin(principal)
+            principal = require_company_admin(principal, conn)
             return settings_row(conn, principal.organization_id)
 
     @router.put("/api/organization/settings")
@@ -61,8 +61,7 @@ def create_organization_settings_router(
     ):
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             require_saas_postgres(conn)
-            principal = user_id
-            require_company_admin(principal)
+            principal = require_company_admin(user_id, conn)
             old = settings_row(conn, principal.organization_id)
             changed = execute(
                 conn,
@@ -115,10 +114,7 @@ def create_organization_settings_router(
     ):
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
             require_saas_postgres(conn)
-            principal: AuthenticatedPrincipal = user_id
-            require_company_admin(principal)
-            if principal.company_role != "owner":
-                raise HTTPException(status_code=403, detail="Only the company owner can transfer ownership")
+            principal: AuthenticatedPrincipal = require_company_owner(user_id, conn)
             if body.target_user_id == principal.user_id:
                 raise HTTPException(status_code=400, detail="Choose another active company member")
 

@@ -28,7 +28,9 @@ def test_login_and_logout_reject_missing_and_invalid_tokens(auth_api):
         assert client.post(path,json=body,headers={'X-CSRF-Token':'bad'}).json()['detail']=='Invalid CSRF token'
     token=client.get('/api/csrf-token').json()['csrf_token']
     assert client.post('/api/auth/login',json={'email':'user1@example.com','password':'test-password'},headers={'X-CSRF-Token':token}).status_code==200
-    assert client.post('/api/auth/logout',headers={'X-CSRF-Token':token}).status_code==200
+    assert client.post('/api/auth/logout',headers={'X-CSRF-Token':token}).status_code==403
+    bound_token=client.get('/api/csrf-token').json()['csrf_token']
+    assert client.post('/api/auth/logout',headers={'X-CSRF-Token':bound_token}).status_code==200
 
 def test_csrf_token_response_cannot_be_cached(auth_api):
     client,_,_=auth_api

@@ -32,6 +32,20 @@ def test_csrf_helpers_accept_generated_tokens_and_reject_invalid_tokens():
     assert csrf.verify_csrf_token("not-a-valid-token") is False
 
 
+def test_csrf_tokens_are_bound_to_the_session_that_requested_them():
+    from backend.security import create_csrf_helpers
+
+    csrf = create_csrf_helpers("csrf-secret")
+    anonymous = csrf.generate_csrf_token()
+    session_one = csrf.generate_csrf_token("session-one")
+
+    assert csrf.verify_csrf_token(anonymous)
+    assert not csrf.verify_csrf_token(anonymous, session_token="session-one")
+    assert csrf.verify_csrf_token(session_one, session_token="session-one")
+    assert not csrf.verify_csrf_token(session_one, session_token="session-two")
+    assert not csrf.verify_csrf_token(session_one)
+
+
 def test_main_csrf_wrappers_use_the_current_serializer(monkeypatch):
     import main
     from itsdangerous import URLSafeTimedSerializer
@@ -66,7 +80,10 @@ def test_main_csrf_dependency_uses_current_verifier(monkeypatch):
     import asyncio
     import main
 
-    monkeypatch.setattr(main, "verify_csrf_token", lambda token: token == "current-token")
+    monkeypatch.setattr(
+        main, "verify_csrf_token",
+        lambda token, session_token=None: token == "current-token" and session_token is None,
+    )
     assert asyncio.run(main.verify_csrf("current-token")) is True
     with pytest.raises(HTTPException) as error:
         asyncio.run(main.verify_csrf("other-token"))
@@ -94,12 +111,24 @@ def test_password_verification_preserves_legacy_utf8_truncation():
 
 
 def test_password_hash_format_and_rejected_inputs():
-    from backend.security import hash_password, verify_password
+    from backend.security import hash_password, password_needs_rehash, verify_password
 
-    assert hash_password("test password").startswith("$2b$12$")
+    assert hash_password("test password").startswith("$spares-bcrypt-sha256$v1$")
+    assert password_needs_rehash("$2b$12$legacy")
     with pytest.raises(ValueError):
         hash_password("contains\x00nul")
     with pytest.raises(ValueError):
         hash_password("x" * 4097)
     with pytest.raises(ValueError):
         verify_password("password", "invalid hash")
+
+
+def test_new_password_hashes_distinguish_passwords_past_bcrypt_byte_limit():
+    from backend.security import hash_password, password_needs_rehash, verify_password
+
+    password = "x" * 72 + "first suffix"
+    stored = hash_password(password)
+
+    assert not password_needs_rehash(stored)
+    assert verify_password(password, stored)
+    assert not verify_password("x" * 72 + "different suffix", stored)
