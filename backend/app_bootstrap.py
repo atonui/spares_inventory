@@ -1,6 +1,7 @@
 """FastAPI application bootstrap wiring."""
 
 import sqlite3
+from pathlib import Path
 from ipaddress import ip_address
 from typing import Sequence
 from urllib.parse import parse_qs
@@ -36,7 +37,15 @@ class RevalidatingHtmlStaticFiles(StaticFiles):
     """Require cached HTML to validate its script manifest before reuse."""
 
     async def get_response(self, path: str, scope):
+        requested_index = path.lower() == "index.html"
+        # Cookie presence selects the shell only; API authentication remains authoritative.
+        if requested_index and not Request(scope).cookies.get("session_token"):
+            _, login_stat = self.lookup_path("login.html")
+            if login_stat is not None:
+                path = "login.html"
         response = await super().get_response(path, scope)
+        if requested_index:
+            response.headers["Vary"] = "Cookie"
         if path.lower().endswith(".html") and response.status_code in (200, 206, 304):
             if path.lower() == "email_change_confirmation.html":
                 response.headers["Cache-Control"] = "no-store"
@@ -209,7 +218,8 @@ def create_inventory_app(
 
     @app.get("/", include_in_schema=False)
     async def serve_frontend():
-        return FileResponse(f"{static_directory}/index.html", headers={"Cache-Control": "no-cache"})
+        page = "login.html" if Path(static_directory, "login.html").is_file() else "index.html"
+        return FileResponse(f"{static_directory}/{page}", headers={"Cache-Control": "no-cache"})
 
     return app, limiter
 
