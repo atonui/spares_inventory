@@ -64,3 +64,9 @@ test('pending session check preserves card geometry without exposing an interact
     assert.match(css,/visibility: hidden/);
     assert.match(css,/aspect-ratio: 4 \/ 1/);
 });
+
+test('announcement controls do not reference login component state',()=>{
+    const announcement=html.slice(html.indexOf('<section class="site-announcement"'),html.indexOf('</section>')+10);
+    assert.doesNotMatch(announcement,/authState/);
+    assert.ok(html.includes("class=\"login-submit\" :disabled=\"loading || authState !== 'anonymous'\""));
+});
