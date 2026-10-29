@@ -108,20 +108,15 @@ def test_non_platform_user_with_inactive_membership_is_denied(postgres_schema):
     assert error.value.status_code == 403
 
 
-def test_suspended_organization_is_carried_by_principal_and_blocks_existing_session(postgres_schema):
+def test_suspended_organization_cannot_resolve_company_principal(postgres_schema):
     from backend.services.principals import resolve_principal
-    from backend.services.tenant_context import authenticated_tenant_transaction, require_company_principal
+    from backend.services.tenant_context import authenticated_tenant_transaction
 
     connection, schema = postgres_schema
     org_id, user_id, token = seed_user(connection, organization_active=False)
 
-    with connection.transaction():
-        principal = resolve_principal(connection, token)
-    assert principal.organization_id == UUID(str(org_id))
-    assert principal.company_role == "engineer"
-    assert principal.organization_is_active is False
-    with pytest.raises(HTTPException) as denied:
-        require_company_principal(principal)
+    with connection.transaction(), pytest.raises(HTTPException) as denied:
+        resolve_principal(connection, token)
     assert denied.value.status_code == 403
 
     connection.commit()
@@ -134,6 +129,41 @@ def test_suspended_organization_is_carried_by_principal_and_blocks_existing_sess
         with authenticated_tenant_transaction(get_connection, session_token=token, expected_user_id=user_id):
             pytest.fail("a suspended organization must not enter a tenant transaction")
     assert denied_transaction.value.status_code == 403
+
+
+def test_platform_admin_in_suspended_organization_gets_no_tenant_context(postgres_schema):
+    from backend.services.principals import resolve_principal
+
+    connection, _ = postgres_schema
+    _, user_id, token = seed_user(connection, platform_admin=True, organization_active=False)
+
+    with connection.transaction():
+        principal = resolve_principal(connection, token)
+
+    assert principal.user_id == user_id
+    assert principal.is_platform_admin is True
+    assert principal.organization_id is None
+    assert principal.organization_is_active is False
+
+
+def test_absolute_session_expiry_is_enforced(postgres_schema):
+    from backend.services.principals import resolve_principal
+    from backend.temporal import serialize_instant, utc_now
+
+    connection, _ = postgres_schema
+    _, user_id, token = seed_user(connection)
+    connection.execute(
+        "UPDATE sessions SET expires_at = %s, absolute_expires_at = %s WHERE user_id = %s",
+        (
+            serialize_instant(utc_now() + timedelta(hours=1)),
+            serialize_instant(utc_now() - timedelta(seconds=1)),
+            user_id,
+        ),
+    )
+
+    with connection.transaction(), pytest.raises(HTTPException) as error:
+        resolve_principal(connection, token)
+    assert error.value.status_code == 401
 
 
 def test_platform_admin_without_membership_has_no_company_context(postgres_schema):

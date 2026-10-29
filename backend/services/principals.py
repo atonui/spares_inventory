@@ -27,6 +27,13 @@ SESSION_EXPIRES_FIELD = TemporalField(
     naive_policy=None,
     provenance="PostgreSQL sessions store canonical UTC instants",
 )
+SESSION_ABSOLUTE_EXPIRES_FIELD = TemporalField(
+    table="sessions",
+    column="absolute_expires_at",
+    kind="instant",
+    naive_policy=None,
+    provenance="PostgreSQL sessions store canonical UTC absolute lifetime limits",
+)
 
 
 def resolve_principal(conn: psycopg.Connection, session_token: str) -> AuthenticatedPrincipal:
@@ -35,7 +42,9 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
         raise HTTPException(status_code=401, detail="Not authenticated")
     session_token_hash = hash_session_credential(session_token)
     row = conn.execute(
-        """SELECT s.user_id, s.expires_at, u.archived_at,
+        """SELECT s.user_id, s.expires_at,
+                  COALESCE(s.absolute_expires_at, s.expires_at) AS absolute_expires_at,
+                  u.archived_at,
                   om.organization_id, om.company_role, om.is_active AS membership_active,
                   o.is_active AS organization_active,
                   (pa.user_id IS NOT NULL) AS is_platform_admin
@@ -51,13 +60,23 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     try:
         expires_at = parse_storage_instant(row["expires_at"], field=SESSION_EXPIRES_FIELD)
+        absolute_expires_at = parse_storage_instant(
+            row["absolute_expires_at"], field=SESSION_ABSOLUTE_EXPIRES_FIELD
+        )
     except (TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired session") from None
-    if utc_now() >= expires_at:
+    now = utc_now()
+    if now >= expires_at or now >= absolute_expires_at:
         raise HTTPException(status_code=401, detail="Session expired")
 
     is_platform_admin = bool(row["is_platform_admin"])
-    has_membership = row["organization_id"] is not None and bool(row["membership_active"])
+    has_organization = row["organization_id"] is not None
+    organization_is_active = bool(row["organization_active"]) if has_organization else True
+    has_membership = (
+        has_organization
+        and bool(row["membership_active"])
+        and organization_is_active
+    )
     if not has_membership and not is_platform_admin:
         raise HTTPException(status_code=403, detail="Active company membership required")
     return AuthenticatedPrincipal(
@@ -65,5 +84,5 @@ def resolve_principal(conn: psycopg.Connection, session_token: str) -> Authentic
         organization_id=UUID(str(row["organization_id"])) if has_membership else None,
         company_role=row["company_role"] if has_membership else None,
         is_platform_admin=is_platform_admin,
-        organization_is_active=bool(row["organization_active"]) if has_membership else True,
+        organization_is_active=organization_is_active,
     )
