@@ -53,3 +53,14 @@ test('rejected sign-in retains form for retry without redirect',async()=>{
     await app.login();assert.equal(app.error,'Invalid credentials');assert.equal(app.loading,false);
     assert.equal(redirects.length,0);
 });
+
+test('pending session check preserves card geometry without exposing an interactive form',()=>{
+    assert.match(html, /class="login-shell login-pending"/);
+    assert.doesNotMatch(html, /<section[^>]*x-show="authState === 'anonymous'"/);
+    assert.match(html, /<form[^>]* inert :inert="authState !== 'anonymous'"/);
+    assert.match(html, /class="login-session-status"/);
+    assert.match(html, /rel="preload" href="fonts\/inter-latin\.woff2"/);
+    const css=fs.readFileSync(path.join(root,'static/login-base.css'),'utf8');
+    assert.match(css,/visibility: hidden/);
+    assert.match(css,/aspect-ratio: 4 \/ 1/);
+});

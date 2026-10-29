@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/static/index.html">
+    <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
     <title>Spares Tracker — Inventory</title>
-    <link rel="stylesheet" href="login-base.css?v=20261029-login-split">
+    <link rel="stylesheet" href="login-base.css?v=20261029-login-stable">
     <link rel="stylesheet" href="login.css?v=20261023-approved-brand-v1">
     <style>[x-cloak] { display: none !important; }</style>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
@@ -28,20 +29,12 @@
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
   <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
   <p class="site-announcement-error" x-show="dismissError" role="alert" x-text="dismissError"></p>
-  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
+  <p class="site-announcement-error" x-show="error" role="status"><span x-text="error"></span><button type="button" @click="load()" :disabled="loading || authState !== 'anonymous'"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry</button></p>
 </section>
 
-    <div x-data="loginPage()" x-init="checkAuth()">
-        <div class="auth-bootstrap" x-show="authState === 'checking'" x-cloak role="status" aria-live="polite">
-            <span class="auth-bootstrap-indicator" aria-hidden="true"></span>
-            <span>Checking your session…</span>
-        </div>
-        <div class="auth-bootstrap auth-bootstrap-error" x-show="authState === 'error'" x-cloak role="alert">
-            <p x-text="error || 'Unable to check your session.'"></p>
-            <button type="button" class="auth-retry" @click="checkAuth()" :disabled="authState === 'checking'">Retry session check</button>
-        </div>
+    <div class="login-shell login-pending" :class="{ 'login-pending': authState !== 'anonymous' }" x-data="loginPage()" x-init="checkAuth()">
         <!-- Login Screen -->
-        <section x-show="authState === 'anonymous'" class="login-screen" role="main" aria-labelledby="login-title" x-cloak>
+        <section class="login-screen" role="main" aria-labelledby="login-title">
             <div class="login-intro">
                 <a class="login-brand" href="/" aria-label="Spares Tracker home">
                     <img src="brand/source/logo-white.svg" alt="" width="720" height="180">
@@ -54,12 +47,22 @@
                 <div class="login-intro-footer"><span class="login-accent-line" aria-hidden="true"></span>Stores. Sites. Engineers.</div>
             </div>
             <div class="login-panel">
+<div class="login-session-status" x-show="authState !== 'anonymous'" x-cloak>
+        <div class="auth-bootstrap" x-show="authState === 'checking'" x-cloak role="status" aria-live="polite">
+            <span class="auth-bootstrap-indicator" aria-hidden="true"></span>
+            <span>Checking your session…</span>
+        </div>
+        <div class="auth-bootstrap auth-bootstrap-error" x-show="authState === 'error'" x-cloak role="alert">
+            <p x-text="error || 'Unable to check your session.'"></p>
+            <button type="button" class="auth-retry" @click="checkAuth()" :disabled="authState === 'checking'">Retry session check</button>
+        </div>
+</div>
                 <div class="login-heading">
                     <p class="login-eyebrow">YOUR WORKSPACE</p>
                     <h2 id="login-title">Welcome back</h2>
                     <p>Sign in to manage your inventory.</p>
                 </div>
-                <form @submit.prevent="login()" class="login-form" :aria-busy="loading">
+                <form @submit.prevent="login()" class="login-form" :aria-busy="loading" inert :inert="authState !== 'anonymous'">
                     <div x-show="error" class="login-error" role="alert" x-text="error" x-cloak></div>
                     <div class="login-field">
                         <label for="login-email">Email address</label>
