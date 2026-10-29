@@ -58,6 +58,30 @@ def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlist
     }) == {"reason": "Customer requested a temporary pause"}
 
 
+def test_account_logout_is_recorded_in_global_audit_without_tenant_context():
+    from backend.services.platform_audit import record_user_logout, safe_platform_audit_details
+
+    class Capture:
+        query = None
+        args = None
+
+        def execute(self, query, args):
+            self.query, self.args = query, args
+
+    conn = Capture()
+    record_user_logout(conn, 12)
+
+    assert "INSERT INTO platform_audit_events" in conn.query
+    assert conn.args[:4] == (12, None, "user_logout", "success")
+    assert safe_platform_audit_details("user_logout", json.loads(conn.args[4])) == {
+        "operation": "logout",
+        "request_id": json.loads(conn.args[4])["request_id"],
+    }
+    assert safe_platform_audit_details("user_logout", {
+        "operation": "logout", "request_id": "not-a-uuid", "session_token": "secret",
+    }) == {"operation": "logout"}
+
+
 def test_platform_settings_audit_details_are_curated():
     from backend.services.platform_audit import safe_platform_audit_details
 

@@ -1520,7 +1520,11 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             _result = response
 
-            _record_mutation_activity(conn, actor_id, 'logout', None, _result, request)
+            if is_postgres(conn):
+                from backend.services.platform_audit import record_user_logout
+                record_user_logout(conn, actor_id)
+            else:
+                _record_mutation_activity(conn, actor_id, 'logout', None, _result, request)
             return _result
 
 
