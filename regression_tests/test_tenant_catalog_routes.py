@@ -93,7 +93,7 @@ def test_parts_route_sets_session_derived_tenant_context(postgres_schema):
         sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema), sql.Identifier(role))
     )
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins TO {}"
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations TO {}"
     ).format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT SELECT, INSERT ON parts TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE parts_id_seq TO {}").format(sql.Identifier(role)))
