@@ -188,7 +188,7 @@ def test_html_revalidates_on_get_head_and_conditional_requests(tmp_path, page):
         assert cached.headers.get("cache-control") == "no-cache"
 
 
-def test_html_cache_policy_leaves_assets_api_and_missing_files_unchanged(tmp_path):
+def test_static_cache_policy_leaves_api_and_missing_files_unchanged(tmp_path):
     from backend.app_bootstrap import create_inventory_app
 
     (tmp_path / "asset.js").write_text("const inventory = true;")
@@ -199,7 +199,8 @@ def test_html_cache_policy_leaves_assets_api_and_missing_files_unchanged(tmp_pat
         return {"ok": True}
 
     with TestClient(app) as client:
-        for path in ["/static/asset.js", "/api/example", "/static/missing.html"]:
+        assert client.get("/static/asset.js").headers["cache-control"] == "no-cache"
+        for path in ["/api/example", "/static/missing.html"]:
             response = client.get(path)
             assert "cache-control" not in response.headers
         assert client.get("/static/missing.html").status_code == 404
@@ -255,3 +256,32 @@ def test_platform_support_responses_and_errors_are_never_cached(tmp_path):
         assert response.headers["cache-control"] == "no-store"
         assert response.headers["pragma"] == "no-cache"
         assert response.headers["referrer-policy"] == "no-referrer"
+
+
+@pytest.mark.parametrize("asset", ["app.css", "app.js", "font.woff2", "logo.svg"])
+def test_versioned_static_assets_have_long_cache_on_get_head_and_304(tmp_path, asset):
+    from backend.app_bootstrap import create_inventory_app
+
+    (tmp_path / asset).write_bytes(b"test asset")
+    app, _ = create_inventory_app(lifespan=None, cors_allowed_origins=[], static_directory=str(tmp_path))
+    with TestClient(app) as client:
+        url = f"/static/{asset}?v=release-1"
+        response = client.get(url)
+        expected = "public, max-age=31536000, immutable"
+        assert response.headers["cache-control"] == expected
+        assert client.head(url).headers["cache-control"] == expected
+        conditional = client.get(url, headers={"If-None-Match": response.headers["etag"]})
+        assert conditional.status_code == 304
+        assert conditional.headers["cache-control"] == expected
+        assert client.get("/static/missing.js?v=release-1").status_code == 404
+
+
+def test_unversioned_font_cache_is_bounded_and_root_html_revalidates(tmp_path):
+    from backend.app_bootstrap import create_inventory_app
+
+    (tmp_path / "font.woff2").write_bytes(b"test font")
+    (tmp_path / "index.html").write_text("<!doctype html><title>Login</title>")
+    app, _ = create_inventory_app(lifespan=None, cors_allowed_origins=[], static_directory=str(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/static/font.woff2").headers["cache-control"] == "public, max-age=604800"
+        assert client.get("/").headers["cache-control"] == "no-cache"

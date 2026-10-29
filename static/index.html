@@ -69,10 +69,10 @@
             <button type="button" class="auth-retry" @click="checkAuth()" :disabled="authState === 'checking'">Retry session check</button>
         </div>
         <!-- Login Screen -->
-        <section x-show="authState === 'anonymous'" class="login-screen" aria-labelledby="login-title" x-cloak>
+        <section x-show="authState === 'anonymous'" class="login-screen" role="main" aria-labelledby="login-title" x-cloak>
             <div class="login-intro">
                 <a class="login-brand" href="/" aria-label="Spares Tracker home">
-                    <img src="brand/source/logo-white.svg" alt="">
+                    <img src="brand/source/logo-white.svg" alt="" width="720" height="180">
                 </a>
                 <div class="login-intro-copy">
                     <p class="login-eyebrow">SPARE PARTS &amp; EQUIPMENT</p>

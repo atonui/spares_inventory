@@ -3,6 +3,7 @@
 import sqlite3
 from ipaddress import ip_address
 from typing import Sequence
+from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -42,6 +43,15 @@ class RevalidatingHtmlStaticFiles(StaticFiles):
                 response.headers["Referrer-Policy"] = "no-referrer"
             else:
                 response.headers["Cache-Control"] = "no-cache"
+        elif response.status_code in (200, 206, 304):
+            extension = path.lower().rsplit(".", 1)[-1]
+            version = parse_qs(scope.get("query_string", b"").decode("ascii", errors="ignore")).get("v", [""])[0]
+            if extension in {"css", "js", "woff", "woff2", "svg", "png", "ico", "jpg", "jpeg", "webp"}:
+                response.headers["Cache-Control"] = (
+                    "public, max-age=31536000, immutable" if version
+                    else "public, max-age=604800" if extension in {"woff", "woff2", "svg", "png", "ico", "jpg", "jpeg", "webp"}
+                    else "no-cache"
+                )
         return response
 
 
@@ -199,6 +209,7 @@ def create_inventory_app(
 
     @app.get("/", include_in_schema=False)
     async def serve_frontend():
-        return FileResponse(f"{static_directory}/index.html")
+        return FileResponse(f"{static_directory}/index.html", headers={"Cache-Control": "no-cache"})
 
     return app, limiter
+
