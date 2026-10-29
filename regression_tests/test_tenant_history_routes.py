@@ -62,7 +62,7 @@ def test_history_reads_are_company_scoped_and_postgres_compatible(postgres_schem
         sql.Identifier(schema), sql.Identifier(role)
     ))
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users,sessions,organization_memberships,platform_admins,activity_logs,"
+        "GRANT SELECT ON users,sessions,organization_memberships,platform_admins,organizations,activity_logs,"
         "movements,stock_transfers,stores,parts,work_orders,organization_settings TO {}"
     ).format(sql.Identifier(role)))
     connection.commit()

@@ -44,7 +44,7 @@ def test_timezone_context_and_update_are_company_scoped(postgres_schema, migrate
         sql.Identifier(schema), sql.Identifier(role)
     ))
     connection.execute(sql.SQL(
-        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins TO {}"
+        "GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations TO {}"
     ).format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT SELECT, UPDATE ON organization_settings TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT INSERT ON activity_logs TO {}").format(sql.Identifier(role)))
