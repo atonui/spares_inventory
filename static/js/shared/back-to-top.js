@@ -9,12 +9,26 @@
     ? window.matchMedia('(prefers-reduced-motion: reduce)')
     : { matches: false };
 
+  let scheduled = false;
+  let previousHidden;
+
   function updateVisibility() {
-    button.hidden = window.scrollY < scrollThreshold;
+    scheduled = false;
+    const hidden = window.scrollY < scrollThreshold;
+    if (hidden !== previousHidden) {
+      button.hidden = hidden;
+      previousHidden = hidden;
+    }
   }
 
-  window.addEventListener('scroll', updateVisibility, { passive: true });
-  window.addEventListener('resize', updateVisibility, { passive: true });
+  function scheduleVisibility() {
+    if (scheduled) return;
+    scheduled = true;
+    window.requestAnimationFrame(updateVisibility);
+  }
+
+  window.addEventListener('scroll', scheduleVisibility, { passive: true });
+  window.addEventListener('resize', scheduleVisibility, { passive: true });
   button.addEventListener('click', function () {
     window.scrollTo({
       top: 0,
@@ -22,5 +36,5 @@
     });
   });
 
-  updateVisibility();
+  scheduleVisibility();
 })();
