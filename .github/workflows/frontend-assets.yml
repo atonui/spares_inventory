@@ -1,0 +1,21 @@
+name: Frontend assets
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  generated-css:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tooling/css
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tooling/css/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check:css

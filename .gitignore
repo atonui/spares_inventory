@@ -31,3 +31,6 @@ logs
 *.sqlite3-*
 *.log
 *.log.*
+
+# Frontend asset build dependencies
+/tooling/css/node_modules/

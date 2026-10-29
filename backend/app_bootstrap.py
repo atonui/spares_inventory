@@ -43,6 +43,12 @@ class RevalidatingHtmlStaticFiles(StaticFiles):
             _, login_stat = self.lookup_path("login.html")
             if login_stat is not None:
                 path = "login.html"
+        # Generated CSS uses the original public URL so relative asset URLs stay valid.
+        if path.lower().endswith(".css") and "/" not in path:
+            minified_path = f"minified/{path}"
+            _, minified_stat = self.lookup_path(minified_path)
+            if minified_stat is not None:
+                path = minified_path
         response = await super().get_response(path, scope)
         if requested_index:
             response.headers["Vary"] = "Cookie"
