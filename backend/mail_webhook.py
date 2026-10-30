@@ -103,9 +103,12 @@ async def receive_resend_webhook(request: Request) -> Response:
                 raise HTTPException(status_code=413, detail="Webhook payload is too large")
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid webhook request") from None
-    body = await request.body()
-    if len(body) > MAX_WEBHOOK_BYTES:
-        raise HTTPException(status_code=413, detail="Webhook payload is too large")
+    body_buffer = bytearray()
+    async for chunk in request.stream():
+        body_buffer.extend(chunk)
+        if len(body_buffer) > MAX_WEBHOOK_BYTES:
+            raise HTTPException(status_code=413, detail="Webhook payload is too large")
+    body = bytes(body_buffer)
 
     if not verify_resend_signature(
         body,
