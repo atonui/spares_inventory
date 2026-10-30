@@ -327,3 +327,40 @@ def test_worker_connects_with_mail_worker_database_url(monkeypatch):
     worker.run(once=True)
 
     assert calls == ["postgresql://worker-role/example"]
+
+
+def test_worker_logs_provider_http_status_without_response_body_or_secrets(caplog):
+    from backend.mail_worker import deliver_claimed_mail
+
+    class _UnauthorizedResponse:
+        status_code = 401
+
+        def raise_for_status(self):
+            raise RuntimeError("provider echoed token=provider-private-detail")
+
+    class _UnauthorizedTransport:
+        def post(self, *_args, **_kwargs):
+            return _UnauthorizedResponse()
+
+    caplog.set_level(logging.WARNING)
+    message = {
+        "id": 20,
+        "message_type": "organization_invitation",
+        "recipient_email": "a@example.test",
+        "encrypted_payload": "ciphertext",
+    }
+    deliver_claimed_mail(
+        message,
+        encryption_key="unused",
+        api_key="secret",
+        from_address="Inventory <no-reply@example.test>",
+        http_transport=_UnauthorizedTransport(),
+        decrypt=lambda _ciphertext, _key: {
+            "invitation_url": "https://example.test/?token=invitation-secret",
+        },
+    )
+
+    assert message["_delivery_error_code"] == "provider_unavailable"
+    assert "provider_status=401" in caplog.text
+    assert "provider-private-detail" not in caplog.text
+    assert "invitation-secret" not in caplog.text
