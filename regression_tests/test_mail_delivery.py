@@ -364,3 +364,42 @@ def test_worker_logs_provider_http_status_without_response_body_or_secrets(caplo
     assert "provider_status=401" in caplog.text
     assert "provider-private-detail" not in caplog.text
     assert "invitation-secret" not in caplog.text
+
+
+
+def test_http_error_logs_only_bounded_provider_category(monkeypatch):
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    import backend.services.mail_delivery as delivery
+
+    def reject(request, timeout):
+        raise HTTPError(
+            request.full_url,
+            403,
+            "Forbidden",
+            hdrs=None,
+            fp=BytesIO(
+                b'{"statusCode":403,"name":"restricted_api_key",'
+                b'"message":"private recipient and secret token=do-not-log"}'
+            ),
+        )
+
+    monkeypatch.setattr(delivery, "urlopen", reject)
+    with pytest.raises(delivery.MailDeliveryError) as error:
+        delivery.send_mail(
+            {
+                "message_type": "organization_invitation",
+                "recipient_email": "owner@example.test",
+                "payload": {"invitation_url": "https://example.test/?token=invite-secret"},
+            },
+            api_key="provider-secret",
+            from_address="Inventory <no-reply@example.test>",
+        )
+
+    assert error.value.code == "provider_unavailable"
+    assert error.value.provider_status == 403
+    assert error.value.provider_error_category == "restricted_api_key"
+    assert "private recipient" not in str(error.value)
+    assert "invite-secret" not in str(error.value)
+    assert "provider-secret" not in str(error.value)
