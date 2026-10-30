@@ -130,6 +130,7 @@ def test_default_urllib_transport_accepts_success_status(monkeypatch):
     )
     assert len(calls) == 1
     assert calls[0][0].full_url == "https://api.resend.com/emails"
+    assert calls[0][0].get_header("User-agent") == "SparesTracker-MailWorker/1.0"
 
 
 def test_provider_error_exposes_only_sanitized_code():
