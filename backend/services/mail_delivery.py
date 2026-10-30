@@ -89,7 +89,11 @@ class _UrllibTransport:
         request = Request(
             url,
             data=json_module.dumps(json).encode("utf-8"),
-            headers={**headers, "Content-Type": "application/json"},
+            headers={
+                **headers,
+                "Content-Type": "application/json",
+                "User-Agent": "SparesTracker-MailWorker/1.0",
+            },
             method="POST",
         )
         try:
