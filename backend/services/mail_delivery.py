@@ -231,6 +231,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         "subject": subject,
         "html": html,
         "text": text_body,
+        "tags": [{"name": "app", "value": "spares_tracker"}],
     }
     transport = http_transport or _UrllibTransport()
     provider_status = None
