@@ -120,7 +120,7 @@ def claim_and_deliver_once(
     return True
 
 
-def run(*, once: bool = False) -> None:
+def run(*, once: bool = False) -> bool | None:
     database_url = os.environ.get("MAIL_WORKER_DATABASE_URL")
     encryption_key = os.environ.get("MAIL_PAYLOAD_ENCRYPTION_KEY")
     api_key = os.environ.get("RESEND_API_KEY")
