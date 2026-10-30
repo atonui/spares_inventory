@@ -65,6 +65,30 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     assert headers["Authorization"] == "Bearer resend-secret"
     assert timeout > 0
 
+def test_resend_adapter_sends_branded_password_reset():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {
+            "message_type": "password_reset",
+            "recipient_email": "owner@example.test",
+            "payload": {"reset_url": "https://example.test/reset?token=reset-secret"},
+        },
+        api_key="resend-secret",
+        from_address="no-reply@example.test",
+        http_transport=transport,
+    )
+    _url, body, _headers, _timeout = transport.calls[0]
+    assert body["from"] == "Spares Tracker <no-reply@example.test>"
+    assert body["subject"] == "Reset your Spares Tracker password"
+    assert "Spares Tracker" in body["html"]
+    assert "Inventory" not in body["html"]
+    assert "Reset password" in body["html"]
+    assert "reset-secret" in body["text"]
+    assert "If you did not request this" in body["text"]
+
+
 
 def test_resend_adapter_sends_email_change_verification():
     from backend.services.mail_delivery import send_mail
@@ -85,8 +109,11 @@ def test_resend_adapter_sends_email_change_verification():
     )
     _url, body, _headers, _timeout = transport.calls[0]
     assert body["to"] == ["new@example.test"]
+    assert body["from"] == "Spares Tracker <mail@example.test>"
     assert "verify" in body["subject"].lower()
+    assert "Confirm your new email address" in body["html"]
     assert "one-time-token" in body["html"]
+    assert "one-time-token" in body["text"]
 
 
 def test_old_email_notice_contains_new_address_without_verification_link():
@@ -105,9 +132,12 @@ def test_old_email_notice_contains_new_address_without_verification_link():
     )
     _url, body, _headers, _timeout = transport.calls[0]
     assert body["to"] == ["old@example.test"]
+    assert body["from"] == "Spares Tracker <mail@example.test>"
+    assert "Spares Tracker" in body["html"]
     assert "new@example.test" in body["html"]
     assert "href=" not in body["html"]
     assert "token=" not in body["html"]
+    assert "new@example.test" in body["text"]
 
 
 def test_default_urllib_transport_accepts_success_status(monkeypatch):
