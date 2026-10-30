@@ -148,7 +148,7 @@ def _render_branded_email(
     if link is not None:
         text_parts.extend([f"{link_label or 'Continue'}: {link}", "If the button does not work, copy the link into your browser."])
     text_parts.append("Spares Tracker")
-    return html, "\\n\\n".join(text_parts)
+    return html, "\n\n".join(text_parts)
 
 
 def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:
