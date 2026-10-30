@@ -105,6 +105,52 @@ class _UrllibTransport:
             return _StatusResponse(exc.code, category, response_format, edge)
 
 
+def _render_branded_email(
+    *, eyebrow: str, heading: str, copy: str, link: str | None = None,
+    link_label: str | None = None, detail: str | None = None,
+) -> tuple[str, str]:
+    """Render accessible HTML and plain-text versions using the product brand."""
+    safe_link = escape(link, quote=True) if link is not None else ""
+    detail_html = (
+        f'<p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#334155;">{escape(detail)}</p>'
+        if detail else ""
+    )
+    action_html = (
+        f'<p style="margin:0 0 20px;"><a href="{safe_link}" '
+        'style="display:inline-block;padding:12px 18px;background:#E9A23B;color:#15263B;'
+        'font-weight:700;text-decoration:none;border-radius:6px;">'
+        f'{escape(link_label or "Continue")}</a></p>'
+        f'<p style="margin:0;color:#64748B;font-size:13px;line-height:1.5;">'
+        f'If the button does not work, copy this link into your browser:<br><a href="{safe_link}" '
+        f'style="color:#15263B;word-break:break-all;">{safe_link}</a></p>'
+        if link is not None else ""
+    )
+    html = (
+        '<div style="margin:0;padding:32px 16px;background:#F5F7FA;'
+        'font-family:Arial,Helvetica,sans-serif;color:#15263B;">'
+        '<div style="max-width:560px;margin:0 auto;background:#FFFFFF;'
+        'border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;">'
+        '<div style="padding:22px 28px;border-bottom:1px solid #E2E8F0;'
+        'font-size:16px;font-weight:700;letter-spacing:.02em;color:#15263B;">'
+        'Spares Tracker</div><div style="padding:28px;">'
+        f'<p style="margin:0 0 8px;color:#64748B;font-size:12px;font-weight:700;'
+        f'letter-spacing:.08em;">{escape(eyebrow.upper())}</p>'
+        f'<h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#15263B;">'
+        f'{escape(heading)}</h1>'
+        f'<p style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#334155;">'
+        f'{escape(copy)}</p>{detail_html}{action_html}'
+        '<p style="margin:28px 0 0;color:#64748B;font-size:12px;line-height:1.5;">'
+        'Spares Tracker</p></div></div></div>'
+    )
+    text_parts = ["Spares Tracker", eyebrow.upper(), heading, copy]
+    if detail:
+        text_parts.append(detail)
+    if link is not None:
+        text_parts.extend([f"{link_label or 'Continue'}: {link}", "If the button does not work, copy the link into your browser."])
+    text_parts.append("Spares Tracker")
+    return html, "\\n\\n".join(text_parts)
+
+
 def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:
     if not api_key or not from_address:
         raise MailDeliveryError("mail_configuration_missing")
@@ -116,28 +162,28 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
     if message_type == "organization_invitation":
         link = payload.get("invitation_url")
         subject = "You’re invited to join Spares Tracker"
-        html = (
-            '<div style="margin:0;padding:32px 16px;background:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#15263B;">'
-            '<div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;">'
-            '<div style="padding:22px 28px;border-bottom:1px solid #E2E8F0;font-size:16px;font-weight:700;letter-spacing:.02em;color:#15263B;">'
-            'Spares Tracker</div><div style="padding:28px;">'
-            '<p style="margin:0 0 8px;color:#64748B;font-size:12px;font-weight:700;letter-spacing:.08em;">INVITATION</p>'
-            '<h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#15263B;">Join your inventory team</h1>'
-            '<p style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#334155;">'
-            'You’ve been invited to join your team on Spares Tracker. Accept the invitation to set up your account.</p>'
-        )
+        eyebrow = "Invitation"
+        heading = "Join your inventory team"
+        copy = "You’ve been invited to join your team on Spares Tracker. Accept the invitation to set up your account."
+        detail = None
         link_label = "Accept invitation"
         invalid_code = "invalid_invitation_message"
     elif message_type == "password_reset":
         link = payload.get("reset_url")
-        subject = "Password reset request - Inventory System"
-        html = "<p>You requested to reset your Inventory account password.</p>"
+        subject = "Reset your Spares Tracker password"
+        eyebrow = "Password reset"
+        heading = "Reset your password"
+        copy = "We received a request to reset the password for your Spares Tracker account."
+        detail = "If you did not request this, you can ignore this email. Your password will not change."
         link_label = "Reset password"
         invalid_code = "invalid_password_reset_message"
     elif message_type == "email_change_verification":
         link = payload.get("verification_url")
         subject = "Verify your new Spares Tracker email address"
-        html = "<p>Confirm this email address for your Spares Tracker account.</p>"
+        eyebrow = "Email address"
+        heading = "Confirm your new email address"
+        copy = "Confirm this email address to finish updating your Spares Tracker account."
+        detail = None
         link_label = "Verify email address"
         invalid_code = "invalid_email_change_message"
     elif message_type == "email_changed_notice":
@@ -145,10 +191,12 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         if not isinstance(new_email, str) or "@" not in new_email:
             raise MailDeliveryError("invalid_email_changed_notice")
         subject = "Your Spares Tracker email address changed"
-        html = (
-            "<p>The email address on your Spares Tracker account was changed.</p>"
-            f"<p>New address: {escape(new_email)}</p>"
-            "<p>If you did not make this change, contact your company administrator.</p>"
+        eyebrow = "Account security"
+        heading = "Your email address changed"
+        copy = "The email address on your Spares Tracker account was changed."
+        detail = (
+            f"New address: {new_email}. "
+            "If you did not make this change, contact your company administrator."
         )
         link = None
         link_label = None
@@ -159,35 +207,21 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         raise MailDeliveryError(invalid_code)
     if link is not None:
         parsed = urlsplit(link) if isinstance(link, str) else None
-        if (parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc):
+        if parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc:
             raise MailDeliveryError(invalid_code)
-    safe_link = escape(link, quote=True) if link is not None else ""
     sender_address = parseaddr(from_address)[1]
     if not sender_address:
         raise MailDeliveryError("mail_configuration_missing")
-    invitation = message_type == "organization_invitation" and link is not None
+    html, text_body = _render_branded_email(
+        eyebrow=eyebrow, heading=heading, copy=copy, detail=detail,
+        link=link, link_label=link_label,
+    )
     body = {
         "from": formataddr(("Spares Tracker", sender_address)),
         "to": [recipient],
         "subject": subject,
-        "html": (
-            html
-            + (
-                f'<p style="margin:0 0 20px;"><a href="{safe_link}" '
-                'style="display:inline-block;padding:12px 18px;background:#E9A23B;color:#15263B;'
-                'font-weight:700;text-decoration:none;border-radius:6px;">Accept invitation</a></p>'
-                f'<p style="margin:0;color:#64748B;font-size:13px;line-height:1.5;">'
-                f'If the button does not work, copy this link into your browser:<br><a href="{safe_link}" '
-                f'style="color:#15263B;word-break:break-all;">{safe_link}</a></p></div></div></div>'
-                if invitation else
-                (f'<p><a href="{safe_link}">{link_label}</a></p>' if link is not None else "")
-            )
-        ),
-        **(
-            {"text": "You’ve been invited to join your team on Spares Tracker. "
-                     f"Accept the invitation to set up your account: {link}"}
-            if invitation else {}
-        ),
+        "html": html,
+        "text": text_body,
     }
     transport = http_transport or _UrllibTransport()
     provider_status = None
