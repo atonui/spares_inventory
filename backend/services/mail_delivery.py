@@ -1,6 +1,7 @@
 """Provider boundary for transactional mail; provider details never escape."""
 
 from html import escape
+from email.utils import formataddr, parseaddr
 import json
 import re
 from urllib.error import HTTPError
@@ -114,8 +115,17 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         raise MailDeliveryError("invalid_mail_message")
     if message_type == "organization_invitation":
         link = payload.get("invitation_url")
-        subject = "You are invited to Inventory"
-        html = "<p>You have been invited to Inventory.</p>"
+        subject = "You’re invited to join Spares Tracker"
+        html = (
+            '<div style="margin:0;padding:32px 16px;background:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#15263B;">'
+            '<div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;">'
+            '<div style="padding:22px 28px;border-bottom:1px solid #E2E8F0;font-size:16px;font-weight:700;letter-spacing:.02em;color:#15263B;">'
+            'Spares Tracker</div><div style="padding:28px;">'
+            '<p style="margin:0 0 8px;color:#64748B;font-size:12px;font-weight:700;letter-spacing:.08em;">INVITATION</p>'
+            '<h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#15263B;">Join your inventory team</h1>'
+            '<p style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#334155;">'
+            'You’ve been invited to join your team on Spares Tracker. Accept the invitation to set up your account.</p>'
+        )
         link_label = "Accept invitation"
         invalid_code = "invalid_invitation_message"
     elif message_type == "password_reset":
@@ -151,13 +161,32 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         parsed = urlsplit(link) if isinstance(link, str) else None
         if (parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc):
             raise MailDeliveryError(invalid_code)
+    safe_link = escape(link, quote=True) if link is not None else ""
+    sender_address = parseaddr(from_address)[1]
+    if not sender_address:
+        raise MailDeliveryError("mail_configuration_missing")
+    invitation = message_type == "organization_invitation" and link is not None
     body = {
-        "from": from_address,
+        "from": formataddr(("Spares Tracker", sender_address)),
         "to": [recipient],
         "subject": subject,
-        "html": html + (
-            f'<p><a href="{escape(link, quote=True)}">{link_label}</a></p>'
-            if link is not None else ""
+        "html": (
+            html
+            + (
+                f'<p style="margin:0 0 20px;"><a href="{safe_link}" '
+                'style="display:inline-block;padding:12px 18px;background:#E9A23B;color:#15263B;'
+                'font-weight:700;text-decoration:none;border-radius:6px;">Accept invitation</a></p>'
+                f'<p style="margin:0;color:#64748B;font-size:13px;line-height:1.5;">'
+                f'If the button does not work, copy this link into your browser:<br><a href="{safe_link}" '
+                f'style="color:#15263B;word-break:break-all;">{safe_link}</a></p></div></div></div>'
+                if invitation else
+                (f'<p><a href="{safe_link}">{link_label}</a></p>' if link is not None else "")
+            )
+        ),
+        **(
+            {"text": "You’ve been invited to join your team on Spares Tracker. "
+                     f"Accept the invitation to set up your account: {link}"}
+            if invitation else {}
         ),
     }
     transport = http_transport or _UrllibTransport()
