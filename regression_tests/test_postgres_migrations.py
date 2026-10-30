@@ -622,3 +622,26 @@ def test_support_session_migration_creates_indexed_bound_session_table():
                   '(actor_user_id, auth_session_id, expires_at)',
                   '(organization_id, created_at DESC)'):
         assert field in statements
+
+
+def test_resend_webhook_migration_tracks_delivery_metadata_without_payloads():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(m for m in MIGRATIONS if m.version == 16)
+    assert migration.name == "resend_delivery_webhooks"
+    statements = "\\n".join(migration.statements)
+    for field in (
+        "provider_message_id TEXT UNIQUE",
+        "delivery_status TEXT NOT NULL DEFAULT 'unknown'",
+        "delivery_event_at TEXT",
+        "delivered_at TEXT",
+        "bounced_at TEXT",
+        "complained_at TEXT",
+        "CREATE TABLE resend_webhook_events",
+        "event_id TEXT PRIMARY KEY",
+        "provider_message_id TEXT NOT NULL",
+        "processed_at TEXT",
+    ):
+        assert field in statements
+    assert "recipient_email" not in statements
+    assert "payload JSON" not in statements
