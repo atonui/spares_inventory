@@ -334,6 +334,7 @@ def test_worker_logs_provider_http_status_without_response_body_or_secrets(caplo
 
     class _UnauthorizedResponse:
         status_code = 401
+        provider_error_category = "api_key_permission_denied"
 
         def raise_for_status(self):
             raise RuntimeError("provider echoed token=provider-private-detail")
@@ -362,6 +363,7 @@ def test_worker_logs_provider_http_status_without_response_body_or_secrets(caplo
 
     assert message["_delivery_error_code"] == "provider_unavailable"
     assert "provider_status=401" in caplog.text
+    assert "provider_error_category=api_key_permission_denied" in caplog.text
     assert "provider-private-detail" not in caplog.text
     assert "invitation-secret" not in caplog.text
 
