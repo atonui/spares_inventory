@@ -13,7 +13,7 @@ function emailChangeConfirmation() {
             }
             if (!this.token || this.token.length < 20 || this.token.length > 200) {
                 this.token = '';
-                this.error = 'This confirmation link is invalid or expired. Request a new email change from your profile.';
+                this.error = 'This confirmation link is invalid or expired. Contact your company administrator or Spares Tracker support for a new link.';
             }
         },
         async confirm() {
@@ -34,15 +34,15 @@ function emailChangeConfirmation() {
                 const data = await response.json();
                 if (!response.ok || data.success !== true) {
                     this.error = response.status === 400
-                        ? 'This confirmation link is invalid or expired. Request a new email change from your profile.'
+                        ? 'This confirmation link is invalid or expired. Contact your company administrator or Spares Tracker support for a new link.'
                         : response.status === 409
-                            ? 'That address can no longer be used. Sign in with your current address and try another.'
-                            : 'The email change could not be completed. Sign in with your current address and try again later.';
+                            ? 'That address can no longer be used. Contact your company administrator or Spares Tracker support to use another address.'
+                            : 'The email change could not be completed. Contact your company administrator or Spares Tracker support for help.';
                     return;
                 }
                 this.success = true;
             } catch (_) {
-                this.error = 'The email change could not be confirmed. Sign in with your current address and request a new link.';
+                this.error = 'The email change could not be confirmed. Contact your company administrator or Spares Tracker support for a new link.';
             } finally {
                 this.loading = false;
             }

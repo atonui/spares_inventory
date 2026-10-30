@@ -3,13 +3,6 @@ function profileManager() {
         activeTab: 'profile',
         loading: true,
         profileRequestBusy: false,
-        emailChangeSaving: false,
-        emailChangeStatusLoading: false,
-        emailChangeError: '',
-        emailChangeStatusError: '',
-        emailChangeMessage: '',
-        emailChangeDraft: '',
-        pendingEmailChange: null,
         profileLoaded: false,
         profileError: '',
         saving: false,
@@ -65,11 +58,11 @@ function profileManager() {
         },
         async init() {
             await Promise.all([this.getCsrfToken(),this.loadProfile()]);
-            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadEmailChangeStatus(),this.loadMobileDevices()]);
+            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadMobileDevices()]);
         },
         async retryProfile() {
             await this.loadProfile();
-            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadEmailChangeStatus(),this.loadMobileDevices()]);
+            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadMobileDevices()]);
         },
         async getCsrfToken() {
             if (this.csrfLoading || this.saving || this.timezoneSaving) return;
@@ -213,42 +206,6 @@ function profileManager() {
                 await this.loadMobileDevices();
             } catch (error) {this.mobileDevicesError=error.message;}
             finally {this.mobileDeviceRevoking=false;}
-        },
-        async loadEmailChangeStatus() {
-            if (!this.profile.saas_mode) {this.pendingEmailChange=null;return;}
-            if (this.emailChangeStatusLoading) return;
-            this.emailChangeStatusLoading=true;this.emailChangeStatusError='';
-            try {
-                const response=await fetch('/api/profile/email-change-request',{credentials:'include',cache:'no-store'});
-                const data=await response.json();
-                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Email-change status could not be loaded.');
-                this.pendingEmailChange=data.status==='pending' ? data : null;
-            } catch (_) {this.emailChangeStatusError='Pending email-change status could not be loaded. Retry when your connection is ready.';}
-            finally {this.emailChangeStatusLoading=false;}
-        },
-        async requestEmailChange() {
-            if (!this.profile.saas_mode || this.emailChangeSaving || this.emailChangeStatusLoading || this.saving || this.timezoneSaving || this.csrfLoading || !this.csrfToken) return;
-            this.emailChangeSaving=true;this.emailChangeError='';this.emailChangeMessage='';
-            try {
-                const response=await InventoryCsrf.request(this,'/api/profile/email-change-requests',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.emailChangeDraft.trim()})});
-                const data=await response.json();this.handleSecurityRejection(response,data);
-                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Email change could not be requested.');
-                this.emailChangeMessage=data.message || 'If the address can be used, a confirmation email has been sent.';
-                this.emailChangeDraft='';
-                await this.loadEmailChangeStatus();
-            } catch (error) {this.emailChangeError=error.message;}
-            finally {this.emailChangeSaving=false;}
-        },
-        async cancelEmailChange() {
-            if (!this.profile.saas_mode || !this.pendingEmailChange || this.emailChangeSaving || this.saving || this.timezoneSaving || this.csrfLoading || !this.csrfToken) return;
-            this.emailChangeSaving=true;this.emailChangeError='';this.emailChangeMessage='';
-            try {
-                const response=await InventoryCsrf.request(this,'/api/profile/email-change-request',{method:'DELETE',cache:'no-store'});
-                const data=await response.json();this.handleSecurityRejection(response,data);
-                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Pending email change could not be canceled.');
-                this.pendingEmailChange=null;this.emailChangeMessage='Pending email change canceled.';
-            } catch (error) {this.emailChangeError=error.message;}
-            finally {this.emailChangeSaving=false;}
         },
         async saveDisplayTimezone() {
             if (this.timezoneSaving || this.saving || this.timezoneLoading || this.csrfLoading || !this.csrfToken || !this.timezoneContext || !this.displayTimezoneDirty) return;

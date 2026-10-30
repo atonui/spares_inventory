@@ -22,8 +22,6 @@ _V1_PATHS = {
     "/api/v1/inventory/transfers/{transfer_id}/receive",
     "/api/v1/inventory/transfers/{transfer_id}/return",
     "/api/v1/auth/logout",
-    "/api/v1/me/email-change-requests",
-    "/api/v1/me/email-change-request",
     "/api/v1/auth/email-change/confirm",
 }
 
@@ -53,8 +51,6 @@ _ERRORS_BY_PATH = {
     "/api/v1/inventory/transfers": ("400", "401", "403", "422", "429", "500", "503"),
     "/api/v1/inventory/adjustments": ("401", "403", "404", "409", "422", "429", "500", "503"),
     "/api/v1/auth/logout": ("401", "403", "404", "429", "500", "503"),
-    "/api/v1/me/email-change-requests": ("401", "403", "409", "422", "429", "500", "503"),
-    "/api/v1/me/email-change-request": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/auth/email-change/confirm": ("400", "409", "422", "429", "500", "503"),
 }
 
@@ -177,7 +173,6 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                 continue
             if path in {
                 "/api/v1/me", "/api/v1/inventory", "/api/v1/inventory/adjustments", "/api/v1/auth/logout",
-                "/api/v1/me/email-change-requests", "/api/v1/me/email-change-request",
             }:
                 operation["security"] = [{"BearerAuth": []}]
             else:
@@ -252,26 +247,6 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                     "does not match expected_quantity. Keep operation_id stable when retrying the same "
                     "change after an ambiguous network failure; an accepted operation is applied once."
                 )
-            if path == "/api/v1/me/email-change-requests" and method.lower() == "post":
-                operation["description"] = (
-                    "Request a verified email change. The current email remains active until "
-                    "the one-time link is confirmed. Response is generic to avoid revealing "
-                    "whether an address is registered. Responses use Cache-Control: no-store. "
-                    "Rate limit: 3 requests per hour per account."
-                )
-            if path == "/api/v1/me/email-change-request":
-                if method.lower() == "get":
-                    operation["description"] = (
-                        "Read the caller's pending email change. The proposed address is masked; "
-                        "expires_at is an ISO 8601 UTC instant. Status is intentionally generic "
-                        "and responses use Cache-Control: no-store."
-                    )
-                elif method.lower() == "delete":
-                    operation["description"] = (
-                        "Cancel the caller's pending email change. The response is stable whether "
-                        "or not a request is pending. Responses use Cache-Control: no-store. "
-                        "Rate limit: 10 requests per hour per account."
-                    )
             if path == "/api/v1/auth/email-change/confirm" and method.lower() == "post":
                 operation["description"] = (
                     "Confirm a one-time email-change token. This public capability endpoint "

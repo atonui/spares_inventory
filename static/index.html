@@ -27,7 +27,7 @@
 <script src="js/inventory/stock-consumption.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/parts-admin.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/stores-admin.js?v=20261014-frontend-21" defer></script>
-<script src="js/inventory/users-admin.js?v=20261029-saas-invitation-submit" defer></script>
+<script src="js/inventory/users-admin.js?v=20261030-admin-managed-email" defer></script>
 <script src="js/inventory/store-types-admin.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/equipment.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/activity-logs.js?v=20261014-frontend-21" defer></script>
@@ -1551,6 +1551,25 @@
                             </button>
                         </div>
                     </form>
+                    <section class="form-group" x-show="currentUser?.saas_mode && editingUser && canManageEditedEmail" aria-labelledby="member-email-change-title">
+                        <h4 id="member-email-change-title">Change sign-in email</h4>
+                        <p class="profile-help">The member keeps using their current email until they confirm the link sent to the new address.</p>
+                        <form @submit.prevent="requestMemberEmailChange()">
+                            <label for="member-new-email">New email address</label>
+                            <input id="member-new-email" type="email" x-model="emailChangeDraft" autocomplete="email" required :disabled="emailChangeBusy">
+                            <button type="submit" class="btn" :disabled="emailChangeBusy || emailChangeLoading || !emailChangeDraft.trim()">Send confirmation link</button>
+                        </form>
+                        <div x-show="emailChangeLoading" role="status">Checking for a pending change…</div>
+                        <div x-show="pendingEmailChange" x-cloak>
+                            <p role="status">Confirmation pending for <strong x-text="pendingEmailChange?.proposed_email"></strong>.</p>
+                            <p x-show="pendingEmailChange?.expires_at" x-text="'Link expires ' + pendingEmailChange?.expires_at"></p>
+                            <button type="button" class="btn" @click="cancelMemberEmailChange()" :disabled="emailChangeBusy">Cancel pending change</button>
+                        </div>
+                        <p role="alert" class="error" x-show="emailChangeError" x-text="emailChangeError"></p>
+                        <p role="status" class="success" x-show="emailChangeMessage" x-text="emailChangeMessage"></p>
+                    </section>
+                    <p class="profile-help" x-show="currentUser?.saas_mode && editingUser && !canManageEditedEmail && editedEmailIsOwner">Contact Spares Tracker support to change the company owner email.</p>
+                    <p class="profile-help" x-show="currentUser?.saas_mode && editingUser && !canManageEditedEmail && !editedEmailIsOwner">Ask another company administrator to change this email address.</p>
                 </div>
             </div>
 

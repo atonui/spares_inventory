@@ -159,6 +159,20 @@ def confirm_email_change(
         raise EmailChangeFailure(400, "invalid_email_change_token")
 
     user = _lock_user(conn, request_ref["user_id"])
+    membership = conn.execute(
+        """SELECT om.organization_id, om.company_role, om.is_active AS membership_active,
+                  o.is_active AS organization_active
+           FROM organization_memberships AS om
+           JOIN organizations AS o ON o.id = om.organization_id
+           WHERE om.user_id = %s""",
+        (request_ref["user_id"],),
+    ).fetchone()
+    if (
+        membership is None
+        or not membership["membership_active"]
+        or not membership["organization_active"]
+    ):
+        raise EmailChangeFailure(400, "invalid_email_change_token")
     request_row = conn.execute(
         """SELECT id, proposed_email, expires_at, consumed_at, canceled_at, delivery_suppressed
            FROM email_change_requests
@@ -198,4 +212,9 @@ def confirm_email_change(
         new_email=proposed_email,
         encryption_key=encryption_key,
     )
-    return {"email": proposed_email}
+    return {
+        "email": proposed_email,
+        "user_id": user["id"],
+        "organization_id": membership["organization_id"],
+        "company_role": membership["company_role"],
+    }

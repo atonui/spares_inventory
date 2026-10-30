@@ -643,6 +643,9 @@ app.include_router(create_users_router(
     password_hash=lambda password: hash_password(password),
     endpoint_log=lambda *args, **kwargs: log_endpoint(*args, **kwargs),
     mutation_activity=lambda *args, **kwargs: _record_mutation_activity(*args, **kwargs),
+    mail_payload_encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+    frontend_url=FRONTEND_URL,
+    limiter=limiter,
 ))
 
 

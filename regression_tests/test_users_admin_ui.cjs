@@ -49,6 +49,47 @@ test('pending invitation resend and cancel use scoped company routes',async()=>{
  await a.resendInvitation(17);await a.cancelInvitation(17);
  assert.deepEqual(calls,[['/users/invitations/17/resend','POST'],'refresh',['/users/invitations/17','DELETE'],'refresh']);
 });
+test('company administrators manage verified email changes from the SaaS user editor',async()=>{
+ const {a}=setup();
+ a.currentUser={id:1,role:'owner',saas_mode:true};
+ a.users=[{id:42,email:'target@example.test',name:'Target',role:'admin',territory:null}];
+ a.editingUser=42;a.emailChangeDraft='new@example.test';
+ const calls=[];
+ a.apiCall=async(path,opts={})=>{
+  calls.push([path,opts.method||'GET',opts.body?JSON.parse(opts.body):null]);
+  if(!opts.method)return {status:'none'};
+  if(opts.method==='POST')return {success:true,message:'Confirmation link sent.'};
+  if(opts.method==='DELETE')return {success:true,message:'Pending email change canceled.'};
+  return {};
+ };
+ assert.equal(a.canManageEditedEmail,true);
+ await a.requestMemberEmailChange();
+ assert.deepEqual(calls,[
+  ['/users/42/email-change-requests','POST',{email:'new@example.test'}],
+  ['/users/42/email-change-request','GET',null],
+ ]);
+ assert.equal(a.emailChangeDraft,'');
+ assert.equal(a.emailChangeMessage,'Confirmation link sent.');
+ a.pendingEmailChange={status:'pending'};
+ await a.cancelMemberEmailChange();
+ assert.deepEqual(calls.at(-1),['/users/42/email-change-request','DELETE',null]);
+ assert.equal(a.pendingEmailChange,null);
+});
+test('SaaS email changes cannot target self or another administrator without owner authority',()=>{
+ const {a}=setup();a.currentUser={id:1,role:'admin',saas_mode:true};
+ a.users=[{id:1,role:'admin'},{id:2,role:'admin'},{id:3,role:'manager'},{id:4,role:'owner'}];
+ a.editingUser=1;assert.equal(a.canManageEditedEmail,false);
+ a.editingUser=2;assert.equal(a.canManageEditedEmail,false);
+ a.editingUser=3;assert.equal(a.canManageEditedEmail,true);
+ a.editingUser=4;assert.equal(a.canManageEditedEmail,false);assert.equal(a.editedEmailIsOwner,true);
+ a.currentUser={id:5,role:'owner',saas_mode:true};a.editingUser=2;assert.equal(a.canManageEditedEmail,true);
+});
+test('email change controls are separate from account update and the owner gets the support path',()=>{
+ const source=html();
+ assert.match(source,/<section class="form-group" x-show="currentUser\?\.saas_mode && editingUser && canManageEditedEmail"[^>]*>[\s\S]*?requestMemberEmailChange\(\)/);
+ assert.match(source,/Contact Spares Tracker support to change the company owner email\./);
+ assert.match(source,/Ask another company administrator to change this email address\./);
+});
 for(const territory of ['', ' Kitale '])test('create keeps raw full form territory '+JSON.stringify(territory),async()=>{
  const {a,timers}=setup();fill(a,'create');a.userForm.territory=territory;const before=plain(a.userForm);const calls=[];
  a.apiCall=async(path,opts)=>{assert.equal(a.loading,true);calls.push([path,opts.method,JSON.parse(opts.body)]);return {};};

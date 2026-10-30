@@ -16,6 +16,12 @@ class _Connection:
     def __init__(self):
         self.calls = []
         self.user = {"id": 7, "email": "old@example.test"}
+        self.membership = {
+            "organization_id": "8e93daf5-220d-4d01-aed2-d277e2e075bf",
+            "company_role": "engineer",
+            "membership_active": True,
+            "organization_active": True,
+        }
         self.request = None
         self.taken_user = None
         self.pending_row = None
@@ -31,6 +37,8 @@ class _Connection:
             return _Result()
         if "SELECT id, email FROM users" in statement:
             return _Result(dict(self.user))
+        if "FROM organization_memberships" in statement and "organization_active" in statement:
+            return _Result(dict(self.membership) if self.membership else None)
         if "UPDATE email_change_requests SET canceled_at" in statement:
             self.cancellations.append(params)
             return _Result()
@@ -208,11 +216,49 @@ def test_confirmation_updates_email_consumes_token_and_notifies_old_address():
         now=now,
     )
 
-    assert result == {"email": "new@example.test"}
+    assert result == {
+        "email": "new@example.test",
+        "user_id": 7,
+        "organization_id": "8e93daf5-220d-4d01-aed2-d277e2e075bf",
+        "company_role": "engineer",
+    }
     assert connection.email_updates == [("new@example.test", 7)]
     assert connection.request["consumed_at"] == serialize_instant(now)
     assert connection.outbox[0][1:3] == ("email_changed_notice", "old@example.test")
     assert decrypt_mail_payload(connection.outbox[0][3], key) == {"new_email": "new@example.test"}
+
+
+@pytest.mark.parametrize("inactive_field", ("membership_active", "organization_active"))
+def test_confirmation_rejects_member_removed_or_suspended_after_request(inactive_field):
+    from cryptography.fernet import Fernet
+    from backend.services.email_change import EmailChangeFailure, confirm_email_change
+    from backend.temporal import serialize_instant
+
+    now = datetime(2030, 1, 2, 3, 0, tzinfo=timezone.utc)
+    connection = _Connection()
+    connection.membership[inactive_field] = False
+    connection.request = {
+        "id": 81,
+        "user_id": 7,
+        "proposed_email": "new@example.test",
+        "token_hash": hashlib.sha256(b"raw-change-token-fixture").hexdigest(),
+        "delivery_suppressed": False,
+        "expires_at": serialize_instant(now + timedelta(minutes=10)),
+        "consumed_at": None,
+        "canceled_at": None,
+    }
+
+    with pytest.raises(EmailChangeFailure) as error:
+        confirm_email_change(
+            connection,
+            token="raw-change-token-fixture",
+            encryption_key=Fernet.generate_key().decode("ascii"),
+            now=now,
+        )
+
+    assert error.value.code == "invalid_email_change_token"
+    assert connection.email_updates == []
+    assert connection.consumptions == []
 
 
 def test_expired_confirmation_does_not_change_email_or_consume_request():
