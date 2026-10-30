@@ -31,10 +31,14 @@ organization for platform-authorized directory requests. The worker role has
 schema `USAGE`, column-level `SELECT` on
 `id`, `organization_id`, `message_type`, `recipient_email`,
 `encrypted_payload`, `status`, `attempt_count`, `available_at`,
-`lease_expires_at`, and `claim_token`, and column-level `UPDATE` on `status`,
-`claim_token`, `lease_expires_at`, `attempt_count`, `updated_at`, `sent_at`,
-`last_error_code`, and `available_at`. It has no access to other application
-tables and no outbox `INSERT`, `DELETE`, or DDL privileges.
+`lease_expires_at`, `claim_token`, `provider_message_id`,
+`delivery_status`, and `delivery_event_at`, and column-level `UPDATE` on
+`status`, `claim_token`, `lease_expires_at`, `attempt_count`, `updated_at`,
+`sent_at`, `last_error_code`, `available_at`, `provider_message_id`,
+`delivery_status`, `delivery_event_at`, `delivered_at`, `bounced_at`, and
+`complained_at`. It can select, insert, and update the minimal
+`resend_webhook_events` table. It has no access to other application tables and
+no outbox `INSERT`, `DELETE`, or DDL privileges.
 
 PostgreSQL SaaS password-reset and invitation delivery require
 `MAIL_PAYLOAD_ENCRYPTION_KEY`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL`.
