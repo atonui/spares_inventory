@@ -72,11 +72,13 @@ class _StatusResponse:
     def __init__(
         self, status_code: int, provider_error_category: str | None = None,
         provider_response_format: str | None = None, provider_edge: str | None = None,
+        provider_message_id: str | None = None,
     ):
         self.status_code = status_code
         self.provider_error_category = provider_error_category
         self.provider_response_format = provider_response_format
         self.provider_edge = provider_edge
+        self.provider_message_id = provider_message_id
 
     def raise_for_status(self):
         if self.status_code < 200 or self.status_code >= 300:
@@ -99,7 +101,14 @@ class _UrllibTransport:
         )
         try:
             with urlopen(request, timeout=timeout) as response:
-                return _StatusResponse(response.status)
+                try:
+                    payload = json_module.loads(response.read(65536).decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    payload = None
+                message_id = payload.get("id") if isinstance(payload, dict) else None
+                if not isinstance(message_id, str) or not message_id.strip() or len(message_id) > 255:
+                    message_id = None
+                return _StatusResponse(response.status, provider_message_id=message_id)
         except HTTPError as exc:
             category, response_format, edge = _provider_error_metadata(exc)
             return _StatusResponse(exc.code, category, response_format, edge)
@@ -151,7 +160,7 @@ def _render_branded_email(
     return html, "\n\n".join(text_parts)
 
 
-def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:
+def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> str | None:
     if not api_key or not from_address:
         raise MailDeliveryError("mail_configuration_missing")
     message_type = message.get("message_type")
@@ -222,6 +231,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         "subject": subject,
         "html": html,
         "text": text_body,
+        "tags": [{"name": "app", "value": "spares_tracker"}],
     }
     transport = http_transport or _UrllibTransport()
     provider_status = None
@@ -248,6 +258,8 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         if edge in {"cloudflare", "other"}:
             provider_edge = edge
         response.raise_for_status()
+        message_id = getattr(response, "provider_message_id", None)
+        return message_id if isinstance(message_id, str) and message_id.strip() else None
     except Exception:
         # Keep provider response bodies and exception messages private. Only a
         # bounded machine-readable category and numeric status can escape.

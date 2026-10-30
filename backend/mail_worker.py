@@ -45,12 +45,13 @@ def deliver_claimed_mail(
                 message["_delivery_terminal"] = True
                 logger.warning("mail delivery failed code=%s", message["_delivery_error_code"])
                 return False
-        send_mail(
+        provider_message_id = send_mail(
             {**message, "payload": payload},
             api_key=api_key,
             from_address=from_address,
             http_transport=http_transport,
         )
+        message["_provider_message_id"] = provider_message_id
     except MailDeliveryError as exc:
         message["_delivery_error_code"] = exc.code
         if any((
@@ -100,7 +101,10 @@ def claim_and_deliver_once(
     )
     with conn.transaction():
         if sent:
-            mark_mail_sent(conn, mail_id=message["id"], claim_token=str(message["claim_token"]))
+            mark_mail_sent(
+                conn, mail_id=message["id"], claim_token=str(message["claim_token"]),
+                provider_message_id=message.get("_provider_message_id"),
+            )
         else:
             attempt = int(message["attempt_count"])
             terminal = message.get("_delivery_terminal", False) or attempt >= len(RETRY_DELAYS_SECONDS) + 1
@@ -116,7 +120,7 @@ def claim_and_deliver_once(
     return True
 
 
-def run(*, once: bool = False) -> None:
+def run(*, once: bool = False) -> bool | None:
     database_url = os.environ.get("MAIL_WORKER_DATABASE_URL")
     encryption_key = os.environ.get("MAIL_PAYLOAD_ENCRYPTION_KEY")
     api_key = os.environ.get("RESEND_API_KEY")
@@ -137,7 +141,7 @@ def run(*, once: bool = False) -> None:
                 from_address=from_address,
             )
             if once:
-                return
+                return did_work
             if not did_work:
                 time.sleep(5)
 
@@ -147,7 +151,17 @@ def main() -> None:
     parser.add_argument("--once", action="store_true", help="process at most one queued message")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    run(once=args.once)
+    if args.once:
+        run(once=True)
+        return
+    import uvicorn
+
+    uvicorn.run(
+        "backend.mail_webhook:app",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "8080")),
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

@@ -60,6 +60,7 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     assert "Inventory." not in body["html"]
     assert "Spares Tracker" in body["text"]
     assert "raw-secret" in body["text"]
+    assert body["tags"] == [{"name": "app", "value": "spares_tracker"}]
     assert body["to"] == ["owner@example.test"]
     assert "raw-secret" in body["html"]
     assert headers["Authorization"] == "Bearer resend-secret"
@@ -146,6 +147,9 @@ def test_default_urllib_transport_accepts_success_status(monkeypatch):
     class _UrlResponse:
         status = 202
 
+        def read(self, _limit):
+            return b'{"id":"resend-email-123"}'
+
         def __enter__(self):
             return self
 
@@ -154,7 +158,7 @@ def test_default_urllib_transport_accepts_success_status(monkeypatch):
 
     calls = []
     monkeypatch.setattr(delivery, "urlopen", lambda request, timeout: (calls.append((request, timeout)) or _UrlResponse()))
-    delivery.send_mail(
+    provider_message_id = delivery.send_mail(
         {
             "message_type": "organization_invitation",
             "recipient_email": "owner@example.test",
@@ -163,6 +167,7 @@ def test_default_urllib_transport_accepts_success_status(monkeypatch):
         api_key="resend-secret",
         from_address="Inventory <no-reply@example.test>",
     )
+    assert provider_message_id == "resend-email-123"
     assert len(calls) == 1
     assert calls[0][0].full_url == "https://api.resend.com/emails"
     assert calls[0][0].get_header("User-agent") == "SparesTracker-MailWorker/1.0"

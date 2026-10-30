@@ -137,15 +137,25 @@ GRANT UPDATE (email) ON TABLE users TO web_runtime_role;
 
 GRANT USAGE ON SCHEMA public TO mail_worker_role;
 GRANT SELECT (id, organization_id, message_type, recipient_email, encrypted_payload,
-              status, attempt_count, available_at, lease_expires_at, claim_token)
+              status, attempt_count, available_at, lease_expires_at, claim_token,
+              provider_message_id, delivery_status, delivery_event_at)
   ON TABLE mail_outbox TO mail_worker_role;
 GRANT UPDATE (status, claim_token, lease_expires_at, attempt_count, updated_at,
-              sent_at, last_error_code, available_at)
+              sent_at, last_error_code, available_at, provider_message_id,
+              delivery_status, delivery_event_at, delivered_at, bounced_at, complained_at)
   ON TABLE mail_outbox TO mail_worker_role;
+REVOKE ALL PRIVILEGES ON TABLE resend_webhook_events FROM web_runtime_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE resend_webhook_events TO mail_worker_role;
 ```
 
 The worker receives no rights on identity, sessions, invitations, platform, or
 inventory tables, and no outbox `INSERT`, `DELETE`, ownership, or DDL rights.
+It stores only verified Resend event IDs, provider message IDs, event types, and
+timestamps. The webhook receiver accepts signed events at
+`https://<mail-worker-domain>/webhooks/resend`; configure the signing secret as
+`RESEND_WEBHOOK_SECRET` on `spares_mail_worker`. Configure Resend to send
+`email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`,
+`email.complained`, `email.failed`, and `email.suppressed` events.
 The API process receives the migration identity only for startup migrations;
 request handling uses the web runtime identity. The worker must not receive
 the migration identity.
