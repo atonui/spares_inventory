@@ -176,9 +176,11 @@ def test_invitation_list_only_returns_active_unexpired_rows(invitation_api):
 
     api = invitation_api
     invited_by = api.identities["owner"][0]
+    from datetime import timedelta
+
     now = utc_now()
-    future = serialize_instant(now + __import__("datetime").timedelta(days=1))
-    from datetime import timedelta\n    future = serialize_instant(now + timedelta(days=1))\n    past = serialize_instant(now - timedelta(days=1))
+    future = serialize_instant(now + timedelta(days=1))
+    past = serialize_instant(now - timedelta(days=1))
     current = serialize_instant(now)
 
     rows = (
