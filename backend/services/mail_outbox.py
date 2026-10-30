@@ -8,6 +8,19 @@ from backend.temporal import serialize_instant
 
 RETRY_DELAYS_SECONDS = (60, 300, 1200, 3600, 14400)
 MAX_ATTEMPTS = 6
+RESEND_EVENT_STATUS = {
+    "email.sent": "sent",
+    "email.delivered": "delivered",
+    "email.delivery_delayed": "delayed",
+    "email.bounced": "bounced",
+    "email.complained": "complained",
+    "email.failed": "failed",
+    "email.suppressed": "suppressed",
+}
+_DELIVERY_PRIORITY = {
+    "unknown": 0, "sent": 1, "delayed": 2, "delivered": 3,
+    "bounced": 4, "failed": 4, "complained": 5, "suppressed": 5,
+}
 _ERROR_CODE = re.compile(r"^[a-z0-9_:-]{1,80}$")
 
 
@@ -72,17 +85,96 @@ def claim_pending_mail(conn, *, now: datetime, lease_seconds: int = 60) -> dict 
     return dict(row) if row is not None else None
 
 
-def mark_mail_sent(conn, *, mail_id: int, claim_token: str) -> None:
+def mark_mail_sent(
+    conn, *, mail_id: int, claim_token: str, provider_message_id: str | None = None,
+) -> None:
     now = _stamp(datetime.now(timezone.utc))
+    if provider_message_id is not None and (
+        not isinstance(provider_message_id, str) or not provider_message_id.strip()
+        or len(provider_message_id) > 255
+    ):
+        raise ValueError("Provider message ID is invalid.")
     result = conn.execute(
         """UPDATE mail_outbox SET status = 'sent', claim_token = NULL,
                   lease_expires_at = NULL, sent_at = %s, updated_at = %s,
-                  last_error_code = NULL
+                  last_error_code = NULL, provider_message_id = %s,
+                  delivery_status = 'sent', delivery_event_at = NULL
            WHERE id = %s AND status = 'claimed' AND claim_token = %s""",
-        (now, now, mail_id, claim_token),
+        (now, now, provider_message_id, mail_id, claim_token),
     )
     if result.rowcount != 1:
         raise RuntimeError("Mail claim is no longer current.")
+    if provider_message_id is not None:
+        apply_pending_resend_events(conn, provider_message_id)
+
+
+def record_resend_webhook_event(
+    conn, *, event_id: str, provider_message_id: str, event_type: str, occurred_at: str,
+) -> bool:
+    """Store a minimal verified Resend event and apply it when its outbox row exists."""
+    if event_type not in RESEND_EVENT_STATUS:
+        raise ValueError("Unsupported Resend email event.")
+    if not isinstance(event_id, str) or not 1 <= len(event_id) <= 255:
+        raise ValueError("A valid Resend event ID is required.")
+    if not isinstance(provider_message_id, str) or not 1 <= len(provider_message_id) <= 255:
+        raise ValueError("A valid provider message ID is required.")
+    inserted = conn.execute(
+        """INSERT INTO resend_webhook_events
+           (event_id, provider_message_id, event_type, occurred_at)
+           VALUES (%s, %s, %s, %s)
+           ON CONFLICT (event_id) DO NOTHING
+           RETURNING event_id""",
+        (event_id, provider_message_id, event_type, occurred_at),
+    ).fetchone()
+    apply_pending_resend_events(conn, provider_message_id)
+    return inserted is not None
+
+
+def apply_pending_resend_events(conn, provider_message_id: str) -> int:
+    """Apply deduplicated events in timestamp order; keep unmatched events for send races."""
+    events = conn.execute(
+        """SELECT event_id, event_type, occurred_at
+           FROM resend_webhook_events
+           WHERE provider_message_id = %s AND processed_at IS NULL
+           ORDER BY occurred_at, event_id
+           FOR UPDATE""",
+        (provider_message_id,),
+    ).fetchall()
+    processed = 0
+    now = _stamp(datetime.now(timezone.utc))
+    for event in events:
+        delivery_status = RESEND_EVENT_STATUS[event["event_type"]]
+        priority = _DELIVERY_PRIORITY[delivery_status]
+        conn.execute(
+            """UPDATE mail_outbox
+               SET delivery_status = %s, delivery_event_at = %s,
+                   delivered_at = CASE WHEN %s = 'delivered' THEN %s ELSE delivered_at END,
+                   bounced_at = CASE WHEN %s = 'bounced' THEN %s ELSE bounced_at END,
+                   complained_at = CASE WHEN %s = 'complained' THEN %s ELSE complained_at END,
+                   updated_at = %s
+               WHERE provider_message_id = %s
+                 AND (delivery_event_at IS NULL OR delivery_event_at < %s OR
+                      (delivery_event_at = %s AND
+                       CASE delivery_status
+                         WHEN 'unknown' THEN 0 WHEN 'sent' THEN 1 WHEN 'delayed' THEN 2
+                         WHEN 'delivered' THEN 3 WHEN 'bounced' THEN 4 WHEN 'failed' THEN 4
+                         WHEN 'complained' THEN 5 WHEN 'suppressed' THEN 5 ELSE 0
+                       END <= %s))""",
+            (
+                delivery_status, event["occurred_at"],
+                delivery_status, event["occurred_at"],
+                delivery_status, event["occurred_at"],
+                delivery_status, event["occurred_at"],
+                now, provider_message_id, event["occurred_at"], event["occurred_at"], priority,
+            ),
+        )
+        conn.execute(
+            """UPDATE resend_webhook_events SET processed_at = %s
+               WHERE event_id = %s AND processed_at IS NULL""",
+            (now, event["event_id"]),
+        )
+        processed += 1
+    return processed
 
 
 def mark_mail_failed(
