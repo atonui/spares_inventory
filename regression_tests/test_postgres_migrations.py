@@ -645,3 +645,4 @@ def test_resend_webhook_migration_tracks_delivery_metadata_without_payloads():
         assert field in statements
     assert "recipient_email" not in statements
     assert "payload JSON" not in statements
+    assert "REVOKE ALL ON resend_webhook_events FROM PUBLIC" in statements

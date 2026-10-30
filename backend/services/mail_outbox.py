@@ -145,6 +145,13 @@ def apply_pending_resend_events(conn, provider_message_id: str) -> int:
     for event in events:
         delivery_status = RESEND_EVENT_STATUS[event["event_type"]]
         priority = _DELIVERY_PRIORITY[delivery_status]
+        mail_row = conn.execute(
+            "SELECT id FROM mail_outbox WHERE provider_message_id = %s FOR UPDATE",
+            (provider_message_id,),
+        ).fetchone()
+        if mail_row is None:
+            # The webhook can arrive before mark_mail_sent stores the provider ID.
+            continue
         conn.execute(
             """UPDATE mail_outbox
                SET delivery_status = %s, delivery_event_at = %s,

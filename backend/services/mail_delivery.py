@@ -102,7 +102,7 @@ class _UrllibTransport:
         try:
             with urlopen(request, timeout=timeout) as response:
                 try:
-                    payload = json.loads(response.read(65536).decode("utf-8"))
+                    payload = json_module.loads(response.read(65536).decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     payload = None
                 message_id = payload.get("id") if isinstance(payload, dict) else None

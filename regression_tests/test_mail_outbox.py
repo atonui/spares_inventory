@@ -195,3 +195,39 @@ def test_resend_event_received_before_provider_id_is_applied_when_send_completes
     assert row["delivery_status"] == "bounced"
     assert row["bounced_at"] == event_time
     assert pending["processed_at"] is not None
+
+
+def test_stale_resend_event_does_not_downgrade_status_and_is_processed(migrated_outbox):
+    from backend.services.mail_outbox import (
+        claim_pending_mail, mark_mail_sent, record_resend_webhook_event,
+    )
+    from backend.temporal import serialize_instant, utc_now
+
+    connection, _schema, organization_id = migrated_outbox
+    _enqueue(connection, organization_id)
+    now = utc_now()
+    with connection.transaction():
+        message = claim_pending_mail(connection, now=now)
+        mark_mail_sent(
+            connection, mail_id=message["id"], claim_token=str(message["claim_token"]),
+            provider_message_id="resend-message-ordering",
+        )
+        record_resend_webhook_event(
+            connection, event_id="evt-delivered-newer",
+            provider_message_id="resend-message-ordering", event_type="email.delivered",
+            occurred_at=serialize_instant(now + timedelta(seconds=2)),
+        )
+        record_resend_webhook_event(
+            connection, event_id="evt-sent-older",
+            provider_message_id="resend-message-ordering", event_type="email.sent",
+            occurred_at=serialize_instant(now + timedelta(seconds=1)),
+        )
+
+    status = connection.execute(
+        "SELECT delivery_status FROM mail_outbox WHERE id = %s", (message["id"],)
+    ).fetchone()["delivery_status"]
+    processed_events = connection.execute(
+        "SELECT count(*) AS count FROM resend_webhook_events WHERE processed_at IS NOT NULL"
+    ).fetchone()["count"]
+    assert status == "delivered"
+    assert processed_events == 2

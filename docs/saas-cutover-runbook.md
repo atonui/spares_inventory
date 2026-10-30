@@ -144,6 +144,7 @@ GRANT UPDATE (status, claim_token, lease_expires_at, attempt_count, updated_at,
               sent_at, last_error_code, available_at, provider_message_id,
               delivery_status, delivery_event_at, delivered_at, bounced_at, complained_at)
   ON TABLE mail_outbox TO mail_worker_role;
+REVOKE ALL PRIVILEGES ON TABLE resend_webhook_events FROM web_runtime_role;
 GRANT SELECT, INSERT, UPDATE ON TABLE resend_webhook_events TO mail_worker_role;
 ```
 

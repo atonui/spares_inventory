@@ -29,4 +29,5 @@ SQL = (
     """CREATE INDEX idx_resend_webhook_events_pending
        ON resend_webhook_events (provider_message_id, occurred_at, event_id)
        WHERE processed_at IS NULL""",
+    "REVOKE ALL ON resend_webhook_events FROM PUBLIC",
 )
