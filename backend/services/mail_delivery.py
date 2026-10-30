@@ -1,23 +1,57 @@
 """Provider boundary for transactional mail; provider details never escape."""
 
 from html import escape
+import json
+import re
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+_PROVIDER_ERROR_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def _provider_error_name(error: HTTPError) -> str | None:
+    """Extract only a bounded machine-readable code; never retain provider text."""
+    try:
+        payload = json.loads(error.read(8192).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, OSError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for key in ("name", "code", "type"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            candidate = value.strip().lower()
+            if _PROVIDER_ERROR_NAME.fullmatch(candidate):
+                return candidate
+    message = payload.get("message")
+    if isinstance(message, str):
+        lowered = message.lower()
+        if "api key" in lowered and ("permission" in lowered or "restricted" in lowered):
+            return "api_key_permission_denied"
+        if "domain" in lowered and ("verify" in lowered or "verified" in lowered):
+            return "domain_verification"
+        if ("testing" in lowered or "test mode" in lowered) and ("recipient" in lowered or "email" in lowered):
+            return "testing_recipient_restriction"
+    return None
 
 
 class MailDeliveryError(Exception):
-    def __init__(self, code: str, *, provider_status: int | None = None):
+    def __init__(
+        self, code: str, *, provider_status: int | None = None,
+        provider_error_category: str | None = None,
+    ):
         self.code = code
         self.provider_status = provider_status
+        self.provider_error_category = provider_error_category
         super().__init__(code)
 
 
 class _StatusResponse:
-    def __init__(self, status_code: int):
+    def __init__(self, status_code: int, provider_error_category: str | None = None):
         self.status_code = status_code
+        self.provider_error_category = provider_error_category
 
     def raise_for_status(self):
         if self.status_code < 200 or self.status_code >= 300:
@@ -38,7 +72,7 @@ class _UrllibTransport:
             with urlopen(request, timeout=timeout) as response:
                 return _StatusResponse(response.status)
         except HTTPError as exc:
-            return _StatusResponse(exc.code)
+            return _StatusResponse(exc.code, _provider_error_name(exc))
 
 
 def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:
@@ -99,6 +133,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
     }
     transport = http_transport or _UrllibTransport()
     provider_status = None
+    provider_error_category = None
     try:
         response = transport.post(
             RESEND_ENDPOINT,
@@ -109,10 +144,15 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         status_code = getattr(response, "status_code", None)
         if isinstance(status_code, int) and not isinstance(status_code, bool) and 100 <= status_code <= 599:
             provider_status = status_code
+        category = getattr(response, "provider_error_category", None)
+        if isinstance(category, str) and _PROVIDER_ERROR_NAME.fullmatch(category):
+            provider_error_category = category
         response.raise_for_status()
     except Exception:
-        # Keep the provider response body and exception message private. The
-        # numeric status alone is safe and helps diagnose rejected requests.
+        # Keep provider response bodies and exception messages private. Only a
+        # bounded machine-readable category and numeric status can escape.
         raise MailDeliveryError(
-            "provider_unavailable", provider_status=provider_status
+            "provider_unavailable",
+            provider_status=provider_status,
+            provider_error_category=provider_error_category,
         ) from None
