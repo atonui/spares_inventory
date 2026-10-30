@@ -30,15 +30,17 @@ def transfer_permissions(actor, row, user_id):
 def complete_transfer(transfer_id, data, user_id, action, request=None, *, session_token,
                       authenticated_write_transaction, permission_checker,
                       balance_snapshot, add_inventory_quantity,
-                      record_stock_audit, change_after):
+                      record_stock_audit, change_after, notification_enqueuer=None):
     if not data.confirmed:
         raise HTTPException(status_code=400,detail='Physical receipt or return must be confirmed')
     with authenticated_write_transaction(user_id, session_token, busy_detail="Stock is busy; no changes saved. Try again") as conn:
         actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
         query = """SELECT m.*,t.status,t.source_min_threshold,s1.assigned_user_id AS source_owner,
-            s2.assigned_user_id AS dest_owner,s2.type AS dest_type
+            s2.assigned_user_id AS dest_owner,s2.type AS dest_type,
+            s1.name AS source_store_name,s2.name AS destination_store_name,p.part_number
             FROM stock_transfers t JOIN movements m ON m.id=t.movement_id
             JOIN stores s1 ON s1.id=m.from_store_id JOIN stores s2 ON s2.id=m.to_store_id
+            JOIN parts p ON p.id=m.part_id
             WHERE t.movement_id=?"""
         if is_postgres(conn):
             query += " FOR UPDATE OF t"
@@ -80,5 +82,29 @@ def complete_transfer(transfer_id, data, user_id, action, request=None, *, sessi
         movement_ids=[transfer_id]
         if movement_id is not None: movement_ids.append(movement_id)
         record_stock_audit(conn,user_id,'receive_transfer' if action=='received' else 'return_transfer',[change_after(conn,before)],movement_ids,resource_id=inventory_id,request=request,extra={'transfer_id':transfer_id,'before_status':'in_transit','after_status':action,'notes':data.notes})
+        if is_postgres(conn) and notification_enqueuer:
+            organization_id = (
+                user_id.organization_id if isinstance(user_id, AuthenticatedPrincipal)
+                else conn.execute(
+                    "SELECT NULLIF(current_setting('app.organization_id', true), '')::uuid AS id"
+                ).fetchone()["id"]
+            )
+            notification_enqueuer(
+                conn,
+                event_type="transfer_received" if action == "received" else "transfer_returned",
+                organization_id=organization_id,
+                store_id=row["from_store_id"],
+                actor_user_id=actor_id,
+                event_id=transfer_id,
+                payload={
+                    "transfer_id": transfer_id,
+                    "source_store_id": row["from_store_id"],
+                    "destination_store_id": row["to_store_id"],
+                    "source_store_name": row["source_store_name"],
+                    "destination_store_name": row["destination_store_name"],
+                    "part_number": row["part_number"],
+                    "quantity": row["quantity"],
+                },
+            )
         return {'success':True,'message':'Receipt confirmed; destination stock is available' if action=='received' else 'Physical return confirmed; source stock restored'}
 

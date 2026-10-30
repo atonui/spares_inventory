@@ -141,6 +141,95 @@ def test_old_email_notice_contains_new_address_without_verification_link():
     assert "new@example.test" in body["text"]
 
 
+@pytest.mark.parametrize(("message_type", "payload", "subject", "link_label"), [
+    (
+        "stock_added_notice",
+        {
+            "store_name": "Nairobi Main",
+            "part_number": "VALVE-1",
+            "quantity": 4,
+            "inventory_url": "https://example.test/static/index.html?store_id=7&inventory_id=42",
+        },
+        "Stock was added to your store",
+        "View store inventory",
+    ),
+    (
+        "transfer_dispatched_notice",
+        {
+            "transfer_id": 55,
+            "source_store_name": "Central",
+            "destination_store_name": "Nairobi Main",
+            "part_number": "VALVE-1",
+            "quantity": 4,
+            "transfer_url": "https://example.test/static/index.html?transfer_id=55",
+        },
+        "Stock transfer awaiting receipt",
+        "View transfer",
+    ),
+    (
+        "transfer_completed_notice",
+        {
+            "transfer_id": 55,
+            "action": "received",
+            "source_store_name": "Central",
+            "destination_store_name": "Nairobi Main",
+            "part_number": "VALVE-1",
+            "quantity": 4,
+            "store_url": "https://example.test/static/index.html?store_id=3",
+        },
+        "Stock transfer completed",
+        "View source store",
+    ),
+])
+def test_resend_adapter_sends_store_activity_notification(
+    message_type, payload, subject, link_label,
+):
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {"message_type": message_type, "recipient_email": "store@example.test", "payload": payload},
+        api_key="resend-secret",
+        from_address="no-reply@example.test",
+        http_transport=transport,
+    )
+
+    _url, body, _headers, _timeout = transport.calls[0]
+    assert body["to"] == ["store@example.test"]
+    assert body["from"] == "Spares Tracker <no-reply@example.test>"
+    assert body["subject"] == subject
+    assert link_label in body["html"]
+    assert "https://example.test/static/index.html" in body["html"]
+    assert "VALVE-1" in body["text"]
+
+
+def test_store_activity_email_escapes_store_and_part_names():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {
+            "message_type": "stock_added_notice",
+            "recipient_email": "owner@example.test",
+            "payload": {
+                "store_name": '<img src=x onerror="alert(1)">',
+                "part_number": "VALVE & <script>",
+                "quantity": 2,
+                "inventory_url": "https://example.test/static/index.html?store_id=1&inventory_id=2",
+            },
+        },
+        api_key="resend-secret",
+        from_address="no-reply@example.test",
+        http_transport=transport,
+    )
+
+    _url, body, _headers, _timeout = transport.calls[0]
+    assert '<img src=x onerror="alert(1)">' not in body["html"]
+    assert "&lt;img" in body["html"]
+    assert "VALVE &amp; &lt;script&gt;" in body["html"]
+    assert body["subject"] == "Stock was added to your store"
+
+
 def test_default_urllib_transport_accepts_success_status(monkeypatch):
     import backend.services.mail_delivery as delivery
 

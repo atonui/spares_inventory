@@ -51,7 +51,8 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                                   inventory_adder, stock_audit,
                                   stock_change_reader,
                                   planned_dispatch_guard,
-                                  transfer_completion) -> APIRouter:
+                                  transfer_completion,
+                                  notification_enqueuer=None) -> APIRouter:
     router = APIRouter()
     get_current_user = current_user
     verify_csrf = csrf_dependency
@@ -256,7 +257,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             # Check if user can edit this store
             organization_column = ", organization_id" if is_postgres(conn) else ""
             execute_cursor(conn, cursor,
-                f"SELECT type, assigned_user_id{organization_column} FROM stores WHERE id = ?",
+                f"SELECT name, type, assigned_user_id{organization_column} FROM stores WHERE id = ?",
                 (request_data.store_id,),
             )
             store = cursor.fetchone()
@@ -295,6 +296,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                 conn, request_data.store_id, request_data.part_id,
                 request_data.quantity, work_order_id,
             )
+            part = execute(conn, "SELECT part_number FROM parts WHERE id = ?", (request_data.part_id,)).fetchone()
 
             # Log movement
             movement_values = (request_data.store_id, request_data.part_id,
@@ -309,7 +311,24 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                     (to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
                     VALUES(?,?,?,'add',?,?)""", movement_values)
 
-            record_stock_audit(conn,user_id,"add_stock",[change_after(conn,before)],[_insert_id(conn, cursor)],resource_id=inventory_id,request=request)
+            movement_id = _insert_id(conn, cursor)
+            record_stock_audit(conn,user_id,"add_stock",[change_after(conn,before)],[movement_id],resource_id=inventory_id,request=request)
+            if is_postgres(conn) and notification_enqueuer:
+                notification_enqueuer(
+                    conn,
+                    event_type="stock_added",
+                    organization_id=_organization_id(conn, user_id),
+                    store_id=request_data.store_id,
+                    actor_user_id=_actor_id(user_id),
+                    event_id=movement_id,
+                    payload={
+                        "store_id": request_data.store_id,
+                        "inventory_id": inventory_id,
+                        "store_name": store["name"],
+                        "part_number": part["part_number"],
+                        "quantity": request_data.quantity,
+                    },
+                )
             return {
                 "success": True,
                 "id": inventory_id,
@@ -387,7 +406,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
     ):
         """Dispatch stock; destination stock becomes available only on receipt."""
         with authenticated_write_transaction(user_id, get_request_credential(request).value, busy_detail="Stock is busy; no changes saved. Try again") as conn:
-            item = execute(conn, _locked(conn, "SELECT i.*,s.type,s.assigned_user_id,p.part_number FROM inventory i JOIN stores s ON s.id=i.store_id JOIN parts p ON p.id=i.part_id WHERE i.id=?", "i"),
+            item = execute(conn, _locked(conn, "SELECT i.*,s.type,s.assigned_user_id,s.name AS source_store_name,p.part_number FROM inventory i JOIN stores s ON s.id=i.store_id JOIN parts p ON p.id=i.part_id WHERE i.id=?", "i"),
                            (request_data.inventory_id,)).fetchone()
             if not item:
                 raise HTTPException(status_code=404, detail="Source inventory item not found")
@@ -428,6 +447,24 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                 execute(conn,'INSERT INTO stock_transfers(movement_id,source_min_threshold) VALUES(?,?)',(mid,item['min_threshold'] or 0))
             destination = execute(conn,'SELECT name FROM stores WHERE id=?',(request_data.to_store_id,)).fetchone()
             record_stock_audit(conn,user_id,'transfer_stock',[change_after(conn,before)],[mid],resource_id=item['id'],request=request,extra={'transfer_id':mid,'before_status':None,'after_status':'in_transit','to_store_id':request_data.to_store_id,'to_store_name':destination['name']})
+            if is_postgres(conn) and notification_enqueuer:
+                notification_enqueuer(
+                    conn,
+                    event_type="transfer_dispatched",
+                    organization_id=_organization_id(conn, user_id),
+                    store_id=request_data.to_store_id,
+                    actor_user_id=_actor_id(user_id),
+                    event_id=mid,
+                    payload={
+                        "transfer_id": mid,
+                        "source_store_id": item["store_id"],
+                        "destination_store_id": request_data.to_store_id,
+                        "source_store_name": item["source_store_name"],
+                        "destination_store_name": destination["name"],
+                        "part_number": item["part_number"],
+                        "quantity": request_data.quantity,
+                    },
+                )
             return {'success':True,'transfer_id':mid,'message':f"Dispatched {request_data.quantity} {item['part_number']}; awaiting receipt"}
 
     @router.post('/api/inventory/transfers/{transfer_id}/receive')

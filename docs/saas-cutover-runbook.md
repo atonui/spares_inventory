@@ -30,6 +30,12 @@ later migration project, not a runtime toggle.
 - PostgreSQL password-reset messages use the encrypted transactional outbox
   and Resend worker; `FRONTEND_URL` supplies the reset-link origin. Legacy
   SQLite mode continues to use its existing SMTP path.
+- In PostgreSQL mode, stock additions notify the active assignee of that
+  store, transfer dispatches notify the destination assignee, and receipts or
+  returns notify the source assignee. The person who performed the action is
+  skipped. The app best-effort queues messages inside the stock transaction;
+  a mail queue failure does not undo a stock change. The worker delivers
+  queued messages, whose links open the relevant inventory or pending transfer.
 - Verify the invitation sender domain, HTTPS origin, cookie security, exact
   CORS origins, database network access, and worker health before inviting
   customers.

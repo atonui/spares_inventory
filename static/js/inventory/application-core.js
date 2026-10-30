@@ -92,6 +92,10 @@ function inventoryCoreFeature() {
             if (inventoryAuthRequests.get(this) !== request) return;
             try { await this.loadAllData(); }
             catch (error) { this.error = error.message; }
+            if (inventoryAuthRequests.get(this) !== request) return;
+            if (typeof this.applyNotificationLink === 'function') {
+                await this.applyNotificationLink();
+            }
         },
 
         // Authentication

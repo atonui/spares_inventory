@@ -31,6 +31,7 @@ from backend.app_activity import (
 )
 from backend.email_service import send_password_reset_email
 from backend.services.password_reset_mail import enqueue_password_reset_mail
+from backend.services.store_email_notifications import enqueue_store_notification
 
 
 configured_loggers = setup_logging()
@@ -578,6 +579,12 @@ inventory_write_router = create_inventory_write_router(
     stock_change_reader=lambda *args, **kwargs: change_after(*args, **kwargs),
     planned_dispatch_guard=lambda *args, **kwargs: require_planned_dispatch(*args, **kwargs),
     transfer_completion=lambda *args, **kwargs: complete_transfer(*args, **kwargs),
+    notification_enqueuer=lambda conn, **kwargs: enqueue_store_notification(
+        conn,
+        frontend_url=FRONTEND_URL,
+        encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+        **kwargs,
+    ),
 )
 app.include_router(inventory_write_router)
 consume_stock = inventory_write_router.consume_stock
@@ -606,6 +613,12 @@ def complete_transfer(transfer_id, data, user_id, action, request=None, *, sessi
         add_inventory_quantity=add_inventory_quantity,
         record_stock_audit=record_stock_audit,
         change_after=change_after,
+        notification_enqueuer=lambda conn, **kwargs: enqueue_store_notification(
+            conn,
+            frontend_url=FRONTEND_URL,
+            encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY,
+            **kwargs,
+        ),
     )
 
 
