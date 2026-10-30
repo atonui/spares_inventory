@@ -46,3 +46,15 @@ def test_resend_signature_rejects_tampering_and_stale_timestamp():
         body, webhook_id=webhook_id, timestamp=timestamp,
         signature="v0," + signature, secret=secret, now=1800000000,
     )
+
+
+def test_webhook_event_filter_accepts_only_spares_tracker_tagged_messages():
+    from backend.mail_webhook import is_spares_tracker_message
+
+    assert is_spares_tracker_message(
+        {"tags": [{"name": "app", "value": "spares_tracker"}]}
+    )
+    assert not is_spares_tracker_message(
+        {"tags": [{"name": "app", "value": "another_app"}]}
+    )
+    assert not is_spares_tracker_message({"tags": []})
