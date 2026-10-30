@@ -9,8 +9,9 @@ RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
 class MailDeliveryError(Exception):
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, provider_status: int | None = None):
         self.code = code
+        self.provider_status = provider_status
         super().__init__(code)
 
 
@@ -97,6 +98,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         ),
     }
     transport = http_transport or _UrllibTransport()
+    provider_status = None
     try:
         response = transport.post(
             RESEND_ENDPOINT,
@@ -104,7 +106,13 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=10,
         )
+        status_code = getattr(response, "status_code", None)
+        if isinstance(status_code, int) and not isinstance(status_code, bool) and 100 <= status_code <= 599:
+            provider_status = status_code
         response.raise_for_status()
     except Exception:
-        # Never persist or log provider response bodies or exception messages.
-        raise MailDeliveryError("provider_unavailable") from None
+        # Keep the provider response body and exception message private. The
+        # numeric status alone is safe and helps diagnose rejected requests.
+        raise MailDeliveryError(
+            "provider_unavailable", provider_status=provider_status
+        ) from None
