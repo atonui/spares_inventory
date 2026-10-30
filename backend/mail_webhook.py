@@ -75,6 +75,15 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+def is_spares_tracker_message(data: dict) -> bool:
+    tags = data.get("tags")
+    return isinstance(tags, list) and any(
+        isinstance(tag, dict) and tag.get("name") == "app"
+        and tag.get("value") == "spares_tracker"
+        for tag in tags
+    )
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -119,7 +128,7 @@ async def receive_resend_webhook(request: Request) -> Response:
     data = event.get("data")
     if not isinstance(event_id, str) or not isinstance(event_type, str) or not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Invalid webhook payload")
-    if event_type not in RESEND_EVENT_STATUS:
+    if event_type not in RESEND_EVENT_STATUS or not is_spares_tracker_message(data):
         return Response(status_code=204)
 
     provider_message_id = data.get("email_id")
