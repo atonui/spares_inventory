@@ -42,8 +42,20 @@ Invitation delivery also requires `INVITATION_BASE_URL`. Store these as service
 secrets. Generate the encryption key with the application's Fernet key
 generator, keep it separate from `SECRET_KEY`, and retain a protected recovery
 copy. Password-reset delivery uses `FRONTEND_URL`; legacy SQLite mode retains
-the synchronous SMTP password-reset path. The mail worker requires
-`MAIL_WORKER_DATABASE_URL`; it does not fall back to `DATABASE_URL`:
+the synchronous SMTP password-reset path.
+
+The mail worker requires `MAIL_WORKER_DATABASE_URL`; it does not fall back to
+`DATABASE_URL`. It also hosts the signed Resend webhook receiver at
+`/webhooks/resend` and requires `RESEND_WEBHOOK_SECRET`. Add a Railway public
+domain to the `spares_mail_worker` service, then configure that URL in Resend.
+Subscribe to `email.sent`, `email.delivered`, `email.delivery_delayed`,
+`email.bounced`, `email.complained`, `email.failed`, and
+`email.suppressed`. Resend supplies the webhook signing secret when the
+endpoint is created; set it as `RESEND_WEBHOOK_SECRET` on the mail-worker
+service. The receiver stores event IDs, message IDs, event types, and timestamps
+only; it does not retain the webhook payload or recipient details.
+
+Run the service with:
 
 ```bash
 python -m backend.mail_worker
