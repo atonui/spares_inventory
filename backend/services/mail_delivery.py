@@ -15,16 +15,10 @@ def _provider_error_name(error: HTTPError) -> str | None:
     """Extract only a bounded machine-readable code; never retain provider text."""
     try:
         payload = json.loads(error.read(8192).decode("utf-8"))
-    except (UnicodeDecodeError, ValueError, OSError):
+    except Exception:
         return None
     if not isinstance(payload, dict):
         return None
-    for key in ("name", "code", "type"):
-        value = payload.get(key)
-        if isinstance(value, str):
-            candidate = value.strip().lower()
-            if _PROVIDER_ERROR_NAME.fullmatch(candidate):
-                return candidate
     message = payload.get("message")
     if isinstance(message, str):
         lowered = message.lower()
@@ -34,6 +28,12 @@ def _provider_error_name(error: HTTPError) -> str | None:
             return "domain_verification"
         if ("testing" in lowered or "test mode" in lowered) and ("recipient" in lowered or "email" in lowered):
             return "testing_recipient_restriction"
+    for key in ("name", "code", "type"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            candidate = value.strip().lower()
+            if _PROVIDER_ERROR_NAME.fullmatch(candidate):
+                return candidate
     return None
 
 
