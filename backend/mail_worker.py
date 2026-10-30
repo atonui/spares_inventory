@@ -53,7 +53,14 @@ def deliver_claimed_mail(
         )
     except MailDeliveryError as exc:
         message["_delivery_error_code"] = exc.code
-        logger.warning("mail delivery failed code=%s", exc.code)
+        if exc.provider_status is not None:
+            logger.warning(
+                "mail delivery failed code=%s provider_status=%s",
+                exc.code,
+                exc.provider_status,
+            )
+        else:
+            logger.warning("mail delivery failed code=%s", exc.code)
         return False
     except Exception:
         message["_delivery_error_code"] = "payload_unavailable"
