@@ -53,12 +53,20 @@ def deliver_claimed_mail(
         )
     except MailDeliveryError as exc:
         message["_delivery_error_code"] = exc.code
-        if exc.provider_status is not None or exc.provider_error_category is not None:
+        if any((
+            exc.provider_status is not None,
+            exc.provider_error_category is not None,
+            exc.provider_response_format is not None,
+            exc.provider_edge is not None,
+        )):
             logger.warning(
-                "mail delivery failed code=%s provider_status=%s provider_error_category=%s",
+                "mail delivery failed code=%s provider_status=%s provider_error_category=%s "
+                "provider_response_format=%s provider_edge=%s",
                 exc.code,
                 exc.provider_status if exc.provider_status is not None else "unknown",
                 exc.provider_error_category or "unknown",
+                exc.provider_response_format or "unknown",
+                exc.provider_edge or "unknown",
             )
         else:
             logger.warning("mail delivery failed code=%s", exc.code)

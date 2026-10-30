@@ -335,6 +335,8 @@ def test_worker_logs_provider_http_status_without_response_body_or_secrets(caplo
     class _UnauthorizedResponse:
         status_code = 401
         provider_error_category = "api_key_permission_denied"
+        provider_response_format = "json"
+        provider_edge = "other"
 
         def raise_for_status(self):
             raise RuntimeError("provider echoed token=provider-private-detail")
@@ -364,6 +366,7 @@ def test_worker_logs_provider_http_status_without_response_body_or_secrets(caplo
     assert message["_delivery_error_code"] == "provider_unavailable"
     assert "provider_status=401" in caplog.text
     assert "provider_error_category=api_key_permission_denied" in caplog.text
+    assert "provider_response_format=json" in caplog.text
     assert "provider-private-detail" not in caplog.text
     assert "invitation-secret" not in caplog.text
 
@@ -405,3 +408,41 @@ def test_http_error_logs_only_bounded_provider_category(monkeypatch):
     assert "private recipient" not in str(error.value)
     assert "invite-secret" not in str(error.value)
     assert "provider-secret" not in str(error.value)
+
+
+
+def test_html_forbidden_response_is_classified_without_logging_body(monkeypatch):
+    from email.message import Message
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    import backend.services.mail_delivery as delivery
+
+    headers = Message()
+    headers["Content-Type"] = "text/html"
+    headers["Server"] = "cloudflare"
+
+    def reject(request, timeout):
+        raise HTTPError(
+            request.full_url, 403, "Forbidden", hdrs=headers,
+            fp=BytesIO(b"<html>private edge diagnostic</html>"),
+        )
+
+    monkeypatch.setattr(delivery, "urlopen", reject)
+    with pytest.raises(delivery.MailDeliveryError) as error:
+        delivery.send_mail(
+            {
+                "message_type": "organization_invitation",
+                "recipient_email": "owner@example.test",
+                "payload": {"invitation_url": "https://example.test/?token=invite-secret"},
+            },
+            api_key="provider-secret",
+            from_address="Inventory <no-reply@example.test>",
+        )
+
+    assert error.value.provider_status == 403
+    assert error.value.provider_error_category == "non_json_error_response"
+    assert error.value.provider_response_format == "html"
+    assert error.value.provider_edge == "cloudflare"
+    assert "private edge diagnostic" not in str(error.value)
+    assert "invite-secret" not in str(error.value)

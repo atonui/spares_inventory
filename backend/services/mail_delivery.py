@@ -11,47 +11,71 @@ RESEND_ENDPOINT = "https://api.resend.com/emails"
 _PROVIDER_ERROR_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
-def _provider_error_name(error: HTTPError) -> str | None:
-    """Extract only a bounded machine-readable code; never retain provider text."""
+def _provider_error_metadata(error: HTTPError) -> tuple[str, str, str]:
+    """Return bounded diagnostics; never retain provider text or response content."""
+    headers = error.headers
     try:
-        payload = json.loads(error.read(8192).decode("utf-8"))
+        content_type = headers.get_content_type().lower()
     except Exception:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    message = payload.get("message")
-    if isinstance(message, str):
-        lowered = message.lower()
-        if "api key" in lowered and ("permission" in lowered or "restricted" in lowered):
-            return "api_key_permission_denied"
-        if "domain" in lowered and ("verify" in lowered or "verified" in lowered):
-            return "domain_verification"
-        if ("testing" in lowered or "test mode" in lowered) and ("recipient" in lowered or "email" in lowered):
-            return "testing_recipient_restriction"
-    for key in ("name", "code", "type"):
-        value = payload.get(key)
-        if isinstance(value, str):
-            candidate = value.strip().lower()
-            if _PROVIDER_ERROR_NAME.fullmatch(candidate):
-                return candidate
-    return None
-
+        content_type = ""
+    response_format = (
+        "json" if content_type == "application/json"
+        else "html" if content_type == "text/html"
+        else "text" if content_type.startswith("text/")
+        else "other"
+    )
+    try:
+        server = headers.get("server", "").lower()
+    except Exception:
+        server = ""
+    edge = "cloudflare" if "cloudflare" in server else "other"
+    try:
+        raw_body = error.read(8192)
+        payload = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        payload = None
+    if isinstance(payload, dict):
+        message = payload.get("message")
+        if isinstance(message, str):
+            lowered = message.lower()
+            if "api key" in lowered and ("permission" in lowered or "restricted" in lowered):
+                return "api_key_permission_denied", response_format, edge
+            if "domain" in lowered and ("verify" in lowered or "verified" in lowered):
+                return "domain_verification", response_format, edge
+            if ("testing" in lowered or "test mode" in lowered) and ("recipient" in lowered or "email" in lowered):
+                return "testing_recipient_restriction", response_format, edge
+        for key in ("name", "code", "type"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                candidate = value.strip().lower()
+                if _PROVIDER_ERROR_NAME.fullmatch(candidate):
+                    return candidate, response_format, edge
+        return "json_error_unclassified", response_format, edge
+    return "non_json_error_response", response_format, edge
 
 class MailDeliveryError(Exception):
     def __init__(
         self, code: str, *, provider_status: int | None = None,
         provider_error_category: str | None = None,
+        provider_response_format: str | None = None, provider_edge: str | None = None,
     ):
         self.code = code
         self.provider_status = provider_status
         self.provider_error_category = provider_error_category
+        self.provider_response_format = provider_response_format
+        self.provider_edge = provider_edge
         super().__init__(code)
 
 
 class _StatusResponse:
-    def __init__(self, status_code: int, provider_error_category: str | None = None):
+    def __init__(
+        self, status_code: int, provider_error_category: str | None = None,
+        provider_response_format: str | None = None, provider_edge: str | None = None,
+    ):
         self.status_code = status_code
         self.provider_error_category = provider_error_category
+        self.provider_response_format = provider_response_format
+        self.provider_edge = provider_edge
 
     def raise_for_status(self):
         if self.status_code < 200 or self.status_code >= 300:
@@ -72,7 +96,8 @@ class _UrllibTransport:
             with urlopen(request, timeout=timeout) as response:
                 return _StatusResponse(response.status)
         except HTTPError as exc:
-            return _StatusResponse(exc.code, _provider_error_name(exc))
+            category, response_format, edge = _provider_error_metadata(exc)
+            return _StatusResponse(exc.code, category, response_format, edge)
 
 
 def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=None) -> None:
@@ -134,6 +159,8 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
     transport = http_transport or _UrllibTransport()
     provider_status = None
     provider_error_category = None
+    provider_response_format = None
+    provider_edge = None
     try:
         response = transport.post(
             RESEND_ENDPOINT,
@@ -147,6 +174,12 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         category = getattr(response, "provider_error_category", None)
         if isinstance(category, str) and _PROVIDER_ERROR_NAME.fullmatch(category):
             provider_error_category = category
+        response_format = getattr(response, "provider_response_format", None)
+        if response_format in {"json", "html", "text", "other"}:
+            provider_response_format = response_format
+        edge = getattr(response, "provider_edge", None)
+        if edge in {"cloudflare", "other"}:
+            provider_edge = edge
         response.raise_for_status()
     except Exception:
         # Keep provider response bodies and exception messages private. Only a
@@ -155,4 +188,6 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
             "provider_unavailable",
             provider_status=provider_status,
             provider_error_category=provider_error_category,
+            provider_response_format=provider_response_format,
+            provider_edge=provider_edge,
         ) from None
