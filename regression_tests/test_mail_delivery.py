@@ -60,6 +60,7 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     assert "Inventory." not in body["html"]
     assert "Spares Tracker" in body["text"]
     assert "raw-secret" in body["text"]
+    assert body["tags"] == [{"name": "app", "value": "spares_tracker"}]
     assert body["to"] == ["owner@example.test"]
     assert "raw-secret" in body["html"]
     assert headers["Authorization"] == "Bearer resend-secret"
