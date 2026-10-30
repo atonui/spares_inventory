@@ -168,3 +168,35 @@ def test_suspended_organization_cannot_accept_pending_invitation(invitation_api)
         ))
     assert error.value.status_code == 400
     assert api.admin.execute("SELECT count(*) AS n FROM organization_memberships").fetchone()["n"] == 3
+
+
+
+def test_invitation_list_only_returns_active_unexpired_rows(invitation_api):
+    from backend.temporal import serialize_instant, utc_now
+
+    api = invitation_api
+    invited_by = api.identities["owner"][0]
+    now = utc_now()
+    future = serialize_instant(now + __import__("datetime").timedelta(days=1))
+    from datetime import timedelta\n    future = serialize_instant(now + timedelta(days=1))\n    past = serialize_instant(now - timedelta(days=1))
+    current = serialize_instant(now)
+
+    rows = (
+        ("active@example.test", future, None, None),
+        ("canceled@example.test", future, None, current),
+        ("expired@example.test", past, None, None),
+        ("accepted@example.test", future, current, None),
+    )
+    for email, expires_at, accepted_at, canceled_at in rows:
+        api.admin.execute(
+            """INSERT INTO organization_invitations
+               (organization_id, email_normalized, company_role, token_hash, invited_by,
+                expires_at, accepted_at, canceled_at)
+               VALUES (%s, %s, 'engineer', %s, %s, %s, %s, %s)""",
+            (api.org_id, email, uuid4().hex, invited_by, expires_at, accepted_at, canceled_at),
+        )
+
+    listing = api.endpoint("GET", "/api/users/invitations")
+    result = asyncio.run(listing(request=api.request("owner"), user_id=api.principal("owner")))
+
+    assert [row["email"] for row in result] == ["active@example.test"]
