@@ -6,7 +6,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from backend.database_sql import execute, is_postgres
 from backend.schemas.inventory_reads import InventoryResponse, StatsResponse
-from backend.schemas.api_v1 import InventoryPageResponse
+from backend.schemas.api_v1 import InventoryPageResponse, StorePageResponse, PendingTransferPageResponse
+from backend.services.mobile_list_cursor import decode_list_cursor, encode_list_cursor
 from backend.services.api_v1_pagination import (
     decode_inventory_cursor,
     encode_inventory_cursor,
@@ -238,5 +239,63 @@ def create_inventory_read_router(*, get_connection, current_user,
                 item['can_receive'],item['can_return']=transfer_permissions(actor,row,actor_id)
                 result.append(item)
             return result
+
+    def native_continuation(request, kind, cursor):
+        credential = get_request_credential(request)
+        if credential.transport != 'bearer':
+            raise HTTPException(status_code=401, detail='Not authenticated')
+        try:
+            last_id = decode_list_cursor(cursor_secret, kind, cursor)
+        except ValueError:
+            raise HTTPException(status_code=400, detail='Invalid continuation cursor') from None
+        return credential, last_id
+
+    def page_response(rows, kind, limit):
+        visible = rows[:limit]
+        next_cursor = encode_list_cursor(cursor_secret, kind, visible[-1]['id']) if len(rows) > limit else None
+        return {'items': visible, 'page': {'limit': limit, 'next_cursor': next_cursor}}
+
+    @router.get('/api/v1/stores', response_model=StorePageResponse)
+    @instant_response
+    async def stores_v1(request: Request, limit: int = Query(50, ge=1, le=100),
+                        cursor: str | None = Query(None, max_length=2048),
+                        user_id=Depends(get_current_user)):
+        """List active stores, including empty stores, in ascending ID order."""
+        credential, last_id = native_continuation(request, 'stores', cursor)
+        with authenticated_database_transaction(get_db_connection, principal_or_user=user_id,
+                session_token=credential.value, readonly=True) as (conn, _principal):
+            rows = execute(conn, '''SELECT id,name,type,location,assigned_user_id,archived_at
+                FROM stores WHERE archived_at IS NULL AND id > ? ORDER BY id LIMIT ?''',
+                (last_id, limit + 1)).fetchall()
+            return page_response([dict(row) for row in rows], 'stores', limit)
+
+    @router.get('/api/v1/inventory/transfers', response_model=PendingTransferPageResponse)
+    @instant_response
+    async def transfers_v1(request: Request, limit: int = Query(50, ge=1, le=100),
+                           cursor: str | None = Query(None, max_length=2048),
+                           user_id=Depends(get_current_user)):
+        """List pending transfers in ascending movement ID order with action permissions."""
+        credential, last_id = native_continuation(request, 'transfers', cursor)
+        with authenticated_database_transaction(get_db_connection, principal_or_user=user_id,
+                session_token=credential.value, readonly=True) as (conn, principal):
+            actor = principal if isinstance(principal, AuthenticatedPrincipal) else execute(
+                conn, 'SELECT role FROM users WHERE id = ?', (principal,)).fetchone()
+            actor_id = principal.user_id if isinstance(principal, AuthenticatedPrincipal) else principal
+            rows = execute(conn, '''SELECT m.id,m.quantity,m.created_at,m.created_by,m.from_store_id,m.to_store_id,
+                p.part_number,p.description,s1.name AS from_store_name,s2.name AS to_store_name,
+                s1.assigned_user_id AS source_owner,s2.assigned_user_id AS dest_owner,s2.type AS dest_type,
+                u.name AS created_by_name,wo.work_order_number AS work_order,t.status
+                FROM stock_transfers t JOIN movements m ON m.id=t.movement_id
+                JOIN parts p ON p.id=m.part_id JOIN stores s1 ON s1.id=m.from_store_id
+                JOIN stores s2 ON s2.id=m.to_store_id JOIN users u ON u.id=m.created_by
+                LEFT JOIN work_orders wo ON wo.id=m.work_order_id
+                WHERE t.status='in_transit' AND m.id > ? ORDER BY m.id LIMIT ?''',
+                (last_id, limit + 1)).fetchall()
+            result = []
+            for row in rows:
+                item = dict(row)
+                item['can_receive'], item['can_return'] = transfer_permissions(actor, row, actor_id)
+                result.append(item)
+            return page_response(result, 'transfers', limit)
 
     return router
