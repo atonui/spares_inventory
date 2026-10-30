@@ -21,6 +21,7 @@ from backend.services.invitations import (
 )
 from backend.services.mail_payloads import validate_mail_encryption_key
 from backend.services.tenant_context import set_tenant_context
+from backend.temporal import serialize_instant, utc_now
 
 
 def create_invitation_router(
@@ -104,10 +105,14 @@ def create_invitation_router(
             if not is_postgres(conn):
                 raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             user_id = require_company_admin(user_id, conn)
+            now = serialize_instant(utc_now())
             rows = conn.execute(
                 """SELECT id, email_normalized AS email, company_role AS role,
                           created_at, expires_at, accepted_at, canceled_at
-                   FROM organization_invitations ORDER BY id DESC"""
+                   FROM organization_invitations
+                   WHERE accepted_at IS NULL AND canceled_at IS NULL AND expires_at > %s
+                   ORDER BY id DESC""",
+                (now,),
             ).fetchall()
             return [dict(row) for row in rows]
 
