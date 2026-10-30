@@ -15,7 +15,7 @@
 <script src="js/shared/time-context.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/features.js?v=20261014-frontend-21" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
-<script src="js/inventory/application-core.js?v=20261021-toolbar-picker-feedback" defer></script>
+<script src="js/inventory/application-core.js?v=20261030-store-email-notifications" defer></script>
 <script src="js/inventory/dialog-focus.js?v=20261016-dialog-focus" defer></script>
 <script src="js/inventory/reports.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/replenishment.js?v=20261014-frontend-21" defer></script>
@@ -36,7 +36,8 @@
 <script src="js/inventory/browsing.js?v=20261014-frontend-21" defer></script>
 <script src="js/inventory/archived-records.js?v=20261025-frontend-22" defer></script>
 <script src="js/inventory/navigation.js?v=20261014-frontend-21" defer></script>
-<script src="js/pages/inventory-v21.js?v=20261014-frontend-21" defer></script>
+<script src="js/inventory/notification-links.js?v=20261030-store-email-notifications" defer></script>
+<script src="js/pages/inventory-v21.js?v=20261030-store-email-notifications" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -280,7 +281,7 @@
                         <thead><tr><th>Dispatched</th><th>Part</th><th>Quantity</th><th>Source store</th><th>Destination store</th><th>Sent by</th><th>Work order</th><th>Action</th></tr></thead>
                         <tbody>
                             <template x-for="transfer in pendingTransfers" :key="transfer.id">
-                                <tr>
+                                <tr :id="'transfer-row-' + transfer.id">
                                     <td data-label="Dispatched" x-text="formatInstant(transfer.created_at)"></td>
                                     <td data-label="Part" x-text="transfer.part_number"></td><td data-label="Quantity" x-text="transfer.quantity"></td>
                                     <td data-label="Source store" x-text="transfer.from_store_name"></td><td data-label="Destination store" x-text="transfer.to_store_name"></td>
@@ -549,7 +550,7 @@
                 </thead>
                 <tbody>
                     <template x-for="item in filteredStoreInventory" :key="item.id">
-                        <tr role="row" :class="isLowStock(item) ? 'low-stock' : ''">
+                        <tr role="row" :id="'store-inventory-row-' + item.id" :class="isLowStock(item) ? 'low-stock' : ''">
                             <td role="cell" data-label="Part number"><div class="stock-cell-value"><strong x-text="item.part_number"></strong></div></td>
                             <td role="cell" data-label="Description" x-text="item.description"></td>
                             <td role="cell" data-label="Quantity"><div class="stock-cell-value">

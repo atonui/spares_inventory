@@ -19,5 +19,6 @@ function inventoryApp() {
         inventoryExportsFeature(),
         inventoryBrowsingFeature(),
         archivedRecordsFeature(),
-        navigationFeature());
+        navigationFeature(),
+        notificationLinksFeature());
 }

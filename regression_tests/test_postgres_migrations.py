@@ -646,3 +646,17 @@ def test_resend_webhook_migration_tracks_delivery_metadata_without_payloads():
     assert "recipient_email" not in statements
     assert "payload JSON" not in statements
     assert "REVOKE ALL ON resend_webhook_events FROM PUBLIC" in statements
+
+
+def test_store_activity_email_migration_allows_only_supported_notice_types():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(m for m in MIGRATIONS if m.version == 17)
+    statements = "\n".join(migration.statements)
+    assert migration.name == "store_activity_emails"
+    for message_type in (
+        "stock_added_notice",
+        "transfer_dispatched_notice",
+        "transfer_completed_notice",
+    ):
+        assert f"'{message_type}'" in statements

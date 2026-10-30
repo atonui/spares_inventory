@@ -20,6 +20,7 @@ from . import (
     v0014_organization_invitation_mail_counts,
     v0015_platform_support_sessions,
     v0016_resend_delivery_webhooks,
+    v0017_store_activity_emails,
 )
 
 
@@ -54,6 +55,7 @@ MIGRATIONS = tuple(
         v0014_organization_invitation_mail_counts,
         v0015_platform_support_sessions,
         v0016_resend_delivery_webhooks,
+        v0017_store_activity_emails,
     )
 )
 

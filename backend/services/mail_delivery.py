@@ -210,6 +210,73 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         link = None
         link_label = None
         invalid_code = "invalid_email_changed_notice"
+    elif message_type == "stock_added_notice":
+        store_name = payload.get("store_name")
+        part_number = payload.get("part_number")
+        quantity = payload.get("quantity")
+        if not all(isinstance(value, str) and value.strip() for value in (store_name, part_number)):
+            raise MailDeliveryError("invalid_stock_added_notice")
+        if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0:
+            raise MailDeliveryError("invalid_stock_added_notice")
+        link = payload.get("inventory_url")
+        subject = "Stock was added to your store"
+        eyebrow = "Stock update"
+        heading = f"Stock added to {store_name}"
+        copy = f"{quantity} × {part_number} was added to {store_name}."
+        detail = None
+        link_label = "View store inventory"
+        invalid_code = "invalid_stock_added_notice"
+    elif message_type == "transfer_dispatched_notice":
+        transfer_id = payload.get("transfer_id")
+        part_number = payload.get("part_number")
+        quantity = payload.get("quantity")
+        source_store = payload.get("source_store_name")
+        destination_store = payload.get("destination_store_name")
+        if (
+            not isinstance(transfer_id, int) or isinstance(transfer_id, bool) or transfer_id <= 0
+            or not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0
+            or not all(isinstance(value, str) and value.strip() for value in
+                       (part_number, source_store, destination_store))
+        ):
+            raise MailDeliveryError("invalid_transfer_dispatched_notice")
+        link = payload.get("transfer_url")
+        subject = "Stock transfer awaiting receipt"
+        eyebrow = "Stock transfer"
+        heading = f"Transfer #{transfer_id} is awaiting receipt"
+        copy = (
+            f"{quantity} × {part_number} was sent from {source_store} to "
+            f"{destination_store}. Confirm the physical receipt when it arrives."
+        )
+        detail = None
+        link_label = "View transfer"
+        invalid_code = "invalid_transfer_dispatched_notice"
+    elif message_type == "transfer_completed_notice":
+        transfer_id = payload.get("transfer_id")
+        action = payload.get("action")
+        part_number = payload.get("part_number")
+        quantity = payload.get("quantity")
+        source_store = payload.get("source_store_name")
+        destination_store = payload.get("destination_store_name")
+        if (
+            not isinstance(transfer_id, int) or isinstance(transfer_id, bool) or transfer_id <= 0
+            or action not in {"received", "returned"}
+            or not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0
+            or not all(isinstance(value, str) and value.strip() for value in
+                       (part_number, source_store, destination_store))
+        ):
+            raise MailDeliveryError("invalid_transfer_completed_notice")
+        link = payload.get("store_url")
+        completed_label = "received" if action == "received" else "returned to the source store"
+        subject = "Stock transfer completed"
+        eyebrow = "Stock transfer"
+        heading = f"Transfer #{transfer_id} {completed_label}"
+        copy = (
+            f"{quantity} × {part_number} moved from {source_store} to "
+            f"{destination_store} was {completed_label}."
+        )
+        detail = None
+        link_label = "View source store"
+        invalid_code = "invalid_transfer_completed_notice"
     else:
         raise MailDeliveryError("unsupported_message_type")
     if not isinstance(recipient, str) or "@" not in recipient:

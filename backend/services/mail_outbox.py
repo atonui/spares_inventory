@@ -39,6 +39,9 @@ def enqueue_mail(
         "password_reset",
         "email_change_verification",
         "email_changed_notice",
+        "stock_added_notice",
+        "transfer_dispatched_notice",
+        "transfer_completed_notice",
     }:
         raise ValueError("Unsupported mail message type.")
     if not all(isinstance(value, str) and value.strip() for value in
