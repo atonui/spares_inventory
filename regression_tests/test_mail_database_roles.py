@@ -46,11 +46,16 @@ def mail_worker_role_db(postgres_schema):
     ))
     admin.execute(sql.SQL(
         "GRANT SELECT (id, organization_id, message_type, recipient_email, encrypted_payload, "
-        "status, attempt_count, available_at, lease_expires_at, claim_token) ON mail_outbox TO {}"
+        "status, attempt_count, available_at, lease_expires_at, claim_token, "
+        "provider_message_id, delivery_status, delivery_event_at) ON mail_outbox TO {}"
     ).format(sql.Identifier(role)))
     admin.execute(sql.SQL(
         "GRANT UPDATE (status, claim_token, lease_expires_at, attempt_count, updated_at, sent_at, "
-        "last_error_code, available_at) ON mail_outbox TO {}"
+        "last_error_code, available_at, provider_message_id, delivery_status, delivery_event_at, "
+        "delivered_at, bounced_at, complained_at) ON mail_outbox TO {}"
+    ).format(sql.Identifier(role)))
+    admin.execute(sql.SQL(
+        "GRANT SELECT, INSERT, UPDATE ON resend_webhook_events TO {}"
     ).format(sql.Identifier(role)))
     admin.commit()
 
