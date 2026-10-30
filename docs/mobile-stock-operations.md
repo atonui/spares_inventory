@@ -25,10 +25,28 @@ Dispatch does not make destination stock available until receipt is confirmed.
 ## Delivery checklist
 
 - [x] Versioned bearer write routes reuse desktop stock rules.
-- [ ] Paginated native stores/parts/transfer reads, including empty stores.
+- [x] Paginated native active stores and pending-transfer reads, including empty stores.
+- [ ] Paginated native parts reads.
 - [ ] Mobile receive and issue forms with quantity/work-order review.
 - [ ] Mobile dispatch, pending transfer, receive and return screens.
 - [ ] Retry-safe operation IDs before offline operational writes are enabled.
 - [ ] Add/edit inventory records and permitted metadata in the mobile client.
 - [ ] Paginated native movement history and mobile item history.
 - [ ] PostgreSQL tenant/role and physical-device acceptance of the complete flows.
+
+## Transfer read contract
+
+`GET /api/v1/stores` lists the authenticated tenant's active stores, including
+stores with no inventory. `GET /api/v1/inventory/transfers` lists in-transit
+movements with source/destination names, part details, quantity, UTC creation
+time and server-derived `can_receive` / `can_return` flags. Mutation routes
+still recheck those permissions when the user confirms an action.
+
+Both reads require bearer authentication, accept `limit` (1–100; default 50)
+and an optional opaque signed `cursor`, and return `{items, page: {limit,
+next_cursor}}`. Rows are ordered by ascending ID. Continue until `next_cursor`
+is null. Cursors are purpose-bound; a store cursor is invalid for transfers.
+Pending transfers may disappear between pages when another device completes
+them; continuation does not require the previous row to remain pending.
+Refresh from the first page to discover later changes. Tenant scope always
+comes from the revalidated session, never from a client-supplied tenant ID.
