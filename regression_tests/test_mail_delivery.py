@@ -54,7 +54,12 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     )
     url, body, headers, timeout = transport.calls[0]
     assert url == "https://api.resend.com/emails"
-    assert body["from"] == "Inventory <no-reply@example.test>"
+    assert body["from"] == "Spares Tracker <no-reply@example.test>"
+    assert body["subject"] == "You’re invited to join Spares Tracker"
+    assert "Spares Tracker" in body["html"]
+    assert "Inventory." not in body["html"]
+    assert "Spares Tracker" in body["text"]
+    assert "raw-secret" in body["text"]
     assert body["to"] == ["owner@example.test"]
     assert "raw-secret" in body["html"]
     assert headers["Authorization"] == "Bearer resend-secret"
