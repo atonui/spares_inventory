@@ -116,7 +116,7 @@
              x-data="{ mobileNavigationOpen: false, trapNavigationFocus(event, drawer) { const focusable = [...drawer.querySelectorAll('a[href], button:not([disabled])')].filter((element) => element.getClientRects().length); if (!focusable.length) return; const first = focusable[0]; const last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } } }"
              @click.outside="if (mobileNavigationOpen) mobileNavigationOpen = false"
              @keydown.escape.window="if (mobileNavigationOpen) { mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus()) }">
-            <a class="skip-link" href="#workspace-content">Skip to main content</a>
+            <a class="skip-link" href="#workspace-content" @click.prevent="$refs.workspaceContent.focus(); $refs.workspaceContent.scrollIntoView()">Skip to main content</a>
             <aside class="workspace-sidebar" :class="mobileNavigationOpen ? 'is-open' : ''" @keydown.tab="if (mobileNavigationOpen) trapNavigationFocus($event, $el)"
                    :inert="window.matchMedia('(max-width: 1024px)').matches && !mobileNavigationOpen"
                    :role="mobileNavigationOpen ? 'dialog' : null"
@@ -151,7 +151,7 @@
                 </section>
             </aside>
             <div class="sidebar-backdrop" x-show="mobileNavigationOpen" x-cloak @click="mobileNavigationOpen = false; $nextTick(() => $refs.mobileNavigationTrigger.focus())" aria-hidden="true"></div>
-            <main id="workspace-content" tabindex="-1" class="container workspace-main" :inert="window.matchMedia('(max-width: 1024px)').matches && mobileNavigationOpen">
+            <main id="workspace-content" tabindex="-1" x-ref="workspaceContent" class="container workspace-main" :inert="window.matchMedia('(max-width: 1024px)').matches && mobileNavigationOpen">
             <!-- Header -->
             <div class="header">
                 <div class="user-info">
