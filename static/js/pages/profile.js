@@ -37,6 +37,7 @@ function profileManager() {
         mobileDevicesError: '',
         mobileDevicesSuccess: '',
         mobileDeviceRevoking: false,
+        isMobileViewport() { return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches === true; },
         pendingMobileDeviceRevocation: null,
 
         get timezoneSaving() { return this.displayTimezoneSaving || this.businessTimezoneSaving; },
@@ -118,7 +119,7 @@ function profileManager() {
             }
         },
         async createMobilePairing() {
-            if (!this.profile.saas_mode || this.mobilePairingBusy || this.csrfLoading || !this.csrfToken) return;
+            if (!this.profile.saas_mode || this.isMobileViewport() || this.mobilePairingBusy || this.csrfLoading || !this.csrfToken) return;
             this.mobilePairingBusy=true;this.mobilePairingError='';this.mobilePairingSuccess='';
             this.stopMobilePairingPolling();this.mobilePairing=null;
             try {
@@ -157,7 +158,7 @@ function profileManager() {
         },
         stopMobilePairingPolling() {if (this.mobilePairingTimer) clearTimeout(this.mobilePairingTimer);this.mobilePairingTimer=null;},
         async approveMobilePairing() {
-            if (!this.mobilePairing || this.mobilePairing.status!=='pending' || this.mobilePairingBusy || !this.csrfToken) return;
+            if (!this.mobilePairing || this.isMobileViewport() || this.mobilePairing.status!=='pending' || this.mobilePairingBusy || !this.csrfToken) return;
             const requestId=this.mobilePairing.requestId;this.mobilePairingBusy=true;this.mobilePairingError='';
             try {
                 const response=await InventoryCsrf.request(this,`/api/profile/mobile-pairings/${encodeURIComponent(requestId)}/approve`,{method:'POST',cache:'no-store'});

@@ -53,6 +53,8 @@
 </section>
 <section class="profile-mobile-pairing" x-show="profile.saas_mode" aria-labelledby="mobile-pairing-title">
 <h2 id="mobile-pairing-title">Connect mobile app</h2>
+<p class="profile-help" x-show="isMobileViewport()">Open Account settings on a desktop browser to generate and approve a pairing QR code. Use the Spares Tracker mobile app to scan it.</p>
+<div x-show="!isMobileViewport()">
 <p class="profile-help">Generate a one-time QR code, then scan it from Spares Tracker on your phone. You’ll review and approve the device here before it can access your account.</p>
 <div class="profile-setting">
   <div class="profile-actions">
@@ -71,6 +73,7 @@
   </div>
   <p role="alert" class="error" x-show="mobilePairingError" x-text="mobilePairingError"></p>
   <p role="status" class="success" aria-live="polite" x-show="mobilePairingSuccess" x-text="mobilePairingSuccess"></p>
+</div>
 </div>
 <div class="profile-setting mobile-devices" aria-labelledby="paired-devices-title">
   <h3 id="paired-devices-title">Paired devices</h3>
