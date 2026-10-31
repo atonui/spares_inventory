@@ -89,6 +89,7 @@ def create_inventory_app(
     *,
     lifespan,
     cors_allowed_origins: Sequence[str],
+    cors_allowed_origin_regex: str | None = None,
     trusted_hosts: Sequence[str] = (
         "www.sparestracker.com", "sparestracker.com",
         "sparesinventory-production.up.railway.app", "localhost", "127.0.0.1", "testserver",
@@ -142,11 +143,7 @@ def create_inventory_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(cors_allowed_origins),
-        # Vercel preview URLs are deployment-specific. Keep the regex limited to
-        # this mobile project and team; all other origins remain explicitly configured.
-        allow_origin_regex=(
-            r"^https://sparesinventorymobile-[a-z0-9]+-allans-projects-d339eeba\.vercel\.app$"
-        ),
+        allow_origin_regex=cors_allowed_origin_regex,
         allow_credentials=True,
         allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Request-ID"],
