@@ -194,7 +194,11 @@ function superPanel() {
       max_login_attempts:        { label: 'Max Login Attempts',     desc: 'Consecutive failures before account lockout',      unit: 'attempts', min: 1, max: 100  },
       lockout_duration_minutes:  { label: 'Lockout Duration',       desc: 'How long an account stays locked after failure',   unit: 'minutes',  min: 1, max: 1440 },
       session_duration_hours:    { label: 'Session Duration',       desc: 'Normal login session lifetime',                   unit: 'hours',    min: 1, max: 720  },
+      mobile_session_max_duration_hours: { label: 'Mobile Session Maximum', desc: 'Platform-wide maximum native app session lifetime', unit: 'hours', min: 1, max: 720 },
       remember_me_duration_days: { label: '"Remember Me" Duration', desc: 'Session lifetime when remember-me is checked',    unit: 'days',     min: 1, max: 365  },
+    },
+    get availableCfgMeta() {
+      return Object.fromEntries(Object.entries(this.cfgMeta).filter(([key]) => this.me?.saas_mode || key !== 'mobile_session_max_duration_hours'));
     },
 
     // ── Boot ──────────────────────────────────────────────────

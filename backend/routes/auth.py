@@ -772,22 +772,32 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     ).fetchone()
                     if active is None:
                         raise HTTPException(status_code=401, detail="Invalid credentials")
+                    if native:
+                        set_mobile_pairing_user_scope(session_conn, user["id"])
+                        session_conn.execute(
+                            "UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND is_mobile = TRUE AND is_active = TRUE",
+                            (user["id"],),
+                        )
+                        revoked_at = serialize_instant(utc_now())
+                        session_conn.execute(
+                            """UPDATE session_refresh_credentials AS r SET expires_at = %s,
+                                      consumed_at = COALESCE(r.consumed_at, %s)
+                               FROM sessions AS s WHERE s.id = r.session_id AND s.user_id = %s
+                                 AND s.is_mobile = TRUE AND s.is_active = FALSE""",
+                            (revoked_at, revoked_at, user["id"]),
+                        )
+                        session_conn.execute(
+                            "UPDATE mobile_device_sessions SET revoked_at = %s WHERE user_id = %s AND revoked_at IS NULL",
+                            (revoked_at, user["id"]),
+                        )
                     session_id = session_conn.execute(
                         """INSERT INTO sessions (user_id, session_token_hash, expires_at,
-                                                  absolute_expires_at, ip_address, user_agent)
-                           VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+                                                  absolute_expires_at, ip_address, user_agent, is_mobile)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                         (user["id"], hash_session_credential(raw_credential),
                          serialize_instant(expires), serialize_instant(absolute_expires),
-                         ip_address, user_agent),
+                         ip_address, user_agent, native),
                     ).fetchone()["id"]
-                    if native:
-                        session_conn.execute(
-                            """INSERT INTO session_refresh_credentials
-                               (session_id, token_hash, issued_at, expires_at)
-                               VALUES (%s, %s, %s, %s)""",
-                            (session_id, hash_session_credential(raw_refresh_credential),
-                             serialize_instant(utc_now()), serialize_instant(absolute_expires)),
-                        )
                     session_conn.execute(
                         """UPDATE users SET failed_login_attempts = 0,
                                   account_locked_until = NULL, last_login = %s
@@ -799,6 +809,23 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     if (principal.company_role is not None and not principal.organization_is_active
                             and not principal.is_platform_admin):
                         raise HTTPException(status_code=403, detail="Organization is suspended")
+                    if native:
+                        now = utc_now()
+                        set_mobile_pairing_user_scope(session_conn, user["id"])
+                        from backend.services.mobile_session_policy import effective_mobile_session_duration_hours
+                        absolute_expires = now + timedelta(hours=effective_mobile_session_duration_hours(session_conn, principal.organization_id))
+                        expires = min(now + timedelta(minutes=15), absolute_expires)
+                        session_conn.execute(
+                            "UPDATE sessions SET expires_at = %s, absolute_expires_at = %s WHERE id = %s",
+                            (serialize_instant(expires), serialize_instant(absolute_expires), session_id),
+                        )
+                        session_conn.execute(
+                            """INSERT INTO session_refresh_credentials
+                               (session_id, token_hash, issued_at, expires_at)
+                               VALUES (%s, %s, %s, %s)""",
+                            (session_id, hash_session_credential(raw_refresh_credential),
+                             serialize_instant(now), serialize_instant(absolute_expires)),
+                        )
                     user_role = (
                         principal.company_role
                         if principal.company_role is not None and principal.organization_is_active
@@ -1099,10 +1126,12 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
             rows = conn.execute(
-                """SELECT d.request_id AS device_id, d.device_name, d.paired_at, s.last_activity
-                   FROM mobile_device_sessions d JOIN sessions s ON s.id = d.session_id
-                   WHERE d.user_id = %s AND d.revoked_at IS NULL AND s.is_active = TRUE
-                   ORDER BY d.paired_at DESC""",
+                """SELECT s.id::text AS device_id, COALESCE(d.device_name, 'Mobile app') AS device_name,
+                          s.created_at AS paired_at, s.last_activity
+                   FROM sessions AS s
+                   LEFT JOIN mobile_device_sessions AS d ON d.session_id = s.id AND d.user_id = s.user_id
+                   WHERE s.user_id = %s AND s.is_mobile = TRUE AND s.is_active = TRUE
+                   ORDER BY s.created_at DESC""",
                 (user_id,),
             ).fetchall()
         return JSONResponse(
@@ -1119,20 +1148,27 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
+            if not request_id.isdecimal():
+                raise HTTPException(status_code=404, detail="Paired device not found")
             device = conn.execute(
-                """SELECT session_id FROM mobile_device_sessions
-                   WHERE request_id = %s AND user_id = %s AND revoked_at IS NULL FOR UPDATE""",
-                (request_id, user_id),
+                """SELECT id FROM sessions WHERE id = %s AND user_id = %s
+                   AND is_mobile = TRUE AND is_active = TRUE FOR UPDATE""",
+                (int(request_id), user_id),
             ).fetchone()
             if device is None:
                 raise HTTPException(status_code=404, detail="Paired device not found")
             conn.execute(
                 "UPDATE sessions SET is_active = FALSE WHERE id = %s AND user_id = %s",
-                (device["session_id"], user_id),
+                (device["id"], user_id),
+            )
+            revoked_at = serialize_instant(utc_now())
+            conn.execute(
+                "UPDATE session_refresh_credentials SET expires_at = %s, consumed_at = COALESCE(consumed_at, %s) WHERE session_id = %s",
+                (revoked_at, revoked_at, device["id"]),
             )
             conn.execute(
-                "UPDATE mobile_device_sessions SET revoked_at = %s WHERE request_id = %s",
-                (serialize_instant(utc_now()), request_id),
+                "UPDATE mobile_device_sessions SET revoked_at = %s WHERE session_id = %s AND user_id = %s AND revoked_at IS NULL",
+                (revoked_at, device["id"], user_id),
             )
         return JSONResponse(content={"success": True}, headers={"Cache-Control": "no-store"})
 
@@ -1313,27 +1349,50 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 ).fetchone()
                 if user is None or user["archived_at"] is not None:
                     raise HTTPException(status_code=401, detail="The account is unavailable")
-                cfg = get_security_config()
-                absolute_expires = now + timedelta(hours=cfg["session_duration_hours"])
-                access_expires = min(now + timedelta(minutes=15), absolute_expires)
+                # The users row lock serializes native sign-in and pair completion.
+                # Revoke the prior mobile session before inserting its replacement.
+                set_mobile_pairing_user_scope(conn, user["id"])
+                conn.execute(
+                    "UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND is_mobile = TRUE AND is_active = TRUE",
+                    (user["id"],),
+                )
+                conn.execute(
+                    """UPDATE session_refresh_credentials AS r SET expires_at = %s,
+                              consumed_at = COALESCE(r.consumed_at, %s)
+                       FROM sessions AS s WHERE s.id = r.session_id AND s.user_id = %s
+                         AND s.is_mobile = TRUE AND s.is_active = FALSE""",
+                    (serialize_instant(now), serialize_instant(now), user["id"]),
+                )
+                conn.execute(
+                    "UPDATE mobile_device_sessions SET revoked_at = %s WHERE user_id = %s AND revoked_at IS NULL",
+                    (serialize_instant(now), user["id"]),
+                )
                 session_id = conn.execute(
                     """INSERT INTO sessions (user_id, session_token_hash, expires_at,
-                                              absolute_expires_at, ip_address, user_agent)
-                       VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                    (user["id"], hash_session_credential(access_token), serialize_instant(access_expires),
-                     serialize_instant(absolute_expires), request.client.host if request.client else None,
+                                              absolute_expires_at, ip_address, user_agent, is_mobile)
+                       VALUES (%s, %s, %s, %s, %s, %s, TRUE) RETURNING id""",
+                    (user["id"], hash_session_credential(access_token),
+                     serialize_instant(now + timedelta(minutes=15)), serialize_instant(now + timedelta(hours=720)),
+                     request.client.host if request.client else None,
                      request.headers.get("user-agent", "")[:512]),
                 ).fetchone()["id"]
-                conn.execute(
-                    """INSERT INTO session_refresh_credentials (session_id, token_hash, issued_at, expires_at)
-                       VALUES (%s, %s, %s, %s)""",
-                    (session_id, hash_session_credential(refresh_token), serialize_instant(now), serialize_instant(absolute_expires)),
-                )
                 from backend.services.principals import resolve_principal
                 principal = resolve_principal(conn, access_token)
                 has_active_company = principal.company_role is not None and principal.organization_is_active
                 if principal.user_id != user["id"] or not (has_active_company or principal.is_platform_admin):
                     raise HTTPException(status_code=403, detail="The account has no active company access")
+                from backend.services.mobile_session_policy import effective_mobile_session_duration_hours
+                absolute_expires = now + timedelta(hours=effective_mobile_session_duration_hours(conn, principal.organization_id))
+                access_expires = min(now + timedelta(minutes=15), absolute_expires)
+                conn.execute(
+                    "UPDATE sessions SET expires_at = %s, absolute_expires_at = %s WHERE id = %s",
+                    (serialize_instant(access_expires), serialize_instant(absolute_expires), session_id),
+                )
+                conn.execute(
+                    """INSERT INTO session_refresh_credentials (session_id, token_hash, issued_at, expires_at)
+                       VALUES (%s, %s, %s, %s)""",
+                    (session_id, hash_session_credential(refresh_token), serialize_instant(now), serialize_instant(absolute_expires)),
+                )
                 set_mobile_pairing_user_scope(conn, user["id"])
                 conn.execute(
                     """INSERT INTO mobile_device_sessions

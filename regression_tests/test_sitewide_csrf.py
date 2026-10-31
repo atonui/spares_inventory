@@ -11,6 +11,11 @@ TOKEN_AUTHENTICATED_MUTATIONS = {
     ('/api/v1/auth/mobile-pairing/claim', frozenset({'POST'})),
     ('/api/v1/auth/mobile-pairing/complete', frozenset({'POST'})),
     ('/api/v1/inventory/adjustments', frozenset({'POST'})),
+    ('/api/v1/inventory/add', frozenset({'POST'})),
+    ('/api/v1/inventory/consume', frozenset({'POST'})),
+    ('/api/v1/inventory/transfer', frozenset({'POST'})),
+    ('/api/v1/inventory/transfers/{transfer_id}/receive', frozenset({'POST'})),
+    ('/api/v1/inventory/transfers/{transfer_id}/return', frozenset({'POST'})),
 }
 
 def dependencies(dependant):

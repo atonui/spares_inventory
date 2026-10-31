@@ -22,6 +22,7 @@ from . import (
     v0016_resend_delivery_webhooks,
     v0017_store_activity_emails,
     v0018_mobile_pairing_manual_code,
+    v0019_mobile_session_policy,
 )
 
 
@@ -58,6 +59,7 @@ MIGRATIONS = tuple(
         v0016_resend_delivery_webhooks,
         v0017_store_activity_emails,
         v0018_mobile_pairing_manual_code,
+        v0019_mobile_session_policy,
     )
 )
 

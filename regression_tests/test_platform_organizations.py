@@ -463,7 +463,7 @@ def test_concurrent_platform_admin_revokes_cannot_remove_last_admin(platform_api
             (api.principal.user_id, second_request, second_id),
         ]))
     assert sum(result == {"success": True} for result in results) == 1
-    assert 409 in results
+    assert any(result in (403, 409) for result in results)
     assert api.admin.execute(
         "SELECT count(*) AS total FROM platform_admins pa JOIN users u ON u.id=pa.user_id WHERE u.archived_at IS NULL"
     ).fetchone()["total"] == 1

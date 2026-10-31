@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 
 function setup(fetch, mobile=false) {
- const context={console,Intl,Date,Headers,URLSearchParams,fetch,window:{location:{href:'',matchMedia:query=>({matches:mobile && query==='(max-width: 760px)'})}}};
+ const context={console,Intl,Date,Headers,URLSearchParams,fetch,window:{location:{href:''},matchMedia:query=>({matches:mobile && query==='(max-width: 760px)'})}};
  vm.createContext(context);loadPageScripts('profile.html',context);return context.profileManager();
 }
 

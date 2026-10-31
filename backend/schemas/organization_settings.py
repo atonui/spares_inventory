@@ -30,3 +30,8 @@ class OrganizationSettingsUpdate(BaseModel):
 class OwnerTransferRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target_user_id: int = Field(strict=True, gt=0)
+
+
+class MobileSessionPolicyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    duration_hours: int = Field(strict=True, ge=1, le=720)

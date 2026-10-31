@@ -65,6 +65,50 @@ def test_mobile_device_session_migration_tracks_revocable_paired_devices():
     assert "app.mobile_pairing_user_id" in sql
 
 
+def test_mobile_session_policy_migration_adds_checked_org_duration_and_platform_cap():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 19)
+    sql = "\n".join(migration.statements)
+    assert migration.name == "mobile_session_policy"
+    assert "mobile_session_duration_hours INTEGER NOT NULL DEFAULT 720" in sql
+    assert "BETWEEN 1 AND 720" in sql
+    assert "INSERT INTO system_settings" not in sql
+    assert "ALTER TABLE sessions ADD COLUMN is_mobile BOOLEAN NOT NULL DEFAULT FALSE" in sql
+    assert "uq_sessions_one_active_mobile_per_user" in sql
+
+
+def test_mobile_session_policy_allows_only_one_active_mobile_session_per_account(postgres_schema):
+    from psycopg.errors import UniqueViolation
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    conn, _schema = postgres_schema
+    apply_postgres_migrations(conn)
+    user_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('mobile-unique@example.test','Mobile','x') RETURNING id"
+    ).fetchone()["id"]
+    conn.execute(
+        """INSERT INTO sessions(user_id,session_token_hash,expires_at,is_mobile)
+           VALUES (%s,'mobile-one','2099-01-01T00:00:00.000000Z',TRUE)""",
+        (user_id,),
+    )
+    conn.commit()
+    with pytest.raises(UniqueViolation):
+        conn.execute(
+            """INSERT INTO sessions(user_id,session_token_hash,expires_at,is_mobile)
+               VALUES (%s,'mobile-two','2099-01-01T00:00:00.000000Z',TRUE)""",
+            (user_id,),
+        )
+    conn.rollback()
+    conn.execute("UPDATE sessions SET is_active=FALSE WHERE user_id=%s", (user_id,))
+    conn.execute(
+        """INSERT INTO sessions(user_id,session_token_hash,expires_at,is_mobile)
+           VALUES (%s,'mobile-replacement','2099-01-01T00:00:00.000000Z',TRUE)""",
+        (user_id,),
+    )
+    conn.commit()
+
+
 def test_mobile_stock_adjustment_migration_adds_a_unique_retry_key():
     from backend.postgres_migrations.registry import MIGRATIONS
 
@@ -145,7 +189,7 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 19))
+    assert status.applied_versions == tuple(range(1, 20))
     assert status.pending_versions == ()
 
     user_id = connection.execute(
@@ -179,7 +223,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 19))
+    assert status.applied_versions == tuple(range(1, 20))
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -233,7 +277,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 19))
+    assert status.applied_versions == tuple(range(1, 20))
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -359,7 +403,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == tuple(range(1, 19))
+    assert status.applied_versions == tuple(range(1, 20))
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -496,7 +540,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 19))
+    assert status.applied_versions == tuple(range(1, 20))
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -547,7 +591,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 19))
+    assert status.applied_versions == tuple(range(1, 20))
     session_columns = {
         row["column_name"]
         for row in connection.execute(

@@ -210,7 +210,8 @@ def test_platform_security_settings_validate_audit_and_feed_auth_configuration(p
     api = platform_settings_api
     get_settings = api.settings_endpoint("GET", "/api/platform/security-config")
     update = api.settings_endpoint("PUT", "/api/platform/security-config/{key}")
-    assert asyncio.run(get_settings(request=api.request, response=Response(), actor=api.principal)) == {}
+    initial_settings = asyncio.run(get_settings(request=api.request, response=Response(), actor=api.principal))
+    assert initial_settings["mobile_session_max_duration_hours"]["setting_value"] == "720"
 
     result = asyncio.run(update(
         key="max_login_attempts", body=SystemSettingUpdate(value="8"),
