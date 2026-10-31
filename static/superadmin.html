@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
-<link rel="stylesheet" href="superadmin.css?v=20261029-platform-support-v1">
+<link rel="stylesheet" href="superadmin.css?v=20261031-platform-console-v1">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
@@ -13,7 +13,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261031-mobile-session-policy" defer></script>
+<script src="js/pages/superadmin.js?v=20261031-platform-console-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -29,7 +29,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="brand/generated/apple-touch-icon.png">
 </head>
 
-<body x-data="superPanel()" x-init="init()">
+<body x-data="superPanel()" x-init="init()" :class="{'platform-console': me?.saas_mode}">
 <section class="site-announcement" x-data="siteAnnouncementBanner()" x-show="announcement || error" x-cloak aria-label="Site announcement">
   <div class="site-announcement-notice" :class="{'site-announcement-warning': announcement?.level === 'warning', 'site-announcement-danger': announcement?.level === 'danger'}" x-show="announcement" role="status" aria-live="polite" x-text="announcement?.message"></div>
   <button type="button" x-show="announcement?.dismissible" @click="dismiss()" :disabled="dismissPending" x-text="dismissPending ? 'Dismissing…' : 'Dismiss announcement'"></button>
@@ -76,7 +76,11 @@
   </form>
 </div>
 
-<div class="shell" :inert="dlg.open || resetModal.open || supportStartOpen">
+<div class="confirm-overlay" x-show="organizationCreateOpen" style="display:none" x-cloak role="dialog" aria-modal="true" aria-labelledby="organization-create-title" tabindex="-1" x-effect="syncDialog($el, organizationCreateOpen)" @keydown.tab="trapDialogFocus($event, $el)" @keydown.escape.stop="organizationCreateOpen=false">
+  <form class="confirm-box organization-create-box" @submit.prevent="provisionOrganization()"><h3 id="organization-create-title">Create organization</h3><p>Create a tenant workspace and queue an invitation for its first owner.</p><div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div><div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div><div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div><p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p><div class="confirm-actions"><button type="button" class="btn btn-outline" @click="organizationCreateOpen=false" :disabled="actionPending.provisionOrganization">Cancel</button><button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization" x-text="actionPending.provisionOrganization?'Creating…':'Create organization'"></button></div></form>
+</div>
+
+<div class="shell" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
 
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
@@ -138,26 +142,29 @@
       </div>
       <div class="nav-section" x-show="me?.saas_mode && me?.is_platform_admin">
         <div class="nav-label">Platform</div>
-        <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'; loadPlatformDashboard()" :aria-current="tab==='dashboard' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#chart"></use></svg></span> Overview
-        </button>
-        <button type="button" class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()" :aria-current="tab==='config' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#secconfig"></use></svg></span> Security Settings
-        </button>
-        <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#broadcast"></use></svg></span> System Announcement
+        <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'; loadPlatformOverview()" :aria-current="tab==='dashboard' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#overview"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#overview"></use></svg></span> Overview
         </button>
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#store"></use></svg></span> Organizations
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#organization"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#organization"></use></svg></span> Organizations
         </button>
         <button type="button" class="nav-item" x-show="supportSession" :class="tab==='support'&&'active'" @click="selectSection('support')" :aria-current="tab==='support' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#lock"></use></svg></span> Customer Support
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#support"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#support"></use></svg></span> Customer support
         </button>
+      </div>
+      <div class="nav-section" x-show="me?.saas_mode && me?.is_platform_admin">
+        <div class="nav-label">Administration</div>
         <button type="button" class="nav-item" :class="tab==='platformAdmins'&&'active'" @click="tab='platformAdmins'; loadPlatformAdmins()" :aria-current="tab==='platformAdmins' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#users"></use></svg></span> Platform Admins
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#platform-access"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#platform-access"></use></svg></span> Platform access
+        </button>
+        <button type="button" class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()" :aria-current="tab==='config' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use></svg></span> Security settings
+        </button>
+        <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#announcement"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#announcement"></use></svg></span> Announcements
         </button>
         <button type="button" class="nav-item" :class="tab==='platformAudit'&&'active'" @click="tab='platformAudit'; loadPlatformAudit()" :aria-current="tab==='platformAudit' ? 'page' : null">
-          <span class="ni"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#audit"></use></svg></span> Platform Audit
+          <span class="ni"><svg class="platform-icon" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#audit"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#audit"></use></svg></span> Audit log
         </button>
       </div>
     </nav>
@@ -165,7 +172,7 @@
     <div class="sidebar-footer">
       <div class="sf-name" x-text="me?.name || '...'"></div>
       <div class="sf-role" x-text="me?.saas_mode ? 'Platform admin' : 'Superadmin'">Superadmin</div>
-      <a href="/static/index.html"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to App</a>
+      <a x-show="!me?.saas_mode" href="/static/index.html"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to App</a>
     </div>
   </aside>
 
@@ -184,14 +191,15 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" :value="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support') || (me?.saas_mode && (['dashboard','config','announcement','organizations','platformAdmins','platformAudit'].includes(key) || (key==='support' && supportSession)))" x-text="title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support') || (me?.saas_mode && (['dashboard','config','announcement','organizations','platformAdmins','platformAudit'].includes(key) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
-      <h1 x-text="tabTitles[tab]||'Superadmin'"></h1>
+      <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
       <div class="topbar-right">
+        <span class="platform-context" x-show="me?.saas_mode">Platform level</span>
         <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)" class="spin"></span>
         <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-        <a href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
+        <a x-show="!me?.saas_mode" href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
       </div>
     </div>
 
@@ -278,64 +286,29 @@
       </div><!-- /dashboard -->
 
       <div x-show="tab==='dashboard' && me?.saas_mode">
-        <div class="stat-grid">
-          <div class="stat-card"><div class="stat-num" x-text="dashboard.organizations_active ?? '—'"></div><div class="stat-lbl">Active Organizations</div></div>
-          <div class="stat-card"><div class="stat-num" x-text="dashboard.organizations_total ?? '—'"></div><div class="stat-lbl">All Organizations</div></div>
-          <div class="stat-card"><div class="stat-num" x-text="dashboard.identities_active ?? '—'"></div><div class="stat-lbl">Active Accounts</div></div>
-          <div class="stat-card"><div class="stat-num" x-text="dashboard.platform_admins ?? '—'"></div><div class="stat-lbl">Platform Administrators</div></div>
-          <div class="stat-card"><div class="stat-num" x-text="dashboard.mail_pending ?? '—'"></div><div class="stat-lbl">Queued Email</div></div>
-          <div class="stat-card"><div class="stat-num red" x-text="dashboard.mail_failed ?? '—'"></div><div class="stat-lbl">Failed Email</div></div>
+        <div class="platform-page-intro"><div><p class="eyebrow">PLATFORM OPERATIONS</p><h2>Platform overview</h2><p>Organization and account totals across the SaaS platform.</p></div><button class="btn btn-success" @click="tab='organizations';loadOrganizations(0)">Manage organizations</button></div>
+        <div x-show="platformDashboardError" class="action-error" role="alert"><span x-text="platformDashboardError"></span> <button class="btn btn-sm btn-outline" @click="refresh()">Retry</button></div>
+        <div class="platform-metrics">
+          <article class="platform-metric"><span>Organizations</span><strong x-text="dashboard.organizations_total ?? '—'"></strong><small><span x-text="dashboard.organizations_active ?? '—'"></span> active</small></article>
+          <article class="platform-metric"><span>Active accounts</span><strong x-text="dashboard.identities_active ?? '—'"></strong><small>Across platform identities</small></article>
+          <article class="platform-metric"><span>Platform access</span><strong x-text="dashboard.platform_admins ?? '—'"></strong><small>Platform administrators</small></article>
+          <article class="platform-metric"><span>Invitation email</span><strong><span x-text="dashboard.mail_pending ?? '—'"></span> <small>pending</small></strong><small :class="Number(dashboard.mail_failed)>0?'attention-text':''"><span x-text="dashboard.mail_failed ?? '—'"></span> failed</small></article>
         </div>
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Tenant overview</span></div>
-          <div class="panel-body"><p>Platform totals exclude tenant inventory. Organization records are managed separately from company workspaces.</p>
-            <button class="btn btn-success" @click="tab='organizations'; loadOrganizations()">Manage organizations</button>
-          </div>
+        <div class="platform-overview-grid">
+          <section class="panel"><div class="panel-header"><span class="panel-title">Needs attention</span></div><div class="panel-body"><div class="attention-card" :class="Number(dashboard.mail_failed)>0?'needs-attention':'clear-attention'"><strong x-text="Number(dashboard.mail_failed)>0 ? `${dashboard.mail_failed} invitation email(s) failed` : 'No failed invitation email is currently reported'"></strong><p x-text="Number(dashboard.mail_failed)>0 ? 'Review the affected organization and retry invitation delivery from its administration workflow.' : 'This reflects the current invitation-mail count only.'"></p></div></div></section>
+          <section class="panel"><div class="panel-header"><span class="panel-title">Recent platform activity</span><button class="btn btn-sm btn-outline" @click="loadOverviewActivity()">Refresh</button></div><div class="panel-body"><p x-show="overviewActivityError" class="action-error" role="alert" x-text="overviewActivityError"></p><p x-show="!overviewActivityError && !overviewActivity.length" class="empty">No recent platform events.</p><ol class="activity-list"><template x-for="event in overviewActivity" :key="event.id"><li><strong x-text="event.action"></strong><span x-text="event.result"></span><small x-text="`${event.created_at} · ${event.organization_id || 'Platform'}`"></small></li></template></ol></div></section>
         </div>
       </div>
 
       <div x-show="tab==='organizations' && me?.saas_mode">
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Provision an organization</span></div>
-          <div class="panel-body">
-            <form @submit.prevent="provisionOrganization()">
-              <div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div>
-              <div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div>
-              <div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div>
-              <button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization">Create organization and send invitation</button>
-              <p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p>
-            </form>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Organizations</span><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset)" :disabled="organizationLoading">Refresh</button></div>
-          <div class="panel-body" style="overflow:auto">
-            <form class="list-filters organization-filters" @submit.prevent="loadOrganizations(0)">
-              <label>Search organizations<input type="search" maxlength="100" placeholder="Name or slug" x-model="organizationFilters.search" :disabled="organizationLoading"></label>
-              <label>Status<select x-model="organizationFilters.status" :disabled="organizationLoading"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label>
-              <div class="filter-actions"><button class="btn btn-success" type="submit" :disabled="organizationLoading">Search</button><button class="btn btn-outline" type="button" @click="organizationFilters={search:'',status:'all'};loadOrganizations(0)" :disabled="organizationLoading">Clear</button></div>
-            </form>
-            <p x-show="organizationLoading" role="status" class="list-count">Loading organizations…</p>
-            <div x-show="organizationError" class="action-error" role="alert"><span x-text="organizationError"></span> <button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset)" :disabled="organizationLoading">Retry</button></div>
-            <div x-show="!organizationLoading && !organizationError && !organizations.length" class="empty">No organizations match these filters.</div>
-            <div style="overflow:auto" x-show="!organizationLoading && !organizationError && organizations.length">
-              <table class="organizations-table tbl"><thead><tr><th>Organization</th><th>Status</th><th>Active members</th><th>Invitation email</th><th>Created (UTC)</th><th>Actions</th></tr></thead>
-                <tbody><template x-for="org in organizations" :key="org.id"><tr>
-                  <td data-label="Organization"><strong x-text="org.name"></strong><small class="organization-slug" x-text="org.slug"></small></td>
-                  <td data-label="Status"><span class="organization-status" :class="org.is_active ? 'is-active' : 'is-suspended'" x-text="org.is_active ? 'Active' : 'Suspended'"></span></td>
-                  <td data-label="Active members" x-text="org.active_member_count"></td>
-                  <td data-label="Invitation email"><span class="invitation-count">Pending <strong x-text="org.pending_invitation_mail_count"></strong></span><span class="invitation-count">Failed <strong x-text="org.failed_invitation_mail_count"></strong></span></td>
-                  <td data-label="Created (UTC)" x-text="org.created_at"></td>
-                  <td data-label="Actions"><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openSupportStart(org)" :disabled="!!supportSession || !me?.is_platform_admin">Start support session</button><button class="btn btn-sm btn-outline" :class="org.is_active ? 'organization-suspend' : 'organization-reactivate'" @click="requestOrganizationStatus(org)" :disabled="dialogBusy || actionPending['organization:'+org.id]" x-text="org.is_active ? 'Suspend' : 'Reactivate'"></button></div></td>
-                </tr></template></tbody>
-              </table>
-            </div>
-            <div class="organization-pagination" x-show="organizationTotal>0 && !organizationError">
-              <span role="status" x-text="`Showing ${organizationOffset+1}–${Math.min(organizationOffset+organizations.length,organizationTotal)} of ${organizationTotal}`"></span>
-              <div class="filter-actions"><button class="btn btn-sm btn-outline" @click="loadOrganizations(Math.max(0,organizationOffset-organizationLimit))" :disabled="organizationLoading || organizationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset+organizationLimit)" :disabled="organizationLoading || organizationOffset+organizationLimit>=organizationTotal">Next</button></div>
-            </div>
-          </div>
-        </div>
+        <div class="platform-page-intro"><div><p class="eyebrow">TENANT PORTFOLIO</p><h2>Organizations</h2><p>Manage tenant lifecycle and review organization-level platform activity.</p></div><button class="btn btn-success" @click="openOrganizationCreate()">Create organization</button></div>
+        <section class="panel"><div class="panel-header"><span class="panel-title">Organization directory</span><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset)" :disabled="organizationLoading">Refresh</button></div><div class="panel-body">
+          <form class="list-filters organization-filters" @submit.prevent="loadOrganizations(0)"><label>Search organizations<input type="search" maxlength="100" placeholder="Name or slug" x-model="organizationFilters.search" :disabled="organizationLoading"></label><label>Status<select x-model="organizationFilters.status" :disabled="organizationLoading"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label><div class="filter-actions"><button class="btn btn-success" type="submit" :disabled="organizationLoading">Search</button><button class="btn btn-outline" type="button" @click="organizationFilters={search:'',status:'all'};loadOrganizations(0)" :disabled="organizationLoading">Clear</button></div></form>
+          <p x-show="organizationLoading" role="status" class="list-count">Loading organizations…</p><div x-show="organizationError" class="action-error" role="alert"><span x-text="organizationError"></span> <button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset)" :disabled="organizationLoading">Retry</button></div><div x-show="!organizationLoading && !organizationError && !organizations.length" class="empty">No organizations match these filters.</div>
+          <div class="organization-directory" x-show="!organizationLoading && !organizationError && organizations.length"><table class="organizations-table tbl"><thead><tr><th>Organization</th><th>Status</th><th>Active members</th><th>Invitation email</th><th>Created (UTC)</th><th>Actions</th></tr></thead><tbody><template x-for="org in organizations" :key="org.id"><tr :class="selectedOrganization?.id===org.id?'selected-row':''"><td data-label="Organization"><strong x-text="org.name"></strong><small class="organization-slug" x-text="org.slug"></small></td><td data-label="Status"><span class="organization-status" :class="org.is_active?'is-active':'is-suspended'" x-text="org.is_active?'Active':'Suspended'"></span></td><td data-label="Active members" x-text="org.active_member_count"></td><td data-label="Invitation email"><span class="invitation-count">Pending <strong x-text="org.pending_invitation_mail_count"></strong></span><span class="invitation-count">Failed <strong x-text="org.failed_invitation_mail_count"></strong></span></td><td data-label="Created (UTC)" x-text="org.created_at"></td><td data-label="Actions"><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openOrganization(org)">View details</button><button class="btn btn-sm btn-outline" :class="org.is_active?'organization-suspend':'organization-reactivate'" @click="requestOrganizationStatus(org)" :disabled="dialogBusy || actionPending['organization:'+org.id]" x-text="org.is_active?'Suspend':'Reactivate'"></button></div></td></tr></template></tbody></table></div>
+          <div class="organization-pagination" x-show="organizationTotal>0 && !organizationError"><span role="status" x-text="`Showing ${organizationOffset+1}–${Math.min(organizationOffset+organizations.length,organizationTotal)} of ${organizationTotal}`"></span><div class="filter-actions"><button class="btn btn-sm btn-outline" @click="loadOrganizations(Math.max(0,organizationOffset-organizationLimit))" :disabled="organizationLoading || organizationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset+organizationLimit)" :disabled="organizationLoading || organizationOffset+organizationLimit>=organizationTotal">Next</button></div></div>
+        </div></section>
+        <section class="panel organization-detail" x-show="selectedOrganization"><div class="panel-header"><div><span class="panel-title" x-text="selectedOrganization?.name"></span><small class="organization-slug" x-text="selectedOrganization?.slug"></small></div><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openSupportStart(selectedOrganization)" :disabled="!!supportSession || !me?.is_platform_admin">Start support session</button><button class="btn btn-sm btn-outline" :class="selectedOrganization?.is_active?'organization-suspend':'organization-reactivate'" @click="requestOrganizationStatus(selectedOrganization)" x-text="selectedOrganization?.is_active?'Suspend organization':'Reactivate organization'"></button><button class="btn btn-sm btn-outline" @click="selectedOrganization=null;organizationAuditRows=[]">Close details</button></div></div><div class="panel-body"><div class="organization-facts"><span><small>Status</small><strong x-text="selectedOrganization?.is_active?'Active':'Suspended'"></strong></span><span><small>Active members</small><strong x-text="selectedOrganization?.active_member_count ?? '—'"></strong></span><span><small>Created (UTC)</small><strong x-text="selectedOrganization?.created_at || '—'"></strong></span><span><small>Invitation mail</small><strong><span x-text="selectedOrganization?.pending_invitation_mail_count ?? 0"></span> pending · <span x-text="selectedOrganization?.failed_invitation_mail_count ?? 0"></span> failed</strong></span></div><h3 class="activity-heading">Recent organization activity</h3><p x-show="organizationAuditLoading" role="status">Loading organization activity…</p><div x-show="organizationAuditError" class="action-error" role="alert"><span x-text="organizationAuditError"></span><button class="btn btn-sm btn-outline" @click="loadOrganizationActivity(selectedOrganization.id)">Retry</button></div><p x-show="!organizationAuditLoading && !organizationAuditError && !organizationAuditRows.length" class="empty">No platform events are recorded for this organization.</p><ol class="activity-list"><template x-for="event in organizationAuditRows" :key="event.id"><li><strong x-text="event.action"></strong><span x-text="event.result"></span><small x-text="`${event.created_at} · actor ${event.actor_user_id ?? 'System'}`"></small></li></template></ol></div></section>
       </div>
 
       <div x-show="tab==='support' && me?.saas_mode && supportSession">
