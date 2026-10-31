@@ -40,7 +40,7 @@ This design covers the first SaaS delivery slice. The legacy SQLite-to-PostgreSQ
 
 The global `users` table remains the identity record, with globally unique email. Company roles live only in `organization_memberships.company_role`; platform status lives only in `platform_admins`. Do not add a PostgreSQL `users.role` compatibility column or infer platform status from a company role.
 
-The v1 uniqueness constraint remains one membership per user. Company roles are `owner`, `admin`, `manager`, and `engineer`. A platform administrator may also have a company membership, but the platform role alone never creates tenant context or authorizes inventory access. A request-supplied organization ID is never proof of access.
+The v1 uniqueness constraint remains one membership per user. Company roles are `owner`, `admin`, `manager`, and `engineer`. Platform administrators are platform-only identities and cannot have a company membership. A user must be transferred out of their company membership before platform administrator access is granted; a platform administrator must be revoked before the identity can join a company. A request-supplied organization ID is never proof of access.
 
 Introduce explicit company-administration and platform-administration authorization boundaries:
 
@@ -50,7 +50,7 @@ Introduce explicit company-administration and platform-administration authorizat
 - Platform administrators have no automatic inventory access. To use tenant operations they must also have an active company membership with the required company role.
 - The legacy SQLite path may continue to interpret existing `admin` and `superadmin` roles while SQLite mode is active. The PostgreSQL path must use membership and platform tables only.
 
-For migration mapping later, the existing `superadmin` identity becomes a platform administrator and receives an explicit owner membership in the first organization; existing `admin`, `manager`, and `engineer` roles map to the corresponding company roles. This slice must not perform that data migration itself.
+For migration mapping later, the selected `superadmin` identity becomes a platform administrator with no company membership. A different legacy `admin` or `superadmin` identity must be selected as the first-organization owner. The importer requires both emails and rejects the same identity for both roles. Other legacy `admin`/`superadmin` users map to company admins, while `manager` and `engineer` map to their corresponding company roles. The PostgreSQL migration removes existing platform-admin memberships only when another active owner remains; otherwise it fails before changing the schema or data.
 
 ## Invitation and Provisioning Flow
 
@@ -114,7 +114,7 @@ PostgreSQL integration tests must prove:
 
 1. Company owners/admins can manage only users and invitations in their own organization; managers and engineers are denied those operations.
 2. Platform admins can provision organizations and initial-owner invitations, but platform status alone cannot read tenant inventory or company user lists.
-3. A platform admin with an explicit active company membership is authorized only according to that membership's company role.
+3. Platform-admin and tenant membership are mutually exclusive in both provisioning routes and PostgreSQL constraints; a platform admin has no tenant principal.
 4. Invitations are single-use, expiring, bound to the normalized email and organization, and safe under duplicate acceptance or resend races.
 5. Email queue insertion is atomic with invitation creation; delivery retries are bounded and concurrent workers do not double-claim a message.
 6. Invitation tokens and encrypted payloads do not appear in application logs or public responses.

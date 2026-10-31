@@ -62,14 +62,15 @@ def test_import_preserves_tenant_data_maps_roles_and_rehearsal_rolls_back(sqlite
     report = import_sqlite_snapshot(
         path, dsn, organization_name="First Company",
         platform_admin_email="test@example.com", dry_run=True,
+        tenant_owner_email="admin@example.com",
     )
     assert report.dry_run and not report.applied
-    assert report.source_counts["users"] == 2
+    assert report.source_counts["users"] == 3
     assert report.revoked_sessions == 1
     assert report.memberships_checked == 2
     assert report.balances_checked == 1
     assert report.transfer_states == ({"received": 1} if before.get("stock_transfers") else {})
-    assert report.target_counts["users"] == 2
+    assert report.target_counts["users"] == 3
     assert admin.execute("SELECT count(*) FROM users").fetchone()["count"] == 0
 
     with sqlite3_readwrite(path) as source:
@@ -88,7 +89,7 @@ def test_import_cli_reports_failure_type_without_exception_details(monkeypatch, 
     result = sqlite_to_postgres.main([
         "import-sqlite", "--source", "ignored.db", "--target-dsn-env",
         "MIGRATION_DATABASE_URL", "--organization-name", "First Company",
-        "--platform-admin-email", "admin@example.com",
+        "--platform-admin-email", "test@example.com", "--tenant-owner-email", "owner@example.com",
     ])
 
     captured = capsys.readouterr()
@@ -98,17 +99,18 @@ def test_import_cli_reports_failure_type_without_exception_details(monkeypatch, 
     assert "database password" not in captured.err
 
 
-def test_import_apply_maps_first_superadmin_to_platform_and_company_owner(sqlite_snapshot, migrated_target):
+def test_import_apply_keeps_platform_admin_separate_from_company_owner(sqlite_snapshot, migrated_target):
     from backend.migration_import.sqlite_to_postgres import import_sqlite_snapshot
 
     path, _before = sqlite_snapshot
     admin, dsn = migrated_target
     report = import_sqlite_snapshot(
         path, dsn, organization_name="First Company",
-        platform_admin_email="test@example.com", dry_run=False,
+        platform_admin_email="test@example.com", tenant_owner_email="owner@example.com", dry_run=False,
     )
     assert report.applied and not report.dry_run
-    assert admin.execute("SELECT company_role FROM organization_memberships WHERE user_id=7").fetchone()["company_role"] == "owner"
+    assert admin.execute("SELECT count(*) FROM organization_memberships WHERE user_id=7").fetchone()["count"] == 0
+    assert admin.execute("SELECT company_role FROM organization_memberships WHERE user_id=9").fetchone()["company_role"] == "owner"
     assert admin.execute("SELECT count(*) FROM platform_admins WHERE user_id=7").fetchone()["count"] == 1
     assert admin.execute("SELECT count(*) FROM organization_memberships WHERE user_id=8 AND company_role='engineer'").fetchone()["count"] == 1
     assert admin.execute("SELECT count(*) FROM sessions WHERE is_active").fetchone()["count"] == 0
@@ -143,7 +145,7 @@ def test_import_rejects_invalid_foreign_reference_without_mutating_source(sqlite
         invalid = snapshot(source)
     with pytest.raises(ValueError):
         import_sqlite_snapshot(path, dsn, organization_name="First Company",
-                               platform_admin_email="test@example.com")
+                               platform_admin_email="test@example.com", tenant_owner_email="owner@example.com")
     with sqlite3_readwrite(path) as source:
         assert snapshot(source) == invalid
     assert admin.execute("SELECT count(*) FROM organizations").fetchone()["count"] == 0
@@ -158,7 +160,7 @@ def test_import_refuses_a_nonempty_target(sqlite_snapshot, migrated_target):
     admin.commit()
     with pytest.raises(ValueError, match="target is not empty"):
         import_sqlite_snapshot(path, dsn, organization_name="First Company",
-                               platform_admin_email="test@example.com")
+                               platform_admin_email="test@example.com", tenant_owner_email="owner@example.com")
 
 
 def sqlite3_readwrite(path: Path):

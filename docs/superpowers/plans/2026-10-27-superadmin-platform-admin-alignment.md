@@ -31,7 +31,7 @@
 
 ## Current Alignment
 
-- **Authority separation:** PostgreSQL platform authority is held in `platform_admins`; tenant authority comes from the single organization membership stored in `organization_memberships`. Platform transactions clear tenant context, while tenant transactions require a resolved active company principal. Platform-admin status alone grants no tenant data access.
+- **Authority separation:** PostgreSQL platform authority is held in `platform_admins`; tenant authority comes from the single organization membership stored in `organization_memberships`. These identities are mutually exclusive and enforced by PostgreSQL. Platform transactions clear tenant context, while tenant transactions require a resolved active company principal. Platform admins have no tenant membership or tenant data access.
 - **Platform console:** `/api/platform` and the SaaS UI provide platform dashboard counts, organization search/detail/lifecycle controls, initial-owner invitations, platform-admin grant/revoke, narrowly scoped company-role changes, audit events, announcements, and the supported global session/security settings. The console does not expose tenant inventory or a general tenant-user directory.
 - **Tenant lifecycle and boundaries:** Organization suspension is reason-audited and blocks tenant access for existing and new sessions. Store stock authorization checks the principal’s organization against the store’s organization. Membership uniqueness enforces the documented one-company-per-user model.
 - **Audit and announcements:** Platform mutations and support access are audited through `platform_audit_events`. PostgreSQL announcements use `platform_announcements`; SQLite retains its legacy persistence path until cutover.

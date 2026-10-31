@@ -208,22 +208,26 @@ python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
   --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
-  --platform-admin-email admin@example.com
+  --platform-admin-email platform@example.com \
+  --tenant-owner-email owner@example.com
 
 # Reset the disposable target to its migrated, empty state, then commit:
 python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
   --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
-  --platform-admin-email admin@example.com \
+  --platform-admin-email platform@example.com \
+  --tenant-owner-email owner@example.com \
   --apply
 ```
 
 The importer rejects nonempty targets and unknown source roles, duplicate
-normalized email addresses, invalid references, unsupported schemas, and a
-platform-admin email that does not identify a legacy superadmin. It maps the
-selected account to first-company owner and platform admin; any other legacy
-superadmins become company admins. It preserves application record IDs where
+normalized email addresses, invalid references, unsupported schemas, a
+platform-admin email that does not identify a legacy superadmin, and a tenant
+owner email that does not identify a different legacy admin/superadmin. It maps
+the selected platform account to no tenant membership and the separate account
+to first-company owner; any other legacy superadmins become company admins. It
+preserves application record IDs where
 tables support them and advances PostgreSQL identity sequences after import.
 It does not copy session rows and clears the identity session and reset-token
 fields. Do not change these rules ad hoc during a cutover.

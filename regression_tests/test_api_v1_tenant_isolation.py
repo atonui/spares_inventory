@@ -31,7 +31,7 @@ def v1_postgres_api(postgres_schema, monkeypatch):
             "INSERT INTO users(email,name,password_hash) VALUES (%s,%s,'unused') RETURNING id",
             (f"{label.lower()}-{uuid4().hex}@example.test", label),
         ).fetchone()["id"]
-        if role is not None:
+        if role is not None and not platform_admin:
             connection.execute(
                 "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,%s)",
                 (organization_id, user_id, role),

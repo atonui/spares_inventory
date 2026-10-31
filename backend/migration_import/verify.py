@@ -12,7 +12,8 @@ TENANT_TABLES = (
 )
 
 
-def verify_import(source, target, organization_id, *, imported_counts, source_counts, revoked_sessions):
+def verify_import(source, target, organization_id, *, imported_counts, source_counts, revoked_sessions,
+                  platform_admin_user_id):
     """Return a sanitized reconciliation summary, raising on any mismatch."""
     target_counts = {}
     for table, expected in imported_counts.items():
@@ -92,10 +93,19 @@ def verify_import(source, target, organization_id, *, imported_counts, source_co
     missing_memberships = target.execute(
         """SELECT count(*) AS n FROM users u
              LEFT JOIN organization_memberships m ON m.user_id=u.id AND m.organization_id=%s
-             WHERE m.user_id IS NULL""", (organization_id,),
+             WHERE m.user_id IS NULL AND u.id <> %s""", (organization_id, platform_admin_user_id),
     ).fetchone()["n"]
     if missing_memberships:
         raise ValueError("Organization membership reconciliation failed")
+    if target.execute(
+        "SELECT 1 FROM organization_memberships WHERE user_id=%s", (platform_admin_user_id,)
+    ).fetchone():
+        raise ValueError("Platform administrator unexpectedly has a company membership")
+    if not target.execute(
+        "SELECT 1 FROM organization_memberships WHERE organization_id=%s AND company_role='owner' AND is_active",
+        (organization_id,),
+    ).fetchone():
+        raise ValueError("Imported organization has no active owner")
     if target.execute("SELECT count(*) AS n FROM sessions WHERE is_active").fetchone()["n"]:
         raise ValueError("Imported database contains active sessions")
     if target.execute("SELECT count(*) AS n FROM users WHERE reset_token IS NOT NULL OR session_token IS NOT NULL").fetchone()["n"]:

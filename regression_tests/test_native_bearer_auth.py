@@ -745,8 +745,11 @@ def test_admin_force_logout_revokes_native_refresh_credential(native_auth_api):
         "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'engineer')",
         (api.organization_id, target_id),
     )
+    platform_admin_id = api.connection.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('control-plane@example.test','Platform','stored-hash') RETURNING id"
+    ).fetchone()["id"]
     api.connection.execute(
-        "INSERT INTO platform_admins(user_id) VALUES (%s)", (api.user_id,),
+        "INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_admin_id,),
     )
     api.connection.commit()
 

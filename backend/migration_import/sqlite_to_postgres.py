@@ -212,7 +212,7 @@ def _advance_identity_sequences(target) -> None:
 
 def import_sqlite_snapshot(
     source_path: Path, target_dsn: str, *, organization_name: str,
-    platform_admin_email: str, dry_run: bool = True,
+    platform_admin_email: str, tenant_owner_email: str, dry_run: bool = True,
 ) -> ImportReport:
     """Import a validated SQLite snapshot; default mode always rolls back."""
     if not organization_name.strip():
@@ -220,6 +220,11 @@ def import_sqlite_snapshot(
     admin_email = platform_admin_email.strip().lower()
     if not admin_email or "@" not in admin_email:
         raise ValueError("Platform administrator email is invalid")
+    owner_email = tenant_owner_email.strip().lower()
+    if not owner_email or "@" not in owner_email:
+        raise ValueError("Tenant owner email is invalid")
+    if owner_email == admin_email:
+        raise ValueError("Platform administrator and tenant owner must be different accounts")
     slug = _slug(organization_name)
     original = _source_connection(Path(source_path))
     staging = None
@@ -245,6 +250,9 @@ def import_sqlite_snapshot(
         platform_user = next((row for row in users if str(row["email"]).strip().lower() == admin_email), None)
         if not platform_user or platform_user["role"] != "superadmin":
             raise ValueError("Platform administrator email must identify an existing legacy superadmin")
+        tenant_owner = next((row for row in users if str(row["email"]).strip().lower() == owner_email), None)
+        if not tenant_owner or tenant_owner["role"] not in {"superadmin", "admin"}:
+            raise ValueError("Tenant owner email must identify a different existing legacy admin or superadmin")
         normalized_emails = [str(row["email"]).strip().lower() for row in users]
         if len(set(normalized_emails)) != len(normalized_emails):
             raise ValueError("SQLite source contains duplicate normalized email addresses")
@@ -272,13 +280,14 @@ def import_sqlite_snapshot(
         with target.cursor() as cursor:
             cursor.executemany(
                 "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,%s)",
-                [(organization_id, row["id"], "owner" if row["id"] == platform_user["id"]
-                  else ("admin" if row["role"] == "superadmin" else row["role"]))
-                 for row in users],
+                [(organization_id, row["id"],
+                  "owner" if row["id"] == tenant_owner["id"]
+                  else ("admin" if row["role"] in {"superadmin", "admin"} else row["role"]))
+                 for row in users if row["id"] != platform_user["id"]],
             )
         target.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_user["id"],))
 
-        imported_counts = {"users": len(users), "memberships": len(users), "platform_admins": 1}
+        imported_counts = {"users": len(users), "memberships": len(users) - 1, "platform_admins": 1}
         for table, columns_for_table in TENANT_COLUMNS.items():
             rows = source_rows.get(table, [])
             if rows and table not in tables:
@@ -351,7 +360,8 @@ def import_sqlite_snapshot(
         revoked = source_counts.get("sessions", 0)
         summary = verify_import(source, target, organization_id,
                                 imported_counts=imported_counts,
-                                source_counts=source_counts, revoked_sessions=revoked)
+                                source_counts=source_counts, revoked_sessions=revoked,
+                                platform_admin_user_id=platform_user["id"])
         if dry_run:
             target.rollback()
         else:
@@ -385,6 +395,7 @@ def main(argv=None) -> int:
     command.add_argument("--target-dsn-env", default="DATABASE_URL")
     command.add_argument("--organization-name", required=True)
     command.add_argument("--platform-admin-email", required=True)
+    command.add_argument("--tenant-owner-email", required=True)
     command.add_argument("--apply", action="store_true", help="commit the import; default is rollback-only rehearsal")
     args = parser.parse_args(argv)
     import os
@@ -395,6 +406,7 @@ def main(argv=None) -> int:
         report = import_sqlite_snapshot(
             args.source, dsn, organization_name=args.organization_name,
             platform_admin_email=args.platform_admin_email, dry_run=not args.apply,
+            tenant_owner_email=args.tenant_owner_email,
         )
     except Exception as error:
         # Driver exception messages can contain SQL values or connection details.
