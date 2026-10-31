@@ -467,8 +467,9 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     connection, _ = postgres_schema
     apply_postgres_migrations(connection)
 
+    failing_version = registry.MIGRATIONS[-1].version + 1
     failing = registry.Migration(
-        version=16,
+        version=failing_version,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -483,7 +484,8 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 16"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = %s",
+        (failing_version,),
     ).fetchone()["count"] == 0
 
 
