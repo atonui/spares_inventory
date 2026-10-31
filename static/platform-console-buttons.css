@@ -1,0 +1,73 @@
+/* Platform-console actions follow the shared brand hierarchy and touch target. */
+body.platform-console :is(.content, .topbar, .confirm-overlay) :is(button:not(.nav-item), .btn, input[type="submit"], input[type="button"]) {
+  min-height: 44px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 80ms ease;
+}
+
+body.platform-console button.ui-icon-only {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) .btn-success {
+  border-color: var(--brand-amber);
+  background: var(--brand-amber);
+  color: #1d2b3d;
+  font-weight: 650;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) .btn-success:hover:not(:disabled) {
+  border-color: #d9932e;
+  background: #d9932e;
+  color: #15263b;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) .btn-outline {
+  border-color: #cbd4df;
+  background: #fff;
+  color: #40536a;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) .btn-outline:hover:not(:disabled) {
+  border-color: #aebbc8;
+  background: #f5f7fa;
+  color: #15263b;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) :is(.btn-red, .btn-danger) {
+  border-color: #d7a5a5;
+  background: #fff;
+  color: #8a2828;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) :is(.btn-red, .btn-danger):hover:not(:disabled) {
+  border-color: #c78383;
+  background: #fff7f7;
+  color: #7a2020;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) :is(button, .btn):active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) :is(button, .btn):disabled {
+  border-color: #d8e0e8;
+  background: #f1f4f7;
+  color: #718096;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+body.platform-console :is(.content, .topbar, .confirm-overlay) :is(button, .btn):focus-visible {
+  outline: 3px solid #547da9;
+  outline-offset: 3px;
+}
+
+body.platform-console :is(.confirm-actions, .organization-actions, .topbar-right) {
+  gap: .65rem;
+}
