@@ -60,5 +60,16 @@ test('malformed token responses cannot authorise a write',async()=>{
  }
 });
 test('token-service failure preserves an authenticated inventory session and read access',async()=>{
- const c=setup(async()=>response(503,{}));c.localStorage.getItem=()=>JSON.stringify({id:1});let removed=false;c.localStorage.removeItem=()=>{removed=true;};const a=c.inventoryApp();a.getCurrentUser=async()=>{a.currentUser={id:1};};let loaded=false;a.loadAllData=async()=>{loaded=true;};await a.checkAuth();assert.equal(a.isAuthenticated,true);assert.equal(removed,false);assert.equal(loaded,true);assert.match(a.error,/security token/i);
+ const c=setup(async()=>response(503,{}));c.localStorage.getItem=()=>JSON.stringify({id:1});let removed=false;c.localStorage.removeItem=()=>{removed=true;};const a=c.inventoryApp();a.getCurrentUser=async()=>({id:1,role:'owner',is_platform_admin:false});let loaded=false;a.loadAllData=async()=>{loaded=true;};await a.checkAuth();assert.equal(a.isAuthenticated,true);assert.equal(removed,false);assert.equal(loaded,true);assert.match(a.error,/security token/i);
+});
+
+test('platform-only inventory session redirects without fetching tenant data or a CSRF token',async()=>{
+ const c=setup(async()=>{throw Error('Tenant request must not run');});
+ const redirects=[];c.window.location.replace=url=>redirects.push(url);
+ const a=c.inventoryApp();a.getCurrentUser=async()=>({id:7,role:'platform_admin',is_platform_admin:true});
+ a.loadAllData=async()=>{throw Error('Tenant data must not load');};
+ await a.checkAuth();
+ assert.deepEqual(redirects,['/static/superadmin.html']);
+ assert.equal(a.isAuthenticated,false);
+ assert.equal(a.error,'');
 });

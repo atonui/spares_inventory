@@ -22,7 +22,7 @@ test('login shell excludes inventory controllers and dashboard CSS',()=>{
 });
 test('session cookie is checked on the server before redirecting',async()=>{
     const calls=[];
-    const {app,redirects}=setup(async(url,options)=>{calls.push({url,options});return {ok:true,status:200}});
+    const {app,redirects}=setup(async(url,options)=>{calls.push({url,options});return {ok:true,status:200,json:async()=>({id:1,role:'owner',is_platform_admin:false})}});
     await app.checkAuth();
     assert.deepEqual(redirects,['/static/index.html']);
     assert.equal(calls[0].options.credentials,'include');
@@ -38,7 +38,7 @@ test('anonymous and failed session checks remain distinct',async()=>{
 });
 test('sign-in preserves remember-me, uses shared CSRF and prevents duplicate submits',async()=>{
     let resolve;let calls=0;let payload;
-    const {app,redirects}=setup(null,async(owner,url,options)=>{
+    const {app,redirects}=setup(async()=>({ok:true,json:async()=>({id:1,role:'owner',is_platform_admin:false})}),async(owner,url,options)=>{
         calls++;assert.equal(url,'/api/auth/login');payload=JSON.parse(options.body);
         return new Promise(r=>resolve=r);
     });
@@ -70,3 +70,19 @@ test('announcement controls do not reference login component state',()=>{
     assert.doesNotMatch(announcement,/authState/);
     assert.ok(html.includes("class=\"login-submit\" :disabled=\"loading || authState !== 'anonymous'\""));
 });
+
+for (const action of ['checkAuth', 'login']) {
+    test(`tenantless platform admin ${action} redirects to the platform console`, async()=>{
+        const reads=[];
+        const {app,redirects}=setup(async(url,options)=>{
+            reads.push({url,options});
+            return {ok:true,json:async()=>({id:7,role:'platform_admin',is_platform_admin:true})};
+        },async()=>({ok:true}));
+        await app[action]();
+        assert.deepEqual(redirects,['/static/superadmin.html']);
+        assert.equal(reads.length,1);
+        assert.equal(reads[0].url,'/api/me');
+        assert.equal(reads[0].options.credentials,'include');
+        assert.equal(reads[0].options.cache,'no-store');
+    });
+}
