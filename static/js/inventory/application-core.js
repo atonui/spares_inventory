@@ -73,6 +73,10 @@ function inventoryCoreFeature() {
             try {
                 const user = await this.getCurrentUser();
                 if (inventoryAuthRequests.get(this) !== request) return;
+                if (user.is_platform_admin && user.role === 'platform_admin') {
+                    window.location.replace('/static/superadmin.html');
+                    return;
+                }
                 this.currentUser = user;
                 this.isAuthenticated = true;
                 this.authState = 'authenticated';

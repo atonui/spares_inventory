@@ -5,6 +5,13 @@ function loginPage() {
         error: '',
         csrfToken: '',
         loginForm: {email: '', password: '', remember_me: false},
+        async redirectAuthenticatedUser() {
+            const response = await fetch('/api/me', {credentials: 'include', cache: 'no-store'});
+            if (!response.ok) throw Error('Unable to check your session. Retry.');
+            const user = await response.json();
+            const isTenantlessPlatformAdmin = user.is_platform_admin && user.role === 'platform_admin';
+            window.location.replace(isTenantlessPlatformAdmin ? '/static/superadmin.html' : '/static/index.html');
+        },
         async checkAuth() {
             if (this.loading) return;
             this.authState = 'checking';
@@ -13,7 +20,9 @@ function loginPage() {
                 const response = await fetch('/api/me', {credentials: 'include', cache: 'no-store'});
                 if (response.status === 401) { this.authState = 'anonymous'; return; }
                 if (!response.ok) throw Error('Unable to check your session. Retry.');
-                window.location.replace('/static/index.html');
+                const user = await response.json();
+                const isTenantlessPlatformAdmin = user.is_platform_admin && user.role === 'platform_admin';
+                window.location.replace(isTenantlessPlatformAdmin ? '/static/superadmin.html' : '/static/index.html');
             } catch (error) {
                 this.authState = 'error';
                 this.error = error.message;
@@ -33,7 +42,7 @@ function loginPage() {
                     throw Error(response.status === 401 ? 'Invalid credentials' : 'Unable to sign in. Please retry.');
                 }
                 this.loginForm.password = '';
-                window.location.replace('/static/index.html');
+                await this.redirectAuthenticatedUser();
             } catch (error) {
                 this.error = error.message;
             } finally {
