@@ -78,6 +78,7 @@ function superPanel() {
     apiUrl: '/api',
     csrfToken: '',
     me: null,
+    ready: false,
 
     tabTitles: {
       dashboard: 'Dashboard',    accounts: 'Locked Accounts',
@@ -304,6 +305,7 @@ async submitPasswordReset() {
           setTimeout(() => location.href = '/static/index.html', 2000);
           return false;
         }
+        this.ready = true;
         return true;
       } catch { location.href = '/static/index.html'; return false; }
     },

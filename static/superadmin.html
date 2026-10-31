@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
-<link rel="stylesheet" href="superadmin.css?v=20261031-platform-console-v1">
+<link rel="stylesheet" href="superadmin.css?v=20261031-console-ready-v1">
 <link rel="stylesheet" href="platform-console.css?v=20261031-platform-console-v2">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261031-platform-console-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261031-console-ready-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -81,7 +81,9 @@
   <form class="confirm-box organization-create-box" @submit.prevent="provisionOrganization()"><h3 id="organization-create-title">Create organization</h3><p>Create a tenant workspace and queue an invitation for its first owner.</p><div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div><div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div><div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div><p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p><div class="confirm-actions"><button type="button" class="btn btn-outline" @click="organizationCreateOpen=false" :disabled="actionPending.provisionOrganization">Cancel</button><button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization" x-text="actionPending.provisionOrganization?'Creating…':'Create organization'"></button></div></form>
 </div>
 
-<div class="shell" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
+<div class="console-boot" x-show="!ready" role="status" aria-live="polite">Loading administration console…</div>
+
+<div class="shell" x-show="ready" x-cloak style="display: none;" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
 
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
