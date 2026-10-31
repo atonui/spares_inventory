@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 21979)
+Total output lines: 982
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
-<link rel="stylesheet" href="superadmin.css?v=20261031-platform-console-v1">
+<link rel="stylesheet" href="superadmin.css?v=20261031-console-ready-v1">
 <link rel="stylesheet" href="platform-console.css?v=20261031-platform-console-v2">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
@@ -14,7 +17,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261031-platform-console-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261031-console-ready-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -81,7 +84,9 @@
   <form class="confirm-box organization-create-box" @submit.prevent="provisionOrganization()"><h3 id="organization-create-title">Create organization</h3><p>Create a tenant workspace and queue an invitation for its first owner.</p><div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div><div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div><div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div><p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p><div class="confirm-actions"><button type="button" class="btn btn-outline" @click="organizationCreateOpen=false" :disabled="actionPending.provisionOrganization">Cancel</button><button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization" x-text="actionPending.provisionOrganization?'Creating…':'Create organization'"></button></div></form>
 </div>
 
-<div class="shell" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
+<div class="console-boot" x-show="!ready" role="status" aria-live="polite">Loading administration console…</div>
+
+<div class="shell" x-show="ready" x-cloak style="display: none;" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
 
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
@@ -348,89 +353,7 @@
             <div x-show="platformAdminError" class="action-error" role="alert"><span x-text="platformAdminError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformAdmins()" :disabled="platformAdminLoading">Retry</button></div>
             <div x-show="!platformAdminLoading && !platformAdminError && !platformAdmins.length" class="empty">No platform administrators found.</div>
             <div class="platform-admin-table-wrap" x-show="!platformAdminLoading && !platformAdminError && platformAdmins.length">
-              <table class="tbl platform-admins-table"><thead><tr><th>Name</th><th>Email</th><th>Access</th><th>Action</th></tr></thead>
-                <tbody><template x-for="admin in platformAdmins" :key="admin.id"><tr>
-                  <td data-label="Name" x-text="admin.name"></td>
-                  <td data-label="Email" x-text="admin.email"></td>
-                  <td data-label="Access"><span x-show="admin.id === me?.id" class="tag tag-blue">You</span><span x-show="admin.id !== me?.id" class="tag tag-green">Platform admin</span></td>
-                  <td data-label="Action"><button x-show="admin.id !== me?.id" class="btn btn-sm btn-outline btn-red" @click="requestPlatformAdminRevoke(admin)" :disabled="dialogBusy || actionPending[`platformAdminRevoke:${admin.id}`]" x-text="actionPending[`platformAdminRevoke:${admin.id}`] ? 'Revoking…' : 'Revoke access'"></button><span x-show="admin.id === me?.id">Cannot revoke your own access</span><p class="action-error" x-show="actionErrors[`platformAdminRevoke:${admin.id}`]" role="alert" x-text="actionErrors[`platformAdminRevoke:${admin.id}`]"></p></td>
-                </tr></template></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div x-show="tab==='platformAudit' && me?.saas_mode">
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Platform audit events</span><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset)" :disabled="platformAuditLoading">Refresh</button></div>
-          <div class="panel-body">
-            <p>Platform-level administrative changes across organizations. Timestamps use UTC.</p>
-            <form @submit.prevent="loadPlatformAudit(0)" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;align-items:end">
-              <div class="form-group"><label for="platform-audit-actor">Actor user ID</label><input id="platform-audit-actor" type="number" min="1" x-model="platformAuditFilters.actor_user_id"></div>
-              <div class="form-group"><label for="platform-audit-org">Organization ID</label><input id="platform-audit-org" x-model="platformAuditFilters.organization_id" maxlength="36"></div>
-              <div class="form-group"><label for="platform-audit-action">Action</label><input id="platform-audit-action" x-model="platformAuditFilters.action" maxlength="100"></div>
-              <div class="form-group"><label for="platform-audit-result">Result</label><input id="platform-audit-result" x-model="platformAuditFilters.result" maxlength="100"></div>
-              <div class="form-group"><label for="platform-audit-start">From (UTC ISO timestamp)</label><input id="platform-audit-start" placeholder="2026-10-01T00:00:00Z" x-model="platformAuditFilters.start_at" maxlength="40"></div>
-              <div class="form-group"><label for="platform-audit-end">Until (UTC ISO timestamp)</label><input id="platform-audit-end" placeholder="2026-11-01T00:00:00Z" x-model="platformAuditFilters.end_at" maxlength="40"></div>
-              <div style="display:flex;gap:.5rem"><button class="btn btn-success" type="submit" :disabled="platformAuditLoading">Apply filters</button><button class="btn btn-outline" type="button" @click="platformAuditFilters={actor_user_id:'',organization_id:'',action:'',result:'',start_at:'',end_at:''};loadPlatformAudit(0)" :disabled="platformAuditLoading">Clear</button></div>
-            </form>
-            <p x-show="platformAuditLoading" role="status">Loading platform audit events…</p>
-            <div x-show="platformAuditError" role="alert" class="action-error"><span x-text="platformAuditError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset)" :disabled="platformAuditLoading">Retry</button></div>
-            <div style="overflow:auto" x-show="!platformAuditLoading && !platformAuditError">
-              <table class="tbl audit-table"><thead><tr><th>Time (UTC)</th><th>Actor ID</th><th>Organization ID</th><th>Action</th><th>Result</th><th>Details</th></tr></thead>
-                <tbody><template x-for="event in platformAuditRows" :key="event.id"><tr><td x-text="event.created_at"></td><td x-text="event.actor_user_id ?? 'System'"></td><td x-text="event.organization_id || '—'"></td><td x-text="event.action"></td><td x-text="event.result"></td><td x-text="JSON.stringify(event.details || {})"></td></tr></template></tbody>
-              </table>
-              <p x-show="!platformAuditRows.length">No platform audit events match these filters.</p>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem" x-show="platformAuditTotal>0">
-              <span x-text="`${platformAuditOffset+1}–${Math.min(platformAuditOffset+platformAuditRows.length,platformAuditTotal)} of ${platformAuditTotal}`"></span>
-              <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(Math.max(0,platformAuditOffset-50))" :disabled="platformAuditLoading || platformAuditOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset+50)" :disabled="platformAuditLoading || platformAuditOffset+50>=platformAuditTotal">Next</button></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      <!-- ══════════ LOCKED ACCOUNTS ══════════ -->
-      <div x-show="tab==='accounts'">
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">
-              Locked Accounts
-              <span x-show="locked.length>0" class="tag tag-red" style="margin-left:6px;" x-text="locked.length"></span>
-            </span>
-            <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0 || actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock All</button>
-              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadLocked()" aria-label="Refresh locked accounts" title="Refresh locked accounts"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-            </div>
-          </div>
-
-          <div class="action-feedback">
-            <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
-            <p class="action-error" x-show="actionErrors.unlock" role="alert" x-text="actionErrors.unlock"></p>
-          </div>
-          <div x-show="locked.length===0 && !loading" class="empty"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#check"></use></svg> No accounts are currently locked</div>
-
-          <div x-show="locked.length>0" style="overflow-x:auto;">
-            <table class="tbl locked-accounts-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" aria-label="Select all locked user accounts" @change="toggleAll($event)" :disabled="actionPending.unlock" style="cursor:pointer;"></th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Failed Attempts</th>
-                  <th>Locked Until</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="u in locked" :key="u.id">
-                  <tr>
-                    <td data-label="Select"><input type="checkbox" :value="u.id" x-model="selectedLocked" :aria-label="'Select account for ' + u.name" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
-                    <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
-                    <td data-label="Email" style="font-size:0.8rem;color:var(--brand-slate);" x-text="u.email"></td>
+              <table class="tbl platform-admins-table"><thead><tr><th>Name</th><th>Email</th><th>Access</th><th>Action</th></t…1979 tokens truncated…nd-slate);" x-text="u.email"></td>
                     <td data-label="Role"><span class="tag tag-grey" x-text="u.role"></span></td>
                     <td data-label="Failed Attempts"><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
                     <td data-label="Locked Until" style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
