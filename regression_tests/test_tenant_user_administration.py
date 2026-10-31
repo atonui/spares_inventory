@@ -238,6 +238,9 @@ def test_member_removal_deletes_only_membership_and_revokes_sessions(tenant_user
            VALUES (%s, 'manager', 'existing-company-history', %s) RETURNING id""",
         (api.manager_id, api.org_a),
     ).fetchone()["id"]
+    # The endpoint opens another connection; publish history and release its
+    # foreign-key locks before it locks the organization and removes membership.
+    api.connection.commit()
     remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
     result = asyncio.run(remove(
         target_user_id=api.manager_id,
@@ -320,6 +323,8 @@ def test_admin_cannot_remove_another_admin(tenant_user_api):
         "UPDATE organization_memberships SET company_role='admin' WHERE organization_id=%s AND user_id=%s",
         (api.org_a, api.manager_id),
     )
+    # Authorization must observe the committed role on its own connection.
+    api.connection.commit()
     remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
     with pytest.raises(HTTPException) as error:
         asyncio.run(remove(
@@ -336,6 +341,8 @@ def test_member_removal_uses_current_actor_role_after_ownership_transfer(tenant_
         "UPDATE organization_memberships SET company_role='admin' WHERE organization_id=%s AND user_id=%s",
         (api.org_a, api.owner_id),
     )
+    # Keep the principal stale, but make the ownership transfer visible.
+    api.connection.commit()
     remove = api.endpoint("POST", "/api/users/{target_user_id}/remove")
     with pytest.raises(HTTPException) as error:
         asyncio.run(remove(

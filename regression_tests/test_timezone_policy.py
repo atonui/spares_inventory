@@ -66,7 +66,10 @@ def test_versioned_v3_upgrade_preserves_existing_expiry(tmp_path, monkeypatch):
             apply_migrations(c)
         c.execute("INSERT INTO users(id,email,name,password_hash,session_expires) VALUES(1,'test@example.com','Test','hash','2099-01-01T00:00:00.000000Z')")
         c.commit()
-        assert apply_migrations(c).applied==(1,2,3,4,5,6)
+        # Exercise the timezone upgrade itself. The later hashed-session
+        # migration intentionally invalidates legacy session credentials.
+        monkeypatch.setattr(registry, 'MIGRATIONS', registry.MIGRATIONS[:4])
+        assert apply_migrations(c).applied == (1, 2, 3, 4)
         assert c.execute('SELECT session_expires,display_timezone FROM users').fetchone()==('2099-01-01T00:00:00.000000Z',None)
         assert c.execute('SELECT business_timezone FROM organisation_settings').fetchone()[0]=='Africa/Nairobi'
 

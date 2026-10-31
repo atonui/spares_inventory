@@ -108,6 +108,11 @@ def assess_database(path: Path) -> dict:
                     continue
                 # Known schema has integer primary keys. Never expose tokens or text PKs.
                 key = next((r[1] for r in schema[field.table] if r[5] and r[2].upper() == 'INTEGER'), None)
+                # These rowid tables use secret request IDs as text primary
+                # keys. Report only their internal integer row identity.
+                if (key is None and field.table in {'mobile_pairing_requests', 'mobile_device_sessions'}
+                        and '_rowid_' not in {r[1].lower() for r in schema[field.table]}):
+                    key = '_rowid_'
                 if key is None:
                     raise AssessmentError('Temporal table lacks a safe integer row identity.')
                 sql = 'SELECT ' + _quote(key) + ',' + _quote(field.column) + ' FROM ' + _quote(field.table)
