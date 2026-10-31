@@ -2,7 +2,7 @@
 
 **Goal:** Complete the backend regression suite without test-created transaction lock hangs.
 
-**Scope:** Test fixtures and CI only; no production settings or application behavior changes.
+**Scope:** Test fixtures, CI, and read-only timestamp assessment metadata/diagnostics; no production settings or authentication behavior changes.
 
 - [x] Reproduce the existing member-removal test failure with PostgreSQL lock_timeout=5s and statement_timeout=60s in disposable CI.
 - [x] Commit setup mutations before invoking endpoints through independent connections; preserve membership, session and activity-history assertions.
