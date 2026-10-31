@@ -116,7 +116,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             )
 
     def set_mobile_pairing_token_scope(conn, setting, token_hash):
-        if setting not in {'app.mobile_pairing_qr_token_hash', 'app.mobile_pairing_claim_token_hash'}:
+        if setting not in {'app.mobile_pairing_qr_token_hash', 'app.mobile_pairing_code_hash', 'app.mobile_pairing_claim_token_hash'}:
             raise ValueError('Invalid mobile pairing scope')
         conn.execute(f"SELECT set_config('{setting}', %s, true)", (token_hash,))
 
@@ -1046,6 +1046,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         token = secrets.token_urlsafe(32)
         token_hash = hash_session_credential(token)
+        code_alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        raw_pairing_code = ''.join(secrets.choice(code_alphabet) for _ in range(10))
+        pairing_code = f'{raw_pairing_code[:5]}-{raw_pairing_code[5:]}'
+        pairing_code_hash = hash_session_credential(raw_pairing_code)
         request_id = secrets.token_urlsafe(18)
         created_at = utc_now()
         expires_at = created_at + timedelta(minutes=2)
@@ -1070,9 +1074,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             )
             conn.execute(
                 """INSERT INTO mobile_pairing_requests
-                   (request_id, user_id, qr_token_hash, status, created_at, expires_at)
-                   VALUES (%s, %s, %s, 'created', %s, %s)""",
-                (request_id, user_id, token_hash, serialize_instant(created_at), serialize_instant(expires_at)),
+                   (request_id, user_id, qr_token_hash, pairing_code_hash, status, created_at, expires_at)
+                   VALUES (%s, %s, %s, %s, 'created', %s, %s)""",
+                (request_id, user_id, token_hash, pairing_code_hash,
+                 serialize_instant(created_at), serialize_instant(expires_at)),
             )
         return JSONResponse(
             status_code=201,
@@ -1080,6 +1085,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 "request_id": request_id,
                 "qr_data": qr_data,
                 "qr_svg": qr_svg,
+                "pairing_code": pairing_code,
                 "expires_at": serialize_instant(expires_at),
             },
             headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Referrer-Policy": "no-referrer"},
@@ -1216,16 +1222,26 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         from urllib.parse import parse_qs, urlsplit
         from backend.database_sql import is_postgres
         from backend.postgres_database import postgres_transaction
-        try:
-            parsed = urlsplit(payload.qr_data)
-            values = parse_qs(parsed.query, strict_parsing=True)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="This QR code is invalid or has expired") from None
-        token_values = values.get("token", [])
-        if (parsed.scheme != "sparesflow" or parsed.netloc != "pair" or parsed.path or parsed.fragment
-                or set(values) != {"token"} or len(token_values) != 1 or not token_values[0]):
-            raise HTTPException(status_code=400, detail="This QR code is invalid or has expired")
-        qr_hash = hash_session_credential(token_values[0])
+
+        if payload.pairing_code is not None:
+            challenge_hash = hash_session_credential(payload.pairing_code)
+            challenge_column = "pairing_code_hash"
+            challenge_scope = "app.mobile_pairing_code_hash"
+            invalid_detail = "This pairing code is invalid or has expired"
+        else:
+            try:
+                parsed = urlsplit(payload.qr_data or "")
+                values = parse_qs(parsed.query, strict_parsing=True)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="This QR code is invalid or has expired") from None
+            token_values = values.get("token", [])
+            if (parsed.scheme != "sparesflow" or parsed.netloc != "pair" or parsed.path or parsed.fragment
+                    or set(values) != {"token"} or len(token_values) != 1 or not token_values[0]):
+                raise HTTPException(status_code=400, detail="This QR code is invalid or has expired")
+            challenge_hash = hash_session_credential(token_values[0])
+            challenge_column = "qr_token_hash"
+            challenge_scope = "app.mobile_pairing_qr_token_hash"
+            invalid_detail = "This QR code is invalid or has expired"
         claim_token = secrets.token_urlsafe(32)
         claim_hash = hash_session_credential(claim_token)
         now = utc_now()
@@ -1237,15 +1253,15 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             with postgres_transaction(conn):
                 conn.execute("SELECT set_config('app.organization_id', '', true)")
                 conn.execute("SELECT set_config('app.email_change_user_id', '', true)")
-                set_mobile_pairing_token_scope(conn, 'app.mobile_pairing_qr_token_hash', qr_hash)
+                set_mobile_pairing_token_scope(conn, challenge_scope, challenge_hash)
                 row = conn.execute(
-                    """SELECT request_id, status, expires_at FROM mobile_pairing_requests
-                       WHERE qr_token_hash = %s FOR UPDATE""",
-                    (qr_hash,),
+                    f"""SELECT request_id, status, expires_at FROM mobile_pairing_requests
+                       WHERE {challenge_column} = %s FOR UPDATE""",
+                    (challenge_hash,),
                 ).fetchone()
                 if (row is None or row["status"] != "created"
                         or now >= stored_instant(row["expires_at"], "expires_at")):
-                    raise HTTPException(status_code=410, detail="This QR code is invalid or has expired")
+                    raise HTTPException(status_code=410, detail=invalid_detail)
                 conn.execute(
                     """UPDATE mobile_pairing_requests
                        SET status = 'pending', device_name = %s, claimed_at = %s, claim_token_hash = %s

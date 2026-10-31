@@ -10,7 +10,7 @@ function setup(fetch, mobile=false) {
 
 test('mobile website does not generate a pairing QR code',async()=>{
  const calls=[];
- const p=setup(async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',expires_at:'2026-10-21T12:02:00Z'})};},true);
+ const p=setup(async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',pairing_code:'ABCDE-23456',expires_at:'2026-10-21T12:02:00Z'})};},true);
  p.profile.saas_mode=true;p.csrfToken='csrf';
  assert.equal(p.isMobileViewport(),true);
  await p.createMobilePairing();
@@ -22,7 +22,7 @@ test('desktop profile creates a no-store QR pairing request and polls device sta
  const calls=[];
  const p=setup(async(url,options={})=>{
   calls.push({url,options});
-  if(url==='/api/profile/mobile-pairings') return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',expires_at:'2026-10-21T12:02:00Z'})};
+  if(url==='/api/profile/mobile-pairings') return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',pairing_code:'ABCDE-23456',expires_at:'2026-10-21T12:02:00Z'})};
   return {ok:true,json:async()=>({status:'pending',device_name:'Android phone',expires_at:'2026-10-21T12:02:00Z'})};
  });
  p.profile.saas_mode=true;p.csrfToken='csrf';
@@ -32,6 +32,7 @@ test('desktop profile creates a no-store QR pairing request and polls device sta
  assert.equal(calls[0].options.cache,'no-store');
  assert.equal(calls[0].options.headers.get('X-CSRF-Token'),'csrf');
  assert.match(p.mobilePairing.qrDataUrl,/data:image\/svg\+xml/);
+ assert.equal(p.mobilePairing.pairingCode,'ABCDE-23456');
  assert.equal(p.mobilePairing.status,'pending');
  assert.equal(p.mobilePairing.deviceName,'Android phone');
 });
@@ -104,4 +105,10 @@ test('revoking a paired device refreshes and retries once when the CSRF token is
  assert.equal(calls[2].csrf,'fresh-csrf');
  assert.equal(p.mobileDevices.length,0);
  assert.equal(p.mobileDevicesSuccess,'Device access revoked.');
+});
+
+test('desktop profile displays a manual code when QR scanning is unavailable',()=>{
+ const html=require('node:fs').readFileSync('static/profile.html','utf8');
+ assert.match(html,/Can’t scan\? Enter this code in the mobile app/);
+ assert.match(html,/mobilePairing\?\.pairingCode/);
 });

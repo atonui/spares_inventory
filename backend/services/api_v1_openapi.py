@@ -222,10 +222,10 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                     })
             if path == "/api/v1/auth/mobile-pairing/claim" and method.lower() == "post":
                 operation["description"] = (
-                    "Exchange the short-lived QR capability for a separate claim token. The QR capability "
-                    "does not authenticate the device; a signed-in desktop account must approve the "
-                    "pending request before credentials can be exchanged. QR capabilities expire after "
-                    "two minutes and can be claimed once. Do not log request bodies or cache responses."
+                    "Exchange a short-lived QR capability or manually entered pairing code for a separate claim token. "
+                    "Neither credential authenticates the device; a signed-in desktop account must approve "
+                    "the pending request before credentials can be exchanged. Both expire after two minutes "
+                    "and can be used once. Do not log request bodies or cache responses."
                 )
             if path == "/api/v1/auth/mobile-pairing/complete" and method.lower() == "post":
                 operation["description"] = (

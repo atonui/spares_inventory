@@ -660,3 +660,14 @@ def test_store_activity_email_migration_allows_only_supported_notice_types():
         "transfer_completed_notice",
     ):
         assert f"'{message_type}'" in statements
+
+
+def test_manual_mobile_pairing_code_migration_adds_hashed_code_scope():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 18)
+    statements = "\n".join(migration.statements)
+    assert migration.name == "mobile_pairing_manual_code"
+    assert "pairing_code_hash TEXT UNIQUE" in statements
+    assert "DROP POLICY mobile_pairing_token_scope" in statements
+    assert "app.mobile_pairing_code_hash" in statements

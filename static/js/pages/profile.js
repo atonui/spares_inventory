@@ -126,9 +126,9 @@ function profileManager() {
                 const response=await InventoryCsrf.request(this,'/api/profile/mobile-pairings',{method:'POST',cache:'no-store'});
                 const data=await response.json();this.handleSecurityRejection(response,data);
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'A mobile pairing code could not be generated.');
-                if (typeof data.request_id!=='string' || typeof data.qr_svg!=='string' || typeof data.expires_at!=='string') throw Error('The server returned an invalid pairing code.');
-                this.mobilePairing={requestId:data.request_id,qrDataUrl:`data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.qr_svg)}`,expiresAt:data.expires_at,status:'created',deviceName:''};
-                this.mobilePairingMessage='Waiting for a phone to scan this code.';
+                if (typeof data.request_id!=='string' || typeof data.qr_svg!=='string' || typeof data.pairing_code!=='string' || typeof data.expires_at!=='string') throw Error('The server returned an invalid pairing code.');
+                this.mobilePairing={requestId:data.request_id,qrDataUrl:`data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.qr_svg)}`,pairingCode:data.pairing_code,expiresAt:data.expires_at,status:'created',deviceName:''};
+                this.mobilePairingMessage='Waiting for a phone to scan or enter this code.';
                 this.pollMobilePairing();
             } catch (error) {this.mobilePairingError=error.message;}
             finally {this.mobilePairingBusy=false;}
@@ -142,7 +142,7 @@ function profileManager() {
                 if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Pairing status could not be checked.');
                 if (this.mobilePairing?.requestId!==pairing.requestId) return;
                 pairing.status=data.status;pairing.deviceName=data.device_name || '';
-                if (data.status==='created') this.mobilePairingMessage='Waiting for a phone to scan this code.';
+                if (data.status==='created') this.mobilePairingMessage='Waiting for a phone to scan or enter this code.';
                 else if (data.status==='pending') this.mobilePairingMessage='Review the device name, then approve the request if you recognize it.';
                 else if (data.status==='approved') this.mobilePairingMessage='Approved. Finish signing in on the phone.';
                 else if (data.status==='consumed') {this.mobilePairingSuccess='Mobile app connected successfully.';this.mobilePairingMessage='This one-time code has been used.';this.mobilePairing=null;return;}
