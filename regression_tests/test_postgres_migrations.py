@@ -73,7 +73,7 @@ def test_mobile_session_policy_migration_adds_checked_org_duration_and_platform_
     assert migration.name == "mobile_session_policy"
     assert "mobile_session_duration_hours INTEGER NOT NULL DEFAULT 720" in sql
     assert "BETWEEN 1 AND 720" in sql
-    assert "mobile_session_max_duration_hours" in sql
+    assert "INSERT INTO system_settings" not in sql
     assert "ALTER TABLE sessions ADD COLUMN is_mobile BOOLEAN NOT NULL DEFAULT FALSE" in sql
     assert "uq_sessions_one_active_mobile_per_user" in sql
 
