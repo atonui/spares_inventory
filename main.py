@@ -328,6 +328,10 @@ async def lifespan(app):
 app, limiter = create_inventory_app(
     lifespan=lifespan,
     cors_allowed_origins=settings.CORS_ALLOWED_ORIGINS,
+    cors_allowed_origin_regex=(
+        r"^https://sparesinventorymobile-[a-z0-9]+-allans-projects-d339eeba\.vercel\.app$"
+        if settings.ALLOW_MOBILE_VERCEL_PREVIEWS else None
+    ),
     trusted_hosts=[host.strip() for host in settings.TRUSTED_HOSTS.split(",") if host.strip()],
 )
 
