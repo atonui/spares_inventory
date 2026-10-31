@@ -10,6 +10,12 @@ function usersAdminFeature() {
 
         showUserModal: false,
         editingUser: null,
+        emailChangeDraft: '',
+        pendingEmailChange: null,
+        emailChangeBusy: false,
+        emailChangeLoading: false,
+        emailChangeError: '',
+        emailChangeMessage: '',
         invitations: [],
         invitationsLoading: false,
 
@@ -101,6 +107,10 @@ function usersAdminFeature() {
 
         editUser(user) {
             this.editingUser = user.id;
+            this.emailChangeDraft = '';
+            this.pendingEmailChange = null;
+            this.emailChangeError = '';
+            this.emailChangeMessage = '';
             this.userForm = {
                 email: user.email,
                 name: user.name,
@@ -109,6 +119,70 @@ function usersAdminFeature() {
                 territory: user.territory || ''
             };
             this.showUserModal = true;
+            if (this.currentUser?.saas_mode && this.canManageEditedEmail) this.loadMemberEmailChange();
+        },
+
+        get editedEmailTarget() {
+            return this.users.find(user => Number(user.id) === Number(this.editingUser)) || null;
+        },
+
+        get canManageEditedEmail() {
+            const target = this.editedEmailTarget;
+            return Boolean(this.currentUser?.saas_mode && target && target.id !== this.currentUser.id
+                && target.role !== 'owner' && (target.role !== 'admin' || this.currentUser.role === 'owner'));
+        },
+
+        get editedEmailIsOwner() {
+            return Boolean(this.editedEmailTarget?.role === 'owner');
+        },
+
+        async loadMemberEmailChange() {
+            if (!this.canManageEditedEmail || this.emailChangeLoading) return;
+            this.emailChangeLoading = true;
+            this.emailChangeError = '';
+            try {
+                const result = await this.apiCall(`/users/${this.editingUser}/email-change-request`);
+                this.pendingEmailChange = result.status === 'pending' ? result : null;
+            } catch (error) {
+                this.emailChangeError = 'Failed to load pending email change: ' + error.message;
+            } finally {
+                this.emailChangeLoading = false;
+            }
+        },
+
+        async requestMemberEmailChange() {
+            if (!this.canManageEditedEmail || this.emailChangeBusy || !this.emailChangeDraft.trim()) return;
+            this.emailChangeBusy = true;
+            this.emailChangeError = '';
+            this.emailChangeMessage = '';
+            try {
+                const result = await this.apiCall(`/users/${this.editingUser}/email-change-requests`, {
+                    method: 'POST', body: JSON.stringify({email: this.emailChangeDraft.trim()})
+                });
+                this.emailChangeDraft = '';
+                this.emailChangeMessage = result.message || 'If the address can be used, a confirmation email has been sent.';
+                await this.loadMemberEmailChange();
+            } catch (error) {
+                this.emailChangeError = 'Failed to request email change: ' + error.message;
+            } finally {
+                this.emailChangeBusy = false;
+            }
+        },
+
+        async cancelMemberEmailChange() {
+            if (!this.canManageEditedEmail || !this.pendingEmailChange || this.emailChangeBusy) return;
+            this.emailChangeBusy = true;
+            this.emailChangeError = '';
+            this.emailChangeMessage = '';
+            try {
+                const result = await this.apiCall(`/users/${this.editingUser}/email-change-request`, {method: 'DELETE'});
+                this.pendingEmailChange = null;
+                this.emailChangeMessage = result.message || 'Pending email change canceled.';
+            } catch (error) {
+                this.emailChangeError = 'Failed to cancel email change: ' + error.message;
+            } finally {
+                this.emailChangeBusy = false;
+            }
         },
 
         async updateUser() {

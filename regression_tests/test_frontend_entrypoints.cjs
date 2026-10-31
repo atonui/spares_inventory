@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const {pageScripts, loadPageScripts} = require('./helpers/frontend.cjs');
 const root = path.resolve(__dirname, '..');
 const expected = {
-    'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/shared/back-to-top.js','js/inventory/application-core.js','js/inventory/dialog-focus.js','js/inventory/reports.js','js/inventory/replenishment.js','js/inventory/stock-counts.js','js/inventory/stock-imports.js','js/inventory/transfer-receipts.js','js/inventory/stock-dispatch.js','js/inventory/stock-entry.js','js/inventory/stock-consumption.js','js/inventory/parts-admin.js','js/inventory/stores-admin.js','js/inventory/users-admin.js','js/inventory/store-types-admin.js','js/inventory/equipment.js','js/inventory/activity-logs.js','js/inventory/movement-history.js','js/inventory/exports.js','js/inventory/browsing.js','js/inventory/archived-records.js','js/inventory/navigation.js','js/pages/inventory-v21.js','js/shared/password-visibility.js',],
+    'index.html': ['temporal.js','audit.js','js/shared/csrf.js','js/shared/time-context.js','js/shared/features.js','js/shared/back-to-top.js','js/inventory/application-core.js','js/inventory/dialog-focus.js','js/inventory/reports.js','js/inventory/replenishment.js','js/inventory/stock-counts.js','js/inventory/stock-imports.js','js/inventory/transfer-receipts.js','js/inventory/stock-dispatch.js','js/inventory/stock-entry.js','js/inventory/stock-consumption.js','js/inventory/parts-admin.js','js/inventory/stores-admin.js','js/inventory/users-admin.js','js/inventory/store-types-admin.js','js/inventory/equipment.js','js/inventory/activity-logs.js','js/inventory/movement-history.js','js/inventory/exports.js','js/inventory/browsing.js','js/inventory/archived-records.js','js/inventory/navigation.js','js/inventory/notification-links.js','js/pages/inventory-v21.js','js/shared/password-visibility.js',],
     'profile.html': ['temporal.js','js/shared/csrf.js','js/shared/time-context.js','js/pages/profile.js','js/shared/password-visibility.js',],
     'forgot_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js'],
     'reset_password.html': ['js/shared/csrf.js','js/pages/password-recovery.js','js/shared/password-visibility.js',],
@@ -25,7 +25,7 @@ for (const [page,files] of Object.entries(expected)) {
     files.push('js/shared/announcements.js');
     test(`${page}: shipped scripts precede Alpine with one controller`,()=>{
         const scripts=pageScripts(page);
-        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/shared/password-visibility.js' ? '20261029-password-visibility' : f==='js/shared/back-to-top.js' ? '20261029-back-to-top-frame' : f==='js/inventory/dialog-focus.js' ? '20261016-dialog-focus' : f==='js/inventory/application-core.js' ? '20261021-toolbar-picker-feedback' : f==='js/inventory/users-admin.js' ? '20261017-company-member-removal' : f==='js/inventory/archived-records.js' ? '20261025-frontend-22' : f==='js/pages/profile.js' ? '20261029-csrf-refresh' : f==='js/pages/superadmin.js' ? '20261029-platform-support-v1' : f==='js/shared/announcement-time.js' || f==='js/shared/announcements.js' || (page==='profile.html' && f==='js/shared/csrf.js') ? '20261014-announcement-controls' : f==='js/shared/announcements.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
+        assert.deepEqual(scripts.filter(s=>s.localPath).map(s=>s.src),files.map(f=>f+'?v='+ (f==='js/shared/password-visibility.js' ? '20261029-password-visibility' : f==='js/shared/back-to-top.js' ? '20261029-back-to-top-frame' : f==='js/inventory/dialog-focus.js' ? '20261016-dialog-focus' : f==='js/inventory/application-core.js' || f==='js/inventory/notification-links.js' || (page==='index.html' && f==='js/pages/inventory-v21.js') ? '20261030-store-email-notifications' : f==='js/inventory/users-admin.js' ? '20261030-admin-managed-email' : f==='js/inventory/archived-records.js' ? '20261025-frontend-22' : f==='js/pages/profile.js' ? '20261030-admin-managed-email' : f==='js/pages/superadmin.js' ? '20261029-platform-support-v1' : f==='js/shared/announcement-time.js' || f==='js/shared/announcements.js' || (page==='profile.html' && f==='js/shared/csrf.js') ? '20261014-announcement-controls' : f==='js/shared/announcements.js' ? '20261014-broadcasts' : page==='index.html' ? '20261014-frontend-21' : '20261013-frontend-1')));
         assert.equal(scripts.length,files.length+1);
         assert.equal(scripts.at(-1).src,'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.min.js');
         assert.ok(scripts.every(s=>s.defer));
@@ -48,7 +48,7 @@ test('inventory and profile retain lazy getters and method receivers',()=>{
         const current=loadPageScripts(page,context())[factory]();
         const getter=factory==='inventoryApp'?'replenishmentRows':'displayTimezoneDirty';
         assert.equal(typeof Object.getOwnPropertyDescriptor(current,getter).get,'function');
-        if(factory==='inventoryApp') assert.equal(Object.keys(current).length,277);
+        if(factory==='inventoryApp') assert.equal(Object.keys(current).length,291);
         if(factory==='inventoryApp') {
             current.replenishmentPlan={rows:[{store_id:1},{store_id:2}]};current.replenishmentStoreFilter='2';
             assert.equal(current.replenishmentRows.length,1);assert.equal(current.replenishmentRows[0].store_id,2);
@@ -65,7 +65,7 @@ test('email-change confirmation is a standalone local script page',()=>{
     const html=fs.readFileSync(path.join(root,'static','email_change_confirmation.html'),'utf8');
     assert.equal(html.startsWith('<!doctype html>'),true);
     const scripts=pageScripts('email_change_confirmation.html');
-    assert.deepEqual(scripts.map(script=>script.src),['js/pages/email-change-confirmation.js?v=20261017-email-change']);
+    assert.deepEqual(scripts.map(script=>script.src),['js/pages/email-change-confirmation.js?v=20261030-admin-managed-email']);
     assert.ok(scripts.every(script=>script.defer));
 });
 test('controllers create independent state for each instance',()=>{

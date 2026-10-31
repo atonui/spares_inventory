@@ -9,12 +9,15 @@ from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.services.authorization import require_company_admin
 from backend.database_sql import execute, is_postgres
+from backend.schemas.email_change import EmailChangeRequest, EmailChangeStatus, EmailChangeRequestResponse, EmailChangeCancelResponse
+from fastapi.responses import JSONResponse
 
 
 def create_users_router(*, get_connection, authenticated_writer, current_user,
                         csrf_dependency, user_management_guard, archive_admin_guard,
                         archive_service, password_hash, endpoint_log,
-                        mutation_activity) -> APIRouter:
+                        mutation_activity, mail_payload_encryption_key=None,
+                        frontend_url="", limiter=None) -> APIRouter:
     """Register existing flows without owning database or audit infrastructure."""
     router = APIRouter()
     get_db_connection = get_connection
@@ -27,6 +30,86 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     hash_password = password_hash
     log_endpoint = endpoint_log
     _record_mutation_activity = mutation_activity
+    limiter = limiter or type("NoLimiter", (), {"limit": lambda self, _rule: lambda function: function})()
+
+    def email_change_scope(conn, actor, target_user_id):
+        principal = require_company_admin(actor, conn)
+        target = execute(
+            conn,
+            """SELECT om.company_role, om.is_active, u.archived_at
+               FROM organization_memberships AS om JOIN users AS u ON u.id=om.user_id
+               WHERE om.organization_id=? AND om.user_id=? FOR UPDATE OF om,u""",
+            (principal.organization_id, target_user_id),
+        ).fetchone()
+        if target is None or target["archived_at"] is not None:
+            raise HTTPException(status_code=404, detail="Company member not found")
+        if target["company_role"] == "owner":
+            raise HTTPException(status_code=403, detail="Contact Spares Tracker support to change the company owner email")
+        if principal.user_id == target_user_id:
+            raise HTTPException(status_code=403, detail="Ask another company administrator to change your email address")
+        if target["company_role"] == "admin" and principal.company_role != "owner":
+            raise HTTPException(status_code=403, detail="Only the owner can change an administrator email")
+        if not target["is_active"]:
+            raise HTTPException(status_code=409, detail="Company member is inactive")
+        return principal
+
+    @router.post("/api/users/{target_user_id}/email-change-requests", status_code=202,
+                 response_model=EmailChangeRequestResponse)
+    @limiter.limit("3/hour")
+    async def request_member_email_change(target_user_id: int, data: EmailChangeRequest,
+                                          request: Request, user_id: int = Depends(get_current_user),
+                                          csrf_valid: bool = Depends(verify_csrf)):
+        from backend.services.email_change import EmailChangeFailure, request_email_change
+        try:
+            with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+                if not is_postgres(conn):
+                    raise HTTPException(status_code=404, detail="Company email changes are available in SaaS mode")
+                principal = email_change_scope(conn, user_id, target_user_id)
+                execute(conn, "SELECT set_config('app.email_change_user_id', ?, true)", (str(target_user_id),))
+                request_email_change(conn, user_id=target_user_id, proposed_email=str(data.email),
+                                     frontend_url=frontend_url, encryption_key=mail_payload_encryption_key)
+                _record_mutation_activity(conn, principal, "request_member_email_change", "user", {"id": target_user_id}, request)
+        except EmailChangeFailure as exc:
+            messages = {
+                "same_email": (422, "The new email must differ from the current email."),
+                "email_change_unavailable": (409, "That email address is unavailable."),
+                "account_unavailable": (404, "The account is unavailable."),
+            }
+            status, detail = messages.get(exc.code, (400, "The email change could not be completed."))
+            raise HTTPException(status_code=status, detail=detail) from None
+        except ValueError:
+            raise HTTPException(status_code=503, detail="Email change is unavailable") from None
+        return JSONResponse(status_code=202, content={"success": True,
+            "message": "If the address can be used, a confirmation email has been sent."},
+            headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/users/{target_user_id}/email-change-request", response_model=EmailChangeStatus)
+    async def get_member_email_change(target_user_id: int, request: Request,
+                                     user_id: int = Depends(get_current_user)):
+        from backend.services.email_change import get_pending_email_change
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+            if not is_postgres(conn):
+                raise HTTPException(status_code=404, detail="Company email changes are available in SaaS mode")
+            email_change_scope(conn, user_id, target_user_id)
+            execute(conn, "SELECT set_config('app.email_change_user_id', ?, true)", (str(target_user_id),))
+            result = get_pending_email_change(conn, user_id=target_user_id)
+        return JSONResponse(content=result or {"status": "none"}, headers={"Cache-Control": "no-store"})
+
+    @router.delete("/api/users/{target_user_id}/email-change-request", response_model=EmailChangeCancelResponse)
+    @limiter.limit("10/hour")
+    async def cancel_member_email_change(target_user_id: int, request: Request,
+                                        user_id: int = Depends(get_current_user),
+                                        csrf_valid: bool = Depends(verify_csrf)):
+        from backend.services.email_change import cancel_email_change
+        with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
+            if not is_postgres(conn):
+                raise HTTPException(status_code=404, detail="Company email changes are available in SaaS mode")
+            principal = email_change_scope(conn, user_id, target_user_id)
+            execute(conn, "SELECT set_config('app.email_change_user_id', ?, true)", (str(target_user_id),))
+            cancel_email_change(conn, user_id=target_user_id)
+            _record_mutation_activity(conn, principal, "cancel_member_email_change", "user", {"id": target_user_id}, request)
+        return JSONResponse(content={"success": True, "message": "Pending email change canceled."},
+                            headers={"Cache-Control": "no-store"})
 
     @router.post('/api/users/{target_user_id}/restore')
     async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
