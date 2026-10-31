@@ -29,7 +29,7 @@ def test_company_roles_and_platform_status_remain_independent(postgres_schema):
         "INSERT INTO organizations(name,slug) VALUES ('B','matrix-b') RETURNING id"
     ).fetchone()["id"]
     people = (
-        (1, "owner@example.com", org_a, "owner", True),
+        (1, "owner@example.com", org_a, "owner", False),
         (2, "admin@example.com", org_a, "admin", False),
         (3, "manager@example.com", org_a, "manager", False),
         (4, "engineer@example.com", org_a, "engineer", False),

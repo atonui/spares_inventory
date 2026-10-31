@@ -224,7 +224,7 @@
 - Modify: `docs/environment.md`
 
 **Interfaces:**
-- Produces `import_sqlite_snapshot(source_path: Path, target_dsn: str, *, organization_name: str, platform_admin_email: str, dry_run: bool = True) -> ImportReport`.
+- Produces `import_sqlite_snapshot(source_path: Path, target_dsn: str, *, organization_name: str, platform_admin_email: str, tenant_owner_email: str, dry_run: bool = True) -> ImportReport`.
 - CLI: `python -m backend.migration_import import-sqlite --source PATH --target-dsn-env DATABASE_URL --organization-name NAME --platform-admin-email EMAIL --tenant-owner-email EMAIL [--apply]`.
 - The SQLite source opens read-only; omitted `--apply` means rollback-only rehearsal. The target database must be empty except for the PostgreSQL migration ledger and bootstrap records.
 

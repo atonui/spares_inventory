@@ -4,14 +4,26 @@ VERSION = 20
 NAME = "platform_tenant_identity_separation"
 
 SQL = (
-    # Protect active organizations before removing any dual-role memberships.
+    "LOCK TABLE organization_memberships IN SHARE ROW EXCLUSIVE MODE",
+    "LOCK TABLE platform_admins IN SHARE ROW EXCLUSIVE MODE",
+    # Preserve an active owner before removing any dual-role memberships.
     """DO $$
        BEGIN
            IF EXISTS (
                SELECT 1 FROM organization_memberships AS om
                JOIN platform_admins AS pa ON pa.user_id = om.user_id
-               JOIN organizations AS o ON o.id = om.organization_id
-               WHERE om.is_active AND om.company_role = 'owner' AND o.is_active
+               WHERE om.is_active AND om.company_role = 'owner'
+                 AND NOT EXISTS (
+                     SELECT 1 FROM organization_memberships AS other_owner
+                     WHERE other_owner.organization_id = om.organization_id
+                       AND other_owner.is_active = TRUE
+                       AND other_owner.company_role = 'owner'
+                       AND other_owner.user_id <> om.user_id
+                       AND NOT EXISTS (
+                           SELECT 1 FROM platform_admins AS other_platform_admin
+                           WHERE other_platform_admin.user_id = other_owner.user_id
+                       )
+                 )
            ) THEN
                RAISE EXCEPTION 'Platform-admin membership separation requires promoting another active tenant owner first';
            END IF;
@@ -23,6 +35,7 @@ SQL = (
     """CREATE FUNCTION enforce_platform_tenant_identity_separation()
        RETURNS TRIGGER LANGUAGE plpgsql AS $$
        BEGIN
+           PERFORM pg_advisory_xact_lock(NEW.user_id);
            IF TG_TABLE_NAME = 'organization_memberships' THEN
                IF EXISTS (SELECT 1 FROM platform_admins WHERE user_id = NEW.user_id) THEN
                    RAISE EXCEPTION 'Platform administrators cannot have tenant memberships'

@@ -136,6 +136,47 @@ def test_existing_identity_must_prove_password(invitation_db):
     ).fetchone() is None
 
 
+def test_platform_admin_identity_cannot_be_invited_to_a_tenant(invitation_db):
+    conn, org_id, actor_id, key = invitation_db
+    platform_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('platform-invite@example.test','Platform','hash') RETURNING id"
+    ).fetchone()["id"]
+    conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_id,))
+
+    with pytest.raises(HTTPException) as error:
+        _create(conn, org_id, actor_id, key, email="platform-invite@example.test")
+
+    assert error.value.status_code == 409
+    assert "platform administrator" in error.value.detail.lower()
+
+
+def test_pending_invitation_cannot_create_membership_for_platform_admin(invitation_db):
+    from backend.services.invitations import accept_invitation
+    from backend.services.tenant_context import set_tenant_context
+
+    conn, org_id, actor_id, key = invitation_db
+    _create(conn, org_id, actor_id, key, email="late-platform@example.test")
+    token = _token_from_outbox(conn, key)
+    platform_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('late-platform@example.test','Platform','hash:password') RETURNING id"
+    ).fetchone()["id"]
+    conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_id,))
+
+    with pytest.raises(HTTPException) as error:
+        with conn.transaction():
+            set_tenant_context(conn, org_id)
+            accept_invitation(
+                conn, organization_id=org_id, token=token, name="Platform", password="password",
+                password_hash=lambda value: "hash:" + value,
+                password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+            )
+
+    assert error.value.detail == "Invitation is invalid or expired"
+    assert conn.execute(
+        "SELECT 1 FROM organization_memberships WHERE user_id=%s", (platform_id,)
+    ).fetchone() is None
+
+
 def test_platform_provisioning_rolls_back_if_mail_cannot_be_encrypted(invitation_db):
     from backend.services.invitations import create_organization_with_owner_invitation
 

@@ -62,7 +62,7 @@ def test_import_preserves_tenant_data_maps_roles_and_rehearsal_rolls_back(sqlite
     report = import_sqlite_snapshot(
         path, dsn, organization_name="First Company",
         platform_admin_email="test@example.com", dry_run=True,
-        tenant_owner_email="admin@example.com",
+        tenant_owner_email="owner@example.com",
     )
     assert report.dry_run and not report.applied
     assert report.source_counts["users"] == 3
