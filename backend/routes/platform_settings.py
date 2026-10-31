@@ -116,7 +116,14 @@ def create_platform_settings_router(*, get_connection, current_user, csrf_depend
                 keys,
             ).fetchall()
             response.headers["Cache-Control"] = "no-store"
-            return {row["setting_key"]: dict(row) for row in rows}
+            settings = {row["setting_key"]: dict(row) for row in rows}
+            settings.setdefault("mobile_session_max_duration_hours", {
+                "setting_key": "mobile_session_max_duration_hours",
+                "setting_value": "720",
+                "description": "Maximum mobile session lifetime in hours",
+                "updated_at": None,
+            })
+            return settings
 
     @router.put("/security-config/{key}")
     async def update_platform_security_config(
