@@ -54,3 +54,16 @@ test('expired security token on a write disables writes and offers token retry',
 test('missing-token rejection exposes security recovery on the profile page',async()=>{
  const {p}=setup(async()=>({ok:false,status:403,json:async()=>({detail:'CSRF token missing'})}));ready(p);p.displayTimezoneDraft='UTC';await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);
 });
+test('organization admin loads and saves mobile session duration within platform maximum',async()=>{
+ const calls=[];let duration=48;
+ const {p}=setup(async(url,options={})=>{
+  calls.push({url,options});
+  if(options.method==='PUT') {duration=JSON.parse(options.body).duration_hours;return {ok:true,json:async()=>({duration_hours:duration,max_duration_hours:72})};}
+  return {ok:true,json:async()=>({duration_hours:duration,max_duration_hours:72})};
+ });
+ p.profile={saas_mode:true,role:'admin'};p.csrfToken='test-only';
+ await p.loadMobileSessionPolicy();assert.equal(p.mobileSessionDurationDraft,48);assert.equal(p.mobileSessionPolicy.max_duration_hours,72);
+ p.mobileSessionDurationDraft=24;await p.saveMobileSessionPolicy();
+ assert.equal(calls[1].url,'/api/organization/mobile-session-policy');assert.equal(calls[1].options.method,'PUT');
+ assert.deepEqual(JSON.parse(calls[1].options.body),{duration_hours:24});assert.equal(p.mobileSessionPolicy.duration_hours,24);
+});

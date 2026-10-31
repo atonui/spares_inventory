@@ -16,6 +16,7 @@ SECURITY_SETTING_LIMITS = {
     "lockout_duration_minutes": 1440,
     "session_duration_hours": 720,
     "remember_me_duration_days": 365,
+    "mobile_session_max_duration_hours": 720,
 }
 
 
@@ -140,6 +141,8 @@ def create_platform_settings_router(*, get_connection, current_user, csrf_depend
             session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
+            if key == "mobile_session_max_duration_hours":
+                conn.execute("SELECT set_config('app.platform_admin_user_id', %s, true)", (str(principal.user_id),))
             conn.execute(
                 """INSERT INTO system_settings(setting_key, setting_value, updated_by, updated_at)
                    VALUES (%s, %s, %s, %s)
@@ -149,6 +152,47 @@ def create_platform_settings_router(*, get_connection, current_user, csrf_depend
                        updated_at = EXCLUDED.updated_at""",
                 (key, str(value), principal.user_id, serialize_instant(utc_now())),
             )
+            if key == "mobile_session_max_duration_hours":
+                now = serialize_instant(utc_now())
+                organizations = conn.execute("SELECT id FROM organizations WHERE is_active = TRUE").fetchall()
+                for organization in organizations:
+                    conn.execute("SELECT set_config('app.organization_id', %s, true)", (str(organization["id"]),))
+                    conn.execute(
+                        """UPDATE organization_settings
+                           SET mobile_session_duration_hours = LEAST(mobile_session_duration_hours, %s),
+                               revision = revision + 1, updated_at = %s, updated_by = %s
+                           WHERE organization_id = %s AND mobile_session_duration_hours > %s""",
+                        (value, now, principal.user_id, organization["id"], value),
+                    )
+                conn.execute("SELECT set_config('app.organization_id', '', true)")
+                conn.execute(
+                    """UPDATE sessions AS s SET absolute_expires_at = to_char(LEAST(s.absolute_expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                              expires_at = to_char(LEAST(s.expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                              is_active = CASE WHEN d.deadline <= %s THEN FALSE ELSE s.is_active END
+                       FROM (
+                           SELECT s.id AS session_id,
+                                  LEAST(s.created_at::timestamptz + (%s * INTERVAL '1 hour'), s.absolute_expires_at::timestamptz) AS deadline
+                           FROM sessions AS s WHERE s.is_mobile = TRUE
+                       ) AS d
+                       WHERE s.id = d.session_id AND (s.absolute_expires_at::timestamptz > d.deadline OR s.expires_at::timestamptz > d.deadline)""",
+                    (now, value),
+                )
+                conn.execute(
+                    """UPDATE session_refresh_credentials AS r SET expires_at = to_char(LEAST(r.expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+                       FROM (
+                           SELECT s.id AS session_id,
+                                  LEAST(s.created_at::timestamptz + (%s * INTERVAL '1 hour'), s.absolute_expires_at::timestamptz) AS deadline
+                           FROM sessions AS s WHERE s.is_mobile = TRUE AND s.is_active = TRUE
+                       ) AS d
+                       WHERE r.session_id = d.session_id AND r.expires_at::timestamptz > d.deadline""",
+                    (value,),
+                )
+                conn.execute(
+                    """UPDATE mobile_device_sessions AS m SET revoked_at = COALESCE(m.revoked_at, %s)
+                       FROM sessions AS s WHERE s.id = m.session_id AND s.is_active = FALSE
+                         AND m.revoked_at IS NULL""",
+                    (now,),
+                )
             record_platform_audit_event(
                 conn, principal.user_id, "global_security_setting_changed", "success",
                 details={"key": key, "value": value},

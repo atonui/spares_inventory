@@ -20,7 +20,7 @@ def test_startup_applies_empty_schema_then_is_idempotent(postgres_schema):
     dsn = _schema_dsn(schema)
     first = initialize_application_database(dsn, defaults={})
     second = initialize_application_database(dsn, defaults={})
-    assert first.applied_versions == tuple(range(1, 19))
+    assert first.applied_versions == tuple(range(1, 20))
     assert first.pending_versions == ()
     assert second == first
 

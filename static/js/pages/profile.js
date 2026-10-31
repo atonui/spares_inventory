@@ -37,6 +37,12 @@ function profileManager() {
         mobileDevicesError: '',
         mobileDevicesSuccess: '',
         mobileDeviceRevoking: false,
+        mobileSessionPolicy: null,
+        mobileSessionDurationDraft: 720,
+        mobileSessionPolicyLoading: false,
+        mobileSessionPolicySaving: false,
+        mobileSessionPolicyError: '',
+        mobileSessionPolicyMessage: '',
         isMobileViewport() { return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches === true; },
         pendingMobileDeviceRevocation: null,
 
@@ -59,11 +65,11 @@ function profileManager() {
         },
         async init() {
             await Promise.all([this.getCsrfToken(),this.loadProfile()]);
-            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadMobileDevices()]);
+            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadMobileDevices(),this.loadMobileSessionPolicy()]);
         },
         async retryProfile() {
             await this.loadProfile();
-            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadMobileDevices()]);
+            if (this.profileLoaded) await Promise.all([this.loadTimezoneContext(),this.loadMobileDevices(),this.loadMobileSessionPolicy()]);
         },
         async getCsrfToken() {
             if (this.csrfLoading || this.saving || this.timezoneSaving) return;
@@ -109,6 +115,29 @@ function profileManager() {
                 this.displayTimezoneMessage='';this.businessTimezoneMessage='';
             } catch (error) {this.timezoneContext=null;this.timezoneError=error.message;}
             finally {this.timezoneLoading=false;}
+        },
+        async loadMobileSessionPolicy() {
+            if (!this.profile.saas_mode || !this.canManageBusinessTimezone || this.mobileSessionPolicyLoading || this.mobileSessionPolicySaving) return;
+            this.mobileSessionPolicyLoading=true;this.mobileSessionPolicyError='';
+            try {
+                const response=await fetch('/api/organization/mobile-session-policy',{credentials:'include',cache:'no-store'});
+                const data=await response.json();
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Mobile session settings could not be loaded.');
+                if (!Number.isInteger(data.duration_hours) || !Number.isInteger(data.max_duration_hours) || data.duration_hours < 1 || data.duration_hours > data.max_duration_hours) throw Error('Mobile session settings are invalid.');
+                this.mobileSessionPolicy=data;this.mobileSessionDurationDraft=data.duration_hours;
+            } catch (error) {this.mobileSessionPolicy=null;this.mobileSessionPolicyError=error.message;}
+            finally {this.mobileSessionPolicyLoading=false;}
+        },
+        async saveMobileSessionPolicy() {
+            if (!this.mobileSessionPolicy || !Number.isInteger(this.mobileSessionDurationDraft) || this.mobileSessionDurationDraft < 1 || this.mobileSessionDurationDraft > this.mobileSessionPolicy.max_duration_hours || this.mobileSessionPolicySaving || this.csrfLoading || !this.csrfToken) return;
+            this.mobileSessionPolicySaving=true;this.mobileSessionPolicyError='';this.mobileSessionPolicyMessage='';
+            try {
+                const response=await InventoryCsrf.request(this,'/api/organization/mobile-session-policy',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({duration_hours:this.mobileSessionDurationDraft}),cache:'no-store'});
+                const data=await response.json();this.handleSecurityRejection(response,data);
+                if (!response.ok) throw Error(typeof data.detail==='string' ? data.detail : 'Mobile session settings could not be saved.');
+                this.mobileSessionPolicy=data;this.mobileSessionDurationDraft=data.duration_hours;this.mobileSessionPolicyMessage='Mobile session duration saved.';
+            } catch (error) {this.mobileSessionPolicyError=error.message;}
+            finally {this.mobileSessionPolicySaving=false;}
         },
         clearDisplayTimezoneFeedback() {this.displayTimezoneError='';this.displayTimezoneMessage='';},
         clearBusinessTimezoneFeedback() {if (!this.timezoneConflict) this.businessTimezoneError='';this.businessTimezoneMessage='';},

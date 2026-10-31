@@ -13,7 +13,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261029-platform-support-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261031-mobile-session-policy" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -556,11 +556,11 @@
         <div class="panel">
           <div class="panel-header">
             <span class="panel-title">Security Parameters</span>
-            <span style="font-size:0.75rem;color:var(--brand-slate);">Changes apply to new logins immediately</span>
+            <span style="font-size:0.75rem;color:var(--brand-slate);" x-text="me?.saas_mode ? 'Mobile limits also shorten active sessions' : 'Changes apply to new logins immediately'"></span>
           </div>
           <div class="panel-body">
             <p x-show="me?.saas_mode">Controls include login lockout and session lifetimes. MFA and global password policy are not managed here.</p>
-            <template x-for="[key, meta] in Object.entries(cfgMeta)">
+            <template x-for="[key, meta] in Object.entries(availableCfgMeta)">
               <div class="cfg-row">
                 <div>
                   <div class="cfg-label" x-text="meta.label"></div>

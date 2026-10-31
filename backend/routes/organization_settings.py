@@ -4,7 +4,7 @@ from backend.services.session_credentials import get_request_credential
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.database_sql import execute, is_postgres
-from backend.schemas.organization_settings import OrganizationSettingsUpdate, OwnerTransferRequest
+from backend.schemas.organization_settings import MobileSessionPolicyUpdate, OrganizationSettingsUpdate, OwnerTransferRequest
 from backend.services.activity import record_activity
 from backend.services.authorization import require_company_admin, require_company_owner
 from backend.services.principals import AuthenticatedPrincipal
@@ -37,6 +37,99 @@ def create_organization_settings_router(
             "business_timezone": row["business_timezone"],
             "revision": row["revision"],
         }
+
+    def mobile_session_limit(conn):
+        row = execute(
+            conn,
+            "SELECT setting_value FROM system_settings WHERE setting_key = 'mobile_session_max_duration_hours'",
+        ).fetchone()
+        try:
+            return max(1, min(720, int(row["setting_value"]))) if row else 720
+        except (TypeError, ValueError):
+            return 720
+
+    def mobile_session_policy_row(conn, organization_id):
+        row = execute(
+            conn,
+            "SELECT mobile_session_duration_hours FROM organization_settings WHERE organization_id = ?",
+            (organization_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Organization settings not found")
+        return {"duration_hours": row["mobile_session_duration_hours"], "max_duration_hours": mobile_session_limit(conn)}
+
+    @router.get("/api/organization/mobile-session-policy")
+    async def get_mobile_session_policy(user_id=Depends(current_user), request: Request = None):
+        with authenticated_database_transaction(
+            get_connection,
+            principal_or_user=user_id,
+            session_token=get_request_credential(request).value if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            require_saas_postgres(conn)
+            principal = require_company_admin(principal, conn)
+            return mobile_session_policy_row(conn, principal.organization_id)
+
+    @router.put("/api/organization/mobile-session-policy")
+    async def update_mobile_session_policy(
+        body: MobileSessionPolicyUpdate,
+        request: Request,
+        user_id=Depends(current_user),
+        csrf_valid: bool = Depends(csrf_dependency),
+    ):
+        with authenticated_writer(user_id, get_request_credential(request).value) as conn:
+            require_saas_postgres(conn)
+            principal = require_company_admin(user_id, conn)
+            maximum = mobile_session_limit(conn)
+            if body.duration_hours > maximum:
+                raise HTTPException(status_code=400, detail=f"Duration cannot exceed the platform limit of {maximum} hours")
+            execute(
+                conn,
+                "SELECT organization_id FROM organization_settings WHERE organization_id = ? FOR UPDATE",
+                (principal.organization_id,),
+            )
+            execute(
+                conn,
+                "UPDATE organization_settings SET mobile_session_duration_hours = ?, revision = revision + 1, updated_at = ?, updated_by = ? WHERE organization_id = ?",
+                (body.duration_hours, serialize_instant(utc_now()), principal.user_id, principal.organization_id),
+            )
+            now = serialize_instant(utc_now())
+            execute(
+                conn,
+                """UPDATE sessions AS s SET absolute_expires_at = to_char(LEAST(s.absolute_expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                          expires_at = to_char(LEAST(s.expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                          is_active = CASE WHEN d.deadline <= ? THEN FALSE ELSE s.is_active END
+                   FROM (
+                       SELECT s.id AS session_id,
+                              LEAST(s.created_at::timestamptz + (? * INTERVAL '1 hour'), s.absolute_expires_at::timestamptz) AS deadline
+                       FROM sessions AS s
+                       JOIN organization_memberships AS om ON om.user_id = s.user_id
+                       WHERE om.organization_id = ? AND om.is_active = TRUE AND s.is_mobile = TRUE AND s.is_active = TRUE
+                   ) AS d
+                   WHERE s.id = d.session_id AND (s.absolute_expires_at::timestamptz > d.deadline OR s.expires_at::timestamptz > d.deadline)""",
+                (now, body.duration_hours, principal.organization_id),
+            )
+            execute(
+                conn,
+                """UPDATE mobile_device_sessions AS m SET revoked_at = COALESCE(m.revoked_at, ?)
+                   FROM sessions AS s WHERE s.id = m.session_id AND s.user_id = m.user_id
+                     AND s.is_active = FALSE AND m.revoked_at IS NULL
+                     AND m.user_id IN (SELECT user_id FROM organization_memberships WHERE organization_id = ?)""",
+                (now, principal.organization_id),
+            )
+            execute(
+                conn,
+                """UPDATE session_refresh_credentials AS r SET expires_at = to_char(LEAST(r.expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+                   FROM (
+                       SELECT s.id AS session_id,
+                              LEAST(s.created_at::timestamptz + (? * INTERVAL '1 hour'), s.absolute_expires_at::timestamptz) AS deadline
+                       FROM sessions AS s JOIN organization_memberships AS om ON om.user_id = s.user_id
+                           WHERE om.organization_id = ? AND om.is_active = TRUE AND s.is_mobile = TRUE
+                   ) AS d
+                   WHERE r.session_id = d.session_id AND r.expires_at::timestamptz > d.deadline""",
+                (body.duration_hours, principal.organization_id),
+            )
+            return mobile_session_policy_row(conn, principal.organization_id)
 
     @router.get("/api/organization/settings")
     async def get_organization_settings(

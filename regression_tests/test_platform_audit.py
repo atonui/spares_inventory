@@ -97,6 +97,9 @@ def test_platform_settings_audit_details_are_curated():
     assert safe_platform_audit_details("global_security_setting_changed", {
         "key": "password_policy", "value": 8,
     }) == {}
+    assert safe_platform_audit_details("global_security_setting_changed", {
+        "key": "mobile_session_max_duration_hours", "value": 24,
+    }) == {"key": "mobile_session_max_duration_hours", "value": 24}
 
 
 @pytest.fixture

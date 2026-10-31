@@ -79,11 +79,13 @@ test('platform admin revocation requires confirmation and hides self-removal act
 });
 test('SaaS settings load and save use platform routes while SQLite keeps legacy routes',async()=>{
  const a=app(),paths=[];a.me={saas_mode:true};
+ assert.ok(a.availableCfgMeta.mobile_session_max_duration_hours);
  a.api=async(path,options={})=>{paths.push([path,options.method||'GET']);return path.endsWith('/security-config')?{}:{success:true};};
  await a.loadConfig();a.panelLoads.config.loaded=true;a.cfgVals.max_login_attempts='8';await a.saveConfig('max_login_attempts');
  assert.deepEqual(paths,[['/platform/security-config','GET'],['/platform/security-config/max_login_attempts','PUT'],['/platform/security-config','GET']]);
  paths.length=0;a.me={saas_mode:false};a.api=async(path,options={})=>{paths.push([path,options.method||'GET']);return {};};
  await a.loadConfig();assert.deepEqual(paths,[['/superadmin/security-config','GET']]);
+ assert.equal(a.availableCfgMeta.mobile_session_max_duration_hours,undefined);
  assert.match(html,/MFA and global password policy are not managed here/);
 });
 test('SaaS announcement management uses platform routes and accepts fixed UTC timezone revision',async()=>{

@@ -89,6 +89,7 @@ def safe_platform_audit_details(action: str, details) -> dict:
         elif key == "key" and isinstance(value, str) and value in {
             "max_login_attempts", "lockout_duration_minutes",
             "session_duration_hours", "remember_me_duration_days",
+            "mobile_session_max_duration_hours",
         }:
             safe[key] = value
         elif key == "value" and isinstance(value, int) and not isinstance(value, bool):
@@ -97,6 +98,7 @@ def safe_platform_audit_details(action: str, details) -> dict:
                 "lockout_duration_minutes": 1440,
                 "session_duration_hours": 720,
                 "remember_me_duration_days": 365,
+                "mobile_session_max_duration_hours": 720,
             }
             setting_key = details.get("key")
             if setting_key in limits and 1 <= value <= limits[setting_key]:

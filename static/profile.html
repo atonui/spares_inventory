@@ -9,7 +9,7 @@
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261014-announcement-controls" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
-<script src="js/pages/profile.js?v=20261031-manual-pairing-code" defer></script>
+<script src="js/pages/profile.js?v=20261031-mobile-session-policy" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -104,6 +104,14 @@
   </ul>
   <p role="status" class="success" aria-live="polite" x-show="mobileDevicesSuccess" x-text="mobileDevicesSuccess"></p>
 </div>
+<form class="profile-setting" x-show="canManageBusinessTimezone" @submit.prevent="saveMobileSessionPolicy()">
+<span class="profile-eyebrow">Applies to everyone</span><h3>Mobile app session duration</h3>
+<p class="profile-help">Choose how long a paired phone can stay signed in before it must be paired again. The platform administrator sets the maximum.</p>
+<label for="mobile-session-duration">Session duration (hours)</label><input id="mobile-session-duration" type="number" min="1" :max="mobileSessionPolicy?.max_duration_hours || 720" step="1" x-model.number="mobileSessionDurationDraft" @input="mobileSessionPolicyMessage='';mobileSessionPolicyError=''" :disabled="mobileSessionPolicyLoading || mobileSessionPolicySaving">
+<p class="profile-help" x-show="mobileSessionPolicy">Platform maximum: <strong x-text="mobileSessionPolicy?.max_duration_hours"></strong> hours.</p>
+<div class="profile-actions"><button type="submit" :disabled="mobileSessionPolicyLoading || mobileSessionPolicySaving || csrfLoading || !csrfToken || !mobileSessionPolicy || mobileSessionDurationDraft === mobileSessionPolicy.duration_hours"><span x-text="mobileSessionPolicySaving ? 'Saving…' : 'Save mobile session duration'"></span></button><button type="button" class="profile-secondary" @click="loadMobileSessionPolicy()" :disabled="mobileSessionPolicyLoading || mobileSessionPolicySaving">Reload</button></div>
+<p role="alert" class="error" x-show="mobileSessionPolicyError" x-text="mobileSessionPolicyError"></p><p role="status" class="success" x-show="mobileSessionPolicyMessage" x-text="mobileSessionPolicyMessage"></p>
+</form>
 </section>
 <h2>Timezones</h2><p role="status" x-show="timezoneLoading">Loading timezone settings…</p>
 <div role="alert" x-show="timezoneError"><p x-text="timezoneError"></p><button type="button" @click="loadTimezoneContext()" :disabled="timezoneLoading"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg> Retry timezone settings</button></div>
