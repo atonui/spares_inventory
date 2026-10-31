@@ -19,6 +19,10 @@ OPERATIONS = {
     ('GET', '/api/users'), ('POST', '/api/users'),
     ('PUT', '/api/users/{target_user_id}'), ('DELETE', '/api/users/{target_user_id}'),
     ('POST', '/api/users/{target_user_id}/restore'),
+    ('POST', '/api/users/{target_user_id}/remove'),
+    ('POST', '/api/users/{target_user_id}/email-change-requests'),
+    ('GET', '/api/users/{target_user_id}/email-change-request'),
+    ('DELETE', '/api/users/{target_user_id}/email-change-request'),
 }
 
 
@@ -26,7 +30,7 @@ def test_users_router_registration_and_dependency_identity():
     routes = [r for r in main.app.routes if isinstance(r, APIRoute)
               and (r.path == '/api/users' or r.path.startswith('/api/users/'))
               and r.endpoint.__module__ == 'backend.routes.users']
-    assert len(routes) == 5
+    assert len(routes) == len(OPERATIONS)
     assert {(method, r.path) for r in routes for method in r.methods} == OPERATIONS
     for route in routes:
         assert route.endpoint.__module__ == 'backend.routes.users'
@@ -35,7 +39,7 @@ def test_users_router_registration_and_dependency_identity():
         if route.methods != {'GET'}:
             expected.add(main.verify_authenticated_csrf)
         assert {d.call for d in route.dependant.dependencies} == expected
-    read = next(r for r in routes if r.methods == {'GET'})
+    read = next(r for r in routes if r.path == '/api/users' and r.methods == {'GET'})
     assert read.response_model == list[main.UserResponse] or read.response_model == main.List[main.UserResponse]
 
     invitation_routes = {(method, route.path) for route in main.app.routes

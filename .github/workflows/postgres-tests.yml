@@ -34,3 +34,10 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: pytest regression_tests -vv --tb=short -o faulthandler_timeout=90 --junitxml=postgres-test-results.xml
+      - name: Upload backend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-test-results
+          path: postgres-test-results.xml
+          if-no-files-found: warn

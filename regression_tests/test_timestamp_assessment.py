@@ -49,6 +49,48 @@ def test_manifest_covers_schema_temporal_fields(database):
     assert all(field.provenance for field in TEMPORAL_FIELDS)
 
 
+@pytest.mark.parametrize(('table', 'column'), [
+    ('mobile_pairing_requests', 'created_at'),
+    ('mobile_pairing_requests', 'expires_at'),
+    ('mobile_pairing_requests', 'claimed_at'),
+    ('mobile_pairing_requests', 'approved_at'),
+    ('mobile_pairing_requests', 'consumed_at'),
+    ('mobile_device_sessions', 'paired_at'),
+    ('mobile_device_sessions', 'revoked_at'),
+])
+@pytest.mark.parametrize(('value', 'category', 'blockers'), [
+    ('2026-10-31T09:00:00.000000Z', 'aware', 0),
+    ('2026-10-31T09:00:00', 'naive_unverified', 1),
+    ('SECRET-invalid-instant', 'invalid', 1),
+])
+def test_mobile_instants_use_safe_integer_diagnostics(database, table, column, value, category, blockers):
+    # Keep the real text-primary-key shape without needing auth credentials or
+    # unrelated foreign-key records. Identifiers come only from the cases above.
+    with sqlite3.connect(database) as conn:
+        conn.execute(f'DROP TABLE "{table}"')
+        conn.execute(f'CREATE TABLE "{table}" (request_id TEXT PRIMARY KEY, "{column}" TEXT)')
+        conn.execute(f'INSERT INTO "{table}" VALUES (?, ?)', ('SECRET-pairing-request', value))
+    before = digest(database)
+    report = assess_database(database)
+    field = next(f for f in report['fields'] if f['table'] == table and f['column'] == column)
+    assert field['counts'][category] == 1
+    assert report['blockers'] == blockers
+    assert field['issues'] == ([{'row_id': 1, 'reason': category}] if blockers else [])
+    assert 'SECRET' not in json.dumps(report)
+    assert digest(database) == before
+
+
+def test_assessment_accepts_schema_before_mobile_pairing(tmp_path, monkeypatch):
+    from backend.migrations import registry
+    path = tmp_path / 'pre-mobile.db'
+    with sqlite3.connect(path) as conn, monkeypatch.context() as patch:
+        patch.setattr(registry, 'MIGRATIONS', registry.MIGRATIONS[:6])
+        apply_migrations(conn)
+    report = assess_database(path)
+    assert report['blockers'] == 0
+    assert any(f['table'] == 'mobile_pairing_requests' for f in report['absent_fields'])
+
+
 def test_unknown_naive_and_invalid_values_block_conversion(database, monkeypatch):
     import scripts.assess_timestamps as assessment
     from dataclasses import replace
