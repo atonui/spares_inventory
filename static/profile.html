@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker · Account settings</title>
 <link rel="stylesheet" href="mystyle.css?v=20261029-keyboard-controls">
-<link rel="stylesheet" href="profile.css?v=20261023-app-button-system-v1">
+<link rel="stylesheet" href="profile.css?v=20261031-manual-pairing-code">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261014-announcement-controls" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
-<script src="js/pages/profile.js?v=20261031-mobile-pairing-viewport" defer></script>
+<script src="js/pages/profile.js?v=20261031-manual-pairing-code" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -61,9 +61,15 @@
     <button type="button" @click="createMobilePairing()" :disabled="mobilePairingBusy || csrfLoading || saving || timezoneSaving || !csrfToken"><span x-text="mobilePairingBusy ? 'Generating…' : mobilePairing ? 'Generate a new QR code' : 'Generate QR code'"></span></button>
     <button type="button" class="profile-secondary" x-show="mobilePairing" @click="cancelMobilePairing()" :disabled="mobilePairingBusy">Cancel request</button>
   </div>
-  <p class="profile-help" x-show="mobilePairing">This code expires in two minutes and can only be scanned once.</p>
+  <p class="profile-help" x-show="mobilePairing">The QR code and manual code expire in two minutes. Either can be used once.</p>
   <div class="mobile-pairing-code" x-show="mobilePairing?.qrDataUrl" x-cloak>
-    <img :src="mobilePairing?.qrDataUrl" alt="One-time QR code to connect the Spares Tracker mobile app">
+    <div>
+      <img :src="mobilePairing?.qrDataUrl" alt="One-time QR code to connect the Spares Tracker mobile app">
+      <div class="mobile-pairing-manual">
+        <p class="profile-eyebrow">Can’t scan? Enter this code in the mobile app</p>
+        <code x-text="mobilePairing?.pairingCode"></code>
+      </div>
+    </div>
     <div>
       <p class="profile-eyebrow">Pairing status</p>
       <p role="status" aria-live="polite" x-text="mobilePairingMessage"></p>

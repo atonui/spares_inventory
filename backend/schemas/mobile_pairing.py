@@ -2,7 +2,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+import re
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.schemas.auth import NativeLoginUserResponse
 
@@ -11,12 +13,30 @@ class MobilePairingCreated(BaseModel):
     request_id: str
     qr_data: str
     qr_svg: str
+    pairing_code: str
     expires_at: datetime
 
 
 class MobilePairingClaim(BaseModel):
-    qr_data: str = Field(min_length=1, max_length=2048)
+    qr_data: str | None = Field(default=None, min_length=1, max_length=2048)
+    pairing_code: str | None = Field(default=None, min_length=10, max_length=11)
     device_name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("pairing_code")
+    @classmethod
+    def pairing_code_must_be_valid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().upper()
+        if not re.fullmatch(r"[A-HJ-NP-Z2-9]{5}-?[A-HJ-NP-Z2-9]{5}", normalized):
+            raise ValueError("Pairing code is invalid")
+        return normalized.replace("-", "")
+
+    @model_validator(mode="after")
+    def exactly_one_pairing_credential(self):
+        if (self.qr_data is None) == (self.pairing_code is None):
+            raise ValueError("Provide either a QR payload or a pairing code")
+        return self
 
     @field_validator("device_name")
     @classmethod

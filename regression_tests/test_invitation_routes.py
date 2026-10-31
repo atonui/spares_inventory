@@ -184,19 +184,20 @@ def test_invitation_list_only_returns_active_unexpired_rows(invitation_api):
     current = serialize_instant(now)
 
     rows = (
-        ("active@example.test", future, None, None),
-        ("canceled@example.test", future, None, current),
-        ("expired@example.test", past, None, None),
-        ("accepted@example.test", future, current, None),
+        ("active@example.test", future, None, None, None),
+        ("canceled@example.test", future, None, None, current),
+        ("expired@example.test", past, None, None, None),
+        ("accepted@example.test", future, current, invited_by, None),
     )
-    for email, expires_at, accepted_at, canceled_at in rows:
+    for email, expires_at, accepted_at, accepted_by, canceled_at in rows:
         api.admin.execute(
             """INSERT INTO organization_invitations
                (organization_id, email_normalized, company_role, token_hash, invited_by,
-                expires_at, accepted_at, canceled_at)
-               VALUES (%s, %s, 'engineer', %s, %s, %s, %s, %s)""",
-            (api.org_id, email, uuid4().hex, invited_by, expires_at, accepted_at, canceled_at),
+                expires_at, accepted_at, accepted_by, canceled_at)
+               VALUES (%s, %s, 'engineer', %s, %s, %s, %s, %s, %s)""",
+            (api.org_id, email, uuid4().hex, invited_by, expires_at, accepted_at, accepted_by, canceled_at),
         )
+    api.admin.commit()
 
     listing = api.endpoint("GET", "/api/users/invitations")
     result = asyncio.run(listing(request=api.request("owner"), user_id=api.principal("owner")))

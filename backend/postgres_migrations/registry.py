@@ -21,6 +21,7 @@ from . import (
     v0015_platform_support_sessions,
     v0016_resend_delivery_webhooks,
     v0017_store_activity_emails,
+    v0018_mobile_pairing_manual_code,
 )
 
 
@@ -56,6 +57,7 @@ MIGRATIONS = tuple(
         v0015_platform_support_sessions,
         v0016_resend_delivery_webhooks,
         v0017_store_activity_emails,
+        v0018_mobile_pairing_manual_code,
     )
 )
 

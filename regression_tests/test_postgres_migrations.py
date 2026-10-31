@@ -145,7 +145,7 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 16))
+    assert status.applied_versions == tuple(range(1, 19))
     assert status.pending_versions == ()
 
     user_id = connection.execute(
@@ -179,7 +179,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 16))
+    assert status.applied_versions == tuple(range(1, 19))
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -233,7 +233,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 16))
+    assert status.applied_versions == tuple(range(1, 19))
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -359,7 +359,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == tuple(range(1, 16))
+    assert status.applied_versions == tuple(range(1, 19))
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -467,8 +467,9 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
     connection, _ = postgres_schema
     apply_postgres_migrations(connection)
 
+    failing_version = registry.MIGRATIONS[-1].version + 1
     failing = registry.Migration(
-        version=16,
+        version=failing_version,
         name="injected_failure",
         statements=(
             "CREATE TABLE failed_migration_probe (id integer PRIMARY KEY)",
@@ -483,7 +484,8 @@ def test_failed_migration_rolls_back_ddl_and_ledger_row(postgres_schema, monkeyp
 
     assert connection.execute("SELECT to_regclass('failed_migration_probe') AS name").fetchone()["name"] is None
     assert connection.execute(
-        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = 16"
+        "SELECT count(*) AS count FROM postgres_schema_migrations WHERE version = %s",
+        (failing_version,),
     ).fetchone()["count"] == 0
 
 
@@ -494,7 +496,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 16))
+    assert status.applied_versions == tuple(range(1, 19))
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -545,7 +547,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 16))
+    assert status.applied_versions == tuple(range(1, 19))
     session_columns = {
         row["column_name"]
         for row in connection.execute(
@@ -660,3 +662,14 @@ def test_store_activity_email_migration_allows_only_supported_notice_types():
         "transfer_completed_notice",
     ):
         assert f"'{message_type}'" in statements
+
+
+def test_manual_mobile_pairing_code_migration_adds_hashed_code_scope():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 18)
+    statements = "\n".join(migration.statements)
+    assert migration.name == "mobile_pairing_manual_code"
+    assert "pairing_code_hash TEXT UNIQUE" in statements
+    assert "DROP POLICY mobile_pairing_token_scope" in statements
+    assert "app.mobile_pairing_code_hash" in statements

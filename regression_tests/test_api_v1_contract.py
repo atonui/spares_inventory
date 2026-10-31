@@ -351,6 +351,7 @@ def test_v1_openapi_documents_bearer_and_login_csrf():
     assert document["paths"]["/api/v1/auth/mobile-pairing/claim"]["post"].get("security", []) == []
     assert document["paths"]["/api/v1/auth/mobile-pairing/complete"]["post"].get("security", []) == []
     assert "two minutes" in document["paths"]["/api/v1/auth/mobile-pairing/claim"]["post"]["description"]
+    assert "pairing code" in document["paths"]["/api/v1/auth/mobile-pairing/claim"]["post"]["description"]
     assert "approves" in document["paths"]["/api/v1/auth/mobile-pairing/complete"]["post"]["description"]
     assert document["paths"]["/api/v1/csrf-token"]["get"].get("security", []) == []
     login_parameters = document["paths"]["/api/v1/auth/native/login"]["post"].get("parameters", [])
