@@ -39,7 +39,7 @@ def platform_api(postgres_schema):
         ("existing-" + uuid4().hex,),
     ).fetchone()["id"]
     member_id = admin.execute(
-        "INSERT INTO users(email,name,password_hash) VALUES ('member@example.test','Member','hash') RETURNING id"
+        "INSERT INTO users(email,name,password_hash) VALUES ('member@example.com','Member','hash') RETURNING id"
     ).fetchone()["id"]
     admin.execute(
         "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'manager')",

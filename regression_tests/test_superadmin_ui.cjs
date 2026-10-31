@@ -111,8 +111,8 @@ test('SaaS platform admin section does not expose tenant identity search',()=>{
  assert.match(section,/Grant platform admin/);assert.match(section,/type="email"/);assert.match(section,/platformAdmins/);assert.doesNotMatch(section,/filteredUsers|allUsers|userFilters/);
 });
 test('SaaS navigation exposes only supported platform settings and announcement controls',()=>{
- const platform=html.split('x-show="me?.saas_mode && me?.is_platform_admin"')[1].split('</nav>')[0];
- assert.match(platform,/Security Settings/);assert.match(platform,/System Announcement/);
+ const platform=html.slice(html.indexOf('x-show="me?.saas_mode && me?.is_platform_admin"'), html.indexOf('</nav>'));
+ assert.match(platform,/Security settings/);assert.match(platform,/Announcements/);
  assert.match(html,/\['dashboard','config','announcement','organizations','platformAdmins','platformAudit'\]/);
  assert.match(html,/key==='support' && supportSession/);
  assert.match(html,/Scheduled announcements use UTC/);
