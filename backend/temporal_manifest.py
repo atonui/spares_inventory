@@ -78,7 +78,9 @@ TEMPORAL_FIELDS += ANNOUNCEMENT_CONTROL_FIELDS
 
 # Pairing fields were introduced after the canonical UTC migration. Their
 # writers serialize aware instants; never infer a timezone for naive values.
-TEMPORAL_FIELDS += tuple(
+# Prepend these table-specific policies: the legacy wire formatter resolves
+# shared column names by last occurrence and must retain its existing policy.
+TEMPORAL_FIELDS = tuple(
     TemporalField(table, column, 'instant', None,
                   'Mobile pairing auth routes use serialize_instant(utc_now()); explicit UTC Z writer.',
                   optional=True)
@@ -87,4 +89,4 @@ TEMPORAL_FIELDS += tuple(
         'mobile_device_sessions': ('paired_at', 'revoked_at'),
     }.items()
     for column in columns
-)
+) + TEMPORAL_FIELDS
