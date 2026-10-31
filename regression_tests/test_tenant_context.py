@@ -36,7 +36,7 @@ def seed_user(conn, *, role="engineer", platform_admin=False, membership=True, a
            VALUES (%s, %s, %s) RETURNING id""",
         (f"{org_id}@example.test", "Test User", "not-a-real-hash"),
     ).fetchone()["id"]
-    if membership:
+    if membership and not platform_admin:
         conn.execute(
             """INSERT INTO organization_memberships(organization_id, user_id, company_role, is_active)
                VALUES (%s, %s, %s, %s)""",
@@ -131,7 +131,7 @@ def test_suspended_organization_cannot_resolve_company_principal(postgres_schema
     assert denied_transaction.value.status_code == 403
 
 
-def test_platform_admin_in_suspended_organization_gets_no_tenant_context(postgres_schema):
+def test_platform_admin_is_separate_from_suspended_organization_membership(postgres_schema):
     from backend.services.principals import resolve_principal
 
     connection, _ = postgres_schema

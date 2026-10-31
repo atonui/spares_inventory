@@ -134,13 +134,15 @@ python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
   --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
-  --platform-admin-email admin@example.com
+  --platform-admin-email platform@example.com \
+  --tenant-owner-email owner@example.com
 
 python -m backend.migration_import import-sqlite \
   --source /secure/snapshots/inventory.db \
   --target-dsn-env MIGRATION_DATABASE_URL \
   --organization-name 'First Company' \
-  --platform-admin-email admin@example.com \
+  --platform-admin-email platform@example.com \
+  --tenant-owner-email owner@example.com \
   --apply
 ```
 

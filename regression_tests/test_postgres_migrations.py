@@ -78,6 +78,17 @@ def test_mobile_session_policy_migration_adds_checked_org_duration_and_platform_
     assert "uq_sessions_one_active_mobile_per_user" in sql
 
 
+def test_platform_tenant_separation_migration_locks_identity_tables_before_cleanup():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 20)
+    assert migration.name == "platform_tenant_identity_separation"
+    assert migration.statements[:2] == (
+        "LOCK TABLE organization_memberships IN SHARE ROW EXCLUSIVE MODE",
+        "LOCK TABLE platform_admins IN SHARE ROW EXCLUSIVE MODE",
+    )
+
+
 def test_mobile_session_policy_allows_only_one_active_mobile_session_per_account(postgres_schema):
     from psycopg.errors import UniqueViolation
     from backend.postgres_migrations.runner import apply_postgres_migrations
@@ -151,6 +162,130 @@ def test_user_can_belong_to_only_one_organization(postgres_schema):
                 "VALUES (%s, %s, 'engineer')",
                 (organization_ids[1], user_id),
             )
+
+
+def test_platform_admin_and_tenant_membership_are_mutually_exclusive(postgres_schema):
+    from psycopg.errors import CheckViolation
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    conn, _schema = postgres_schema
+    apply_postgres_migrations(conn)
+    organization_id = conn.execute(
+        "INSERT INTO organizations(name,slug) VALUES ('Separation','separation-test') RETURNING id"
+    ).fetchone()["id"]
+    member_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('member-separation@example.test','Member','x') RETURNING id"
+    ).fetchone()["id"]
+    platform_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('platform-separation@example.test','Platform','x') RETURNING id"
+    ).fetchone()["id"]
+    conn.execute(
+        "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner')",
+        (organization_id, member_id),
+    )
+    conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (platform_id,))
+    conn.commit()
+
+    with pytest.raises(CheckViolation):
+        with conn.transaction():
+            conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (member_id,))
+    with pytest.raises(CheckViolation):
+        with conn.transaction():
+            conn.execute(
+                "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'engineer')",
+                (organization_id, platform_id),
+            )
+
+
+def test_identity_separation_migration_allows_platform_owner_when_another_active_owner_exists(postgres_schema):
+    from backend.postgres_migrations.registry import MIGRATIONS
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    conn, _schema = postgres_schema
+    apply_postgres_migrations(conn)
+    migration = next(m for m in MIGRATIONS if m.version == 20)
+    with conn.transaction():
+        conn.execute("ALTER TABLE organization_memberships DISABLE TRIGGER organization_memberships_exclude_platform_admins")
+        conn.execute("ALTER TABLE platform_admins DISABLE TRIGGER platform_admins_exclude_tenant_members")
+        organization_id = conn.execute(
+            "INSERT INTO organizations(name,slug) VALUES ('Owner migration','owner-migration-test') RETURNING id"
+        ).fetchone()["id"]
+        root_id = conn.execute(
+            "INSERT INTO users(email,name,password_hash) VALUES ('root-migration@example.test','Root','x') RETURNING id"
+        ).fetchone()["id"]
+        owner_id = conn.execute(
+            "INSERT INTO users(email,name,password_hash) VALUES ('owner-migration@example.test','Owner','x') RETURNING id"
+        ).fetchone()["id"]
+        conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (root_id,))
+        conn.execute(
+            "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner'),(%s,%s,'owner')",
+            (organization_id, root_id, organization_id, owner_id),
+        )
+        conn.execute(migration.statements[0])
+        conn.execute(migration.statements[1])
+        assert conn.execute(
+            "SELECT count(*) AS n FROM organization_memberships WHERE user_id=%s", (root_id,)
+        ).fetchone()["n"] == 0
+        assert conn.execute(
+            "SELECT count(*) AS n FROM organization_memberships WHERE user_id=%s", (owner_id,)
+        ).fetchone()["n"] == 1
+
+
+def test_identity_separation_migration_refuses_the_only_active_owner(postgres_schema):
+    from backend.postgres_migrations.registry import MIGRATIONS
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from psycopg.errors import RaiseException
+
+    conn, _schema = postgres_schema
+    apply_postgres_migrations(conn)
+    migration = next(m for m in MIGRATIONS if m.version == 20)
+    with pytest.raises(RaiseException, match="promoting another active tenant owner"):
+        with conn.transaction():
+            conn.execute("ALTER TABLE organization_memberships DISABLE TRIGGER organization_memberships_exclude_platform_admins")
+            conn.execute("ALTER TABLE platform_admins DISABLE TRIGGER platform_admins_exclude_tenant_members")
+            organization_id = conn.execute(
+                "INSERT INTO organizations(name,slug) VALUES ('Sole owner','sole-owner-test') RETURNING id"
+            ).fetchone()["id"]
+            user_id = conn.execute(
+                "INSERT INTO users(email,name,password_hash) VALUES ('sole-root@example.test','Root','x') RETURNING id"
+            ).fetchone()["id"]
+            conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (user_id,))
+            conn.execute(
+                "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner')",
+                (organization_id, user_id),
+            )
+            conn.execute(migration.statements[0])
+
+
+def test_identity_separation_migration_requires_a_non_platform_owner_to_remain(postgres_schema):
+    from backend.postgres_migrations.registry import MIGRATIONS
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from psycopg.errors import RaiseException
+
+    conn, _schema = postgres_schema
+    apply_postgres_migrations(conn)
+    migration = next(m for m in MIGRATIONS if m.version == 20)
+    with pytest.raises(RaiseException, match="promoting another active tenant owner"):
+        with conn.transaction():
+            conn.execute("ALTER TABLE organization_memberships DISABLE TRIGGER organization_memberships_exclude_platform_admins")
+            conn.execute("ALTER TABLE platform_admins DISABLE TRIGGER platform_admins_exclude_tenant_members")
+            organization_id = conn.execute(
+                "INSERT INTO organizations(name,slug) VALUES ('Platform-only owners','platform-only-owners-test') RETURNING id"
+            ).fetchone()["id"]
+            user_ids = [
+                conn.execute(
+                    "INSERT INTO users(email,name,password_hash) VALUES (%s,%s,'x') RETURNING id",
+                    (f'platform-owner-{i}@example.test', f'Platform {i}'),
+                ).fetchone()["id"]
+                for i in (1, 2)
+            ]
+            for user_id in user_ids:
+                conn.execute("INSERT INTO platform_admins(user_id) VALUES (%s)", (user_id,))
+                conn.execute(
+                    "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner')",
+                    (organization_id, user_id),
+                )
+            conn.execute(migration.statements[0])
 
 
 def test_platform_audit_indexes_cover_order_and_common_filters():

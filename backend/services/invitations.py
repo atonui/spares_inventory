@@ -47,10 +47,18 @@ def create_invitation(
     if company_role not in COMPANY_ROLES:
         raise HTTPException(status_code=422, detail="Invalid company role")
     existing_user = conn.execute(
-        "SELECT id FROM users WHERE lower(btrim(email)) = %s AND archived_at IS NULL",
+        """SELECT u.id, EXISTS (
+               SELECT 1 FROM platform_admins AS pa WHERE pa.user_id = u.id
+           ) AS is_platform_admin
+           FROM users AS u WHERE lower(btrim(u.email)) = %s AND u.archived_at IS NULL""",
         (normalized,),
     ).fetchone()
     if existing_user:
+        if existing_user["is_platform_admin"]:
+            raise HTTPException(
+                status_code=409,
+                detail="Platform administrator accounts cannot be invited to a tenant",
+            )
         existing_membership = conn.execute(
             "SELECT 1 FROM organization_memberships WHERE user_id = %s", (existing_user["id"],)
         ).fetchone()
@@ -141,6 +149,8 @@ def accept_invitation(
         if user["email"].strip().lower() != row["email_normalized"]:
             raise generic
         if conn.execute("SELECT 1 FROM organization_memberships WHERE user_id = %s", (user["id"],)).fetchone():
+            raise generic
+        if conn.execute("SELECT 1 FROM platform_admins WHERE user_id = %s", (user["id"],)).fetchone():
             raise generic
         user_id = user["id"]
     else:

@@ -45,7 +45,7 @@ The first company is created by platform administration. Its first owner accepts
 
 Company owners control company membership and organization-wide settings. Company admins retain current admin functions within their company. Managers and engineers keep their existing operational permissions, scoped to their company. A permission audit is required because existing route checks often inspect the global role directly.
 
-The existing `superadmin` account becomes a `platform_admin` and receives an explicit `owner` membership in the first company. Existing `admin`, `manager`, and `engineer` accounts become the matching company roles. Platform administrators can provision companies and operate global settings and broadcasts; they do not receive ordinary company inventory browsing through their platform role alone. Existing database-level tools remain platform-only and auditable; arbitrary SQL access must not be available to company users.
+The selected `superadmin` account becomes a `platform_admin` and remains outside all company memberships. A separate legacy administrator is selected as the first company's `owner`; platform and tenant identities are mutually exclusive. Existing remaining `admin`, `manager`, and `engineer` accounts become company roles. Platform administrators can provision companies and operate global settings and broadcasts; they do not receive ordinary company inventory browsing through their platform role. Existing database-level tools remain platform-only and auditable; arbitrary SQL access must not be available to company users.
 
 ## Transactional email
 

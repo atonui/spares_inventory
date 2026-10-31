@@ -31,6 +31,13 @@ def create_platform_organizations_router(
             conn.close()
 
     def add_platform_admin(conn, actor_user_id: int, target_user_id: int) -> bool:
+        if conn.execute(
+            "SELECT 1 FROM organization_memberships WHERE user_id = %s", (target_user_id,)
+        ).fetchone():
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer or remove this user's tenant membership before granting platform administrator access",
+            )
         inserted = conn.execute(
             """INSERT INTO platform_admins (user_id) VALUES (%s)
                ON CONFLICT (user_id) DO NOTHING RETURNING user_id""",

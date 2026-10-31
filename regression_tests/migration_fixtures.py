@@ -9,6 +9,7 @@ def legacy_connection(path, *, current=False):
     conn.row_factory=sqlite3.Row
     conn.executescript((FIXTURES/('current_unversioned.sql' if current else 'legacy_inventory.sql')).read_text())
     conn.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES(7,'test@example.com','Test','hash','superadmin')")
+    conn.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES(9,'owner@example.com','Owner','owner-hash','admin')")
     conn.execute("INSERT INTO stores(id,name,type) VALUES(1,'Warehouse','central')")
     conn.execute("INSERT INTO parts(id,part_number,description) VALUES(1,'PART','Part')")
     conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity,min_threshold) VALUES(1,1,1,19,2)')

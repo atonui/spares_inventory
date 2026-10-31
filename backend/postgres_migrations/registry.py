@@ -23,6 +23,7 @@ from . import (
     v0017_store_activity_emails,
     v0018_mobile_pairing_manual_code,
     v0019_mobile_session_policy,
+    v0020_platform_tenant_identity_separation,
 )
 
 
@@ -60,6 +61,7 @@ MIGRATIONS = tuple(
         v0017_store_activity_emails,
         v0018_mobile_pairing_manual_code,
         v0019_mobile_session_policy,
+        v0020_platform_tenant_identity_separation,
     )
 )
 

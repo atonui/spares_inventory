@@ -224,13 +224,13 @@
 - Modify: `docs/environment.md`
 
 **Interfaces:**
-- Produces `import_sqlite_snapshot(source_path: Path, target_dsn: str, *, organization_name: str, platform_admin_email: str, dry_run: bool = True) -> ImportReport`.
-- CLI: `python -m backend.migration_import import-sqlite --source PATH --target-dsn-env DATABASE_URL --organization-name NAME --platform-admin-email EMAIL [--apply]`.
+- Produces `import_sqlite_snapshot(source_path: Path, target_dsn: str, *, organization_name: str, platform_admin_email: str, tenant_owner_email: str, dry_run: bool = True) -> ImportReport`.
+- CLI: `python -m backend.migration_import import-sqlite --source PATH --target-dsn-env DATABASE_URL --organization-name NAME --platform-admin-email EMAIL --tenant-owner-email EMAIL [--apply]`.
 - The SQLite source opens read-only; omitted `--apply` means rollback-only rehearsal. The target database must be empty except for the PostgreSQL migration ledger and bootstrap records.
 
 - [ ] **Step 1: Write failing import tests** for a current SQLite fixture, an empty PostgreSQL target, owner-role mapping, organization-scoped natural keys, preserved timestamps/audit rows, legacy null user IDs, source immutability, bad foreign references, and target-not-empty refusal.
 - [ ] **Step 2: Run `TEST_DATABASE_URL=postgresql://.../inventory_test pytest regression_tests/test_sqlite_postgres_import.py -q`** and confirm the importer/report contracts are missing.
-- [ ] **Step 3: Implement a deterministic table-by-table import** that assigns all operational rows to the first organization, validates `platform_admin_email` identifies an existing legacy superadmin and maps that account to platform-admin plus first-company owner, maps other user roles, invalidates password-reset tokens, and revokes sessions. Do not log row contents, password hashes, session tokens, or DSNs.
+- [ ] **Step 3: Implement a deterministic table-by-table import** that assigns all operational rows to the first organization, validates `platform_admin_email` identifies a legacy superadmin and `tenant_owner_email` identifies a different legacy admin/superadmin, maps the platform admin to no tenant membership and the separate tenant owner to company owner, maps remaining user roles, invalidates password-reset tokens, and revokes sessions. Do not log row contents, password hashes, session tokens, or DSNs.
 - [ ] **Step 4: Implement `ImportReport` verification** for source/target row counts, per-store/part balances, transfer states, organization memberships, temporal fields, and foreign keys; dry-run must leave target unchanged.
 - [ ] **Step 5: Run the importer tests against both current and legacy SQLite fixtures**; compare source snapshots before/after and prove a failed import rolls back every target change.
 - [ ] **Step 6: Commit** as `feat: add verified SQLite to PostgreSQL import`.

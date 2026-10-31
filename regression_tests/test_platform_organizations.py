@@ -349,6 +349,25 @@ def test_platform_admin_grant_matches_exact_active_email_and_is_idempotent(platf
     ).fetchone()["total"] == 1
 
 
+def test_platform_admin_grant_rejects_current_tenant_membership(platform_api):
+    from backend.schemas.platform_organizations import PlatformAdminGrantRequest
+
+    api = platform_api
+    tenant_user = api.admin.execute(
+        "SELECT email FROM users WHERE id=%s", (api.member_id,)
+    ).fetchone()["email"]
+    grant = api.endpoint("POST", "/api/platform/admins")
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(grant(
+            body=PlatformAdminGrantRequest(email=tenant_user),
+            request=api.request, actor=api.principal, csrf_valid=True,
+        ))
+
+    assert error.value.status_code == 409
+    assert "remove this user's tenant membership" in error.value.detail.lower()
+
+
 @pytest.mark.parametrize("archived", [False, True])
 def test_platform_admin_grant_rejects_unknown_or_archived_email(platform_api, archived):
     from backend.schemas.platform_organizations import PlatformAdminGrantRequest
