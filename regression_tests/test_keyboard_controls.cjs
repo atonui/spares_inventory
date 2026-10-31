@@ -62,3 +62,20 @@ test('native CSV inputs remain keyboard reachable and the skip link has a focusa
     assert.match(html, /class="skip-link" href="#workspace-content"/);
     assert.match(html, /<main id="workspace-content" tabindex="-1"/);
 });
+
+test('skip link focuses the current workspace without navigating through the page base', () => {
+    // A normal fragment href resolves through <base> and drops notification
+    // query parameters. Alpine must prevent navigation and focus this document.
+    const link = html.match(/<a class="skip-link"[^>]*>/)?.[0];
+    const expression = link?.match(/@click\.prevent="([^"]+)"/)?.[1];
+    assert.ok(expression, 'Skip must prevent navigation through the document base');
+    assert.match(html, /<main[^>]*x-ref="workspaceContent"/);
+    const calls = [];
+    const location = {href: 'https://example.test/static/index.html?store_id=7&inventory_id=42'};
+    vm.runInNewContext(expression, {window: {location}, $refs: {workspaceContent: {
+        focus() { calls.push('focus'); },
+        scrollIntoView() { calls.push('scroll'); },
+    }}});
+    assert.deepEqual(calls, ['focus', 'scroll']);
+    assert.equal(location.href, 'https://example.test/static/index.html?store_id=7&inventory_id=42');
+});

@@ -8,6 +8,7 @@ function setup(fetch){
  vm.createContext(c);loadPageScripts('profile.html',c);
  return {p:c.profileManager(),c,timers};
 }
+const response=(status,data)=>({status,ok:status>=200&&status<300,json:async()=>data,clone:()=>response(status,data)});
 const context={business_timezone:'Africa/Nairobi',display_timezone:'Africa/Nairobi',revision:1};
 function ready(p){p.profile={name:'Fixture',email:'fixture@example.test',role:'admin',display_timezone:null};p.timezoneContext={...context};p.businessTimezoneDraft='Africa/Nairobi';p.csrfToken='test-only';}
 test('temporary profile failure stays on page and retry loads the account',async()=>{
@@ -44,15 +45,15 @@ test('missing CSRF token prevents password and preference writes',async()=>{
  await p.saveDisplayTimezone();await p.saveBusinessTimezone();await p.changePassword();assert.equal(calls,0);
 });
 test('pending password change cannot submit twice',async()=>{
- let resolve,calls=0;const pending=new Promise(r=>resolve=r);const {p}=setup(()=>{calls++;return pending});ready(p);p.passwordForm={current_password:'fixture-old',new_password:'fixture-new',confirm_password:'fixture-new'};
- const save=p.changePassword();const duplicate=p.changePassword();try {assert.equal(calls,1);} finally {resolve({ok:false,json:async()=>({detail:'Fixture rejection'})});} await Promise.all([save,duplicate]);assert.equal(p.saving,false);assert.equal(p.error,'Fixture rejection');
+ let resolve,startedResolve,calls=0;const pending=new Promise(r=>resolve=r);const started=new Promise(r=>startedResolve=r);const {p}=setup(()=>{calls++;startedResolve();return pending});ready(p);p.passwordForm={current_password:'fixture-old',new_password:'fixture-new',confirm_password:'fixture-new'};
+ const save=p.changePassword();const duplicate=p.changePassword();await started;try {assert.equal(calls,1);} finally {resolve({ok:false,json:async()=>({detail:'Fixture rejection'})});} await Promise.all([save,duplicate]);assert.equal(p.saving,false);assert.equal(p.error,'Fixture rejection');
 });
 test('expired security token on a write disables writes and offers token retry',async()=>{
- const {p}=setup(async()=>({ok:false,status:403,json:async()=>({detail:'Invalid CSRF token'})}));ready(p);p.displayTimezoneDraft='UTC';
- await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);assert.match(p.displayTimezoneError,/CSRF/);
+ let writes=0;const {p}=setup(async url=>url.endsWith('/csrf-token')?response(200,{csrf_token:'fresh-test-only'}):(writes++,response(403,{detail:'Invalid CSRF token'})));ready(p);p.displayTimezoneDraft='UTC';
+ await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);assert.match(p.displayTimezoneError,/CSRF/);assert.equal(writes,2);
 });
 test('missing-token rejection exposes security recovery on the profile page',async()=>{
- const {p}=setup(async()=>({ok:false,status:403,json:async()=>({detail:'CSRF token missing'})}));ready(p);p.displayTimezoneDraft='UTC';await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);
+ let writes=0;const {p}=setup(async url=>url.endsWith('/csrf-token')?response(200,{csrf_token:'fresh-test-only'}):(writes++,response(403,{detail:'CSRF token missing'})));ready(p);p.displayTimezoneDraft='UTC';await p.saveDisplayTimezone();assert.equal(p.csrfToken,'');assert.match(p.csrfError,/retry/i);assert.equal(writes,2);
 });
 test('organization admin loads and saves mobile session duration within platform maximum',async()=>{
  const calls=[];let duration=48;

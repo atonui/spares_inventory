@@ -16,10 +16,12 @@ function setup(globals = {}) {
 test('user administration owns its invitation state and independent forms', () => {
     const c = setup();
     const a = c.usersAdminFeature(), b = c.usersAdminFeature();
-    assert.deepEqual(Object.keys(a).sort(), ['userForm', 'showUserModal', 'editingUser', 'createUser', 'editUser', 'updateUser', 'deleteUser', 'removeUser', 'invitations', 'invitationsLoading', 'loadInvitations', 'inviteUser', 'resendInvitation', 'cancelInvitation'].sort());
+    assert.deepEqual(Object.keys(a).sort(), ['userForm', 'showUserModal', 'editingUser', 'createUser', 'editUser', 'updateUser', 'deleteUser', 'removeUser', 'invitations', 'invitationsLoading', 'loadInvitations', 'inviteUser', 'resendInvitation', 'cancelInvitation', 'emailChangeDraft', 'pendingEmailChange', 'emailChangeBusy', 'emailChangeLoading', 'emailChangeError', 'emailChangeMessage', 'editedEmailTarget', 'editedEmailIsOwner', 'canManageEditedEmail', 'loadMemberEmailChange', 'requestMemberEmailChange', 'cancelMemberEmailChange'].sort());
     assert.deepEqual(plain(a.userForm), initial);
     assert.equal(a.showUserModal, false);
     assert.equal(a.editingUser, null);
+    a.pendingEmailChange = {status: 'pending'}; a.emailChangeDraft = 'changed@example.test';
+    assert.equal(b.pendingEmailChange, null); assert.equal(b.emailChangeDraft, '');
     a.userForm.role = 'admin'; a.showUserModal = true; a.editingUser = 42;
     assert.deepEqual(plain(b.userForm), initial);
     assert.equal(b.showUserModal, false); assert.equal(b.editingUser, null);
