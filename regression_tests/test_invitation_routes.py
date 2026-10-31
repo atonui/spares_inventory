@@ -197,6 +197,7 @@ def test_invitation_list_only_returns_active_unexpired_rows(invitation_api):
                VALUES (%s, %s, 'engineer', %s, %s, %s, %s, %s, %s)""",
             (api.org_id, email, uuid4().hex, invited_by, expires_at, accepted_at, accepted_by, canceled_at),
         )
+    api.admin.commit()
 
     listing = api.endpoint("GET", "/api/users/invitations")
     result = asyncio.run(listing(request=api.request("owner"), user_id=api.principal("owner")))
