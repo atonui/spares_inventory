@@ -312,6 +312,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
     protected={(case[1],_route_template(case[2])) for case in STOCK_CASES+CATALOG_CASES+ADMIN_CASES}
     protected.add(('POST','/api/superadmin/database/restore'))
     protected.update({('PUT', '/api/organization/settings'),
+                      ('PUT', '/api/organization/mobile-session-policy'),
                       ('POST', '/api/organization/owner-transfer'),
                       ('POST', '/api/equipment/{equipment_id}/restore')})
     protected.update({
@@ -350,7 +351,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
     bearer_only.update(('POST', '/api/v1/inventory/' + path) for path in (
         'add', 'consume', 'transfer', 'transfers/{transfer_id}/receive', 'transfers/{transfer_id}/return'))
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==84
+    assert len(protected)==85
     assert registered==protected|exempt|bearer_only
 
 
