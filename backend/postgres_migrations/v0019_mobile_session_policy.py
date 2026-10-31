@@ -7,9 +7,6 @@ SQL = (
     """ALTER TABLE organization_settings
        ADD COLUMN mobile_session_duration_hours INTEGER NOT NULL DEFAULT 720
        CHECK (mobile_session_duration_hours BETWEEN 1 AND 720)""",
-    """INSERT INTO system_settings(setting_key, setting_value, description)
-       VALUES ('mobile_session_max_duration_hours', '720', 'Maximum mobile session lifetime in hours')
-       ON CONFLICT (setting_key) DO NOTHING""",
     "ALTER TABLE sessions ADD COLUMN is_mobile BOOLEAN NOT NULL DEFAULT FALSE",
     """UPDATE sessions SET is_mobile = TRUE
        WHERE id IN (SELECT session_id FROM mobile_device_sessions)""",
