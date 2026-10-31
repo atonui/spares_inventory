@@ -699,7 +699,7 @@ def test_password_change_revokes_all_native_refresh_credentials(native_auth_api)
 
     change_request = Request({
         "type": "http", "method": "POST", "path": "/api/profile/change-password",
-        "headers": [(b"authorization", f"Bearer {first['access_token']}".encode())],
+        "headers": [(b"authorization", f"Bearer {second['access_token']}".encode())],
         "client": ("127.0.0.1", 1234),
     })
     result = asyncio.run(api.endpoint("/api/profile/change-password")(
