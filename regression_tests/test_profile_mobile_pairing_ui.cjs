@@ -3,10 +3,20 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
 
-function setup(fetch) {
- const context={console,Intl,Date,Headers,URLSearchParams,fetch,window:{location:{href:''}}};
+function setup(fetch, mobile=false) {
+ const context={console,Intl,Date,Headers,URLSearchParams,fetch,window:{location:{href:'',matchMedia:query=>({matches:mobile && query==='(max-width: 760px)'})}}};
  vm.createContext(context);loadPageScripts('profile.html',context);return context.profileManager();
 }
+
+test('mobile website does not generate a pairing QR code',async()=>{
+ const calls=[];
+ const p=setup(async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',expires_at:'2026-10-21T12:02:00Z'})};},true);
+ p.profile.saas_mode=true;p.csrfToken='csrf';
+ assert.equal(p.isMobileViewport(),true);
+ await p.createMobilePairing();
+ assert.equal(calls.length,0);
+ assert.equal(p.mobilePairing,null);
+});
 
 test('desktop profile creates a no-store QR pairing request and polls device status',async()=>{
  const calls=[];
