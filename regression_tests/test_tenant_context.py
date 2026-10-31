@@ -143,7 +143,13 @@ def test_platform_admin_is_separate_from_suspended_organization_membership(postg
     assert principal.user_id == user_id
     assert principal.is_platform_admin is True
     assert principal.organization_id is None
-    assert principal.organization_is_active is False
+    assert principal.company_role is None
+    # An unrelated suspended organization does not attach itself to this
+    # platform identity; tenant access must still be explicitly denied.
+    from backend.services.tenant_context import require_company_principal
+    with pytest.raises(HTTPException) as error:
+        require_company_principal(principal)
+    assert error.value.status_code == 403
 
 
 def test_absolute_session_expiry_is_enforced(postgres_schema):

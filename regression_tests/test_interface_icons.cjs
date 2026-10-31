@@ -61,7 +61,7 @@ test('icon accents use a subtle Spares Tracker amber offset and fresh sprite URL
   }
   for (const file of fs.readdirSync('static').filter(name => name.endsWith('.html'))) {
     const html = read(file);
-    for (const reference of html.matchAll(/icons\.svg\?v=[^"#]+#(?:[\w-]+)/g)) {
+    for (const reference of html.matchAll(/(?<![\w-])icons\.svg\?v=[^"#]+#(?:[\w-]+)/g)) {
       assert.match(reference[0], /^icons\.svg\?v=20261019-icon-pack-v4#/, `${file} must request the updated icon sprite`);
     }
   }

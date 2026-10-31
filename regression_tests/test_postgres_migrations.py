@@ -2,6 +2,7 @@
 
 import pytest
 import psycopg
+from backend.postgres_migrations import registry as postgres_registry
 
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
@@ -197,6 +198,18 @@ def test_platform_admin_and_tenant_membership_are_mutually_exclusive(postgres_sc
             )
 
 
+def _run_identity_separation_cleanup(conn, migration):
+    """Exercise the lock, ownership guard and cleanup before trigger creation.
+
+    The schema already has v20 triggers; the tests disable them to seed legacy
+    dual-role data. Do not couple data-phase coverage to SQL tuple positions.
+    """
+    for statement in migration.statements:
+        if statement.lstrip().startswith("CREATE "):
+            break
+        conn.execute(statement)
+
+
 def test_identity_separation_migration_allows_platform_owner_when_another_active_owner_exists(postgres_schema):
     from backend.postgres_migrations.registry import MIGRATIONS
     from backend.postgres_migrations.runner import apply_postgres_migrations
@@ -221,8 +234,7 @@ def test_identity_separation_migration_allows_platform_owner_when_another_active
             "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner'),(%s,%s,'owner')",
             (organization_id, root_id, organization_id, owner_id),
         )
-        conn.execute(migration.statements[0])
-        conn.execute(migration.statements[1])
+        _run_identity_separation_cleanup(conn, migration)
         assert conn.execute(
             "SELECT count(*) AS n FROM organization_memberships WHERE user_id=%s", (root_id,)
         ).fetchone()["n"] == 0
@@ -254,7 +266,7 @@ def test_identity_separation_migration_refuses_the_only_active_owner(postgres_sc
                 "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner')",
                 (organization_id, user_id),
             )
-            conn.execute(migration.statements[0])
+            _run_identity_separation_cleanup(conn, migration)
 
 
 def test_identity_separation_migration_requires_a_non_platform_owner_to_remain(postgres_schema):
@@ -285,7 +297,7 @@ def test_identity_separation_migration_requires_a_non_platform_owner_to_remain(p
                     "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'owner')",
                     (organization_id, user_id),
                 )
-            conn.execute(migration.statements[0])
+            _run_identity_separation_cleanup(conn, migration)
 
 
 def test_platform_audit_indexes_cover_order_and_common_filters():
@@ -324,7 +336,7 @@ def test_email_change_request_constraints_are_append_only_and_single_active(post
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 20))
+    assert status.applied_versions == tuple(m.version for m in postgres_registry.MIGRATIONS)
     assert status.pending_versions == ()
 
     user_id = connection.execute(
@@ -358,7 +370,7 @@ def test_password_reset_outbox_message_type_is_supported(postgres_schema):
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 20))
+    assert status.applied_versions == tuple(m.version for m in postgres_registry.MIGRATIONS)
     connection.execute(
         "INSERT INTO mail_outbox (message_type, recipient_email, encrypted_payload, idempotency_key) "
         "VALUES ('password_reset', 'person@example.test', 'ciphertext', 'password-reset-test')"
@@ -412,7 +424,7 @@ def test_fresh_schema_applies_core_and_tenancy_migrations(postgres_schema):
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 20))
+    assert status.applied_versions == tuple(m.version for m in postgres_registry.MIGRATIONS)
     assert status.pending_versions == ()
     tenant_tables = {
         row["tablename"]
@@ -538,7 +550,7 @@ def test_native_refresh_migration_preserves_sessions_and_tracks_hashed_rotation(
         ),
     )
 
-    assert status.applied_versions == tuple(range(1, 20))
+    assert status.applied_versions == tuple(m.version for m in postgres_registry.MIGRATIONS)
     assert "absolute_expires_at" in session_columns
     assert migrated_expiry == session_expiry
     assert {
@@ -675,7 +687,7 @@ def test_v0004_pending_invitation_email_is_unique_per_organization(postgres_sche
 
     connection, _ = postgres_schema
     status = apply_postgres_migrations(connection)
-    assert status.applied_versions == tuple(range(1, 20))
+    assert status.applied_versions == tuple(m.version for m in postgres_registry.MIGRATIONS)
     connection.execute("SET LOCAL row_security = off")
     org_a = connection.execute(
         "INSERT INTO organizations (name, slug) VALUES ('A', 'a') RETURNING id"
@@ -726,7 +738,7 @@ def test_v0005_hashes_existing_sessions_and_drops_raw_session_values(postgres_sc
     monkeypatch.setattr(registry, "MIGRATIONS", all_migrations)
     status = apply_postgres_migrations(connection)
 
-    assert status.applied_versions == tuple(range(1, 20))
+    assert status.applied_versions == tuple(m.version for m in postgres_registry.MIGRATIONS)
     session_columns = {
         row["column_name"]
         for row in connection.execute(
