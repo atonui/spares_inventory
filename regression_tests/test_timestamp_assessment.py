@@ -49,6 +49,20 @@ def test_manifest_covers_schema_temporal_fields(database):
     assert all(field.provenance for field in TEMPORAL_FIELDS)
 
 
+def test_mobile_assessment_metadata_preserves_legacy_wire_instants():
+    from backend.temporal_contract import wire_instants
+
+    # The wire formatter has no table context. Adding stricter assessment
+    # fields must not replace existing policy for shared column names.
+    assert wire_instants({
+        'created_at': '2026-10-31 09:00:00',
+        'expires_at': '2026-11-01T09:00:00',
+    }) == {
+        'created_at': '2026-10-31T09:00:00.000000Z',
+        'expires_at': '2026-11-01T09:00:00.000000Z',
+    }
+
+
 @pytest.mark.parametrize(('table', 'column'), [
     ('mobile_pairing_requests', 'created_at'),
     ('mobile_pairing_requests', 'expires_at'),
