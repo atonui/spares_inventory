@@ -311,7 +311,7 @@ def test_login_events_persist_in_postgres(
         },
     )
     assert response.status_code == expected_status
-    row = admin.execute("SELECT * FROM platform_security_events").fetchone()
+    row = admin.execute("SELECT * FROM platform_security_events WHERE event=%s", (event,)).fetchone()
     assert row is not None
     assert (row["event"], row["outcome"], row["actor_user_id"]) == (
         event,

@@ -13,10 +13,13 @@ _EVENT_DETAILS = {
     "password_reset_failed": {"reason"},
     "password_reset_completed": set(),
     "password_changed": set(),
-    "session_revoked": {"is_mobile", "reason"},
+    "session_revoked": {"is_mobile", "reason", "session_count"},
+    "session_issued": {"is_mobile", "source"},
+    "session_rotated": {"is_mobile", "source"},
 }
 _OUTCOMES = {"success", "failure", "blocked"}
-_REASONS = {"invalid_credentials", "invalid_token", "token_expired", "weak_password", "too_many_attempts"}
+_SOURCES = {"browser_login", "native_login", "mobile_pairing", "native_refresh"}
+_REASONS = {"user_logout", "user_revoked", "other_sessions_revoked", "mobile_access_revoked", "session_replaced", "refresh_reuse", "account_unavailable", "invalid_credentials", "invalid_token", "token_expired", "weak_password", "too_many_attempts"}
 
 
 def safe_security_event_details(event: str, details) -> dict:
@@ -28,6 +31,10 @@ def safe_security_event_details(event: str, details) -> dict:
         if key == "account_match" and type(value) is bool:
             safe[key] = value
         elif key in {"is_mobile", "remember_me"} and type(value) is bool:
+            safe[key] = value
+        elif key == "source" and isinstance(value, str) and value in _SOURCES:
+            safe[key] = value
+        elif key == "session_count" and type(value) is int and 0 < value <= 2147483647:
             safe[key] = value
         elif key == "reason" and isinstance(value, str) and value in _REASONS:
             safe[key] = value

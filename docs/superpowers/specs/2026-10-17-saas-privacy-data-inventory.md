@@ -23,6 +23,10 @@ production or mobile audit.
   display name or submitted email. Password-change success events and diagnostics
   occur only after the password/session transaction commits. Older records are
   not retroactively redacted.
+- Session lifecycle events (v22 taxonomy) use fixed sources/reasons, a mobile flag
+  when known, and positive affected counts. Access/refresh credentials, hashes,
+  pairing secrets, device names, and client retry IDs are excluded. Refresh retries
+  do not duplicate rotation events.
 - No security-event reader API/UI or export is implemented. The deployment grant
   command limits the web runtime to curated INSERT columns and sequence USAGE;
   it has not been applied or verified against production by this update. Database
