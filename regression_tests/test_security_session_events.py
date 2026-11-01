@@ -123,6 +123,10 @@ def test_session_revocation_emits_after_commit(reset_unit_api, operation):
 @pytest.mark.parametrize("operation", ["other", "all"])
 def test_noop_revocation_does_not_emit_success_event(reset_unit_api, operation):
     client, db, events = reset_unit_api
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(1,'already-inactive','2099-01-01T00:00:00.000000Z',0)"
+        )
     path = (
         "/api/auth/revoke-other-sessions"
         if operation == "other"
@@ -411,3 +415,64 @@ def test_postgres_revocation_events_track_committed_state(security_api, operatio
             ).fetchone()["is_active"]
             is False
         )
+
+
+def test_v22_upgrade_preserves_v21_events_and_enables_new_taxonomy(
+    postgres_schema, monkeypatch
+):
+    import psycopg
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.services.security_events import record_security_event
+
+    conn, schema = postgres_schema
+    migrations = registry.MIGRATIONS
+    with monkeypatch.context() as patch:
+        patch.setattr(registry, "MIGRATIONS", migrations[:21])
+        assert apply_postgres_migrations(conn).current_version == 21
+    conn.commit()
+    record_security_event(conn, event="login_failed", outcome="failure")
+    conn.commit()
+    with pytest.raises(psycopg.errors.CheckViolation):
+        with conn.transaction():
+            record_security_event(conn, event="session_issued", outcome="success")
+    assert apply_postgres_migrations(conn).current_version == 22
+    conn.commit()
+    record_security_event(
+        conn,
+        event="session_issued",
+        outcome="success",
+        details={"is_mobile": True, "source": "native_login"},
+    )
+    conn.commit()
+    assert [
+        row["event"]
+        for row in conn.execute(
+            "SELECT event FROM platform_security_events ORDER BY id"
+        ).fetchall()
+    ] == ["login_failed", "session_issued"]
+
+
+def test_native_issue_commit_failure_never_emits_success(native_auth_api):
+    import psycopg
+
+    api = native_auth_api
+    api.connection.execute(
+        "CREATE FUNCTION reject_native_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'commit guard'; END $$"
+    )
+    api.connection.execute(
+        "CREATE CONSTRAINT TRIGGER reject_native_commit AFTER INSERT ON sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_native_commit()"
+    )
+    api.connection.commit()
+    with pytest.raises(psycopg.errors.RaiseException):
+        native_login(api)
+    assert (
+        api.connection.execute("SELECT count(*) AS n FROM sessions").fetchone()["n"]
+        == 0
+    )
+    assert (
+        api.connection.execute(
+            "SELECT count(*) AS n FROM platform_security_events"
+        ).fetchone()["n"]
+        == 0
+    )
