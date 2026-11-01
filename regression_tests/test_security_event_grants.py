@@ -114,6 +114,7 @@ def test_grant_command_refuses_privileged_runtime_and_preserves_existing_grants(
             sql.Identifier(runtime)
         )
     )
+    conn.execute("GRANT SELECT ON platform_security_events TO PUBLIC")
     if privileged_path == "set_role":
         conn.execute(
             sql.SQL("GRANT {} TO {}").format(
@@ -137,6 +138,10 @@ def test_grant_command_refuses_privileged_runtime_and_preserves_existing_grants(
                 sql.Identifier(schema), sql.Identifier(runtime)
             )
         )
+    before_acl = conn.execute(
+        "SELECT relacl FROM pg_class WHERE oid=%s::regclass",
+        (sql.Identifier(schema, "platform_security_events").as_string(conn),),
+    ).fetchone()["relacl"]
     conn.commit()
     try:
         with pytest.raises(ValueError, match="privileg|owner"):
@@ -152,6 +157,13 @@ def test_grant_command_refuses_privileged_runtime_and_preserves_existing_grants(
                 ),
             ).fetchone()["allowed"]
             is True
+        )
+        assert (
+            conn.execute(
+                "SELECT relacl FROM pg_class WHERE oid=%s::regclass",
+                (sql.Identifier(schema, "platform_security_events").as_string(conn),),
+            ).fetchone()["relacl"]
+            == before_acl
         )
     finally:
         conn.rollback()
