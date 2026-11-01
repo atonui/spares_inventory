@@ -18,7 +18,11 @@ production or mobile audit.
 - Purpose: authentication/account-recovery investigation. Login outcomes and
   reset request/failure/completion are recorded independently of tenant activity.
   Reset outcomes no longer write account email/name into activity details or
-  success runtime diagnostics. Older records are not retroactively redacted.
+  success runtime diagnostics. Login/lockout attempts no longer duplicate into
+  tenant activity; successful login diagnostics use the actor ID without the
+  display name or submitted email. Password-change success events and diagnostics
+  occur only after the password/session transaction commits. Older records are
+  not retroactively redacted.
 - No security-event reader API/UI or export is implemented. The deployment grant
   command limits the web runtime to curated INSERT columns and sequence USAGE;
   it has not been applied or verified against production by this update. Database

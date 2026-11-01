@@ -139,5 +139,6 @@ Tasks 3 and 4 can follow independently after their APIs are stable. Retention wo
 - Merged #315: v21 table, curated writer, login success/failure and already-locked account attempts.
 - Follow-up #316: reset request/failure/completion routing; no reset email/name in activity or success diagnostics; telemetry persistence failures use a fixed diagnostic without exception payload.
 - Follow-up #316 includes explicit opt-in runtime-grant tooling and disposable PostgreSQL integration tests. Production grants must be applied and verified by the operator; they have not been changed by development verification.
-- Still pending: lockout transition, password-change and session/mobile credential issue/rotation/revocation coverage; global event read authorization/API/UI (Task 4); final coverage matrix and rollout verification.
+- Next slice: account-lockout transition and committed password-change events; remove duplicate login activity records and submitted-identifier runtime logging.
+- Still pending after this slice: session/mobile credential issue/rotation/revocation coverage; global event read authorization/API/UI (Task 4); final coverage matrix and rollout verification.
 - Retention policy remains undecided. No purge, archive, export, or retention schedule added. IP/user-agent purpose and retention still require a decision before broader rollout.
