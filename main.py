@@ -32,6 +32,7 @@ from backend.app_activity import (
 from backend.email_service import send_password_reset_email
 from backend.services.password_reset_mail import enqueue_password_reset_mail
 from backend.services.store_email_notifications import enqueue_store_notification
+from backend.services.security_events import record_security_event
 
 
 configured_loggers = setup_logging()
@@ -278,6 +279,24 @@ def log_activity(
     )
 
 
+def log_platform_security_event(**event):
+    """Best-effort global auth telemetry; do not leak payloads on failures."""
+    from backend.database_sql import is_postgres
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not is_postgres(conn):
+            return
+        with conn.transaction():
+            record_security_event(conn, **event)
+    except Exception:
+        error_logger.exception("Failed to persist platform security event")
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def log_system_event(level: str, component: str, message: str, details: dict = None):
     """Log system events to database"""
     return _log_system_event(get_db_connection, logger, error_logger, level, component, message, details)
@@ -456,6 +475,7 @@ app.include_router(create_auth_router(
         expires_at=expires_at,
     ),
     activity_log=lambda **kwargs: log_activity(**kwargs),
+    security_event=log_platform_security_event,
     endpoint_log=log_endpoint,
     mutation_activity=lambda *args: _record_mutation_activity(*args),
     limiter=limiter,
