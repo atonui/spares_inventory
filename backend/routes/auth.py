@@ -562,7 +562,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             )
             raise HTTPException(status_code=400,detail='Invalid or expired token')
 
-        execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
+        execute_cursor(conn, cursor, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (user["id"],))
         if is_postgres(conn):
             from backend.services.platform_support import end_support_sessions
             end_support_sessions(conn, actor_user_id=user["id"], end_reason="password_changed")
