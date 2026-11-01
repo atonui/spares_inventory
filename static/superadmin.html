@@ -16,11 +16,11 @@
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
 <script src="js/pages/superadmin.js?v=20261101-platform-security-events" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
-    <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
+    <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.min.js" defer></script>
 <link rel="stylesheet" href="icons.css?v=20261017-sparesflow-button-contrast">
-    <link rel="stylesheet" href="password-visibility.css?v=20261029-password-visibility">
+    <link rel="stylesheet" href="password-visibility.css?v=20261101-password-icons">
 <link rel="stylesheet" href="buttons.css?v=20261023-app-button-system-v1">
 <link rel="stylesheet" href="platform-console-buttons.css?v=20261031-button-system-v1">
 <link rel="stylesheet" href="typography.css?v=20261023-font-scale-v1">
@@ -72,7 +72,7 @@
     <h3 id="support-start-title">Start customer support session</h3>
     <p>Read-only access to <strong x-text="supportStartOrg?.name"></strong> for up to 15 minutes. This access is recorded in the platform audit trail.</p>
     <div class="form-group"><label for="support-start-reason">Reason (10–500 characters)</label><textarea id="support-start-reason" rows="3" minlength="10" maxlength="500" x-model="supportStartForm.reason" required :disabled="supportStartPending"></textarea></div>
-    <div class="form-group"><label for="support-start-password">Confirm your current password</label><div class="password-field-control"><input id="support-start-password" type="password" autocomplete="current-password" x-model="supportStartForm.current_password" required maxlength="1024" :disabled="supportStartPending"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="support-start-password" aria-label="Show password" aria-pressed="false">Show</button></div></div>
+    <div class="form-group"><label for="support-start-password">Confirm your current password</label><div class="password-field-control"><input id="support-start-password" type="password" autocomplete="current-password" x-model="supportStartForm.current_password" required maxlength="1024" :disabled="supportStartPending"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="support-start-password" aria-label="Show password" aria-pressed="false"><svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M2.25 12s3.5-6.25 9.75-6.25S21.75 12 21.75 12s-3.5 6.25-9.75 6.25S2.25 12 2.25 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" stroke="currentColor" stroke-width="1.8"/><path class="password-visibility-icon-slash" d="m4 4 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>
     <p x-show="supportStartError" class="action-error" role="alert" x-text="supportStartError"></p>
     <div class="confirm-actions"><button type="button" class="btn btn-outline" @click="supportStartOpen=false;supportStartForm.current_password=''" :disabled="supportStartPending">Cancel</button><button type="submit" class="btn btn-red" :disabled="supportStartPending" x-text="supportStartPending ? 'Starting…' : 'Start support session'"></button></div>
   </form>
@@ -1004,13 +1004,13 @@
       <label for="reset-password">New Password</label>
       <div class="password-field-control"><input id="reset-password" type="password" x-model="resetModal.password" :disabled="actionPending.reset"
              placeholder="Minimum 8 characters"
-             style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="reset-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+             style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="reset-password" aria-label="Show password" aria-pressed="false"><svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M2.25 12s3.5-6.25 9.75-6.25S21.75 12 21.75 12s-3.5 6.25-9.75 6.25S2.25 12 2.25 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" stroke="currentColor" stroke-width="1.8"/><path class="password-visibility-icon-slash" d="m4 4 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
     </div>
     <div class="form-group">
       <label for="reset-confirm">Confirm Password</label>
       <div class="password-field-control"><input id="reset-confirm" type="password" x-model="resetModal.confirm" :disabled="actionPending.reset"
              placeholder="Repeat new password"
-             style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="reset-confirm" aria-label="Show password" aria-pressed="false">Show</button></div>
+             style="width:100%;padding:.5rem;border:1px solid var(--brand-border);border-radius:4px;font-size:.875rem;"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="reset-confirm" aria-label="Show password" aria-pressed="false"><svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M2.25 12s3.5-6.25 9.75-6.25S21.75 12 21.75 12s-3.5 6.25-9.75 6.25S2.25 12 2.25 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" stroke="currentColor" stroke-width="1.8"/><path class="password-visibility-icon-slash" d="m4 4 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
     </div>
     <div x-show="resetModal.error || actionErrors.reset" role="alert"
          style="background:#f8d7da;color:#721c24;padding:.5rem .75rem;border-radius:4px;font-size:.85rem;margin-bottom:.75rem;"
