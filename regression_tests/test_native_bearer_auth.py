@@ -498,6 +498,18 @@ def test_native_refresh_rejects_expired_refresh_credential(native_auth_api):
         "SELECT is_active FROM sessions WHERE id = %s", (session_id,),
     ).fetchone()
     assert session["is_active"] is False
+    events = api.connection.execute(
+        "SELECT event, details FROM platform_security_events WHERE event='session_revoked' ORDER BY id"
+    ).fetchall()
+    assert events == [{"event": "session_revoked", "details": {"is_mobile": True, "reason": "token_expired", "session_count": 1}}]
+    with pytest.raises(HTTPException) as repeated:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id + "-retry",
+        ))
+    assert repeated.value.status_code == 401
+    assert api.connection.execute(
+        "SELECT count(*) AS n FROM platform_security_events WHERE event='session_revoked'"
+    ).fetchone()["n"] == 1
 
 
 def test_native_refresh_revokes_session_when_membership_is_inactive(native_auth_api):
@@ -534,6 +546,18 @@ def test_native_refresh_revokes_session_when_membership_is_inactive(native_auth_
     assert api.connection.execute(
         "SELECT is_active FROM sessions WHERE id = %s", (session_id,),
     ).fetchone()["is_active"] is False
+    events = api.connection.execute(
+        "SELECT event, details FROM platform_security_events WHERE event='session_revoked' ORDER BY id"
+    ).fetchall()
+    assert events == [{"event": "session_revoked", "details": {"is_mobile": True, "reason": "account_unavailable", "session_count": 1}}]
+    with pytest.raises(HTTPException) as repeated:
+        asyncio.run(api.endpoint("/api/auth/native/refresh")(
+            NativeRefreshRequest(refresh_token=original["refresh_token"]), request, request_id + "-retry",
+        ))
+    assert repeated.value.status_code == 401
+    assert api.connection.execute(
+        "SELECT count(*) AS n FROM platform_security_events WHERE event='session_revoked'"
+    ).fetchone()["n"] == 1
 
 
 def test_company_membership_deactivation_revokes_native_refresh_credential(native_auth_api):

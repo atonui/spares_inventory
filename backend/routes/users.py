@@ -32,6 +32,18 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     _record_mutation_activity = mutation_activity
     limiter = limiter or type("NoLimiter", (), {"limit": lambda self, _rule: lambda function: function})()
 
+    log_security_event = security_event or (lambda **_event: None)
+
+    def log_member_revocation(actor_id, target_user_id, count, reason, request):
+        if count <= 0:
+            return
+        log_security_event(
+            event="session_revoked", outcome="success", actor_user_id=actor_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent", "")[:200],
+            details={"reason": reason, "target_user_id": target_user_id, "session_count": count},
+        )
+
     def email_change_scope(conn, actor, target_user_id):
         principal = require_company_admin(actor, conn)
         target = execute(
@@ -379,7 +391,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                     raise HTTPException(status_code=403, detail="Transfer ownership before removing the owner")
                 if target["company_role"] == "admin" and current_actor.company_role != "owner":
                     raise HTTPException(status_code=403, detail="Only the owner can remove an admin")
-                execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
+                revoked_count = execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND is_active = TRUE", (target_user_id,)).rowcount
                 from backend.services.platform_support import end_support_sessions
                 end_support_sessions(conn, actor_user_id=current_actor.user_id, target_user_id=target_user_id,
                                      end_reason="membership_removed")
@@ -390,8 +402,11 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                 )
                 result = {"success": True, "message": "Company membership removed"}
                 _record_mutation_activity(conn, current_actor, "remove_user", "user", result, request)
-                return result
-            raise HTTPException(status_code=501, detail="Company member removal is available in SaaS mode")
+            else:
+                raise HTTPException(status_code=501, detail="Company member removal is available in SaaS mode")
+        log_member_revocation(current_actor.user_id, target_user_id, revoked_count,
+                              "membership_removed", request)
+        return result
 
 
     @router.delete("/api/users/{target_user_id}")
@@ -403,7 +418,8 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if is_postgres(conn):
+            postgres = is_postgres(conn)
+            if postgres:
                 user_id = require_company_admin(user_id, conn)
                 target = execute(
                     conn,
@@ -425,13 +441,16 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                        WHERE organization_id = ? AND user_id = ? AND is_active = TRUE""",
                     (user_id.organization_id, target_user_id),
                 )
-                execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
+                revoked_count = execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND is_active = TRUE", (target_user_id,)).rowcount
                 from backend.services.platform_support import end_support_sessions
                 end_support_sessions(conn, actor_user_id=user_id.user_id, target_user_id=target_user_id,
                                      end_reason="membership_deactivated")
                 result = {"success": True, "message": "Company membership deactivated"}
                 _record_mutation_activity(conn, user_id, "deactivate_user", "user", result, request)
-                return result
+        if postgres:
+            log_member_revocation(user_id.user_id, target_user_id, revoked_count,
+                                  "membership_deactivated", request)
+            return result
         return archive_record("users", target_user_id, user_id, session_token=get_request_credential(request).value)
 
     return router

@@ -27,6 +27,19 @@ production or mobile audit.
   when known, and positive affected counts. Access/refresh credentials, hashes,
   pairing secrets, device names, and client retry IDs are excluded. Refresh retries
   do not duplicate rotation events.
+- The follow-up in PR #319 records committed member-removal/deactivation session
+  invalidations with the initiating actor ID and affected account ID in curated
+  event fields, a fixed reason, and the positive number of active sessions ended.
+  It does not add email/name or raw credentials. These events are written after
+  the membership/session transaction commits; a process failure in that interval
+  can leave the committed mutation without its telemetry event. No event is emitted
+  for denied, foreign, rolled-back, or no-active-session cases.
+- Organization suspension and platform-administrator role removal retain their
+  distinct platform audit records and do not themselves mark ordinary sessions
+  inactive. Shortening the global mobile-session maximum can change expiry and
+  deactivate already-expired rows; its setting audit records the policy change,
+  but per-account session-revocation telemetry is not currently emitted for that
+  side effect.
 - No security-event reader API/UI or export is implemented. The deployment grant
   command limits the web runtime to curated INSERT columns and sequence USAGE;
   it has not been applied or verified against production by this update. Database
@@ -34,6 +47,8 @@ production or mobile audit.
 - Event retention and the separate purpose/access period for IP/user-agent are
   undecided. No purge/archive schedule is introduced. This source review does
   not establish production access settings, storage immutability, or compliance.
+- Operator-supplied platform audit reasons remain bounded free text; the writer
+  allowlist does not provide general PII detection or scrubbing.
 - Persistence failures emit a fixed diagnostic without exception text/payload
   and do not change public authentication responses. PostgreSQL integration
   coverage uses a disposable `_test` database.

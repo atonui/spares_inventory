@@ -205,6 +205,8 @@ def create_platform_organizations_router(
                 raise HTTPException(status_code=404, detail="Organization member not found")
             if membership["company_role"] == "owner":
                 raise HTTPException(status_code=409, detail="Transfer ownership in company settings first")
+            if membership["company_role"] == body.role:
+                return {"success": True}
             conn.execute(
                 "UPDATE organization_memberships SET company_role = %s WHERE organization_id = %s AND user_id = %s",
                 (body.role, org_id, user_id),

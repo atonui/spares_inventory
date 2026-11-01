@@ -169,3 +169,26 @@ def test_unchanged_platform_company_role_does_not_duplicate_audit(platform_api, 
     assert api.admin.execute(
         "SELECT count(*) AS n FROM platform_audit_events WHERE action='company_role_changed'"
     ).fetchone()["n"] == (0 if role == "manager" else 1)
+
+
+@pytest.mark.parametrize("result", ["private-token", None, {}, True])
+def test_platform_audit_writer_rejects_unrecognized_results_before_sql(result):
+    from backend.services.platform_audit import record_platform_audit_event
+
+    class Capture:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, *args):
+            self.calls.append(args)
+
+    conn = Capture()
+    with pytest.raises(ValueError, match="Unsupported platform audit result"):
+        record_platform_audit_event(
+            conn,
+            1,
+            "platform_admin_granted",
+            result,
+            details={"target_user_id": 2},
+        )
+    assert conn.calls == []

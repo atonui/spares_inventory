@@ -476,3 +476,23 @@ def test_native_issue_commit_failure_never_emits_success(native_auth_api):
         ).fetchone()["n"]
         == 0
     )
+
+
+@pytest.mark.parametrize('operation', ['specific','other','all'])
+def test_repeated_revocation_does_not_create_duplicate_events(reset_unit_api,operation):
+    from backend.services.session_credentials import hash_session_credential
+    client,db,events=reset_unit_api
+    with sqlite3.connect(db) as conn:
+        sid=conn.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(1,?,'2099-01-01T00:00:00.000000Z')",(hash_session_credential('repeat-target'),)).lastrowid
+    headers={'Cookie':'session_token=fixture-session-1'}
+    if operation=='specific':
+        call=lambda:client.delete(f'/api/auth/sessions/{sid}',headers=headers)
+    else:
+        path='/api/auth/revoke-other-sessions' if operation=='other' else '/api/auth/sessions/revoke-all'
+        call=lambda:client.post(path,headers=headers)
+    assert call().status_code==200
+    first=list(events)
+    assert len(first)==1
+    assert first[0]['details']['session_count']==1
+    assert call().status_code==200
+    assert events==first
