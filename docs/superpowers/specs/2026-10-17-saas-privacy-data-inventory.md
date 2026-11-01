@@ -43,10 +43,13 @@ production or mobile audit.
   fan-out for a global policy action. The setting audit remains the transaction-
   scoped record of the configuration change; the aggregate security event is
   best-effort after commit.
-- No security-event reader API/UI or export is implemented. The deployment grant
-  command limits the web runtime to curated INSERT columns and sequence USAGE;
-  it has not been applied or verified against production by this update. Database
-  owners retain their normal control. The mail worker needs no stream access.
+- The platform-authorized security-event reader API/UI exposes IDs, event,
+  outcome, allowlisted details, and UTC timestamps; it does not return IP,
+  user-agent, request ID, or unmatched submitted identifiers. The deployment
+  grant command can add column-level SELECT for these reader fields while
+  excluding IP, user-agent, and request ID. This option has not been applied or
+  verified against production by this update. Database owners retain their
+  normal control. The mail worker needs no stream access. No export is implemented.
 - Event retention and the separate purpose/access period for IP/user-agent are
   undecided. No purge/archive schedule is introduced. This source review does
   not establish production access settings, storage immutability, or compliance.

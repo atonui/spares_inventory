@@ -37,6 +37,29 @@ const PLATFORM_AUDIT_SETTING_LABELS = Object.freeze({
   session_duration_hours:'Session duration', remember_me_duration_days:'Remember Me duration',
   mobile_session_max_duration_hours:'Mobile session maximum',
 });
+const PLATFORM_SECURITY_EVENT_LABELS = Object.freeze({
+  login_succeeded: 'Sign-in succeeded', login_failed: 'Sign-in failed', login_blocked: 'Sign-in blocked',
+  account_locked: 'Account locked', password_reset_requested: 'Password reset requested',
+  password_reset_failed: 'Password reset failed', password_reset_completed: 'Password reset completed',
+  password_changed: 'Password changed', session_issued: 'Session issued', session_rotated: 'Session rotated',
+  session_revoked: 'Session revoked',
+});
+const PLATFORM_SECURITY_DETAIL_LABELS = Object.freeze({
+  account_match: 'Account match', reason: 'Reason', is_mobile: 'Mobile session', remember_me: 'Remember me',
+  source: 'Source', session_count: 'Sessions affected', target_user_id: 'Target user ID',
+});
+const PLATFORM_SECURITY_OUTCOME_LABELS = Object.freeze({success:'Succeeded', failure:'Failed', blocked:'Blocked'});
+const PLATFORM_SECURITY_DETAIL_VALUES = Object.freeze({
+  reason: {
+    invalid_credentials:'Invalid credentials', too_many_attempts:'Too many attempts', weak_password:'Password policy not met',
+    user_logout:'User signed out', user_revoked:'User revoked the session', other_sessions_revoked:'Other sessions revoked',
+    mobile_access_revoked:'Mobile access revoked', session_replaced:'Session replaced', refresh_reuse:'Refresh token reuse detected',
+    account_unavailable:'Account unavailable', invalid_token:'Invalid token', token_expired:'Token expired',
+    membership_removed:'Organization membership removed', membership_deactivated:'Organization membership deactivated',
+    mobile_duration_policy:'Mobile session duration policy',
+  },
+  source: {browser_login:'Browser sign-in', native_login:'Native sign-in', mobile_pairing:'Mobile pairing', native_refresh:'Native refresh'},
+});
 
 function superPanel() {
   return {
@@ -79,8 +102,9 @@ function superPanel() {
     selectSection(section) {
       if (!Object.hasOwn(this.tabTitles, section)) return;
       if (section === 'support' && !this.me?.saas_mode) return;
+      if (section === 'platformSecurityEvents' && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
       if (this.me?.saas_mode) {
-        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit'];
+        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'];
         if (section === 'support' && this.supportSession) allowed.push('support');
         if (!allowed.includes(section)) return;
       }
@@ -128,12 +152,13 @@ function superPanel() {
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
       organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
+      platformSecurityEvents: 'Security events',
       support: 'Customer Support',
     },
     platformTabTitles: {
       dashboard: 'Overview', organizations: 'Organizations', support: 'Customer support',
       platformAdmins: 'Platform access', config: 'Security settings',
-      announcement: 'Announcements', platformAudit: 'Audit log',
+      announcement: 'Announcements', platformAudit: 'Audit log', platformSecurityEvents: 'Security events',
     },
 
     // data stores
@@ -149,6 +174,9 @@ function superPanel() {
     platformAuditRows: [], platformAuditTotal: 0, platformAuditOffset: 0,
     platformAuditLoading: false, platformAuditError: '',
     platformAuditFilters: { actor_user_id: '', organization_id: '', action: '', result: '', start_at: '', end_at: '' },
+    platformSecurityEventRows: [], platformSecurityEventTotal: 0, platformSecurityEventOffset: 0,
+    platformSecurityEventLoading: false, platformSecurityEventError: '',
+    platformSecurityEventFilters: { event_family: '', outcome: '', account_match: '', actor_user_id: '', start_at: '', end_at: '' },
     organizationForm: { name: '', slug: '', owner_email: '' },
     supportSession: null, supportNow: Date.now(), supportExpiryTimer: null,
     supportStartOrg: null, supportStartOpen: false, supportStartPending: false,
@@ -276,6 +304,7 @@ function superPanel() {
         organizations: () => this.loadOrganizations(),
         platformAdmins: () => this.loadPlatformAdmins(),
         platformAudit: () => this.loadPlatformAudit(),
+        platformSecurityEvents: () => this.loadPlatformSecurityEvents(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
@@ -725,6 +754,60 @@ async submitPasswordReset() {
       } finally {
         this.platformAuditLoading = false;
       }
+    },
+
+    async loadPlatformSecurityEvents(offset = 0) {
+      if (this.platformSecurityEventLoading) return;
+      const request = new URLSearchParams({ limit: '50', offset: String(offset) });
+      for (const [key, value] of Object.entries(this.platformSecurityEventFilters)) {
+        if (String(value).trim()) request.set(key, String(value).trim());
+      }
+      this.platformSecurityEventLoading = true;
+      this.platformSecurityEventError = '';
+      try {
+        const data = await this.api(`/platform/security-events?${request.toString()}`);
+        this.platformSecurityEventRows = Array.isArray(data.rows) ? data.rows : [];
+        this.platformSecurityEventTotal = Number.isInteger(data.total) ? data.total : 0;
+        this.platformSecurityEventOffset = data.offset || 0;
+      } catch (error) {
+        this.platformSecurityEventRows = [];
+        this.platformSecurityEventTotal = 0;
+        this.platformSecurityEventError = error.message || 'Unable to load security events.';
+      } finally {
+        this.platformSecurityEventLoading = false;
+      }
+    },
+
+    platformSecurityEventLabel(event) {
+      return Object.hasOwn(PLATFORM_SECURITY_EVENT_LABELS, event)
+        ? PLATFORM_SECURITY_EVENT_LABELS[event] : 'Other security event';
+    },
+
+    platformSecurityOutcomeLabel(outcome) {
+      return Object.hasOwn(PLATFORM_SECURITY_OUTCOME_LABELS, outcome)
+        ? PLATFORM_SECURITY_OUTCOME_LABELS[outcome] : 'Unknown outcome';
+    },
+
+    platformSecurityDetailLabel(key) {
+      return Object.hasOwn(PLATFORM_SECURITY_DETAIL_LABELS, key)
+        ? PLATFORM_SECURITY_DETAIL_LABELS[key] : 'Other detail';
+    },
+
+    platformSecurityDetailEntries(details) {
+      if (!details || typeof details !== 'object' || Array.isArray(details)) return [];
+      return Object.entries(details).filter(([key]) => Object.hasOwn(PLATFORM_SECURITY_DETAIL_LABELS, key));
+    },
+
+    platformSecurityDetailValue(key, value) {
+      if (key === 'account_match' || key === 'is_mobile' || key === 'remember_me')
+        return value === true ? 'Yes' : value === false ? 'No' : 'Unknown';
+      if (Object.hasOwn(PLATFORM_SECURITY_DETAIL_VALUES, key)) {
+        const labels = PLATFORM_SECURITY_DETAIL_VALUES[key];
+        return typeof value === 'string' && Object.hasOwn(labels, value) ? labels[value] : 'Unknown';
+      }
+      if (key === 'session_count' || key === 'target_user_id')
+        return Number.isSafeInteger(value) && value > 0 ? String(value) : 'Unknown';
+      return 'Unknown';
     },
 
     platformAuditActionLabel(action) {

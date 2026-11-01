@@ -512,6 +512,7 @@ app.include_router(create_organization_settings_router(
 from backend.routes.invitations import create_invitation_router
 from backend.routes.platform_organizations import create_platform_organizations_router
 from backend.routes.platform_audit import create_platform_audit_router
+from backend.routes.platform_security_events import create_platform_security_events_router
 from backend.routes.platform_settings import create_platform_settings_router
 from backend.routes.platform_support import create_platform_support_router
 
@@ -536,6 +537,9 @@ app.include_router(create_platform_organizations_router(
     frontend_url=settings.INVITATION_BASE_URL or FRONTEND_URL,
 ))
 app.include_router(create_platform_audit_router(
+    get_connection=lambda: get_db_connection(), current_user=get_current_user,
+))
+app.include_router(create_platform_security_events_router(
     get_connection=lambda: get_db_connection(), current_user=get_current_user,
 ))
 app.include_router(create_platform_support_router(

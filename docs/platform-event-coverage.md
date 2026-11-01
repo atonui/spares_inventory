@@ -1,6 +1,6 @@
 # Platform audit and security event coverage
 
-This matrix describes the implemented PostgreSQL audit and security streams after PR #318 and the proposed follow-up in PR #319. It separates the administrative audit trail (`platform_audit_events`) from authentication/session telemetry (`platform_security_events`) and tenant activity (`activity_logs`). “Verified” refers to source/tests named below; it does not certify production grants, backups, retention, or provider configuration.
+This matrix describes the implemented PostgreSQL audit and security streams after PRs #318–#322. It separates the administrative audit trail (`platform_audit_events`) from authentication/session telemetry (`platform_security_events`) and tenant activity (`activity_logs`). “Verified” refers to source/tests named below; it does not certify production grants, backups, retention, or provider configuration.
 
 | Operation | Stream and behavior | Boundary and no-op behavior | Evidence / remaining gap |
 | --- | --- | --- | --- |
@@ -20,7 +20,9 @@ This matrix describes the implemented PostgreSQL audit and security streams afte
 
 - Platform audit and security event writers accept curated action/event enums and safe detail allowlists. The platform audit writer also accepts only `success`, `denied`, or `failure` results.
 - Unknown-account login attempts omit the submitted identifier. Reset-failure details contain a fixed reason only. Security events do not include passwords, reset/session/refresh/CSRF tokens, request bodies, or authorization headers.
-- `platform_security_events` is outside tenant RLS. Runtime writes require the explicit least-privilege grant helper; development did not apply grants in production. Platform-authorized read API/UI work remains a later task.
+- `platform_security_events` is outside tenant RLS. Runtime writes and the selected reader columns require the explicit least-privilege grant helper; development did not apply grants in production.
+- The Security events reader uses authenticated platform transactions and returns only event IDs, actor IDs, curated event/outcome/details, and UTC timestamps. It never returns IP address, user-agent, or request ID. The deployment helper's `--platform-reader` option grants SELECT only on the reader columns while withholding those three fields; production grants remain an operator action.
+- `/api/platform/security-events` is read-only, newest-first, limited to 100 rows per page, and supports UTC bounds plus authentication/password/session-family, outcome, account-match, and actor filters. The Platform Administration console presents it separately from Audit log and renders only fixed labels and allowlisted detail values.
 - Runtime grant behavior and selected persistence/rollback paths have disposable PostgreSQL regression coverage. A successful CI run is evidence for those tests, not proof of production role grants or provider configuration.
 - Operator-supplied audit reasons are bounded free text; the code does not perform generalized PII scrubbing of those strings. Keep reasons concise and free of personal data.
 - No retention schedule, purge/archive job, export, backup guarantee, or tamper-evident/immutable storage claim is made. These require separate decisions and operational verification.
