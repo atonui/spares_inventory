@@ -68,13 +68,13 @@ def create_platform_audit_router(*, get_connection, current_user) -> APIRouter:
         for column, value in (("actor_user_id", actor_user_id), ("organization_id", org_id),
                               ("action", action), ("result", result)):
             if value is not None:
-                filters.append(f"{column} = %s")
+                filters.append(f"e.{column} = %s")
                 params.append(value)
         if start:
-            filters.append("created_at >= %s")
+            filters.append("e.created_at >= %s")
             params.append(start)
         if end:
-            filters.append("created_at < %s")
+            filters.append("e.created_at < %s")
             params.append(end)
         where = " WHERE " + " AND ".join(filters) if filters else ""
         with authenticated_platform_transaction(
@@ -82,12 +82,16 @@ def create_platform_audit_router(*, get_connection, current_user) -> APIRouter:
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
         ) as (conn, _principal):
             total = conn.execute(
-                "SELECT count(*) AS total FROM platform_audit_events" + where, tuple(params)
+                "SELECT count(*) AS total FROM platform_audit_events AS e" + where, tuple(params)
             ).fetchone()["total"]
             rows = conn.execute(
-                """SELECT id, actor_user_id, organization_id, action, result, details, created_at
-                   FROM platform_audit_events""" + where +
-                " ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s",
+                """SELECT e.id, e.actor_user_id, e.organization_id, e.action, e.result,
+                          e.details, e.created_at, u.name AS actor_name,
+                          o.name AS organization_name, o.slug AS organization_slug
+                   FROM platform_audit_events AS e
+                   LEFT JOIN users AS u ON u.id = e.actor_user_id
+                   LEFT JOIN organizations AS o ON o.id = e.organization_id""" + where +
+                " ORDER BY e.created_at DESC, e.id DESC LIMIT %s OFFSET %s",
                 (*params, limit, offset),
             ).fetchall()
             safe_rows = []

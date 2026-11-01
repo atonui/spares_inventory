@@ -204,6 +204,15 @@ def test_platform_audit_reader_filters_pages_and_redacts_details(platform_api):
         str(api.org_id), str(other_org_id),
     }
     assert all_rows["rows"][-1]["details"] == {"target_user_id": 56, "role": "engineer"}
+    tenant_event = next(
+        row for row in all_rows["rows"]
+        if row["organization_id"] == str(api.org_id) and row["action"] == "company_role_changed"
+    )
+    assert tenant_event["actor_name"] == "Platform"
+    assert tenant_event["organization_name"] == "Audit Tenant"
+    assert tenant_event["organization_slug"].startswith("audit-")
+    assert all("actor_email" not in row for row in all_rows["rows"])
+    assert "@example.test" not in str(all_rows)
 
 
 @pytest.mark.parametrize("kwargs", [

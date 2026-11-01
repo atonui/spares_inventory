@@ -97,6 +97,14 @@ body.platform-console { background: var(--brand-page); color: var(--brand-navy);
 .platform-console .audit-table td[data-label="Details"] { max-width:28rem; overflow-wrap:anywhere; }
 .platform-console .audit-table td[data-label="Details"] details { white-space:normal; overflow-wrap:anywhere; }
 .platform-console .audit-table td[data-label="Details"] pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.platform-console .platform-audit-identity strong,
+.platform-console .platform-audit-identity small { display:block; }
+.platform-console .platform-audit-identity small { margin-top:.2rem; color:var(--brand-slate-on-page); font-size:.75rem; }
+.platform-console .platform-audit-details summary { min-height:2.5rem; display:flex; align-items:center; cursor:pointer; color:var(--brand-navy); font-weight:600; }
+.platform-console .platform-audit-details dl { display:grid; gap:.55rem; margin:.5rem 0 0; }
+.platform-console .platform-audit-details dl div { display:grid; grid-template-columns:minmax(7rem,auto) minmax(0,1fr); gap:.75rem; border-top:1px solid #e6ebf0; padding-top:.45rem; }
+.platform-console .platform-audit-details dt { color:var(--brand-slate-on-page); font-size:.78rem; }
+.platform-console .platform-audit-details dd { margin:0; overflow-wrap:anywhere; }
 @media (max-width:900px) {
   .platform-console .platform-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .platform-console .organization-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
