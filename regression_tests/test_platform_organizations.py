@@ -366,6 +366,13 @@ def test_platform_admin_grant_rejects_current_tenant_membership(platform_api):
 
     assert error.value.status_code == 409
     assert "remove this user's tenant membership" in error.value.detail.lower()
+    denied = api.admin.execute(
+        "SELECT actor_user_id, result, details FROM platform_audit_events WHERE action = 'platform_admin_granted'"
+    ).fetchall()
+    assert len(denied) == 1
+    assert denied[0]["actor_user_id"] == api.principal.user_id
+    assert denied[0]["result"] == "denied"
+    assert denied[0]["details"] == {"target_user_id": api.member_id}
 
 
 @pytest.mark.parametrize("archived", [False, True])
@@ -408,6 +415,13 @@ def test_platform_admin_cannot_remove_own_access_even_when_another_admin_exists(
     assert api.admin.execute(
         "SELECT count(*) AS total FROM platform_admins"
     ).fetchone()["total"] == 2
+    denied = api.admin.execute(
+        "SELECT actor_user_id, result, details FROM platform_audit_events WHERE action = 'platform_admin_revoked'"
+    ).fetchall()
+    assert len(denied) == 1
+    assert denied[0]["actor_user_id"] == api.principal.user_id
+    assert denied[0]["result"] == "denied"
+    assert denied[0]["details"] == {"target_user_id": api.principal.user_id}
 
 
 def test_last_platform_admin_cannot_be_removed(platform_api):
@@ -420,6 +434,13 @@ def test_last_platform_admin_cannot_be_removed(platform_api):
         ))
     assert error.value.status_code == 409
     assert api.admin.execute("SELECT count(*) AS total FROM platform_admins").fetchone()["total"] == 1
+    denied = api.admin.execute(
+        "SELECT actor_user_id, result, details FROM platform_audit_events WHERE action = 'platform_admin_revoked'"
+    ).fetchall()
+    assert len(denied) == 1
+    assert denied[0]["actor_user_id"] == api.principal.user_id
+    assert denied[0]["result"] == "denied"
+    assert denied[0]["details"] == {"target_user_id": api.principal.user_id}
 
 
 def test_platform_admin_grant_requires_platform_authority(platform_api):
@@ -486,9 +507,13 @@ def test_concurrent_platform_admin_revokes_cannot_remove_last_admin(platform_api
     assert api.admin.execute(
         "SELECT count(*) AS total FROM platform_admins pa JOIN users u ON u.id=pa.user_id WHERE u.archived_at IS NULL"
     ).fetchone()["total"] == 1
-    assert api.admin.execute(
-        "SELECT count(*) AS total FROM platform_audit_events WHERE action = 'platform_admin_revoked'"
-    ).fetchone()["total"] == 1
+    audit_results = api.admin.execute(
+        "SELECT result, count(*) AS total FROM platform_audit_events "
+        "WHERE action = 'platform_admin_revoked' GROUP BY result"
+    ).fetchall()
+    counts = {row["result"]: row["total"] for row in audit_results}
+    assert counts.get("success", 0) == 1
+    assert counts.get("denied", 0) == sum(result == 409 for result in results)
 
 
 def test_platform_web_role_cannot_read_mail_outbox_rows(platform_api):
