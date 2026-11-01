@@ -75,6 +75,7 @@ function superPanel() {
     },
     tab: 'dashboard',
     loading: false,
+    logoutPending: false,
     apiUrl: '/api',
     csrfToken: '',
     me: null,
@@ -293,6 +294,21 @@ async submitPasswordReset() {
     async getCsrf() {
       try { await InventoryCsrf.token(this, this.apiUrl); }
       catch (e) { this.toast(e.message, 'danger'); }
+    },
+
+    async logout() {
+      if (this.logoutPending) return;
+      this.logoutPending = true;
+      try {
+        await this.api('/auth/logout', { method: 'POST' });
+        this.me = null;
+        this.ready = false;
+        window.location.href = '/static/index.html';
+      } catch (error) {
+        this.toast(`Unable to log out: ${error.message || 'Please retry.'}`, 'danger');
+      } finally {
+        this.logoutPending = false;
+      }
     },
 
     async getMe() {

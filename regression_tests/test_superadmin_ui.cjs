@@ -38,6 +38,17 @@ test('settings cannot save before a successful load or during refresh',async()=>
 });
 test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
 test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,17);assert.match(html,/aria-current/);});
+test('platform admin can end the authenticated session from the console',async()=>{
+ const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},window:{location:{href:''}},WeakMap};
+ vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();
+ a.me={saas_mode:true,is_platform_admin:true};a.ready=true;const calls=[];
+ a.api=async(path,options)=>{calls.push([path,options.method]);return {success:true};};
+ await a.logout();
+ assert.deepEqual(calls,[['/auth/logout','POST']]);
+ assert.equal(a.me,null);assert.equal(a.ready,false);
+ assert.equal(c.window.location.href,'/static/index.html');
+ assert.match(html,/<button[^>]*x-show="me\?\.saas_mode && me\?\.is_platform_admin"[^>]*@click="logout\(\)"[^>]*>.*?Log out/s);
+});
 test('legacy superadmin cannot navigate to the SaaS support workspace',()=>{const a=app();a.me={saas_mode:false};a.tab='dashboard';a.selectSection('support');assert.equal(a.tab,'dashboard');assert.match(html,/!me\?\.saas_mode && key!=='support'/);});
 test('SaaS platform boot loads only platform data',async()=>{
  const a=app(),calls=[];
