@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261031-console-ready-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261101-platform-admin-logout" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -201,6 +201,7 @@
       <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
       <div class="topbar-right">
         <span class="platform-context" x-show="me?.saas_mode">Platform level</span>
+        <button type="button" class="btn btn-sm btn-outline" x-show="me?.saas_mode && me?.is_platform_admin" @click="logout()" :disabled="logoutPending" aria-label="Log out"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> <span x-text="logoutPending ? 'Logging out…' : 'Log out'"></span></button>
         <span x-show="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)" class="spin"></span>
         <button class="btn btn-sm btn-outline ui-icon-only" @click="refresh()" :disabled="loading || panelLoads[tab]?.loading || (tab==='organizations' && organizationLoading) || (tab==='platformAdmins' && platformAdminLoading) || (tab==='announcement' && announcementLoading) || (tab==='support' && supportLoading)" aria-label="Refresh current section" title="Refresh current section"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
         <a x-show="!me?.saas_mode" href="/static/index.html" class="btn btn-sm btn-outline"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#arrow-left"></use></svg> Back to inventory</a>
