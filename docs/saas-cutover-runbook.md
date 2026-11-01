@@ -367,14 +367,16 @@ support sessions and prevents future reads. If the browser is stale, reload the
 page and verify the session banner is gone. Support API responses use
 `Cache-Control: no-store`, including error responses.
 
-### Global security-event writer privileges (migration v21 onward)
+### Global security-event privileges (migration v21 onward)
 
 `platform_security_events` is a global stream, outside tenant RLS. Until the
-platform-authorized reader is implemented, the web runtime needs **INSERT only**
-on the curated writer columns and **USAGE only** on its identity sequence. It
-must not receive SELECT, UPDATE, DELETE, TRUNCATE, ownership, or DDL rights. Do
-not add this table to the broad table-grant list above. The mail worker needs no
-privileges on it.
+the web runtime needs **INSERT only** on curated writer columns and **USAGE only**
+on its identity sequence. Once the platform-authorized Security events API is
+deployed, the web runtime also needs column-level **SELECT** on the API fields:
+`id`, `actor_user_id`, `event`, `outcome`, `details`, and `created_at`. The runtime
+must never receive access to `ip_address`, `user_agent`, or `request_id`, or
+UPDATE, DELETE, TRUNCATE, ownership, or DDL rights. Do not add this table to the
+broad table-grant list above. The mail worker needs no privileges on it.
 
 After applying migrations, run the following with the migration identity in a
 controlled environment, substituting the provisioned runtime role. This command
@@ -383,19 +385,21 @@ step. `MIGRATION_DATABASE_URL` must already be set securely; never paste its
 value into a command or log.
 
 ```bash
-python -m backend.security_event_grants --runtime-role spares_web
+python -m backend.security_event_grants --runtime-role spares_web --platform-reader
 ```
 
-The command replaces direct table, column, and sequence grants for that role
-and PUBLIC, including broad defaults inherited at table creation, with the
-writer's minimal grants. It refuses roles that retain effective read/tamper
+The `--platform-reader` option adds only the API's safe column-level read grants
+after replacing broad table, column, and sequence grants for that role and
+PUBLIC. Omit that option when deploying the writer without the reader. The
+command refuses roles that retain effective sensitive-column or tamper
 privileges (for example through ownership, superuser status, or role membership)
 and rolls back in that case; correct the role hierarchy separately. Re-run after
 any manual broad grant/default-privilege operation. It does not alter the
-migration owner's grants or enable a reader API.
+migration owner's grants or grant SELECT on IP address, user-agent, or request ID.
 
 Validate with `regression_tests/test_security_event_grants.py` against a
-disposable database whose name ends in `_test`. The test deliberately starts
-with broad table/column/sequence grants and checks insert persistence, denied
-reads/tampering, denied caller-supplied event IDs, and rollback behavior. These
-tests do not establish tamper evidence or immutable/compliance-grade storage.
+disposable database whose name ends in `_test`. The tests deliberately start
+with broad table/column/sequence grants and check insert persistence, the
+platform reader's limited selected columns, denied sensitive-column reads and
+tampering, denied caller-supplied event IDs, and rollback behavior. These tests
+do not establish tamper evidence or immutable/compliance-grade storage.

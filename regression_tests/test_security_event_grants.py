@@ -89,6 +89,46 @@ def test_runtime_security_event_grants_remove_defaults_and_allow_curated_inserts
         conn.commit()
 
 
+def test_platform_reader_grant_exposes_only_columns_used_by_security_view(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.security_event_grants import grant_security_event_writer
+
+    conn, schema = postgres_schema
+    apply_postgres_migrations(conn)
+    role = "security_reader_" + uuid4().hex
+    conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    conn.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema), sql.Identifier(role)))
+    conn.execute(sql.SQL("GRANT ALL ON platform_security_events TO {}").format(sql.Identifier(role)))
+    conn.execute(sql.SQL("GRANT ALL ON SEQUENCE platform_security_events_id_seq TO {}").format(sql.Identifier(role)))
+    conn.commit()
+    try:
+        grant_security_event_writer(conn, runtime_role=role, schema=schema, platform_reader=True)
+        conn.commit()
+        conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+        conn.execute(
+            "INSERT INTO platform_security_events (event,outcome,request_id,details) VALUES ('login_failed','failure',gen_random_uuid(),'{}')"
+        )
+        conn.execute("SELECT id,actor_user_id,event,outcome,details,created_at FROM platform_security_events").fetchall()
+        for query in [
+            "SELECT ip_address FROM platform_security_events",
+            "SELECT user_agent FROM platform_security_events",
+            "SELECT request_id FROM platform_security_events",
+            "SELECT * FROM platform_security_events",
+            "UPDATE platform_security_events SET event='login_failed'",
+            "DELETE FROM platform_security_events",
+        ]:
+            with pytest.raises(InsufficientPrivilege):
+                with conn.transaction():
+                    conn.execute(query)
+        conn.commit()
+    finally:
+        conn.rollback()
+        conn.execute("RESET ROLE")
+        conn.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
+        conn.commit()
+
+
 @pytest.mark.parametrize("privileged_path", ["set_role", "table_owner", "schema_owner"])
 def test_grant_command_refuses_privileged_runtime_and_preserves_existing_grants(
     postgres_schema, privileged_path

@@ -1,7 +1,7 @@
 # Platform Audit and Security Logging Implementation Plan
 
 **Date:** 2026-10-31  
-**Status:** Tasks 1 and 2 in progress; PRs #315–#319 merged; mobile policy invalidation telemetry is in PR #320
+**Status:** Tasks 1 and 2 remain in progress; Task 3 is complete in merged PR #322; Task 4 is in progress in the current branch. PRs #315–#322 are merged.
 **Design:** [Platform Audit and Security Logging Design](../specs/2026-10-31-platform-audit-security-logging-design.md)
 
 ## Scope and sequencing
@@ -79,6 +79,13 @@ Implement one task per reviewable PR. Preserve existing tenant RLS and the suppo
 - Cross-tenant and non-platform callers are denied.
 - Filters are bounded; sensitive event fields never reach the API/UI.
 - Existing platform console navigation and other tenant user flows remain intact.
+
+### Task 4 progress — 2026-11-01
+
+- Added a read-only `/api/platform/security-events` route using the authenticated platform transaction. It returns curated fields only, sanitizes historic details, limits pages to 100, orders newest-first, and validates event-family, outcome, account-match, actor, and UTC bounds.
+- Added a separate Security events console view with recent events by default, bounded pagination, filters, fixed event/outcome/detail labels, and text-only rendering. It omits unmatched submitted identifiers, IP address, user-agent, and request ID.
+- Extended the deployment grant helper with an opt-in `--platform-reader` mode for column-level SELECT on the API fields. The default remains writer-only; production grants have not been applied or verified.
+- Added PostgreSQL tests for role authorization, filter validation, pagination, redaction, and restricted grants. They could not run locally because FastAPI/pytest and `TEST_DATABASE_URL` are unavailable; PostgreSQL CI is required before merge.
 
 ## Task 5 — Retention and evidence controls
 

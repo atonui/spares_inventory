@@ -36,8 +36,8 @@ test('settings cannot save before a successful load or during refresh',async()=>
  a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
-test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,17);assert.match(html,/aria-current/);});
+test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,18);assert.match(html,/aria-current/);});
 test('platform admin can end the authenticated session from the console',async()=>{
  const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},window:{location:{href:''}},WeakMap};
  vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();
@@ -71,6 +71,29 @@ test('platform administrator list distinguishes loading, failure and successful 
  assert.equal(a.platformAdmins.length,1);assert.equal(a.platformAdminLoading,false);assert.equal(a.platformAdminError,'');
  a.api=async()=>{throw Error('offline');};await a.loadPlatformAdmins();assert.equal(a.platformAdminError,'offline');
  a.api=async()=>[{id:1,email:'platform@example.test',name:'Platform'}];await a.loadPlatformAdmins();assert.equal(a.platformAdminError,'');
+});
+test('security events load with bounded filters and recover after an API failure',async()=>{
+ const a=app(),calls=[];a.platformSecurityEventFilters={event_family:'session',outcome:'failure',account_match:'false',start_at:'2026-10-01T00:00:00Z',end_at:''};
+ a.api=async path=>{calls.push(path);if(calls.length===1)throw Error('offline');return {rows:[{id:1,event:'session_revoked',outcome:'success',details:{reason:'user_logout'}}],total:101,limit:50,offset:50};};
+ await a.loadPlatformSecurityEvents();assert.equal(a.platformSecurityEventError,'offline');assert.equal(a.platformSecurityEventRows.length,0);
+ await a.loadPlatformSecurityEvents(50);assert.equal(a.platformSecurityEventError,'');assert.equal(a.platformSecurityEventRows.length,1);assert.equal(a.platformSecurityEventOffset,50);
+ const query=new URL(calls[1],'https://example.test').searchParams;assert.equal(query.get('event_family'),'session');assert.equal(query.get('outcome'),'failure');assert.equal(query.get('account_match'),'false');assert.equal(query.get('limit'),'50');assert.equal(query.get('offset'),'50');
+ assert.equal(a.platformSecurityEventLabel('login_failed'),'Sign-in failed');assert.equal(a.platformSecurityEventLabel('future_event'),'Other security event');
+ assert.equal(a.platformSecurityOutcomeLabel('__proto__'),'Unknown outcome');
+ assert.equal(a.platformSecurityDetailLabel('reason'),'Reason');assert.equal(a.platformSecurityDetailValue('reason','user_logout'),'User signed out');
+ assert.equal(a.platformSecurityDetailValue('reason','unrecognized'),'Unknown');
+ assert.deepEqual(JSON.parse(JSON.stringify(a.platformSecurityDetailEntries({reason:'user_logout',submitted_identifier:'private@example.test'}))),[['reason','user_logout']]);
+});
+test('platform security events are a separate platform-only console view with safe fields',()=>{
+ const platform=html.slice(html.indexOf('x-show="me?.saas_mode && me?.is_platform_admin"'),html.indexOf('</nav>'));
+ assert.match(platform,/Security events/);assert.match(html,/tab==='platformSecurityEvents' && me\?\.saas_mode && me\?\.is_platform_admin/);
+ const section=html.split('x-show="tab===\'platformSecurityEvents\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('<!-- ══════════ LOCKED ACCOUNTS ══════════ -->')[0];
+ assert.ok(section);assert.match(section,/platformSecurityEventRows/);assert.match(section,/account_match/);assert.doesNotMatch(section,/ip_address|user_agent|request_id|submitted_identifier|x-html/);
+ assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'\]\.includes\(key\)/);
+ assert.match(html,/!me\?\.saas_mode && key!=='support' && key!=='platformSecurityEvents'/);
+});
+test('tenant console identity cannot select the platform security events view',()=>{
+ const a=app();a.me={saas_mode:true,is_platform_admin:false};a.tab='dashboard';a.selectSection('platformSecurityEvents');assert.equal(a.tab,'dashboard');
 });
 test('grant platform admin requires confirmation and posts an exact email',async()=>{
  const a=app();a.me={id:2};a.toast=()=>{};a.platformAdminEmail='  Ops.Team@example.test  ';const calls=[];
@@ -123,8 +146,8 @@ test('SaaS platform admin section does not expose tenant identity search',()=>{
 });
 test('SaaS navigation exposes only supported platform settings and announcement controls',()=>{
  const platform=html.slice(html.indexOf('x-show="me?.saas_mode && me?.is_platform_admin"'), html.indexOf('</nav>'));
- assert.match(platform,/Security settings/);assert.match(platform,/Announcements/);
- assert.match(html,/\['dashboard','config','announcement','organizations','platformAdmins','platformAudit'\]/);
+ assert.match(platform,/Security settings/);assert.match(platform,/Announcements/);assert.match(platform,/Security events/);
+ assert.match(fs.readFileSync('static/js/pages/superadmin.js','utf8'),/platformAudit','platformSecurityEvents'/);
  assert.match(html,/key==='support' && supportSession/);
  assert.match(html,/Scheduled announcements use UTC/);
 });

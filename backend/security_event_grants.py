@@ -1,4 +1,4 @@
-"""Explicit deployment-time privileges for the global security-event writer."""
+"""Explicit deployment-time privileges for global security-event access."""
 
 from __future__ import annotations
 
@@ -19,16 +19,19 @@ WRITER_COLUMNS = (
     "details",
 )
 ALL_COLUMNS = ("id", *WRITER_COLUMNS, "created_at")
+PLATFORM_READER_COLUMNS = ("id", "actor_user_id", "event", "outcome", "details", "created_at")
 
 
 def grant_security_event_writer(
-    conn, *, runtime_role: str, schema: str = "public"
+    conn, *, runtime_role: str, schema: str = "public", platform_reader: bool = False
 ) -> None:
     """Replace broad direct/default grants atomically; reject inherited privileges.
 
     Run as the migration owner after v21. An idle connection gets a committed
     transaction; an existing caller transaction gets a savepoint.
-    A later platform-authorized reader requires its own explicit access design.
+    Set platform_reader only for the web runtime after the platform-authorized
+    reader has been deployed. That mode adds column-level SELECT for the fields
+    required by the API while continuing to exclude IP, user-agent, and request ID.
     """
     table = sql.Identifier(schema, "platform_security_events")
     sequence = sql.Identifier(schema, "platform_security_events_id_seq")
@@ -79,18 +82,28 @@ def grant_security_event_writer(
             )
         )
         conn.execute(sql.SQL("GRANT USAGE ON SEQUENCE {} TO {}").format(sequence, role))
+        if platform_reader:
+            conn.execute(
+                sql.SQL("GRANT SELECT ({}) ON TABLE {} TO {}").format(
+                    sql.SQL(", ").join(map(sql.Identifier, PLATFORM_READER_COLUMNS)),
+                    table,
+                    role,
+                )
+            )
         qualified_table = table.as_string(conn)
         with conn.cursor(row_factory=tuple_row) as cursor:
             for _role_id, identity in identities:
                 _verify_writer_identity(
-                    cursor, identity, qualified_table, sequence.as_string(conn)
+                    cursor, identity, qualified_table, sequence.as_string(conn),
+                    allowed_reader_columns=PLATFORM_READER_COLUMNS if platform_reader else (),
                 )
 
 
-def _verify_writer_identity(cursor, identity, qualified_table, qualified_sequence):
+def _verify_writer_identity(
+    cursor, identity, qualified_table, qualified_sequence, *, allowed_reader_columns=()
+):
     """Check immediate and SET ROLE privileges after replacing direct ACLs."""
     for privilege in (
-        "SELECT",
         "UPDATE",
         "DELETE",
         "TRUNCATE",
@@ -104,14 +117,17 @@ def _verify_writer_identity(cursor, identity, qualified_table, qualified_sequenc
         if cursor.fetchone()[0]:
             raise ValueError("Runtime role retains excessive security-event privileges")
     for privilege in ("SELECT", "UPDATE", "REFERENCES"):
-        cursor.execute(
-            "SELECT has_any_column_privilege(%s, %s, %s)",
-            (identity, qualified_table, privilege),
-        )
-        if cursor.fetchone()[0]:
-            raise ValueError(
-                "Runtime role retains excessive security-event column privileges"
+        for column in ALL_COLUMNS:
+            cursor.execute(
+                "SELECT has_column_privilege(%s, %s, %s, %s)",
+                (identity, qualified_table, column, privilege),
             )
+            if cursor.fetchone()[0] and not (
+                privilege == "SELECT" and column in allowed_reader_columns
+            ):
+                raise ValueError(
+                    "Runtime role retains excessive security-event column privileges"
+                )
     for column in ("id", "created_at"):
         cursor.execute(
             "SELECT has_column_privilege(%s, %s, %s, %s)",
@@ -134,15 +150,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-role", required=True)
     parser.add_argument("--schema", default="public")
+    parser.add_argument(
+        "--platform-reader", action="store_true",
+        help="also grant the API's safe, column-level security-event read access",
+    )
     args = parser.parse_args()
     dsn = os.environ.get("MIGRATION_DATABASE_URL")
     if not dsn:
         parser.error("MIGRATION_DATABASE_URL must be configured")
     with psycopg.connect(dsn) as conn:
         grant_security_event_writer(
-            conn, runtime_role=args.runtime_role, schema=args.schema
+            conn, runtime_role=args.runtime_role, schema=args.schema,
+            platform_reader=args.platform_reader,
         )
-    print("Security-event writer grants applied")
+    print("Security-event writer and reader grants applied" if args.platform_reader else "Security-event writer grants applied")
 
 
 if __name__ == "__main__":

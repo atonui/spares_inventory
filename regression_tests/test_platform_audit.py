@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import psycopg
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from pydantic import ValidationError
 from psycopg import sql
 
@@ -132,6 +132,8 @@ def platform_api(postgres_schema):
     ))
     admin.execute(sql.SQL("GRANT SELECT ON users, sessions, organization_memberships, platform_admins, organizations, platform_audit_events TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE platform_audit_events_id_seq TO {}").format(sql.Identifier(runtime_role)))
+    from backend.security_event_grants import grant_security_event_writer
+    grant_security_event_writer(admin, runtime_role=runtime_role, schema=schema, platform_reader=True)
     admin.commit()
 
     def get_connection():
@@ -244,6 +246,10 @@ def test_non_platform_identity_cannot_read_platform_audit(platform_api):
         "INSERT INTO users(email,name,password_hash) VALUES (%s,'Member','hash') RETURNING id",
         (f"nonadmin-{uuid4().hex}@example.test",),
     ).fetchone()["id"]
+    api.admin.execute(
+        "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'admin')",
+        (api.org_id, user_id),
+    )
     token = "not-platform-" + uuid4().hex
     api.admin.execute(
         "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
@@ -255,6 +261,114 @@ def test_non_platform_identity_cannot_read_platform_audit(platform_api):
     endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/audit-events")
     with pytest.raises(HTTPException) as error:
         asyncio.run(endpoint(request=request, actor=SimpleNamespace(user_id=user_id)))
+    assert error.value.status_code == 403
+
+
+def test_platform_security_event_reader_filters_paginates_and_redacts(platform_api):
+    from backend.routes.platform_security_events import create_platform_security_events_router
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    now = utc_now()
+    secret_email = "unknown-person@example.test"
+    api.admin.execute(
+        """INSERT INTO platform_security_events
+           (actor_user_id,event,outcome,request_id,ip_address,user_agent,details,created_at)
+           VALUES (%s,'login_failed','failure',%s,'203.0.113.8','secret-agent',%s::jsonb,%s),
+                  (NULL,'login_failed','failure',%s,'203.0.113.9','secret-agent',%s::jsonb,%s),
+                  (%s,'password_reset_completed','success',%s,'203.0.113.10','secret-agent',%s::jsonb,%s)""",
+        (api.principal.user_id, str(uuid4()), '{"account_match":true,"reason":"invalid_credentials","email":"' + secret_email + '","token":"secret-token"}', serialize_instant(now),
+         str(uuid4()), '{"account_match":false,"submitted_identifier":"' + secret_email + '"}', serialize_instant(now - timedelta(minutes=1)),
+         api.principal.user_id, str(uuid4()), '{"password":"secret-password"}', serialize_instant(now - timedelta(days=1))),
+    )
+    api.admin.commit()
+    router = create_platform_security_events_router(get_connection=api.runtime_connection, current_user=lambda: None)
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/security-events")
+
+    api_response = Response()
+    result = asyncio.run(endpoint(
+        request=api.request, response=api_response, actor=api.principal, event_family="authentication",
+        outcome="failure", account_match=True, limit=1, offset=0,
+    ))
+    assert result["total"] == 1
+    assert len(result["rows"]) == 1
+    assert result["rows"][0]["event"] == "login_failed"
+    assert result["rows"][0]["details"] == {"account_match": True, "reason": "invalid_credentials"}
+    assert set(result["rows"][0]) == {"id", "actor_user_id", "event", "outcome", "details", "created_at"}
+    assert api_response.headers["cache-control"] == "no-store, private"
+    assert api_response.headers["pragma"] == "no-cache"
+    assert not {"ip_address", "user_agent", "request_id", "email"}.intersection(result["rows"][0])
+    assert secret_email not in str(result)
+    assert "secret-token" not in str(result)
+    assert "secret-password" not in str(result)
+
+    next_page = asyncio.run(endpoint(
+        request=api.request, response=Response(), actor=api.principal,
+        event_family="authentication", outcome="failure", limit=1, offset=1,
+    ))
+    assert next_page["total"] == 2
+    assert next_page["rows"][0]["actor_user_id"] is None
+    assert next_page["rows"][0]["details"] == {"account_match": False}
+
+    all_rows = asyncio.run(endpoint(request=api.request, response=Response(), actor=api.principal, limit=10, offset=0))
+    assert all_rows["total"] == 3
+    assert [row["event"] for row in all_rows["rows"]] == [
+        "login_failed", "login_failed", "password_reset_completed",
+    ]
+    assert all_rows["rows"][1]["actor_user_id"] is None
+    assert all_rows["rows"][1]["details"] == {"account_match": False}
+    successful = asyncio.run(endpoint(
+        request=api.request, response=Response(), actor=api.principal,
+        event_family="password", outcome="success", actor_user_id=api.principal.user_id,
+        limit=10, offset=0,
+    ))
+    assert successful["total"] == 1
+    assert successful["rows"][0]["event"] == "password_reset_completed"
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"limit": 0}, {"limit": 101}, {"offset": -1},
+    {"event_family": "everything"}, {"outcome": "maybe"},
+    {"actor_user_id": -1}, {"start_at": "2026-10-27T00:00:00"},
+    {"start_at": "2026-10-28T00:00:00Z", "end_at": "2026-10-27T00:00:00Z"},
+])
+def test_platform_security_event_reader_rejects_invalid_filters_before_database_access(kwargs):
+    from backend.routes.platform_security_events import create_platform_security_events_router
+
+    router = create_platform_security_events_router(
+        get_connection=lambda: pytest.fail("invalid filters must fail before connecting"),
+        current_user=lambda: None,
+    )
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/security-events")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(request=SimpleNamespace(cookies={}), response=Response(), actor=1, **kwargs))
+    assert error.value.status_code == 422
+
+
+def test_non_platform_identity_cannot_read_platform_security_events(platform_api):
+    from backend.routes.platform_security_events import create_platform_security_events_router
+    from backend.services.session_credentials import hash_session_credential
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    user_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Member','hash') RETURNING id",
+        (f"nonadmin-security-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    api.admin.execute(
+        "INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,%s,'admin')",
+        (api.org_id, user_id),
+    )
+    token = "not-platform-security-" + uuid4().hex
+    api.admin.execute(
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (user_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
+    )
+    api.admin.commit()
+    router = create_platform_security_events_router(get_connection=api.runtime_connection, current_user=lambda: None)
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/security-events")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(request=SimpleNamespace(cookies={"session_token": token}), response=Response(), actor=SimpleNamespace(user_id=user_id)))
     assert error.value.status_code == 403
 
 

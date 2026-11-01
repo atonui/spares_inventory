@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261101-platform-audit-usability" defer></script>
+<script src="js/pages/superadmin.js?v=20261101-platform-security-events" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -170,6 +170,9 @@
         <button type="button" class="nav-item" :class="tab==='platformAudit'&&'active'" @click="tab='platformAudit'; loadPlatformAudit()" :aria-current="tab==='platformAudit' ? 'page' : null">
           <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#audit"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#audit"></use></svg></span> Audit log
         </button>
+        <button type="button" class="nav-item" :class="tab==='platformSecurityEvents'&&'active'" @click="tab='platformSecurityEvents'; loadPlatformSecurityEvents()" :aria-current="tab==='platformSecurityEvents' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use></svg></span> Security events
+        </button>
       </div>
     </nav>
 
@@ -195,7 +198,7 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" :value="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support') || (me?.saas_mode && (['dashboard','config','announcement','organizations','platformAdmins','platformAudit'].includes(key) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
       <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
@@ -397,6 +400,42 @@
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem" x-show="platformAuditTotal>0">
               <span x-text="`${platformAuditOffset+1}–${Math.min(platformAuditOffset+platformAuditRows.length,platformAuditTotal)} of ${platformAuditTotal}`"></span>
               <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(Math.max(0,platformAuditOffset-50))" :disabled="platformAuditLoading || platformAuditOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset+50)" :disabled="platformAuditLoading || platformAuditOffset+50>=platformAuditTotal">Next</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='platformSecurityEvents' && me?.saas_mode && me?.is_platform_admin">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Security events</span><button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(platformSecurityEventOffset)" :disabled="platformSecurityEventLoading">Refresh</button></div>
+          <div class="panel-body">
+            <p>Authentication, password, and session events. Unmatched submitted identifiers and credential details are never displayed. Timestamps use UTC.</p>
+            <form @submit.prevent="loadPlatformSecurityEvents(0)" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;align-items:end">
+              <div class="form-group"><label for="platform-security-family">Event family</label><select id="platform-security-family" x-model="platformSecurityEventFilters.event_family"><option value="">All events</option><option value="authentication">Authentication</option><option value="password">Password</option><option value="session">Sessions</option></select></div>
+              <div class="form-group"><label for="platform-security-outcome">Outcome</label><select id="platform-security-outcome" x-model="platformSecurityEventFilters.outcome"><option value="">All outcomes</option><option value="success">Succeeded</option><option value="failure">Failed</option><option value="blocked">Blocked</option></select></div>
+              <div class="form-group"><label for="platform-security-account-match">Account match</label><select id="platform-security-account-match" x-model="platformSecurityEventFilters.account_match"><option value="">All</option><option value="true">Matched</option><option value="false">No match</option></select></div>
+              <div class="form-group"><label for="platform-security-actor">Actor user ID</label><input id="platform-security-actor" type="number" min="1" x-model="platformSecurityEventFilters.actor_user_id"></div>
+              <div class="form-group"><label for="platform-security-start">From (UTC ISO timestamp)</label><input id="platform-security-start" placeholder="2026-10-01T00:00:00Z" x-model="platformSecurityEventFilters.start_at" maxlength="40"></div>
+              <div class="form-group"><label for="platform-security-end">Until (UTC ISO timestamp)</label><input id="platform-security-end" placeholder="2026-11-01T00:00:00Z" x-model="platformSecurityEventFilters.end_at" maxlength="40"></div>
+              <div style="display:flex;gap:.5rem"><button class="btn btn-success" type="submit" :disabled="platformSecurityEventLoading">Apply filters</button><button class="btn btn-outline" type="button" @click="platformSecurityEventFilters={event_family:'',outcome:'',account_match:'',actor_user_id:'',start_at:'',end_at:''};loadPlatformSecurityEvents(0)" :disabled="platformSecurityEventLoading">Clear</button></div>
+            </form>
+            <p x-show="platformSecurityEventLoading" role="status">Loading security events…</p>
+            <div x-show="platformSecurityEventError" role="alert" class="action-error"><span x-text="platformSecurityEventError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(platformSecurityEventOffset)" :disabled="platformSecurityEventLoading">Retry</button></div>
+            <div style="overflow:auto" x-show="!platformSecurityEventLoading && !platformSecurityEventError">
+              <table class="tbl audit-table"><thead><tr><th>Time (UTC)</th><th>Account</th><th>Event</th><th>Outcome</th><th>Details</th></tr></thead>
+                <tbody><template x-for="event in platformSecurityEventRows" :key="event.id"><tr>
+                  <td data-label="Time (UTC)" x-text="event.created_at"></td>
+                  <td data-label="Account"><span x-text="event.actor_user_id ? 'Matched account · ID ' + event.actor_user_id : (event.details?.account_match === false ? 'No account match' : 'Account unavailable')"></span></td>
+                  <td data-label="Event" x-text="platformSecurityEventLabel(event.event)"></td>
+                  <td data-label="Outcome"><span class="tag tag-grey" x-text="platformSecurityOutcomeLabel(event.outcome)"></span></td>
+                  <td data-label="Details"><details class="platform-audit-details" x-show="platformSecurityDetailEntries(event.details).length"><summary>View details</summary><dl><template x-for="[key,value] in platformSecurityDetailEntries(event.details)" :key="key"><div><dt x-text="platformSecurityDetailLabel(key)"></dt><dd x-text="platformSecurityDetailValue(key,value)"></dd></div></template></dl></details><span x-show="!platformSecurityDetailEntries(event.details).length">No additional details</span></td>
+                </tr></template></tbody>
+              </table>
+              <p x-show="!platformSecurityEventRows.length">No security events match these filters.</p>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem" x-show="platformSecurityEventTotal>0">
+              <span x-text="`${platformSecurityEventOffset+1}–${Math.min(platformSecurityEventOffset+platformSecurityEventRows.length,platformSecurityEventTotal)} of ${platformSecurityEventTotal}`"></span>
+              <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(Math.max(0,platformSecurityEventOffset-50))" :disabled="platformSecurityEventLoading || platformSecurityEventOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(platformSecurityEventOffset+50)" :disabled="platformSecurityEventLoading || platformSecurityEventOffset+50>=platformSecurityEventTotal">Next</button></div>
             </div>
           </div>
         </div>
