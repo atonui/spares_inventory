@@ -19,7 +19,7 @@ _EVENT_DETAILS = {
 }
 _OUTCOMES = {"success", "failure", "blocked"}
 _SOURCES = {"browser_login", "native_login", "mobile_pairing", "native_refresh"}
-_REASONS = {"membership_removed", "membership_deactivated", "user_logout", "user_revoked", "other_sessions_revoked", "mobile_access_revoked", "session_replaced", "refresh_reuse", "account_unavailable", "invalid_credentials", "invalid_token", "token_expired", "weak_password", "too_many_attempts"}
+_REASONS = {"membership_removed", "membership_deactivated", "mobile_duration_policy", "user_logout", "user_revoked", "other_sessions_revoked", "mobile_access_revoked", "session_replaced", "refresh_reuse", "account_unavailable", "invalid_credentials", "invalid_token", "token_expired", "weak_password", "too_many_attempts"}
 
 
 def safe_security_event_details(event: str, details) -> dict:

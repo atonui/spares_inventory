@@ -37,9 +37,12 @@ production or mobile audit.
 - Organization suspension and platform-administrator role removal retain their
   distinct platform audit records and do not themselves mark ordinary sessions
   inactive. Shortening the global mobile-session maximum can change expiry and
-  deactivate already-expired rows; its setting audit records the policy change,
-  but per-account session-revocation telemetry is not currently emitted for that
-  side effect.
+  deactivate already-expired rows; PR #320 adds one aggregate post-commit
+  `session_revoked` event for the platform actor and total number of mobile
+  sessions changed to inactive. It omits per-account IDs to avoid high-cardinality
+  fan-out for a global policy action. The setting audit remains the transaction-
+  scoped record of the configuration change; the aggregate security event is
+  best-effort after commit.
 - No security-event reader API/UI or export is implemented. The deployment grant
   command limits the web runtime to curated INSERT columns and sequence USAGE;
   it has not been applied or verified against production by this update. Database

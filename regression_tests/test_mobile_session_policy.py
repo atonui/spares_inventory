@@ -136,6 +136,7 @@ def mobile_policy_api(postgres_schema):
     )
     platform_router = create_platform_settings_router(
         get_connection=get_connection, current_user=lambda: None, csrf_dependency=lambda: None,
+        security_event=security_event,
     )
     def endpoint(router, method, path):
         return next(r.endpoint for r in router.routes if method in r.methods and r.path == path)
@@ -226,10 +227,12 @@ def test_platform_mobile_max_reduces_company_policies(mobile_policy_api):
     assert api.admin.execute(
         "SELECT count(*) AS n FROM platform_security_events WHERE event='session_revoked'"
     ).fetchone()["n"] == 0
+    assert api.security_events == []
 
 
 def test_platform_mobile_max_records_only_sessions_deactivated_by_policy(mobile_policy_api):
     from backend.schemas.superadmin import SystemSettingUpdate
+    from backend.services.session_credentials import hash_session_credential
     from backend.temporal import serialize_instant, utc_now
 
     api = mobile_policy_api
@@ -244,6 +247,14 @@ def test_platform_mobile_max_records_only_sessions_deactivated_by_policy(mobile_
     api.admin.execute(
         "UPDATE session_refresh_credentials SET expires_at=%s WHERE session_id=%s",
         (serialize_instant(now + timedelta(hours=100)), api.mobile_session_id),
+    )
+    api.admin.execute(
+        """INSERT INTO sessions
+           (user_id,session_token_hash,expires_at,absolute_expires_at,created_at,is_mobile)
+           VALUES (%s,%s,%s,%s,%s,TRUE)""",
+        (api.platform_id, hash_session_credential("mobile-policy-second-session"),
+         serialize_instant(now + timedelta(hours=90)),
+         serialize_instant(now + timedelta(hours=100)), serialize_instant(created)),
     )
     api.admin.commit()
 
@@ -264,7 +275,7 @@ def test_platform_mobile_max_records_only_sessions_deactivated_by_policy(mobile_
         "details": {
             "is_mobile": True,
             "reason": "mobile_duration_policy",
-            "session_count": 1,
+            "session_count": 2,
         },
     }]
     assert api.session_states_at_event == [False]
@@ -287,7 +298,7 @@ def test_platform_mobile_max_records_only_sessions_deactivated_by_policy(mobile_
         "details": {
             "is_mobile": True,
             "reason": "mobile_duration_policy",
-            "session_count": 1,
+            "session_count": 2,
         },
     }]
 

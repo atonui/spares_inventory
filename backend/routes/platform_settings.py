@@ -20,8 +20,11 @@ SECURITY_SETTING_LIMITS = {
 }
 
 
-def create_platform_settings_router(*, get_connection, current_user, csrf_dependency) -> APIRouter:
+def create_platform_settings_router(
+    *, get_connection, current_user, csrf_dependency, security_event=None,
+) -> APIRouter:
     router = APIRouter(prefix="/api/platform", tags=["platform"])
+    log_security_event = security_event or (lambda **_event: None)
 
     def require_postgres():
         conn = get_connection()
@@ -143,6 +146,7 @@ def create_platform_settings_router(*, get_connection, current_user, csrf_depend
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail=f"Value must be an integer between 1 and {limit}") from None
         require_postgres()
+        revoked_session_count = 0
         with authenticated_platform_transaction(
             get_connection,
             session_token=get_request_credential(request).value,
@@ -172,6 +176,23 @@ def create_platform_settings_router(*, get_connection, current_user, csrf_depend
                         (value, now, principal.user_id, organization["id"], value),
                     )
                 conn.execute("SELECT set_config('app.organization_id', '', true)")
+                sessions_to_revoke = conn.execute(
+                    """SELECT s.id
+                       FROM sessions AS s
+                       CROSS JOIN LATERAL (
+                           SELECT LEAST(
+                               s.created_at::timestamptz + (%s * INTERVAL '1 hour'),
+                               s.absolute_expires_at::timestamptz
+                           ) AS deadline
+                       ) AS d
+                       WHERE s.is_mobile = TRUE AND s.is_active = TRUE
+                         AND d.deadline <= %s::timestamptz
+                         AND (s.absolute_expires_at::timestamptz > d.deadline
+                              OR s.expires_at::timestamptz > d.deadline)
+                       FOR UPDATE OF s""",
+                    (value, now),
+                ).fetchall()
+                revoked_session_count = len(sessions_to_revoke)
                 conn.execute(
                     """UPDATE sessions AS s SET absolute_expires_at = to_char(LEAST(s.absolute_expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
                               expires_at = to_char(LEAST(s.expires_at::timestamptz, d.deadline) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
@@ -204,6 +225,19 @@ def create_platform_settings_router(*, get_connection, current_user, csrf_depend
                 conn, principal.user_id, "global_security_setting_changed", "success",
                 details={"key": key, "value": value},
             )
-            return {"success": True, "key": key, "value": value}
+            result = {"success": True, "key": key, "value": value}
+
+        if revoked_session_count:
+            log_security_event(
+                event="session_revoked",
+                outcome="success",
+                actor_user_id=principal.user_id,
+                details={
+                    "is_mobile": True,
+                    "reason": "mobile_duration_policy",
+                    "session_count": revoked_session_count,
+                },
+            )
+        return result
 
     return router
