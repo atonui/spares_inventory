@@ -359,10 +359,13 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 from backend.services.platform_support import end_support_sessions
                 end_support_sessions(conn, actor_user_id=actor_id, end_reason="password_changed")
 
-
-            logger.info(f"Password changed successfully for user {actor_id}")
-
-            return {"message": "Password changed successfully. Please login again."}
+        log_security_event(
+            event="password_changed", outcome="success", actor_user_id=actor_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent", "")[:200], details={},
+        )
+        logger.info("Password changed successfully for user %s", actor_id)
+        return {"message": "Password changed successfully. Please login again."}
 
 
     @router.post("/api/auth/revoke-other-sessions")
@@ -666,11 +669,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             lockout_time = stored_instant(user["account_locked_until"], "account_locked_until")
             if utc_now() < lockout_time:
                 remaining_minutes = int((lockout_time - utc_now()).total_seconds() / 60)
-                log_activity(
-                    user_id=user["id"], username=user["name"], action="login_blocked",
-                    status="error", error_message="Account locked", ip_address=ip_address,
-                    user_agent=user_agent,
-                )
+
                 log_security_event(event="login_blocked", outcome="blocked", actor_user_id=user["id"], ip_address=ip_address, user_agent=user_agent, details={"account_match": True})
                 conn.close()
                 raise HTTPException(
@@ -689,10 +688,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                         (failed_attempts, serialize_instant(lockout_until), user["id"]),
                     )
                     conn.commit()
-                    log_activity(
-                        user_id=user["id"], username=user["name"], action="account_locked",
-                        status="error", error_message="Too many failed attempts",
+                    log_security_event(
+                        event="account_locked", outcome="blocked", actor_user_id=user["id"],
                         ip_address=ip_address, user_agent=user_agent,
+                        details={"account_match": True},
                     )
                     conn.close()
                     raise HTTPException(
@@ -705,11 +704,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     (failed_attempts, user["id"]),
                 )
                 conn.commit()
-            log_activity(
-                user_id=user["id"] if user else 0, username=user_login.email,
-                action="login_failed", status="error", error_message="Invalid credentials",
-                ip_address=ip_address, user_agent=user_agent,
-            )
+
             log_security_event(event="login_failed", outcome="failure", actor_user_id=user["id"] if user else None, ip_address=ip_address, user_agent=user_agent, details={"account_match": bool(user), "reason": "invalid_credentials"})
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -839,13 +834,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 )
             user_role = user["role"]
 
-        log_activity(
-            user_id=user["id"], username=user["name"], action="login",
-            details={"role": user_role, "remember_me": user_login.remember_me},
-            ip_address=ip_address, user_agent=user_agent,
-        )
         log_security_event(event="login_succeeded", outcome="success", actor_user_id=user["id"], ip_address=ip_address, user_agent=user_agent, details={"is_mobile": native, "remember_me": user_login.remember_me})
-        logger.info("User %s (%s) logged in from %s", user["name"], user["id"], ip_address)
+        logger.info("Login completed for user %s", user["id"])
 
         response_data = {
             "success": True,
