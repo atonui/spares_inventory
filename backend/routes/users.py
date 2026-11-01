@@ -17,7 +17,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                         csrf_dependency, user_management_guard, archive_admin_guard,
                         archive_service, password_hash, endpoint_log,
                         mutation_activity, mail_payload_encryption_key=None,
-                        frontend_url="", limiter=None) -> APIRouter:
+                        frontend_url="", limiter=None, security_event=None) -> APIRouter:
     """Register existing flows without owning database or audit infrastructure."""
     router = APIRouter()
     get_db_connection = get_connection
