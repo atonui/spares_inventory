@@ -1,3 +1,43 @@
+const PLATFORM_AUDIT_ACTION_LABELS = Object.freeze({
+  organization_created: 'Organization created',
+  organization_suspended: 'Organization suspended',
+  organization_reactivated: 'Organization reactivated',
+  company_role_changed: 'Company role changed',
+  platform_admin_granted: 'Platform admin access granted',
+  platform_admin_revoked: 'Platform admin access revoked',
+  platform_announcement_saved: 'Platform announcement saved',
+  platform_announcement_removed: 'Platform announcement removed',
+  global_security_setting_changed: 'Global security setting changed',
+  support_session_started: 'Support session started',
+  support_data_read: 'Support data accessed',
+  support_access_denied: 'Support access denied',
+  support_session_ended: 'Support session ended',
+  user_logout: 'User signed out',
+});
+const PLATFORM_AUDIT_RESULT_LABELS = Object.freeze({success:'Success', denied:'Denied', failure:'Failed'});
+const PLATFORM_AUDIT_DETAIL_LABELS = Object.freeze({
+  support_session_id: 'Support session ID', resource: 'Resource', operation: 'Operation',
+  request_id: 'Request ID', end_reason: 'Session end reason', target_user_id: 'Target user ID',
+  reason: 'Reason', invitation_created: 'Owner invitation created', role: 'Company role',
+  revision: 'Revision', audience: 'Audience', key: 'Setting key', value: 'Setting value',
+});
+const PLATFORM_AUDIT_DETAIL_VALUES = Object.freeze({
+  role: {owner:'Owner', admin:'Admin', manager:'Manager', engineer:'Engineer'},
+  audience: {everyone:'Everyone', authenticated:'Authenticated users', roles:'Selected roles'},
+  operation: {start:'Started', lookup:'Looked up', end:'Ended', logout:'Signed out'},
+  resource: {session:'Support session', accounts:'Account access', inventory:'Inventory',
+    'work-orders':'Work orders', equipment:'Equipment', 'equipment-history':'Equipment history',
+    movements:'Stock movements'},
+  end_reason: {user_logout:'User signed out', password_changed:'Password changed',
+    sessions_revoked:'Sessions revoked', platform_admin_revoked:'Platform access revoked',
+    expired:'Expired', membership_removed:'Membership removed', membership_deactivated:'Membership deactivated'},
+});
+const PLATFORM_AUDIT_SETTING_LABELS = Object.freeze({
+  max_login_attempts:'Maximum login attempts', lockout_duration_minutes:'Lockout duration',
+  session_duration_hours:'Session duration', remember_me_duration_days:'Remember Me duration',
+  mobile_session_max_duration_hours:'Mobile session maximum',
+});
+
 function superPanel() {
   return {
     actionPending: {},
@@ -685,6 +725,44 @@ async submitPasswordReset() {
       } finally {
         this.platformAuditLoading = false;
       }
+    },
+
+    platformAuditActionLabel(action) {
+      return Object.hasOwn(PLATFORM_AUDIT_ACTION_LABELS, action)
+        ? PLATFORM_AUDIT_ACTION_LABELS[action] : 'Other platform event';
+    },
+
+    platformAuditResultLabel(result) {
+      return Object.hasOwn(PLATFORM_AUDIT_RESULT_LABELS, result)
+        ? PLATFORM_AUDIT_RESULT_LABELS[result] : 'Other result';
+    },
+
+    platformAuditDetailLabel(key) {
+      return Object.hasOwn(PLATFORM_AUDIT_DETAIL_LABELS, key)
+        ? PLATFORM_AUDIT_DETAIL_LABELS[key] : 'Other detail';
+    },
+
+    platformAuditDetailEntries(details) {
+      if (!details || typeof details !== 'object' || Array.isArray(details)) return [];
+      return Object.entries(details).filter(([key]) => Object.hasOwn(PLATFORM_AUDIT_DETAIL_LABELS, key));
+    },
+
+    platformAuditDetailValue(key, value) {
+      if (key === 'invitation_created') return value === true ? 'Yes' : value === false ? 'No' : 'Unknown';
+      if (Object.hasOwn(PLATFORM_AUDIT_DETAIL_VALUES, key)) {
+        const labels = PLATFORM_AUDIT_DETAIL_VALUES[key];
+        return Object.hasOwn(labels, value) ? labels[value] : 'Unknown';
+      }
+      if (key === 'key') return PLATFORM_AUDIT_SETTING_LABELS[value] || 'Unknown';
+      if (key === 'target_user_id') return Number.isSafeInteger(value) && value > 0 ? String(value) : 'Unknown';
+      if (key === 'value') return Number.isInteger(value) ? String(value) : 'Unknown';
+      if (key === 'support_session_id' || key === 'request_id') {
+        return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+          ? value : 'Unknown';
+      }
+      if (key === 'revision') return typeof value === 'string' && value.length >= 1 && value.length <= 100 ? value : 'Unknown';
+      if (key === 'reason') return typeof value === 'string' && value.length >= 10 && value.length <= 500 ? value : 'Unknown';
+      return 'Unknown';
     },
 
     async provisionOrganization() {

@@ -168,7 +168,34 @@ test('platform audit filters are encoded, paginated, and recoverable after failu
  let path='';a.api=async value=>{path=value;return {rows:[{id:9}],total:101,offset:50};};
  await a.loadPlatformAudit(50);assert.match(path,/limit=50/);assert.match(path,/offset=50/);assert.match(path,/organization_id=org\+%2F\+id/);assert.equal(a.platformAuditRows[0].id,9);assert.equal(a.platformAuditTotal,101);
  a.api=async()=>{throw Error('offline');};await a.loadPlatformAudit(0);assert.equal(a.platformAuditRows.length,0);assert.equal(a.platformAuditError,'offline');assert.equal(a.platformAuditLoading,false);
- assert.match(html,/x-text="JSON.stringify\(event\.details \|\| \{\}\)"/);assert.doesNotMatch(html,/x-html="JSON.stringify\(event\.details/);
+ const section=html.split('x-show="tab===\'platformAudit\' && me?.saas_mode"')[1].split('x-show="tab===\'accounts\'"')[0];
+ assert.match(section,/platformAuditActionLabel\(event\.action\)/);assert.match(section,/platformAuditResultLabel\(event\.result\)/);
+ assert.doesNotMatch(section,/JSON\.stringify/);assert.doesNotMatch(section,/x-html=/);
+});
+test('platform audit renders readable labels and structured safe details',()=>{
+ const a=app();
+ assert.equal(a.platformAuditActionLabel('organization_suspended'),'Organization suspended');
+ assert.equal(a.platformAuditActionLabel('support_data_read'),'Support data accessed');
+ assert.equal(a.platformAuditActionLabel('future_action'),'Other platform event');
+ assert.equal(a.platformAuditResultLabel('success'),'Success');
+ assert.equal(a.platformAuditResultLabel('failure'),'Failed');
+ assert.equal(a.platformAuditResultLabel('future_result'),'Other result');
+ assert.equal(a.platformAuditDetailLabel('target_user_id'),'Target user ID');
+ assert.equal(a.platformAuditDetailLabel('request_id'),'Request ID');
+ assert.equal(a.platformAuditDetailLabel('future_detail'),'Other detail');
+ assert.equal(a.platformAuditDetailValue('invitation_created',true),'Yes');
+ assert.equal(a.platformAuditDetailValue('role','engineer'),'Engineer');
+ assert.equal(a.platformAuditDetailValue('role','future_role'),'Unknown');
+ assert.equal(a.platformAuditDetailValue('resource','submitted-value'),'Unknown');
+ assert.equal(a.platformAuditDetailValue('key','unrecognized-setting'),'Unknown');
+ assert.equal(a.platformAuditDetailValue('target_user_id','private-value'),'Unknown');
+ assert.equal(a.platformAuditDetailValue('reason','Customer-approved change'),'Customer-approved change');
+ assert.deepEqual(JSON.parse(JSON.stringify(a.platformAuditDetailEntries({target_user_id:9,secret:'confidential'}))),[['target_user_id',9]]);
+ const section=html.split('x-show="tab===\'platformAudit\' && me?.saas_mode"')[1].split('x-show="tab===\'accounts\'"')[0];
+ assert.match(section,/event\.actor_name/);assert.match(section,/event\.organization_name/);
+ assert.match(section,/<details[^>]*>/);assert.match(section,/platformAuditDetailEntries\(event\.details\)/);assert.match(section,/platformAuditDetailLabel/);
+ assert.doesNotMatch(section,/JSON\.stringify/);assert.doesNotMatch(section,/x-html=/);
+ assert.match(html,/platform-console\.css\?v=20261101-audit-labels/);
 });
 test('platform organization form sends name slug and owner invitation',async()=>{
  const a=app();a.toast=()=>{};a.organizationForm={name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'};
