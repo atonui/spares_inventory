@@ -1,7 +1,7 @@
 # Platform Audit and Security Logging Implementation Plan
 
 **Date:** 2026-10-31  
-**Status:** Tasks 1 and 2 in progress; PRs #315–#318 merged; membership invalidation coverage and the event matrix are in PR #319
+**Status:** Tasks 1 and 2 in progress; PRs #315–#319 merged; mobile policy invalidation telemetry is in PR #320
 **Design:** [Platform Audit and Security Logging Design](../specs/2026-10-31-platform-audit-security-logging-design.md)
 
 ## Scope and sequencing
@@ -175,5 +175,11 @@ grants. No global reader API/UI, retention, export or purge is added.
 - Suppress `company_role_changed` for requests that leave the platform company role unchanged.
 - Constrain platform-audit result strings to `success`, `denied`, or `failure` before SQL.
 - Add coverage for repeated explicit revocations, expired/unavailable native refresh telemetry, and unchanged platform audit results.
-- See [platform event coverage](../../platform-event-coverage.md) for the source-backed matrix and documented gaps. Global mobile-duration shortening can deactivate already-expired sessions; its setting audit exists, but per-account revocation telemetry is not currently emitted.
-- Task 1/2 remain incomplete: the authorized security-event read API/UI, production grants/access and operational rollout checks, full denied/failure coverage, and the global mobile-duration side effect remain open. Retention/export/purge and provider/backup controls remain gated by policy decisions.
+- See [platform event coverage](../../platform-event-coverage.md) for the source-backed matrix and documented gaps. PR #320 adds aggregate post-commit security telemetry when global mobile-duration shortening deactivates active sessions.
+- Task 1/2 remain incomplete: the authorized security-event read API/UI, production grants/access and operational rollout checks, and full denied/failure coverage remain open. Retention/export/purge and provider/backup controls remain gated by policy decisions.
+
+### Global mobile policy invalidations — PR #320
+
+- Lock and count only active mobile sessions whose calculated deadline is past and whose expiry values the setting update shortens; the setting transaction uses those rows to set `is_active=FALSE`.
+- After commit, write one aggregate `session_revoked` event with the acting platform administrator, fixed `mobile_duration_policy` reason, mobile flag, and count. Do not fan out one row per account for this global operation.
+- No session event is produced for expiry-only tightening that leaves sessions active, repeated/no-op policy updates, or failed commits. The existing best-effort writer can still omit telemetry after commit if persistence fails.

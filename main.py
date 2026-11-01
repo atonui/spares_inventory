@@ -547,6 +547,7 @@ app.include_router(create_platform_settings_router(
     get_connection=lambda: get_db_connection(),
     current_user=get_current_user,
     csrf_dependency=verify_authenticated_csrf,
+    security_event=lambda **event: log_platform_security_event(**event),
 ))
 
 app.include_router(create_stores_router(
