@@ -1,7 +1,7 @@
 # Platform Audit and Security Logging Implementation Plan
 
 **Date:** 2026-10-31  
-**Status:** Proposed; implementation has not started  
+**Status:** Task 1 in progress; login-event slice merged in PR #315
 **Design:** [Platform Audit and Security Logging Design](../specs/2026-10-31-platform-audit-security-logging-design.md)
 
 ## Scope and sequencing
@@ -133,3 +133,11 @@ Implement one task per reviewable PR. Preserve existing tenant RLS and the suppo
 6. Add operational health/logging improvements (Task 6).
 
 Tasks 3 and 4 can follow independently after their APIs are stable. Retention work is intentionally gated by an explicit policy decision.
+
+## Task 1 progress — 2026-11-01
+
+- Merged #315: v21 table, curated writer, login success/failure and already-locked account attempts.
+- Follow-up #316: reset request/failure/completion routing; no reset email/name in activity or success diagnostics; telemetry persistence failures use a fixed diagnostic without exception payload.
+- Follow-up #316 includes explicit opt-in runtime-grant tooling and disposable PostgreSQL integration tests. Production grants must be applied and verified by the operator; they have not been changed by development verification.
+- Still pending: lockout transition, password-change and session/mobile credential issue/rotation/revocation coverage; global event read authorization/API/UI (Task 4); final coverage matrix and rollout verification.
+- Retention policy remains undecided. No purge, archive, export, or retention schedule added. IP/user-agent purpose and retention still require a decision before broader rollout.

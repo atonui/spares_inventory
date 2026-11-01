@@ -291,7 +291,7 @@ def log_platform_security_event(**event):
         with conn.transaction():
             record_security_event(conn, **event)
     except Exception:
-        error_logger.exception("Failed to persist platform security event")
+        error_logger.error("Failed to persist platform security event")
     finally:
         if conn is not None:
             conn.close()

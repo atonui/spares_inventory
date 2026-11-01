@@ -366,3 +366,36 @@ record from the Platform Admins screen; this ends that administrator's active
 support sessions and prevents future reads. If the browser is stale, reload the
 page and verify the session banner is gone. Support API responses use
 `Cache-Control: no-store`, including error responses.
+
+### Global security-event writer privileges (migration v21 onward)
+
+`platform_security_events` is a global stream, outside tenant RLS. Until the
+platform-authorized reader is implemented, the web runtime needs **INSERT only**
+on the curated writer columns and **USAGE only** on its identity sequence. It
+must not receive SELECT, UPDATE, DELETE, TRUNCATE, ownership, or DDL rights. Do
+not add this table to the broad table-grant list above. The mail worker needs no
+privileges on it.
+
+After applying migrations, run the following with the migration identity in a
+controlled environment, substituting the provisioned runtime role. This command
+changes database grants; it is a deployment action, not an application startup
+step. `MIGRATION_DATABASE_URL` must already be set securely; never paste its
+value into a command or log.
+
+```bash
+python -m backend.security_event_grants --runtime-role spares_web
+```
+
+The command replaces direct table, column, and sequence grants for that role
+and PUBLIC, including broad defaults inherited at table creation, with the
+writer's minimal grants. It refuses roles that retain effective read/tamper
+privileges (for example through ownership, superuser status, or role membership)
+and rolls back in that case; correct the role hierarchy separately. Re-run after
+any manual broad grant/default-privilege operation. It does not alter the
+migration owner's grants or enable a reader API.
+
+Validate with `regression_tests/test_security_event_grants.py` against a
+disposable database whose name ends in `_test`. The test deliberately starts
+with broad table/column/sequence grants and checks insert persistence, denied
+reads/tampering, denied caller-supplied event IDs, and rollback behavior. These
+tests do not establish tamper evidence or immutable/compliance-grade storage.

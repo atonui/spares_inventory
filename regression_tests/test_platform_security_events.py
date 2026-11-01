@@ -38,3 +38,26 @@ def test_security_event_writer_rejects_unknown_event():
     with pytest.raises(ValueError, match="Unsupported security event"):
         record_security_event(object(), event="arbitrary", outcome="failure")
 
+
+
+def test_security_event_persistence_failure_does_not_leak_exception_payload(monkeypatch, caplog):
+    import main
+    import backend.database_sql
+    from contextlib import nullcontext
+
+    class BrokenConnection:
+        closed = False
+        def transaction(self):
+            return nullcontext()
+        def execute(self, *_args):
+            raise RuntimeError('private@example.test private-reset-token private-password')
+        def close(self):
+            self.closed = True
+
+    conn = BrokenConnection()
+    monkeypatch.setattr(main, 'get_db_connection', lambda: conn)
+    monkeypatch.setattr(backend.database_sql, 'is_postgres', lambda _conn: True)
+    main.log_platform_security_event(event='login_failed', outcome='failure')
+    assert conn.closed
+    assert 'Failed to persist platform security event' in caplog.text
+    assert all(secret not in caplog.text for secret in ['private@example.test', 'private-reset-token', 'private-password'])
