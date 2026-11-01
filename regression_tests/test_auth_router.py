@@ -98,7 +98,7 @@ def test_auth_runtime_collaborators_are_late_bound(auth_api, tmp_path, monkeypat
     response = client.post('/api/forgot-password', json={'email': 'user1@example.com'})
     assert response.status_code == 200
     assert emails[0][0] == 'user1@example.com'
-    assert any(a['action'] == 'password_reset_request' for a in activities)
+    assert not any(a['action'].startswith('password_reset') for a in activities)
     response = client.post('/api/reset-password', json={'token': emails[0][1], 'new_password': 'new-password'})
     assert response.status_code == 200
     assert hashed == ['new-password']
@@ -126,11 +126,10 @@ def test_forgot_password_failure_log_omits_email_and_provider_error(auth_api, mo
     assert all('private-user@example.com' not in record.getMessage() for record in caplog.records)
     assert all('private provider diagnostic' not in record.getMessage() for record in caplog.records)
     with sqlite3.connect(db) as conn:
-        username, details = conn.execute(
-            "SELECT username, details FROM activity_logs WHERE action='password_reset_request' ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-    assert username == 'account_holder'
-    assert json.loads(details) == {'account_match': True}
+        assert conn.execute(
+            "SELECT count(*) FROM activity_logs WHERE action='password_reset_request'"
+        ).fetchone()[0] == 0
+
 
 
 def test_postgres_forgot_password_queues_mail_in_the_token_transaction(auth_api, monkeypatch):

@@ -424,20 +424,11 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         execute_cursor(conn, cursor, "SELECT id, name FROM users WHERE email = ? AND archived_at IS NULL", (request_data.email,))
         user = cursor.fetchone()
 
-        # Log the attempt (even if email doesn't exist, for security monitoring)
-        if user:
-            user_id = user["id"]
-        else:
-            user_id = None
-
-        log_activity(
-            user_id=user_id,
-            username="account_holder" if user else "unmatched_account",
-            action="password_reset_request",
+        log_security_event(
+            event="password_reset_requested", outcome="success",
+            actor_user_id=user["id"] if user else None,
             details={"account_match": bool(user)},
-            status="success",
-            ip_address=ip_address,
-            user_agent=user_agent,
+            ip_address=ip_address, user_agent=user_agent,
         )
 
         # Always return success to prevent email enumeration
@@ -499,7 +490,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         # Validate token
         execute_cursor(conn, cursor,
-            """SELECT id, name, email, reset_token_expires
+            """SELECT id, reset_token_expires
                FROM users
                WHERE reset_token = ? AND archived_at IS NULL""",
             (request_data.token,),
@@ -508,15 +499,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         if not user:
             # Log failed attempt
-            log_activity(
-                user_id=0,
-                username="unknown",
-                action="password_reset_failed",
-                details={"reason": "invalid_token"},
-                status="error",
-                error_message="Invalid or expired token",
-                ip_address=ip_address,
-                user_agent=user_agent,
+            log_security_event(
+                event="password_reset_failed", outcome="failure",
+                actor_user_id=None, details={"reason": "invalid_token"},
+                ip_address=ip_address, user_agent=user_agent,
             )
             conn.close()
             raise HTTPException(status_code=400, detail="Invalid or expired token")
@@ -524,30 +510,20 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         # Check if token expired
         expires_at = stored_instant(user["reset_token_expires"], "reset_token_expires")
         if utc_now() > expires_at:
-            log_activity(
-                user_id=user["id"],
-                username=user["name"],
-                action="password_reset_failed",
-                details={"reason": "token_expired", "email": user["email"]},
-                status="error",
-                error_message="Token has expired",
-                ip_address=ip_address,
-                user_agent=user_agent,
+            log_security_event(
+                event="password_reset_failed", outcome="failure",
+                actor_user_id=user["id"], details={"reason": "token_expired"},
+                ip_address=ip_address, user_agent=user_agent,
             )
             conn.close()
             raise HTTPException(status_code=400, detail="Token has expired")
 
         # Validate new password
         if len(request_data.new_password) < 8:
-            log_activity(
-                user_id=user["id"],
-                username=user["name"],
-                action="password_reset_failed",
-                details={"reason": "weak_password", "email": user["email"]},
-                status="error",
-                error_message="Password too short",
-                ip_address=ip_address,
-                user_agent=user_agent,
+            log_security_event(
+                event="password_reset_failed", outcome="failure",
+                actor_user_id=user["id"], details={"reason": "weak_password"},
+                ip_address=ip_address, user_agent=user_agent,
             )
             conn.close()
             raise HTTPException(
@@ -557,6 +533,11 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         # Hash before taking the write lock, then reject revoked tokens atomically.
         new_hash = hash_password(request_data.new_password)
         if utc_now() > expires_at:
+            log_security_event(
+                event="password_reset_failed", outcome="failure",
+                actor_user_id=user["id"], details={"reason": "token_expired"},
+                ip_address=ip_address, user_agent=user_agent,
+            )
             conn.close()
             raise HTTPException(status_code=400,detail='Token has expired')
         # Update password and clear token
@@ -574,6 +555,11 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         if cursor.rowcount != 1:
             conn.rollback()
             conn.close()
+            log_security_event(
+                event="password_reset_failed", outcome="failure",
+                actor_user_id=user["id"], details={"reason": "invalid_token"},
+                ip_address=ip_address, user_agent=user_agent,
+            )
             raise HTTPException(status_code=400,detail='Invalid or expired token')
 
         execute_cursor(conn, cursor, "UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user["id"],))
@@ -584,20 +570,12 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         conn.commit()
         conn.close()
 
-        # Log successful password reset
-        log_activity(
-            user_id=user["id"],
-            username=user["name"],
-            action="password_reset_success",
-            details={"email": user["email"]},
-            status="success",
-            ip_address=ip_address,
-            user_agent=user_agent,
+        log_security_event(
+            event="password_reset_completed", outcome="success",
+            actor_user_id=user["id"], details={},
+            ip_address=ip_address, user_agent=user_agent,
         )
-
-        logger.info(
-            f"Password successfully reset for user {user['name']} ({user['email']})"
-        )
+        logger.info("Password reset completed")
 
         return {"message": "Password reset successfully"}
 
