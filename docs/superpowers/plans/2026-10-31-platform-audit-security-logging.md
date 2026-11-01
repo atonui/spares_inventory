@@ -1,7 +1,7 @@
 # Platform Audit and Security Logging Implementation Plan
 
 **Date:** 2026-10-31  
-**Status:** Task 1 in progress; login-event slice merged in PR #315
+**Status:** Tasks 1 and 2 in progress; PRs #315–#318 merged; membership invalidation coverage and the event matrix are in PR #319
 **Design:** [Platform Audit and Security Logging Design](../specs/2026-10-31-platform-audit-security-logging-design.md)
 
 ## Scope and sequencing
@@ -168,3 +168,12 @@ postcommit writer and retain its process-crash omission window.
 Apply v22 before relying on issuance/rotation telemetry. It changes the event CHECK
 constraint only; it preserves existing rows and needs no new runtime columns or
 grants. No global reader API/UI, retention, export or purge is added.
+
+### Administrator invalidation coverage — PR #319
+
+- Add safe actor/target identifiers and positive active-session counts for committed member removal/deactivation; do not emit an event for denied, foreign, no-op, or rolled-back mutations. The global event remains post-commit/best-effort.
+- Suppress `company_role_changed` for requests that leave the platform company role unchanged.
+- Constrain platform-audit result strings to `success`, `denied`, or `failure` before SQL.
+- Add coverage for repeated explicit revocations, expired/unavailable native refresh telemetry, and unchanged platform audit results.
+- See [platform event coverage](../../platform-event-coverage.md) for the source-backed matrix and documented gaps. Global mobile-duration shortening can deactivate already-expired sessions; its setting audit exists, but per-account revocation telemetry is not currently emitted.
+- Task 1/2 remain incomplete: the authorized security-event read API/UI, production grants/access and operational rollout checks, full denied/failure coverage, and the global mobile-duration side effect remain open. Retention/export/purge and provider/backup controls remain gated by policy decisions.

@@ -21,6 +21,7 @@ _DETAIL_FIELDS = {
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},
 }
+_RESULTS = {"success", "denied", "failure"}
 
 
 def record_platform_audit_event(
@@ -30,6 +31,8 @@ def record_platform_audit_event(
     """Write only an allowlisted detail payload into the platform trail."""
     if action not in _DETAIL_FIELDS:
         raise ValueError("Unsupported platform audit action")
+    if not isinstance(result, str) or result not in _RESULTS:
+        raise ValueError("Unsupported platform audit result")
     safe_details = safe_platform_audit_details(action, details)
     conn.execute(
         """INSERT INTO platform_audit_events

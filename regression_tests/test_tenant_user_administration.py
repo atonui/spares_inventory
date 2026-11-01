@@ -76,6 +76,8 @@ def tenant_user_api(postgres_schema):
     connection.execute(sql.SQL("GRANT USAGE, SELECT ON SEQUENCE activity_logs_id_seq TO {}").format(
         sql.Identifier(role)
     ))
+    from backend.security_event_grants import grant_security_event_writer
+    grant_security_event_writer(connection, runtime_role=role, schema=schema)
     connection.commit()
 
     def get_connection():
@@ -84,6 +86,11 @@ def tenant_user_api(postgres_schema):
         scoped.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         scoped.commit()
         return scoped
+
+    def security_event(**event):
+        from backend.services.security_events import record_security_event
+        with get_connection() as scoped:
+            record_security_event(scoped, **event)
 
     router = create_users_router(
         get_connection=get_connection,
@@ -98,6 +105,7 @@ def tenant_user_api(postgres_schema):
         password_hash=lambda value: "hashed:" + value,
         endpoint_log=lambda *args, **kwargs: (lambda fn: fn),
         mutation_activity=lambda *args, **kwargs: None,
+        security_event=security_event,
     )
 
     def endpoint(method, path):

@@ -658,6 +658,7 @@ from backend.routes.users import create_users_router
 
 app.include_router(create_users_router(
     get_connection=lambda: get_db_connection(),
+    security_event=lambda **event: log_platform_security_event(**event),
     authenticated_writer=lambda *args, **kwargs: authenticated_write_transaction(*args, **kwargs),
     current_user=get_current_user,
     csrf_dependency=verify_authenticated_csrf,
