@@ -104,6 +104,8 @@ def mobile_policy_api(postgres_schema):
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON session_refresh_credentials TO {}").format(sql.Identifier(role)))
     admin.execute(sql.SQL("GRANT SELECT ON organizations TO {}").format(sql.Identifier(role)))
     admin.execute(sql.SQL("GRANT SELECT, UPDATE ON sessions TO {}").format(sql.Identifier(role)))
+    from backend.security_event_grants import grant_security_event_writer
+    grant_security_event_writer(admin, runtime_role=role, schema=schema)
     admin.commit()
 
     def get_connection():
@@ -112,6 +114,19 @@ def mobile_policy_api(postgres_schema):
         conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         conn.commit()
         return conn
+
+    security_events = []
+    session_states_at_event = []
+
+    def security_event(**event):
+        from backend.services.security_events import record_security_event
+        with get_connection() as conn:
+            state = conn.execute(
+                "SELECT is_active FROM sessions WHERE id=%s", (mobile_session_id,)
+            ).fetchone()
+            session_states_at_event.append(state["is_active"])
+            record_security_event(conn, **event)
+        security_events.append(event)
 
     org_router = create_organization_settings_router(
         get_connection=get_connection,
@@ -133,6 +148,8 @@ def mobile_policy_api(postgres_schema):
         org_request=req_org, platform_request=req_platform,
         org_principal=AuthenticatedPrincipal(admin_id, org_a, "owner", False),
         platform_principal=AuthenticatedPrincipal(platform_id, None, None, True),
+        security_events=security_events, security_event=security_event,
+        session_states_at_event=session_states_at_event,
     )
     admin.rollback()
     admin.execute("RESET ROLE")
@@ -206,4 +223,112 @@ def test_platform_mobile_max_reduces_company_policies(mobile_policy_api):
     ).fetchone()["absolute_expires_at"]
     from backend.temporal import serialize_instant
     assert deadline == serialize_instant(api.mobile_created + timedelta(hours=24))
+    assert api.admin.execute(
+        "SELECT count(*) AS n FROM platform_security_events WHERE event='session_revoked'"
+    ).fetchone()["n"] == 0
+
+
+def test_platform_mobile_max_records_only_sessions_deactivated_by_policy(mobile_policy_api):
+    from backend.schemas.superadmin import SystemSettingUpdate
+    from backend.temporal import serialize_instant, utc_now
+
+    api = mobile_policy_api
+    now = utc_now()
+    created = now - timedelta(hours=48)
+    api.admin.execute(
+        """UPDATE sessions SET created_at=%s, expires_at=%s, absolute_expires_at=%s
+           WHERE id=%s""",
+        (serialize_instant(created), serialize_instant(now + timedelta(hours=90)),
+         serialize_instant(now + timedelta(hours=100)), api.mobile_session_id),
+    )
+    api.admin.execute(
+        "UPDATE session_refresh_credentials SET expires_at=%s WHERE session_id=%s",
+        (serialize_instant(now + timedelta(hours=100)), api.mobile_session_id),
+    )
+    api.admin.commit()
+
+    update = api.endpoint(api.platform_router, "PUT", "/api/platform/security-config/{key}")
+    result = asyncio.run(update(
+        key="mobile_session_max_duration_hours", body=SystemSettingUpdate(value="24"),
+        request=api.platform_request, actor=api.platform_principal, csrf_valid=True,
+    ))
+
+    assert result["success"] is True
+    assert api.admin.execute(
+        "SELECT is_active FROM sessions WHERE id=%s", (api.mobile_session_id,)
+    ).fetchone()["is_active"] is False
+    assert api.security_events == [{
+        "event": "session_revoked",
+        "outcome": "success",
+        "actor_user_id": api.platform_id,
+        "details": {
+            "is_mobile": True,
+            "reason": "mobile_duration_policy",
+            "session_count": 1,
+        },
+    }]
+    assert api.session_states_at_event == [False]
+
+    asyncio.run(update(
+        key="mobile_session_max_duration_hours", body=SystemSettingUpdate(value="24"),
+        request=api.platform_request, actor=api.platform_principal, csrf_valid=True,
+    ))
+    assert len(api.security_events) == 1
+    assert api.admin.execute(
+        "SELECT count(*) AS n FROM platform_security_events WHERE event='session_revoked'"
+    ).fetchone()["n"] == 1
+    assert api.admin.execute(
+        """SELECT event,outcome,actor_user_id,details FROM platform_security_events
+           WHERE event='session_revoked'"""
+    ).fetchall() == [{
+        "event": "session_revoked",
+        "outcome": "success",
+        "actor_user_id": api.platform_id,
+        "details": {
+            "is_mobile": True,
+            "reason": "mobile_duration_policy",
+            "session_count": 1,
+        },
+    }]
+
+
+def test_platform_mobile_policy_rollback_does_not_emit_revocation_event(mobile_policy_api):
+    from backend.schemas.superadmin import SystemSettingUpdate
+    from backend.temporal import serialize_instant, utc_now
+
+    api = mobile_policy_api
+    now = utc_now()
+    created = now - timedelta(hours=48)
+    api.admin.execute(
+        """UPDATE sessions SET created_at=%s, expires_at=%s, absolute_expires_at=%s
+           WHERE id=%s""",
+        (serialize_instant(created), serialize_instant(now + timedelta(hours=90)),
+         serialize_instant(now + timedelta(hours=100)), api.mobile_session_id),
+    )
+    api.admin.commit()
+    api.admin.execute(
+        """CREATE FUNCTION reject_policy_commit() RETURNS trigger LANGUAGE plpgsql
+           AS $$ BEGIN RAISE EXCEPTION 'policy commit guard'; END $$"""
+    )
+    api.admin.execute(
+        """CREATE CONSTRAINT TRIGGER reject_policy_commit
+           AFTER INSERT OR UPDATE ON system_settings DEFERRABLE INITIALLY DEFERRED
+           FOR EACH ROW EXECUTE FUNCTION reject_policy_commit()"""
+    )
+    api.admin.commit()
+
+    update = api.endpoint(api.platform_router, "PUT", "/api/platform/security-config/{key}")
+    with pytest.raises(psycopg.errors.RaiseException):
+        asyncio.run(update(
+            key="mobile_session_max_duration_hours", body=SystemSettingUpdate(value="24"),
+            request=api.platform_request, actor=api.platform_principal, csrf_valid=True,
+        ))
+
+    assert api.security_events == []
+    assert api.admin.execute(
+        "SELECT is_active FROM sessions WHERE id=%s", (api.mobile_session_id,)
+    ).fetchone()["is_active"] is True
+    assert api.admin.execute(
+        "SELECT count(*) AS n FROM platform_security_events WHERE event='session_revoked'"
+    ).fetchone()["n"] == 0
 
