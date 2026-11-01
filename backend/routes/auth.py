@@ -47,7 +47,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                        limiter, logger, cookie_secure,
                        native_refresh_encryption_key=None,
                        mail_payload_encryption_key=None, frontend_url=None,
-                       authenticated_account_writer=None) -> APIRouter:
+                       authenticated_account_writer=None, security_event=None) -> APIRouter:
     """Register existing HTTP flows without owning application infrastructure."""
     router = APIRouter()
     get_db_connection = get_connection
@@ -63,6 +63,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     get_security_config = security_config
     send_reset_email = reset_email
     log_activity = activity_log
+    log_security_event = security_event or (lambda **_event: None)
     log_endpoint = endpoint_log
     _record_mutation_activity = mutation_activity
 
@@ -692,6 +693,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     status="error", error_message="Account locked", ip_address=ip_address,
                     user_agent=user_agent,
                 )
+                log_security_event(event="login_blocked", outcome="blocked", actor_user_id=user["id"], ip_address=ip_address, user_agent=user_agent, details={"account_match": True})
                 conn.close()
                 raise HTTPException(
                     status_code=423,
@@ -730,6 +732,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 action="login_failed", status="error", error_message="Invalid credentials",
                 ip_address=ip_address, user_agent=user_agent,
             )
+            log_security_event(event="login_failed", outcome="failure", actor_user_id=user["id"] if user else None, ip_address=ip_address, user_agent=user_agent, details={"account_match": bool(user), "reason": "invalid_credentials"})
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -863,6 +866,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             details={"role": user_role, "remember_me": user_login.remember_me},
             ip_address=ip_address, user_agent=user_agent,
         )
+        log_security_event(event="login_succeeded", outcome="success", actor_user_id=user["id"], ip_address=ip_address, user_agent=user_agent, details={"is_mobile": native, "remember_me": user_login.remember_me})
         logger.info("User %s (%s) logged in from %s", user["name"], user["id"], ip_address)
 
         response_data = {
