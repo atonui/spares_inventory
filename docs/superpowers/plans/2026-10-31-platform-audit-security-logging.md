@@ -139,6 +139,32 @@ Tasks 3 and 4 can follow independently after their APIs are stable. Retention wo
 - Merged #315: v21 table, curated writer, login success/failure and already-locked account attempts.
 - Follow-up #316: reset request/failure/completion routing; no reset email/name in activity or success diagnostics; telemetry persistence failures use a fixed diagnostic without exception payload.
 - Follow-up #316 includes explicit opt-in runtime-grant tooling and disposable PostgreSQL integration tests. Production grants must be applied and verified by the operator; they have not been changed by development verification.
-- Next slice: account-lockout transition and committed password-change events; remove duplicate login activity records and submitted-identifier runtime logging.
+- Merged #317: account-lockout transition and committed password-change events; removed duplicate login activity records and submitted-identifier runtime logging.
 - Still pending after this slice: session/mobile credential issue/rotation/revocation coverage; global event read authorization/API/UI (Task 4); final coverage matrix and rollout verification.
 - Retention policy remains undecided. No purge, archive, export, or retention schedule added. IP/user-agent purpose and retention still require a decision before broader rollout.
+
+### Session lifecycle slice
+
+Migration v22 extends the existing stream with `session_issued` and `session_rotated`.
+Session events contain actor ID, fixed source/reason labels, an optional mobile
+flag, and positive affected-session counts. They never contain credential values,
+hashes, device names, submitted identifiers, or request/response bodies.
+
+| Flow | Event behavior |
+| --- | --- |
+| Browser/native login | Issued event after commit; native replacement also records the prior-session count |
+| Approved mobile pairing completion | Issued event and any mobile replacement after commit; pending/invalid requests issue no event |
+| Native refresh | One rotated event for a new credential pair; exact-response retry emits none |
+| Refresh invalidation | Revoked event for a committed expiry, unavailable account, or refresh-reuse revocation |
+| Specific/other-session/logout/mobile-device revocation | Positive committed changes only; failed or no-op operations emit none |
+
+Bulk revocations omit the mobile flag when the affected set may mix browser and
+mobile sessions. Password reset/change events already represent their associated
+session invalidation; this slice does not duplicate those as bulk revoke events.
+Administrator-driven account/membership invalidation coverage remains part of the
+remaining coverage-matrix review. All new events use the existing best-effort
+postcommit writer and retain its process-crash omission window.
+
+Apply v22 before relying on issuance/rotation telemetry. It changes the event CHECK
+constraint only; it preserves existing rows and needs no new runtime columns or
+grants. No global reader API/UI, retention, export or purge is added.

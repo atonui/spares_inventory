@@ -77,8 +77,14 @@ def native_auth_api(postgres_schema):
         conn.commit()
         return conn
 
+    def security_event(**event):
+        from backend.services.security_events import record_security_event
+        with get_connection() as conn:
+            record_security_event(conn, **event)
+
     router = create_auth_router(
         get_connection=get_connection,
+        security_event=security_event,
         authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(
             get_connection, user_id=user_id, session_token=session_token,
         ),

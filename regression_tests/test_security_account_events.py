@@ -51,9 +51,10 @@ def test_login_security_events_replace_tenant_activity_without_identifiers(
         },
     )
     assert response.status_code == expected_status
-    assert len(events) == 1
-    assert events[0]["event"] == event
-    assert events[0]["actor_user_id"] == (None if case == "unknown_failure" else 1)
+    auth_events = [e for e in events if e["event"] in {"login_succeeded", "login_failed", "login_blocked", "account_locked"}]
+    assert len(auth_events) == 1
+    assert auth_events[0]["event"] == event
+    assert auth_events[0]["actor_user_id"] == (None if case == "unknown_failure" else 1)
     assert all(
         secret not in str(events) + caplog.text
         for secret in [
