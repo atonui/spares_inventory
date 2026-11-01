@@ -30,14 +30,15 @@ def create_platform_organizations_router(
         finally:
             conn.close()
 
-    def add_platform_admin(conn, actor_user_id: int, target_user_id: int) -> bool:
+    def add_platform_admin(conn, actor_user_id: int, target_user_id: int) -> bool | None:
         if conn.execute(
             "SELECT 1 FROM organization_memberships WHERE user_id = %s", (target_user_id,)
         ).fetchone():
-            raise HTTPException(
-                status_code=409,
-                detail="Transfer or remove this user's tenant membership before granting platform administrator access",
+            record_platform_audit_event(
+                conn, actor_user_id, "platform_admin_granted", "denied",
+                details={"target_user_id": target_user_id},
             )
+            return None
         inserted = conn.execute(
             """INSERT INTO platform_admins (user_id) VALUES (%s)
                ON CONFLICT (user_id) DO NOTHING RETURNING user_id""",
@@ -257,6 +258,7 @@ def create_platform_organizations_router(
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
         require_postgres()
+        created = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
@@ -270,7 +272,12 @@ def create_platform_organizations_router(
             if target is None:
                 raise HTTPException(status_code=404, detail="No active account exists with that email")
             created = add_platform_admin(conn, principal.user_id, target["id"])
-            return {"success": True, "created": created}
+        if created is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer or remove this user's tenant membership before granting platform administrator access",
+            )
+        return {"success": True, "created": created}
 
     @router.put("/admins/{target_user_id}")
     async def grant_platform_admin_by_id(
@@ -278,6 +285,7 @@ def create_platform_organizations_router(
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
         require_postgres()
+        created = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
@@ -288,7 +296,12 @@ def create_platform_organizations_router(
             if target is None:
                 raise HTTPException(status_code=404, detail="User not found")
             created = add_platform_admin(conn, principal.user_id, target_user_id)
-            return {"success": True, "created": created}
+        if created is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer or remove this user's tenant membership before granting platform administrator access",
+            )
+        return {"success": True, "created": created}
 
     @router.delete("/admins/{target_user_id}")
     async def revoke_platform_admin(
@@ -296,34 +309,47 @@ def create_platform_organizations_router(
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
         require_postgres()
+        denial = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
             if target_user_id == principal.user_id:
-                raise HTTPException(status_code=409, detail="You cannot remove your own platform administrator access")
-            conn.execute("LOCK TABLE platform_admins IN EXCLUSIVE MODE")
-            active_admins = conn.execute(
-                """SELECT count(*) AS n FROM platform_admins pa JOIN users u ON u.id = pa.user_id
-                   WHERE u.archived_at IS NULL"""
-            ).fetchone()["n"]
-            target = conn.execute(
-                "SELECT 1 FROM platform_admins WHERE user_id = %s FOR UPDATE", (target_user_id,)
-            ).fetchone()
-            if target is None:
-                raise HTTPException(status_code=404, detail="Platform administrator not found")
-            if active_admins <= 1:
-                raise HTTPException(status_code=409, detail="The last platform administrator cannot be removed")
-            from backend.services.platform_support import end_support_sessions
-            end_support_sessions(
-                conn, actor_user_id=principal.user_id,
-                target_user_id=target_user_id, end_reason="platform_admin_revoked",
-            )
-            conn.execute("DELETE FROM platform_admins WHERE user_id = %s", (target_user_id,))
-            record_platform_audit_event(
-                conn, principal.user_id, "platform_admin_revoked", "success",
-                details={"target_user_id": target_user_id},
-            )
-            return {"success": True}
+                record_platform_audit_event(
+                    conn, principal.user_id, "platform_admin_revoked", "denied",
+                    details={"target_user_id": target_user_id},
+                )
+                denial = HTTPException(status_code=409, detail="You cannot remove your own platform administrator access")
+            else:
+                conn.execute("LOCK TABLE platform_admins IN EXCLUSIVE MODE")
+                active_admins = conn.execute(
+                    """SELECT count(*) AS n FROM platform_admins pa JOIN users u ON u.id = pa.user_id
+                       WHERE u.archived_at IS NULL"""
+                ).fetchone()["n"]
+                target = conn.execute(
+                    "SELECT 1 FROM platform_admins WHERE user_id = %s FOR UPDATE", (target_user_id,)
+                ).fetchone()
+                if target is None:
+                    raise HTTPException(status_code=404, detail="Platform administrator not found")
+                if active_admins <= 1:
+                    record_platform_audit_event(
+                        conn, principal.user_id, "platform_admin_revoked", "denied",
+                        details={"target_user_id": target_user_id},
+                    )
+                    denial = HTTPException(status_code=409, detail="The last platform administrator cannot be removed")
+                else:
+                    from backend.services.platform_support import end_support_sessions
+                    end_support_sessions(
+                        conn, actor_user_id=principal.user_id,
+                        target_user_id=target_user_id, end_reason="platform_admin_revoked",
+                    )
+                    conn.execute("DELETE FROM platform_admins WHERE user_id = %s", (target_user_id,))
+                    record_platform_audit_event(
+                        conn, principal.user_id, "platform_admin_revoked", "success",
+                        details={"target_user_id": target_user_id},
+                    )
+        if denial is not None:
+            raise denial
+        return {"success": True}
 
     return router
