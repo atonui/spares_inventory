@@ -7,13 +7,13 @@
   <title>Accept invitation · Spares Tracker</title>
   <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
   <link rel="stylesheet" href="login.css?v=20261023-approved-brand-v1">
-    <link rel="stylesheet" href="password-visibility.css?v=20261029-password-visibility">
+    <link rel="stylesheet" href="password-visibility.css?v=20261101-password-icons">
 <link rel="stylesheet" href="buttons.css?v=20261023-app-button-system-v1">
 <link rel="stylesheet" href="typography.css?v=20261023-font-scale-v1">
   <style>[x-cloak]{display:none!important}.invite-card{max-width:34rem;margin:8vh auto;padding:2rem;background:#fff;border-radius:12px;box-shadow:0 8px 36px #10253a18}.invite-card h1{margin-top:0}.invite-card .form-group{margin:1rem 0}.invite-card input{width:100%;box-sizing:border-box;padding:.75rem}.invite-status{margin:1rem 0}</style>
   <script src="js/shared/csrf.js?v=20261014-frontend-21" defer></script>
   <script src="js/pages/accept-invitation.js?v=20261015-saas" defer></script>
-    <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
+    <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.min.js" defer></script>
     <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="brand/generated/favicon-32.png">
@@ -33,7 +33,7 @@
       </div>
       <div class="form-group">
         <label for="invite-password">Password</label>
-        <div class="password-field-control"><input id="invite-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required x-model="password"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="invite-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+        <div class="password-field-control"><input id="invite-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required x-model="password"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="invite-password" aria-label="Show password" aria-pressed="false"><svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M2.25 12s3.5-6.25 9.75-6.25S21.75 12 21.75 12s-3.5 6.25-9.75 6.25S2.25 12 2.25 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" stroke="currentColor" stroke-width="1.8"/><path class="password-visibility-icon-slash" d="m4 4 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
       </div>
       <p class="invite-status" x-show="error" role="alert" x-text="error"></p>
       <p class="invite-status" x-show="!token" role="alert">This invitation link is incomplete or unavailable.</p>

@@ -39,11 +39,11 @@
 <script src="js/inventory/notification-links.js?v=20261030-store-email-notifications" defer></script>
 <script src="js/pages/inventory-v21.js?v=20261030-store-email-notifications" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
-    <script src="js/shared/password-visibility.js?v=20261029-password-visibility" defer></script>
+    <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.min.js" defer></script>
 <link rel="stylesheet" href="icons.css?v=20261017-sparesflow-button-contrast">
-    <link rel="stylesheet" href="password-visibility.css?v=20261029-password-visibility">
+    <link rel="stylesheet" href="password-visibility.css?v=20261101-password-icons">
 <link rel="stylesheet" href="buttons.css?v=20261023-app-button-system-v1">
 <link rel="stylesheet" href="typography.css?v=20261023-font-scale-v1">
     <link rel="icon" type="image/svg+xml" href="brand/source/favicon.svg">
@@ -96,7 +96,7 @@
                     </div>
                     <div class="login-field">
                         <label for="login-password">Password</label>
-                        <div class="password-field-control"><input id="login-password" name="password" type="password" x-model="loginForm.password" autocomplete="current-password" placeholder="Enter your password" required><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="login-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+                        <div class="password-field-control"><input id="login-password" name="password" type="password" x-model="loginForm.password" autocomplete="current-password" placeholder="Enter your password" required><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="login-password" aria-label="Show password" aria-pressed="false"><svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M2.25 12s3.5-6.25 9.75-6.25S21.75 12 21.75 12s-3.5 6.25-9.75 6.25S2.25 12 2.25 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" stroke="currentColor" stroke-width="1.8"/><path class="password-visibility-icon-slash" d="m4 4 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
                     </div>
                     <div class="login-options">
                         <label class="login-remember" for="login-remember"><input id="login-remember" type="checkbox" x-model="loginForm.remember_me"><span>Remember me</span></label>
@@ -1531,7 +1531,7 @@
                         </div>
                         <div class="form-group" x-show="!currentUser?.saas_mode">
                             <label for="user-password" x-text="editingUser ? 'New Password (leave blank to keep current)' : 'Password'"></label>
-                            <div class="password-field-control"><input id="user-password" type="password" x-model="userForm.password" :required="!editingUser && !currentUser?.saas_mode"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="user-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+                            <div class="password-field-control"><input id="user-password" type="password" x-model="userForm.password" :required="!editingUser && !currentUser?.saas_mode"><button type="button" class="password-visibility-toggle" data-password-visibility aria-controls="user-password" aria-label="Show password" aria-pressed="false"><svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M2.25 12s3.5-6.25 9.75-6.25S21.75 12 21.75 12s-3.5 6.25-9.75 6.25S2.25 12 2.25 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" stroke="currentColor" stroke-width="1.8"/><path class="password-visibility-icon-slash" d="m4 4 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
                         </div>
                         <div class="form-group">
                             <label for="user-role">Role</label>

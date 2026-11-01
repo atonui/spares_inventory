@@ -10,6 +10,6 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
     input.type = visible ? 'text' : 'password';
     button.setAttribute('aria-pressed', String(visible));
     button.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
-    button.textContent = visible ? 'Hide' : 'Show';
+    button.classList.toggle('is-visible', visible);
   });
 }
