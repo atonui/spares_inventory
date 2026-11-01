@@ -87,3 +87,88 @@ def test_runtime_security_event_grants_remove_defaults_and_allow_curated_inserts
         conn.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
         conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
         conn.commit()
+
+
+@pytest.mark.parametrize("privileged_path", ["set_role", "table_owner", "schema_owner"])
+def test_grant_command_refuses_privileged_runtime_and_preserves_existing_grants(
+    postgres_schema, privileged_path
+):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.security_event_grants import grant_security_event_writer
+
+    conn, schema = postgres_schema
+    apply_postgres_migrations(conn)
+    runtime = "security_runtime_" + uuid4().hex
+    elevated = "security_elevated_" + uuid4().hex
+    conn.execute(
+        sql.SQL("CREATE ROLE {} NOLOGIN NOINHERIT").format(sql.Identifier(runtime))
+    )
+    conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(elevated)))
+    conn.execute(
+        sql.SQL("GRANT USAGE, CREATE ON SCHEMA {} TO {}, {}").format(
+            sql.Identifier(schema), sql.Identifier(runtime), sql.Identifier(elevated)
+        )
+    )
+    conn.execute(
+        sql.SQL("GRANT SELECT ON platform_security_events TO {}").format(
+            sql.Identifier(runtime)
+        )
+    )
+    if privileged_path == "set_role":
+        conn.execute(
+            sql.SQL("GRANT {} TO {}").format(
+                sql.Identifier(elevated), sql.Identifier(runtime)
+            )
+        )
+        conn.execute(
+            sql.SQL("GRANT SELECT, UPDATE ON platform_security_events TO {}").format(
+                sql.Identifier(elevated)
+            )
+        )
+    elif privileged_path == "table_owner":
+        conn.execute(
+            sql.SQL("ALTER TABLE platform_security_events OWNER TO {}").format(
+                sql.Identifier(runtime)
+            )
+        )
+    else:
+        conn.execute(
+            sql.SQL("ALTER SCHEMA {} OWNER TO {}").format(
+                sql.Identifier(schema), sql.Identifier(runtime)
+            )
+        )
+    conn.commit()
+    try:
+        with pytest.raises(ValueError, match="privileg|owner"):
+            grant_security_event_writer(conn, runtime_role=runtime, schema=schema)
+        # A refusal must not partially revoke the role's original privileges.
+        assert (
+            conn.execute(
+                "SELECT has_table_privilege(%s,%s,%s) AS allowed",
+                (
+                    runtime,
+                    sql.Identifier(schema, "platform_security_events").as_string(conn),
+                    "SELECT",
+                ),
+            ).fetchone()["allowed"]
+            is True
+        )
+    finally:
+        conn.rollback()
+        conn.execute("RESET ROLE")
+        # Return ownership before removing these disposable roles.
+        owner = conn.execute("SELECT current_user AS name").fetchone()["name"]
+        conn.execute(
+            sql.SQL("ALTER SCHEMA {} OWNER TO {}").format(
+                sql.Identifier(schema), sql.Identifier(owner)
+            )
+        )
+        conn.execute(
+            sql.SQL("ALTER TABLE platform_security_events OWNER TO {}").format(
+                sql.Identifier(owner)
+            )
+        )
+        for role in (runtime, elevated):
+            conn.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+            conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
+        conn.commit()

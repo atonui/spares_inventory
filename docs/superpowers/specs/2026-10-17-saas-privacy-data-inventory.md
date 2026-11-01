@@ -5,6 +5,31 @@
 
 This inventory records data flows evidenced in the repository and a read-only review of the current Railway project. Purposes are described from application behavior and may be inferred. It is not a privacy policy, legal retention schedule, or store disclosure. Runtime secrets, live records, provider retention settings, and built iOS/Android manifests were not inspected.
 
+## Security-event source update — 2026-11-01
+
+This update covers the new security stream only. Hosting and native-client
+observations below remain dated snapshots of the original review, not a current
+production or mobile audit.
+
+- PostgreSQL migration v21 adds `platform_security_events`: generated event ID,
+  optional matched actor user ID, allowlisted event/outcome, generated request
+  UUID, bounded IP/user-agent, curated JSON details, and UTC creation timestamp.
+  Unknown accounts have no submitted email/identifier or tenant assignment.
+- Purpose: authentication/account-recovery investigation. Login outcomes and
+  reset request/failure/completion are recorded independently of tenant activity.
+  Reset outcomes no longer write account email/name into activity details or
+  success runtime diagnostics. Older records are not retroactively redacted.
+- No security-event reader API/UI or export is implemented. The deployment grant
+  command limits the web runtime to curated INSERT columns and sequence USAGE;
+  it has not been applied or verified against production by this update. Database
+  owners retain their normal control. The mail worker needs no stream access.
+- Event retention and the separate purpose/access period for IP/user-agent are
+  undecided. No purge/archive schedule is introduced. This source review does
+  not establish production access settings, storage immutability, or compliance.
+- Persistence failures emit a fixed diagnostic without exception text/payload
+  and do not change public authentication responses. PostgreSQL integration
+  coverage uses a disposable `_test` database.
+
 ## Data stored by the backend
 
 ### Accounts and authentication
