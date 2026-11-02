@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 
@@ -21,6 +22,19 @@ from backend.temporal import parse_api_instant, serialize_instant
 logger = logging.getLogger("backend.mail_webhook")
 MAX_WEBHOOK_BYTES = 64 * 1024
 SIGNATURE_TOLERANCE_SECONDS = 300
+_LOG_TYPE = re.compile(r"^[A-Za-z0-9_]{1,64}$")
+_SQLSTATE = re.compile(r"^[A-Za-z0-9]{5}$")
+
+
+def safe_worker_error_fields(exc: Exception) -> tuple[str, str]:
+    """Expose only a bounded exception class and PostgreSQL SQLSTATE."""
+    error_type = type(exc).__name__
+    if not _LOG_TYPE.fullmatch(error_type):
+        error_type = "Exception"
+    sqlstate = getattr(exc, "sqlstate", None)
+    if not isinstance(sqlstate, str) or not _SQLSTATE.fullmatch(sqlstate):
+        sqlstate = "unknown"
+    return error_type, sqlstate
 
 
 def verify_resend_signature(
@@ -55,8 +69,13 @@ async def _deliver_mail_loop() -> None:
     while True:
         try:
             did_work = await asyncio.to_thread(run, once=True)
-        except Exception:
-            logger.warning("mail worker cycle failed")
+        except Exception as exc:
+            error_type, sqlstate = safe_worker_error_fields(exc)
+            logger.error(
+                "mail worker cycle failed error_type=%s sqlstate=%s",
+                error_type,
+                sqlstate,
+            )
             did_work = False
         if not did_work:
             await asyncio.sleep(5)

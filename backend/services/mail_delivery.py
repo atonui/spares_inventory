@@ -301,6 +301,10 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         "tags": [{"name": "app", "value": "spares_tracker"}],
     }
     transport = http_transport or _UrllibTransport()
+    headers = {"Authorization": f"Bearer {api_key}"}
+    message_id = message.get("id")
+    if isinstance(message_id, int) and not isinstance(message_id, bool) and message_id > 0:
+        headers["Idempotency-Key"] = f"spares-tracker-mail-{message_id}"
     provider_status = None
     provider_error_category = None
     provider_response_format = None
@@ -309,7 +313,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         response = transport.post(
             RESEND_ENDPOINT,
             json=body,
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
             timeout=10,
         )
         status_code = getattr(response, "status_code", None)

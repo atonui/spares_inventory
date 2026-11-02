@@ -66,6 +66,26 @@ def test_resend_adapter_sends_invitation_via_configured_sender():
     assert headers["Authorization"] == "Bearer resend-secret"
     assert timeout > 0
 
+
+def test_resend_adapter_keys_retries_to_the_outbox_message():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {
+            "id": 42,
+            "message_type": "organization_invitation",
+            "recipient_email": "owner@example.test",
+            "payload": {"invitation_url": "https://inventory.example.test/accept"},
+        },
+        api_key="resend-secret",
+        from_address="no-reply@example.test",
+        http_transport=transport,
+    )
+
+    _url, _body, headers, _timeout = transport.calls[0]
+    assert headers["Idempotency-Key"] == "spares-tracker-mail-42"
+
 def test_resend_adapter_sends_branded_password_reset():
     from backend.services.mail_delivery import send_mail
 
