@@ -88,6 +88,36 @@ def test_expired_claim_can_be_reclaimed(migrated_outbox):
     assert second["claim_token"] != first["claim_token"]
 
 
+def test_expired_claims_consume_retry_limit_and_eventually_fail(migrated_outbox):
+    from backend.services.mail_outbox import MAX_ATTEMPTS, claim_pending_mail
+    from backend.temporal import utc_now
+
+    connection, _schema, organization_id = migrated_outbox
+    _enqueue(connection, organization_id)
+    now = utc_now()
+    message = None
+    for expected_attempt in range(1, MAX_ATTEMPTS + 1):
+        with connection.transaction():
+            message = claim_pending_mail(connection, now=now, lease_seconds=1)
+        assert message is not None
+        assert message["attempt_count"] == expected_attempt
+        # Simulate the provider accepting the email while the worker fails
+        # before it can acknowledge delivery in PostgreSQL.
+        now += timedelta(seconds=2)
+
+    with connection.transaction():
+        exhausted = claim_pending_mail(connection, now=now, lease_seconds=1)
+
+    assert exhausted is None
+    row = connection.execute(
+        "SELECT status, attempt_count, claim_token, lease_expires_at FROM mail_outbox"
+    ).fetchone()
+    assert row["status"] == "failed"
+    assert row["attempt_count"] == MAX_ATTEMPTS
+    assert row["claim_token"] is None
+    assert row["lease_expires_at"] is None
+
+
 def test_provider_failure_retries_then_marks_terminal_after_six_attempts(migrated_outbox):
     from backend.services.mail_outbox import claim_pending_mail, mark_mail_failed
     from backend.temporal import utc_now

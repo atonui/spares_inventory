@@ -63,27 +63,37 @@ def claim_pending_mail(conn, *, now: datetime, lease_seconds: int = 60) -> dict 
         raise ValueError("Lease duration must be between 1 and 3600 seconds.")
     current = _stamp(now)
     lease_until = _stamp(now + timedelta(seconds=lease_seconds))
+    # A worker may have accepted an email at the provider but failed before
+    # acknowledging it in PostgreSQL. Reclaim each expired lease as a new
+    # attempt, and stop reclaiming after the same bounded retry limit used for
+    # normal delivery failures.
+    conn.execute(
+        """UPDATE mail_outbox
+           SET status = 'failed', claim_token = NULL, lease_expires_at = NULL,
+               last_error_code = 'attempt_limit_reached', updated_at = %s
+           WHERE status = 'claimed' AND lease_expires_at <= %s AND attempt_count >= %s""",
+        (current, current, MAX_ATTEMPTS),
+    )
     token = uuid4()
     row = conn.execute(
         """WITH candidate AS (
                SELECT id FROM mail_outbox
                WHERE (status = 'pending' AND attempt_count < %s AND available_at <= %s)
-                  OR (status = 'claimed' AND lease_expires_at <= %s)
+                  OR (status = 'claimed' AND attempt_count < %s AND lease_expires_at <= %s)
                ORDER BY available_at, id
                LIMIT 1
                FOR UPDATE SKIP LOCKED
            )
            UPDATE mail_outbox AS mail
            SET status = 'claimed', claim_token = %s, lease_expires_at = %s,
-               attempt_count = CASE WHEN mail.status = 'pending'
-                                    THEN mail.attempt_count + 1 ELSE mail.attempt_count END,
+               attempt_count = mail.attempt_count + 1,
                updated_at = %s
            FROM candidate
            WHERE mail.id = candidate.id
            RETURNING mail.id, mail.organization_id, mail.message_type,
                      mail.recipient_email, mail.encrypted_payload, mail.attempt_count,
                      mail.status, mail.claim_token""",
-        (MAX_ATTEMPTS, current, current, token, lease_until, current),
+        (MAX_ATTEMPTS, current, MAX_ATTEMPTS, current, token, lease_until, current),
     ).fetchone()
     return dict(row) if row is not None else None
 

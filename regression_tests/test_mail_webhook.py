@@ -51,6 +51,20 @@ def test_resend_signature_rejects_tampering_and_stale_timestamp():
     )
 
 
+def test_worker_failure_diagnostics_keep_only_bounded_database_codes():
+    from backend.mail_webhook import safe_worker_error_fields
+
+    class DatabaseError(Exception):
+        sqlstate = "42501"
+
+    error_type, sqlstate = safe_worker_error_fields(
+        DatabaseError("private connection detail")
+    )
+
+    assert error_type == "DatabaseError"
+    assert sqlstate == "42501"
+
+
 def test_webhook_event_filter_accepts_only_spares_tracker_tagged_messages():
     from backend.mail_webhook import is_spares_tracker_message
 
