@@ -580,6 +580,7 @@ app.include_router(create_parts_router(
     archive_service=lambda *args, **kwargs: archive_record(*args, **kwargs),
     endpoint_log=lambda *args, **kwargs: log_endpoint(*args, **kwargs),
     mutation_activity=lambda *args, **kwargs: _record_mutation_activity(*args, **kwargs),
+    cursor_secret=SECRET_KEY,
 ))
 
 
