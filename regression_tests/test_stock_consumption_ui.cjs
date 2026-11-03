@@ -229,3 +229,14 @@ test('shipped consumption forms remain independent through replacement and clear
     assert.equal(second.consumeForm, secondForm);
     assert.equal(second.consumeForm.available_quantity, 0);
 });
+
+test('shipped work-order field accepts identifiers supported by the consumption API', () => {
+    const html = fs.readFileSync('static/index.html', 'utf8');
+    const input = html.match(/<input\b[^>]*\bid="consume-work-order-number"[^>]*>/)[0];
+    const pattern = input.match(/\bpattern="([^"]*)"/);
+    const constraint = pattern ? new RegExp(`^(?:${pattern[1]})$`, 'v') : null;
+    for (const number of ['12345', 'WO-2024-001', 'WO/2024/001', 'WO_42', ' WO-42 ', 'WO 42']) {
+        assert.ok(!constraint || constraint.test(number), `browser validation must allow ${JSON.stringify(number)}`);
+    }
+    assert.match(input, /\brequired\b/, 'a work-order number is still mandatory');
+});
