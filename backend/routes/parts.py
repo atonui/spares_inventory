@@ -4,15 +4,18 @@ from backend.temporal_contract import instant_response
 import csv
 import io
 from typing import List
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from backend.database_sql import execute, execute_cursor, is_postgres
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.schemas.parts import PartResponse, CreatePartRequest, UpdatePartRequest
+from backend.schemas.api_v1 import PartPageResponse
+from backend.services.mobile_list_cursor import decode_list_cursor, encode_list_cursor
 
 
 def create_parts_router(*, get_connection, authenticated_writer, current_user,
                         csrf_dependency, admin_guard, archive_admin_guard,
-                        archive_service, endpoint_log, mutation_activity) -> APIRouter:
+                        archive_service, endpoint_log, mutation_activity,
+                        cursor_secret: str) -> APIRouter:
     """Register existing flows without owning database or audit infrastructure."""
     router = APIRouter()
     get_db_connection = get_connection
@@ -24,6 +27,48 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
     archive_record = archive_service
     log_endpoint = endpoint_log
     _record_mutation_activity = mutation_activity
+
+    @router.get("/api/v1/parts", response_model=PartPageResponse)
+    @instant_response
+    async def get_parts_v1(
+        request: Request,
+        limit: int = Query(default=50, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=2048),
+        user_id: int = Depends(get_current_user),
+    ):
+        """List active parts for a native client using a signed continuation cursor."""
+        credential = get_request_credential(request)
+        if credential.transport != "bearer":
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        try:
+            last_id = decode_list_cursor(cursor_secret, "parts", cursor)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid continuation cursor") from None
+
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=credential.value,
+            readonly=True,
+        ) as (conn, _principal):
+            rows = execute(
+                conn,
+                """SELECT id, part_number, description, category
+                   FROM parts
+                   WHERE archived_at IS NULL AND id > ?
+                   ORDER BY id
+                   LIMIT ?""",
+                (last_id, limit + 1),
+            ).fetchall()
+
+        items = [dict(row) for row in rows[:limit]]
+        next_cursor = (
+            encode_list_cursor(cursor_secret, "parts", items[-1]["id"])
+            if len(rows) > limit and items
+            else None
+        )
+        return {"items": items, "page": {"limit": limit, "next_cursor": next_cursor}}
+
 
     @router.get("/api/parts", response_model=List[PartResponse])
     @instant_response
