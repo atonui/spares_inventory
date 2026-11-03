@@ -21,6 +21,18 @@ class StorePageResponse(BaseModel):
     page: InventoryPageMetadata
 
 
+class MobilePartResponse(BaseModel):
+    id: int
+    part_number: str
+    description: str
+    category: str
+
+
+class PartPageResponse(BaseModel):
+    items: list[MobilePartResponse]
+    page: InventoryPageMetadata
+
+
 class PendingTransferResponse(BaseModel):
     id: int
     quantity: int
