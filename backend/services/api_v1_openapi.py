@@ -25,6 +25,20 @@ _V1_PATHS = {
     "/api/v1/auth/email-change/confirm",
 }
 
+_BEARER_AUTH_PATHS = {
+    "/api/v1/me",
+    "/api/v1/inventory",
+    "/api/v1/stores",
+    "/api/v1/inventory/transfers",
+    "/api/v1/inventory/adjustments",
+    "/api/v1/inventory/add",
+    "/api/v1/inventory/consume",
+    "/api/v1/inventory/transfer",
+    "/api/v1/inventory/transfers/{transfer_id}/receive",
+    "/api/v1/inventory/transfers/{transfer_id}/return",
+    "/api/v1/auth/logout",
+}
+
 _ERRORS = {
     "400": ("invalid_request", "The request could not be processed."),
     "401": ("unauthenticated", "Sign in to continue."),
@@ -171,9 +185,7 @@ def build_v1_openapi_document(full_document: dict) -> dict:
         for method, operation in path_item.items():
             if method.lower() not in {"get", "post", "put", "patch", "delete", "options", "head"}:
                 continue
-            if path in {
-                "/api/v1/me", "/api/v1/inventory", "/api/v1/inventory/adjustments", "/api/v1/auth/logout",
-            }:
+            if path in _BEARER_AUTH_PATHS:
                 operation["security"] = [{"BearerAuth": []}]
             else:
                 operation["security"] = []
