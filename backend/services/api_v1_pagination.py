@@ -14,6 +14,7 @@ _MAX_CURSOR_LENGTH = 2048
 @dataclass(frozen=True)
 class InventoryCursor:
     inventory_id: int
+    filter_hash: str | None = None
 
 
 def _serializer(secret: str) -> URLSafeTimedSerializer:
@@ -25,6 +26,7 @@ def _serializer(secret: str) -> URLSafeTimedSerializer:
 def encode_inventory_cursor(
     secret: str,
     inventory_id: int,
+    filter_hash: str | None = None,
 ) -> str:
     """Sign a row ID; current tenant-scoped data supplies the sort key."""
     if isinstance(inventory_id, bool) or not isinstance(inventory_id, int) or inventory_id < 1:
@@ -33,11 +35,14 @@ def encode_inventory_cursor(
         {
             "v": 1,
             "inventory_id": inventory_id,
+            "filter_hash": filter_hash,
         }
     )
 
 
-def decode_inventory_cursor(secret: str, cursor: str) -> InventoryCursor:
+def decode_inventory_cursor(
+    secret: str, cursor: str, expected_filter_hash: str | None = None
+) -> InventoryCursor:
     """Validate a v1 inventory cursor and return its continuation values."""
     if not cursor or len(cursor) > _MAX_CURSOR_LENGTH:
         raise ValueError("Invalid inventory cursor")
@@ -54,4 +59,11 @@ def decode_inventory_cursor(secret: str, cursor: str) -> InventoryCursor:
         or inventory_id < 1
     ):
         raise ValueError("Invalid inventory cursor")
-    return InventoryCursor(inventory_id)
+    filter_hash = payload.get("filter_hash")
+    if filter_hash is not None and (
+        not isinstance(filter_hash, str) or len(filter_hash) != 64
+    ):
+        raise ValueError("Invalid inventory cursor")
+    if filter_hash != expected_filter_hash:
+        raise ValueError("Invalid inventory cursor")
+    return InventoryCursor(inventory_id, filter_hash)
