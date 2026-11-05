@@ -136,7 +136,7 @@ def test_platform_provision_conflict_records_failure_without_submitted_values(pl
     submitted_slug = api.admin.execute(
         "SELECT slug FROM organizations WHERE id=%s", (api.org_id,)
     ).fetchone()["slug"]
-    submitted_email = f"private-{uuid4().hex}@example.test"
+    submitted_email = f"private-{uuid4().hex}@example.com"
     body = OrganizationCreateRequest(
         name=submitted_name, slug=submitted_slug, owner_email=submitted_email,
     )
