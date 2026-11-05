@@ -1,6 +1,7 @@
 """Curated platform audit writes and safe reads."""
 
 import json
+import re
 from uuid import UUID
 from uuid import uuid4
 
@@ -12,9 +13,9 @@ _DETAIL_FIELDS = {
     "support_session_ended": {"support_session_id", "operation", "request_id", "end_reason", "target_user_id"},
     "user_logout": {"operation", "request_id"},
     "organization_created": {"invitation_created"},
-    "company_role_changed": {"target_user_id", "role", "reason"},
-    "platform_admin_granted": {"target_user_id"},
-    "platform_admin_revoked": {"target_user_id"},
+    "company_role_changed": {"target_user_id", "role", "reason", "reason_code"},
+    "platform_admin_granted": {"target_user_id", "reason_code"},
+    "platform_admin_revoked": {"target_user_id", "reason_code"},
     "platform_announcement_saved": {"revision", "audience"},
     "platform_announcement_removed": {"revision"},
     "global_security_setting_changed": {"key", "value"},
@@ -22,6 +23,25 @@ _DETAIL_FIELDS = {
     "organization_reactivated": {"reason"},
 }
 _RESULTS = {"success", "denied", "failure"}
+_UNSAFE_REASON = re.compile(
+    r"(?:\b[\w.+%-]+@[\w.-]+\.[A-Za-z]{2,}\b|"
+    r"\b(?:https?://|www\.)\S+|"
+    r"[?&][A-Za-z0-9_.-]+=[^&\s]*|"
+    r"\b(?:password|token|secret|authorization|cookie|csrf)\s*[:=])",
+    re.IGNORECASE,
+)
+
+
+def normalize_platform_audit_reason(value) -> str | None:
+    """Accept bounded, single-line reasons without common contact or credential fields."""
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not 10 <= len(normalized) <= 500 or any(ord(char) < 32 for char in normalized):
+        return None
+    if _UNSAFE_REASON.search(normalized):
+        return None
+    return normalized
 
 
 def record_platform_audit_event(
@@ -83,8 +103,18 @@ def safe_platform_audit_details(action: str, details) -> dict:
             safe[key] = value
         elif key == "role" and isinstance(value, str) and value in {"owner", "admin", "manager", "engineer"}:
             safe[key] = value
-        elif key == "reason" and isinstance(value, str) and 10 <= len(value) <= 500:
+        elif key == "reason_code" and isinstance(value, str) and value in {
+            "owner_transfer_required",
+        } and action == "company_role_changed":
             safe[key] = value
+        elif key == "reason_code" and isinstance(value, str) and action in {"platform_admin_granted", "platform_admin_revoked"} and value in {
+            "target_unavailable", "target_has_tenant_membership", "self_revocation", "last_active_admin",
+        }:
+            safe[key] = value
+        elif key == "reason":
+            normalized_reason = normalize_platform_audit_reason(value)
+            if normalized_reason is not None:
+                safe[key] = normalized_reason
         elif key == "revision" and isinstance(value, str) and 1 <= len(value) <= 100:
             safe[key] = value
         elif key == "audience" and isinstance(value, str) and value in {"everyone", "authenticated", "roles"}:

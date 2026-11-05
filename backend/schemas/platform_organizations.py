@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from backend.services.platform_audit import normalize_platform_audit_reason
+
 
 class PlatformOrganizationStatusRequest(BaseModel):
     action: Literal["suspend", "reactivate"]
@@ -15,8 +17,8 @@ class PlatformOrganizationStatusRequest(BaseModel):
         if not isinstance(value, str):
             return value
         cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("A reason is required")
+        if normalize_platform_audit_reason(cleaned) is None:
+            raise ValueError("Reason must be 10–500 characters and must not contain contact details, links, query parameters, or credentials")
         return cleaned
 
 
@@ -30,8 +32,8 @@ class PlatformCompanyRoleUpdateRequest(BaseModel):
         if not isinstance(value, str):
             return value
         cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("A reason is required")
+        if normalize_platform_audit_reason(cleaned) is None:
+            raise ValueError("Reason must be 10–500 characters and must not contain contact details, links, query parameters, or credentials")
         return cleaned
 
 

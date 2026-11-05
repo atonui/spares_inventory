@@ -1,7 +1,7 @@
 # Platform Audit and Security Logging Implementation Plan
 
 **Date:** 2026-10-31  
-**Status:** Tasks 1 and 2 remain in progress; Task 3 is complete in merged PR #322; Task 4 is in progress in the current branch. PRs #315–#322 are merged.
+**Status:** Task 1 is complete; Task 2 remains in progress; Tasks 3 and 4 are complete in merged PRs #322 and #323. PRs #315–#324 are merged.
 **Design:** [Platform Audit and Security Logging Design](../specs/2026-10-31-platform-audit-security-logging-design.md)
 
 ## Scope and sequencing
@@ -190,3 +190,12 @@ grants. No global reader API/UI, retention, export or purge is added.
 - Lock and count only active mobile sessions whose calculated deadline is past and whose expiry values the setting update shortens; the setting transaction uses those rows to set `is_active=FALSE`.
 - After commit, write one aggregate `session_revoked` event with the acting platform administrator, fixed `mobile_duration_policy` reason, mobile flag, and count. Do not fan out one row per account for this global operation.
 - No session event is produced for expiry-only tightening that leaves sessions active, repeated/no-op policy updates, or failed commits. The existing best-effort writer can still omit telemetry after commit if persistence fails.
+
+### Platform lifecycle denial coverage — Task 2 slice
+
+- Record owner-role change denials as `company_role_changed` / `denied`, using the requested role and fixed `owner_transfer_required` reason code. Commit that audit row while leaving the membership unchanged.
+- Record unknown or archived platform-admin grant targets without the submitted email, and record unavailable ID-based grant/revoke targets using fixed `target_unavailable` reason codes. Tenant-membership, self-removal, and last-admin denials also use fixed reason codes.
+- `safe_platform_audit_details` applies the same reason-code allowlist to new and historic rows, so unknown reason strings do not reach the reader.
+- Platform reason fields now reject or omit email addresses, URLs, query-parameter strings, credential-like assignments, and control characters. This does not identify arbitrary names, customer notes, inventory values, or all PII; the reason remains operator-supplied bounded text.
+- PostgreSQL-backed regression coverage was added for denied mutation results and email omission. Local verification could not execute these database tests because `TEST_DATABASE_URL` is not configured; a PostgreSQL CI run is required before merging this slice.
+- The rest of Task 2 remains open: finish the action-by-action denial/failure matrix review and check mutation/read transaction boundaries. Do not describe audit storage as immutable or change retention behavior.
