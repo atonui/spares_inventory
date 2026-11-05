@@ -262,7 +262,10 @@ def build_v1_openapi_document(full_document: dict) -> dict:
                     operation.get("description", "")
                     + "\n\nRows are ordered by `part_number`, `store_name`, and inventory id "
                     "as a tie-breaker. Pages are scoped to the authenticated company and "
-                    "include no total count. Continue with `next_cursor` until it is null."
+                    "include no total count. Optional `search` matches part number, description, "
+                    "store name/type, or work order; `store_id` narrows results to a single "
+                    "store. Cursors are bound to the current filters. Continue with "
+                    "`next_cursor` until it is null."
                 ).strip()
             if path == "/api/v1/inventory/adjustments" and method.lower() == "post":
                 operation["description"] = (
