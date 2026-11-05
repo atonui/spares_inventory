@@ -3,6 +3,8 @@ from backend.services.session_credentials import get_request_credential
 from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from typing import List
+import hashlib
+import json
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from backend.database_sql import execute, is_postgres
 from backend.schemas.inventory_reads import InventoryResponse, StatsResponse
@@ -39,23 +41,48 @@ def create_inventory_read_router(*, get_connection, current_user,
             max_length=2048,
             description="Opaque continuation cursor returned by this endpoint.",
         ),
+        search: str | None = Query(
+            default=None,
+            max_length=200,
+            description="Search part number, description, store name/type, or work order.",
+        ),
+        store_id: int | None = Query(
+            default=None,
+            ge=1,
+            description="Restrict results to a store visible to the authenticated company.",
+        ),
         user_id: int = Depends(get_current_user),
     ):
         """Get one authenticated tenant's inventory page using a signed cursor."""
         credential = get_request_credential(request)
         if credential.transport != "bearer":
             raise HTTPException(status_code=401, detail="Not authenticated")
+        normalized_search = " ".join((search or "").split()).casefold()
+        filter_hash = None
+        if normalized_search or store_id is not None:
+            filter_hash = hashlib.sha256(json.dumps(
+                [normalized_search, store_id], separators=(",", ":")
+            ).encode("utf-8")).hexdigest()
         try:
             continuation = (
-                decode_inventory_cursor(cursor_secret, cursor) if cursor is not None else None
+                decode_inventory_cursor(cursor_secret, cursor, filter_hash) if cursor is not None else None
             )
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid inventory cursor") from None
 
         where = "WHERE p.archived_at IS NULL AND s.archived_at IS NULL"
         params = []
+        if store_id is not None:
+            where += " AND i.store_id = ?"
+            params.append(store_id)
+        if normalized_search:
+            for term in normalized_search.split():
+                where += " AND (LOWER(p.part_number) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(s.name) LIKE ? OR LOWER(s.type) LIKE ? OR LOWER(COALESCE(wo.work_order_number, '')) LIKE ?)"
+                search_pattern = f"%{term}%"
+                params.extend([search_pattern] * 5)
         cursor_cte = ""
         cursor_join = ""
+        cursor_prefix_params = []
         if continuation is not None:
             cursor_cte = """
                 WITH cursor_key AS (
@@ -70,7 +97,8 @@ def create_inventory_read_router(*, get_connection, current_user,
             """
             cursor_join = "CROSS JOIN cursor_key"
             where += " AND (p.part_number, s.name, i.id) > (cursor_key.part_number, cursor_key.store_name, ?)"
-            params.extend([continuation.inventory_id, continuation.inventory_id])
+            cursor_prefix_params.append(continuation.inventory_id)
+            params.append(continuation.inventory_id)
         query = f"""
             {cursor_cte}
             SELECT
@@ -105,7 +133,7 @@ def create_inventory_read_router(*, get_connection, current_user,
         ) as (conn, _principal):
             if not is_postgres(conn):
                 register_instant_comparison(conn)
-            rows = execute(conn, query, tuple(params)).fetchall()
+            rows = execute(conn, query, tuple(cursor_prefix_params + params)).fetchall()
 
         has_more = len(rows) > limit
         page_rows = rows[:limit]
@@ -115,6 +143,7 @@ def create_inventory_read_router(*, get_connection, current_user,
             next_cursor = encode_inventory_cursor(
                 cursor_secret,
                 last["id"],
+                filter_hash,
             )
         return {
             "items": [dict(row) for row in page_rows],
