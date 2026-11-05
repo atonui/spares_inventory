@@ -1,4 +1,6 @@
 """Platform-level tenant provisioning and global administrator management."""
+import logging
+
 from backend.services.session_credentials import get_request_credential
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,6 +17,8 @@ from backend.services.mail_payloads import validate_mail_encryption_key
 from backend.services.platform_transactions import authenticated_platform_transaction
 from backend.services.platform_audit import record_platform_audit_event
 
+logger = logging.getLogger(__name__)
+
 
 def create_platform_organizations_router(
     *, get_connection, current_user, csrf_dependency,
@@ -29,6 +33,21 @@ def create_platform_organizations_router(
                 raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
         finally:
             conn.close()
+
+    def record_provision_failure_after_rollback(request, actor):
+        try:
+            with authenticated_platform_transaction(
+                get_connection,
+                session_token=get_request_credential(request).value,
+                expected_user_id=getattr(actor, "user_id", actor),
+            ) as (conn, principal):
+                record_platform_audit_event(
+                    conn, principal.user_id, "organization_created", "failure",
+                    details={"invitation_created": False},
+                )
+        except Exception:
+            # Preserve the original provisioning response and never log request data.
+            logger.error("Platform organization failure audit write failed")
 
     def add_platform_admin(conn, actor_user_id: int, target_user_id: int) -> bool | None:
         if conn.execute(
@@ -161,6 +180,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         try:
+            denial = None
             with authenticated_platform_transaction(
                 get_connection, session_token=get_request_credential(request).value,
                 expected_user_id=getattr(user_id, "user_id", user_id),
@@ -168,18 +188,27 @@ def create_platform_organizations_router(
                 try:
                     validate_mail_encryption_key(encryption_key)
                 except ValueError:
-                    raise HTTPException(status_code=503, detail="Invitation delivery is not configured")
-                return {"success": True, "organization": create_organization_with_owner_invitation(
-                    conn, name=body.name, slug=body.slug, owner_email=str(body.owner_email),
-                    actor_user_id=principal.user_id, frontend_url=frontend_url,
-                    encryption_key=encryption_key,
-                )}
+                    record_platform_audit_event(
+                        conn, principal.user_id, "organization_created", "failure",
+                        details={"invitation_created": False},
+                    )
+                    denial = HTTPException(status_code=503, detail="Invitation delivery is not configured")
+                if denial is None:
+                    result = {"success": True, "organization": create_organization_with_owner_invitation(
+                        conn, name=body.name, slug=body.slug, owner_email=str(body.owner_email),
+                        actor_user_id=principal.user_id, frontend_url=frontend_url,
+                        encryption_key=encryption_key,
+                    )}
+            if denial is not None:
+                raise denial
+            return result
         except HTTPException:
             raise
         except Exception as exc:
             # Avoid exposing uniqueness/database/provider details in platform APIs.
             from psycopg import IntegrityError
             if isinstance(exc, IntegrityError):
+                record_provision_failure_after_rollback(request, user_id)
                 raise HTTPException(status_code=409, detail="Organization name or slug is already in use") from None
             raise
 

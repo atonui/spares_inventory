@@ -89,6 +89,9 @@ def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlist
     assert safe_platform_audit_details("organization_suspended", {
         "reason": "Customer requested a temporary pause", "token": "secret",
     }) == {"reason": "Customer requested a temporary pause"}
+    assert safe_platform_audit_details("organization_created", {
+        "invitation_created": False, "owner_email": "owner@example.com",
+    }) == {"invitation_created": False}
     assert safe_platform_audit_details("organization_suspended", {
         "reason": "Review request from owner@example.com",
     }) == {}
@@ -130,6 +133,12 @@ def test_platform_settings_audit_details_are_curated():
     assert safe_platform_audit_details("platform_announcement_removed", {
         "revision": "revision-2", "message": "private draft",
     }) == {"revision": "revision-2"}
+    assert safe_platform_audit_details("platform_announcement_saved", {
+        "reason_code": "stale_revision", "message": "private draft",
+    }) == {"reason_code": "stale_revision"}
+    assert safe_platform_audit_details("platform_announcement_removed", {
+        "reason_code": "untrusted value",
+    }) == {}
     assert safe_platform_audit_details("global_security_setting_changed", {
         "key": "max_login_attempts", "value": 8, "secret": "no",
     }) == {"key": "max_login_attempts", "value": 8}

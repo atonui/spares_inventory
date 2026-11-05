@@ -147,9 +147,13 @@ def test_platform_announcement_uses_postgres_table_utc_and_revision_conflicts(pl
     with pytest.raises(HTTPException) as error:
         asyncio.run(save(body=stale, request=api.request, actor=api.principal, csrf_valid=True))
     assert error.value.status_code == 409
-    assert api.admin.execute(
-        "SELECT details FROM platform_audit_events WHERE action='platform_announcement_saved'"
-    ).fetchone()["details"]["audience"] == "roles"
+    saved_events = api.admin.execute(
+        "SELECT result, details FROM platform_audit_events WHERE action='platform_announcement_saved' ORDER BY id"
+    ).fetchall()
+    assert saved_events == [
+        {"result": "success", "details": {"revision": saved["announcement"]["revision"], "audience": "roles"}},
+        {"result": "denied", "details": {"reason_code": "stale_revision"}},
+    ]
 
     wrong_timezone_revision = SystemAnnouncementRequest(
         message="Stale timezone", timezone_revision=1,
@@ -158,15 +162,28 @@ def test_platform_announcement_uses_postgres_table_utc_and_revision_conflicts(pl
     with pytest.raises(HTTPException) as error:
         asyncio.run(save(body=wrong_timezone_revision, request=api.request, actor=api.principal, csrf_valid=True))
     assert error.value.status_code == 409
+    assert api.admin.execute(
+        "SELECT result, details FROM platform_audit_events WHERE action='platform_announcement_saved' ORDER BY id DESC LIMIT 1"
+    ).fetchone() == {"result": "denied", "details": {"reason_code": "timezone_revision_changed"}}
 
     remove = api.settings_endpoint("DELETE", "/api/platform/announcement")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(remove(
+            request=api.request, expected_revision="old-revision",
+            actor=api.principal, csrf_valid=True,
+        ))
+    assert error.value.status_code == 409
+    assert api.admin.execute(
+        "SELECT result, details FROM platform_audit_events WHERE action='platform_announcement_removed'"
+    ).fetchone() == {"result": "denied", "details": {"reason_code": "stale_revision"}}
     asyncio.run(remove(
         request=api.request, expected_revision=saved["announcement"]["revision"],
         actor=api.principal, csrf_valid=True,
     ))
     assert asyncio.run(manage(request=api.request, response=Response(), actor=api.principal))["announcement"] is None
     assert api.admin.execute(
-        "SELECT count(*) AS total FROM platform_audit_events WHERE action='platform_announcement_removed'"
+        "SELECT count(*) AS total FROM platform_audit_events "
+        "WHERE action='platform_announcement_removed' AND result='success'"
     ).fetchone()["total"] == 1
 
 

@@ -199,3 +199,10 @@ grants. No global reader API/UI, retention, export or purge is added.
 - Platform reason fields now reject or omit email addresses, URLs, query-parameter strings, credential-like assignments, and control characters. This does not identify arbitrary names, customer notes, inventory values, or all PII; the reason remains operator-supplied bounded text.
 - PostgreSQL-backed regression coverage was added for denied mutation results and email omission. Local verification could not execute these database tests because `TEST_DATABASE_URL` is not configured; a PostgreSQL CI run is required before merging this slice.
 - The rest of Task 2 remains open: finish the action-by-action denial/failure matrix review and check mutation/read transaction boundaries. Do not describe audit storage as immutable or change retention behavior.
+
+### Conflict and rollback coverage — Task 2 follow-up
+
+- Expected platform-announcement revision/timezone conflicts are recorded as denied with fixed reason codes. The conflict is caught before leaving the authorized transaction, so its audit event commits without changing the announcement.
+- Organization-provisioning conflicts are recorded as a fixed failure event after the mutation transaction rolls back. A second platform transaction revalidates the actor; the event contains no submitted organization name, slug, owner email, or exception text. Failure to write this secondary event produces only a fixed diagnostic.
+- The coverage matrix now documents the different boundaries for committed denials and post-rollback failures. Confirm both database-backed flows in PostgreSQL CI before merge.
+- Task 2 remains open until the full action matrix and applicable read/write boundaries are reviewed. Retention, purge, and export remain gated by policy.

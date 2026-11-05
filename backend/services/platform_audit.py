@@ -16,13 +16,20 @@ _DETAIL_FIELDS = {
     "company_role_changed": {"target_user_id", "role", "reason", "reason_code"},
     "platform_admin_granted": {"target_user_id", "reason_code"},
     "platform_admin_revoked": {"target_user_id", "reason_code"},
-    "platform_announcement_saved": {"revision", "audience"},
-    "platform_announcement_removed": {"revision"},
+    "platform_announcement_saved": {"revision", "audience", "reason_code"},
+    "platform_announcement_removed": {"revision", "reason_code"},
     "global_security_setting_changed": {"key", "value"},
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},
 }
 _RESULTS = {"success", "denied", "failure"}
+_REASON_CODES = {
+    "company_role_changed": {"owner_transfer_required"},
+    "platform_admin_granted": {"target_unavailable", "target_has_tenant_membership"},
+    "platform_admin_revoked": {"target_unavailable", "self_revocation", "last_active_admin"},
+    "platform_announcement_saved": {"stale_revision", "timezone_revision_changed"},
+    "platform_announcement_removed": {"stale_revision"},
+}
 _UNSAFE_REASON = re.compile(
     r"(?:\b[\w.+%-]+@[\w.-]+\.[A-Za-z]{2,}\b|"
     r"\b(?:https?://|www\.)\S+|"
@@ -97,19 +104,13 @@ def safe_platform_audit_details(action: str, details) -> dict:
             "membership_removed", "membership_deactivated",
         }:
             safe[key] = value
-        elif key == "invitation_created" and value is True:
-            safe[key] = True
+        elif key == "invitation_created" and isinstance(value, bool):
+            safe[key] = value
         elif key == "target_user_id" and isinstance(value, int) and not isinstance(value, bool) and value > 0:
             safe[key] = value
         elif key == "role" and isinstance(value, str) and value in {"owner", "admin", "manager", "engineer"}:
             safe[key] = value
-        elif key == "reason_code" and isinstance(value, str) and value in {
-            "owner_transfer_required",
-        } and action == "company_role_changed":
-            safe[key] = value
-        elif key == "reason_code" and isinstance(value, str) and action in {"platform_admin_granted", "platform_admin_revoked"} and value in {
-            "target_unavailable", "target_has_tenant_membership", "self_revocation", "last_active_admin",
-        }:
+        elif key == "reason_code" and isinstance(value, str) and value in _REASON_CODES.get(action, set()):
             safe[key] = value
         elif key == "reason":
             normalized_reason = normalize_platform_audit_reason(value)
