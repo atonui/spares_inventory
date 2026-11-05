@@ -14,6 +14,9 @@ _V1_PATHS = {
     "/api/v1/me",
     "/api/v1/inventory",
     "/api/v1/parts",
+    "/api/v1/overview",
+    "/api/v1/equipment",
+    "/api/v1/inventory/movements",
     "/api/v1/stores",
     "/api/v1/inventory/transfers",
     "/api/v1/inventory/adjustments",
@@ -27,6 +30,10 @@ _V1_PATHS = {
 }
 
 _BEARER_AUTH_PATHS = {
+    "/api/v1/parts",
+    "/api/v1/overview",
+    "/api/v1/equipment",
+    "/api/v1/inventory/movements",
     "/api/v1/me",
     "/api/v1/inventory",
     "/api/v1/stores",
@@ -63,6 +70,9 @@ _ERRORS_BY_PATH = {
     "/api/v1/me": ("401", "403", "404", "429", "500", "503"),
     "/api/v1/inventory": ("400", "401", "403", "404", "422", "429", "500", "503"),
     "/api/v1/parts": ("400", "401", "429", "500", "503"),
+    "/api/v1/overview": ("401", "403", "429", "500", "503"),
+    "/api/v1/equipment": ("400", "401", "403", "422", "429", "500", "503"),
+    "/api/v1/inventory/movements": ("400", "401", "403", "422", "429", "500", "503"),
     "/api/v1/stores": ("400", "401", "403", "422", "429", "500", "503"),
     "/api/v1/inventory/transfers": ("400", "401", "403", "422", "429", "500", "503"),
     "/api/v1/inventory/adjustments": ("401", "403", "404", "409", "422", "429", "500", "503"),

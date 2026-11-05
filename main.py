@@ -594,6 +594,15 @@ app.include_router(create_inventory_read_router(
 ))
 
 
+from backend.routes.mobile_reads import create_mobile_read_router
+
+app.include_router(create_mobile_read_router(
+    get_connection=lambda: get_db_connection(),
+    current_user=get_current_user,
+    cursor_secret=SECRET_KEY,
+))
+
+
 from backend.routes.inventory_writes import create_inventory_write_router
 
 inventory_write_router = create_inventory_write_router(
