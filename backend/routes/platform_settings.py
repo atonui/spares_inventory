@@ -62,22 +62,41 @@ def create_platform_settings_router(
         csrf_valid=Depends(csrf_dependency),
     ):
         require_postgres()
+        denial = None
         with authenticated_platform_transaction(
             get_connection,
             session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
             if body.timezone_revision != 0:
-                raise HTTPException(409, "Platform schedule timezone changed. Reload before saving.")
-            notice = announcements.notice_from_request(body, timezone="UTC")
-            saved = announcements.save_notice(
-                conn, notice, actor_id=principal.user_id, expected_revision=body.expected_revision,
-            )
-            record_platform_audit_event(
-                conn, principal.user_id, "platform_announcement_saved", "success",
-                details={"revision": saved["revision"], "audience": saved["audience"]},
-            )
-            return {"success": True, "revision": saved["revision"]}
+                record_platform_audit_event(
+                    conn, principal.user_id, "platform_announcement_saved", "denied",
+                    details={"reason_code": "timezone_revision_changed"},
+                )
+                denial = HTTPException(409, "Platform schedule timezone changed. Reload before saving.")
+            else:
+                notice = announcements.notice_from_request(body, timezone="UTC")
+                try:
+                    saved = announcements.save_notice(
+                        conn, notice, actor_id=principal.user_id, expected_revision=body.expected_revision,
+                    )
+                except HTTPException as exc:
+                    if exc.status_code != 409:
+                        raise
+                    record_platform_audit_event(
+                        conn, principal.user_id, "platform_announcement_saved", "denied",
+                        details={"reason_code": "stale_revision"},
+                    )
+                    denial = exc
+                else:
+                    record_platform_audit_event(
+                        conn, principal.user_id, "platform_announcement_saved", "success",
+                        details={"revision": saved["revision"], "audience": saved["audience"]},
+                    )
+                    result = {"success": True, "revision": saved["revision"]}
+        if denial is not None:
+            raise denial
+        return result
 
     @router.delete("/announcement")
     async def remove_platform_announcement(
@@ -87,18 +106,31 @@ def create_platform_settings_router(
         csrf_valid=Depends(csrf_dependency),
     ):
         require_postgres()
+        denial = None
         with authenticated_platform_transaction(
             get_connection,
             session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
         ) as (conn, principal):
-            removed = announcements.remove_notice(conn, expected_revision=expected_revision)
-            if removed is not None:
+            try:
+                removed = announcements.remove_notice(conn, expected_revision=expected_revision)
+            except HTTPException as exc:
+                if exc.status_code != 409:
+                    raise
                 record_platform_audit_event(
-                    conn, principal.user_id, "platform_announcement_removed", "success",
-                    details={"revision": removed["revision"]},
+                    conn, principal.user_id, "platform_announcement_removed", "denied",
+                    details={"reason_code": "stale_revision"},
                 )
-            return {"success": True}
+                denial = exc
+            else:
+                if removed is not None:
+                    record_platform_audit_event(
+                        conn, principal.user_id, "platform_announcement_removed", "success",
+                        details={"revision": removed["revision"]},
+                    )
+        if denial is not None:
+            raise denial
+        return {"success": True}
 
     @router.get("/security-config")
     async def get_platform_security_config(

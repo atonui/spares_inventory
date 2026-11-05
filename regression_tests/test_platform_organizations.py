@@ -127,6 +127,43 @@ def test_platform_provisions_tenant_and_encrypted_owner_invitation(platform_api)
     assert api.admin.execute("SELECT count(*) AS n FROM platform_audit_events").fetchone()["n"] == 1
 
 
+def test_platform_provision_conflict_records_failure_without_submitted_values(platform_api):
+    from backend.schemas.invitations import OrganizationCreateRequest
+
+    api = platform_api
+    create = api.endpoint("POST", "/api/platform/organizations")
+    submitted_name = "Duplicate name " + uuid4().hex
+    submitted_slug = api.admin.execute(
+        "SELECT slug FROM organizations WHERE id=%s", (api.org_id,)
+    ).fetchone()["slug"]
+    submitted_email = f"private-{uuid4().hex}@example.test"
+    body = OrganizationCreateRequest(
+        name=submitted_name, slug=submitted_slug, owner_email=submitted_email,
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(create(
+            body=body, request=api.request, user_id=api.principal, csrf_valid=True,
+        ))
+
+    assert error.value.status_code == 409
+    assert api.admin.execute("SELECT count(*) AS n FROM organizations").fetchone()["n"] == 1
+    assert api.admin.execute("SELECT count(*) AS n FROM organization_invitations").fetchone()["n"] == 0
+    assert api.admin.execute("SELECT count(*) AS n FROM mail_outbox").fetchone()["n"] == 0
+    events = api.admin.execute(
+        "SELECT actor_user_id, action, result, details FROM platform_audit_events"
+    ).fetchall()
+    assert events == [{
+        "actor_user_id": api.principal.user_id,
+        "action": "organization_created",
+        "result": "failure",
+        "details": {"invitation_created": False},
+    }]
+    assert submitted_name not in str(events)
+    assert submitted_slug not in str(events)
+    assert submitted_email not in str(events)
+
+
 def test_platform_dashboard_preserves_mail_count_fields_from_counts_view(platform_api):
     api = platform_api
     dashboard = api.endpoint("GET", "/api/platform/dashboard")
