@@ -257,6 +257,48 @@ def test_platform_suspend_reactivate_audits_reason_and_is_idempotent(platform_ap
     assert api.admin.execute("SELECT count(*) AS n FROM platform_audit_events").fetchone()["n"] == 2
 
 
+def test_platform_owner_role_change_is_denied_and_audited(platform_api):
+    from backend.schemas.platform_organizations import PlatformCompanyRoleUpdateRequest
+
+    api = platform_api
+    api.admin.execute(
+        "UPDATE organization_memberships SET company_role='owner' WHERE organization_id=%s AND user_id=%s",
+        (api.org_id, api.member_id),
+    )
+    api.admin.commit()
+    change = api.endpoint(
+        "PUT", "/api/platform/organizations/{organization_id}/members/{user_id}/role"
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(change(
+            organization_id=str(api.org_id), user_id=api.member_id,
+            body=PlatformCompanyRoleUpdateRequest(
+                role="admin", reason="Requested owner role change"
+            ),
+            request=api.request, actor=api.principal, csrf_valid=True,
+        ))
+
+    assert error.value.status_code == 409
+    assert api.admin.execute(
+        "SELECT company_role FROM organization_memberships WHERE organization_id=%s AND user_id=%s",
+        (api.org_id, api.member_id),
+    ).fetchone()["company_role"] == "owner"
+    denied = api.admin.execute(
+        "SELECT actor_user_id, organization_id, action, result, details FROM platform_audit_events"
+    ).fetchall()
+    assert len(denied) == 1
+    assert denied[0]["actor_user_id"] == api.principal.user_id
+    assert denied[0]["organization_id"] == api.org_id
+    assert denied[0]["action"] == "company_role_changed"
+    assert denied[0]["result"] == "denied"
+    assert denied[0]["details"] == {
+        "target_user_id": api.member_id,
+        "role": "admin",
+        "reason_code": "owner_transfer_required",
+    }
+
+
 def test_platform_status_unknown_organization_returns_404(platform_api):
     from backend.schemas.platform_organizations import PlatformOrganizationStatusRequest
 
@@ -372,7 +414,10 @@ def test_platform_admin_grant_rejects_current_tenant_membership(platform_api):
     assert len(denied) == 1
     assert denied[0]["actor_user_id"] == api.principal.user_id
     assert denied[0]["result"] == "denied"
-    assert denied[0]["details"] == {"target_user_id": api.member_id}
+    assert denied[0]["details"] == {
+        "target_user_id": api.member_id,
+        "reason_code": "target_has_tenant_membership",
+    }
 
 
 @pytest.mark.parametrize("archived", [False, True])
@@ -394,6 +439,46 @@ def test_platform_admin_grant_rejects_unknown_or_archived_email(platform_api, ar
             actor=api.principal, csrf_valid=True,
         ))
     assert error.value.status_code == 404
+    events = api.admin.execute(
+        "SELECT actor_user_id, action, result, details FROM platform_audit_events"
+    ).fetchall()
+    assert events == [{
+        "actor_user_id": api.principal.user_id,
+        "action": "platform_admin_granted",
+        "result": "denied",
+        "details": {"reason_code": "target_unavailable"},
+    }]
+    assert email not in str(events)
+
+
+def test_platform_admin_grant_and_revoke_missing_ids_are_audited(platform_api):
+    api = platform_api
+    missing_user_id = api.member_id + 100000
+    grant = api.endpoint("PUT", "/api/platform/admins/{target_user_id}")
+    with pytest.raises(HTTPException) as grant_error:
+        asyncio.run(grant(
+            target_user_id=missing_user_id, request=api.request,
+            actor=api.principal, csrf_valid=True,
+        ))
+    assert grant_error.value.status_code == 404
+
+    revoke = api.endpoint("DELETE", "/api/platform/admins/{target_user_id}")
+    with pytest.raises(HTTPException) as revoke_error:
+        asyncio.run(revoke(
+            target_user_id=missing_user_id, request=api.request,
+            actor=api.principal, csrf_valid=True,
+        ))
+    assert revoke_error.value.status_code == 404
+
+    events = api.admin.execute(
+        "SELECT action, result, details FROM platform_audit_events ORDER BY id"
+    ).fetchall()
+    assert events == [
+        {"action": "platform_admin_granted", "result": "denied",
+         "details": {"target_user_id": missing_user_id, "reason_code": "target_unavailable"}},
+        {"action": "platform_admin_revoked", "result": "denied",
+         "details": {"target_user_id": missing_user_id, "reason_code": "target_unavailable"}},
+    ]
 
 
 def test_platform_admin_cannot_remove_own_access_even_when_another_admin_exists(platform_api):
@@ -421,7 +506,10 @@ def test_platform_admin_cannot_remove_own_access_even_when_another_admin_exists(
     assert len(denied) == 1
     assert denied[0]["actor_user_id"] == api.principal.user_id
     assert denied[0]["result"] == "denied"
-    assert denied[0]["details"] == {"target_user_id": api.principal.user_id}
+    assert denied[0]["details"] == {
+        "target_user_id": api.principal.user_id,
+        "reason_code": "self_revocation",
+    }
 
 
 def test_last_platform_admin_cannot_be_removed(platform_api):
@@ -440,7 +528,10 @@ def test_last_platform_admin_cannot_be_removed(platform_api):
     assert len(denied) == 1
     assert denied[0]["actor_user_id"] == api.principal.user_id
     assert denied[0]["result"] == "denied"
-    assert denied[0]["details"] == {"target_user_id": api.principal.user_id}
+    assert denied[0]["details"] == {
+        "target_user_id": api.principal.user_id,
+        "reason_code": "self_revocation",
+    }
 
 
 def test_platform_admin_grant_requires_platform_authority(platform_api):

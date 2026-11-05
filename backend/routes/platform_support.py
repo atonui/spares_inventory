@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from backend.database_sql import is_postgres
-from backend.services.platform_audit import record_platform_audit_event
+from backend.services.platform_audit import normalize_platform_audit_reason, record_platform_audit_event
 from backend.services.platform_support import authenticated_support_transaction, create_support_session
 from backend.services.platform_transactions import authenticated_platform_transaction
 from backend.services.session_credentials import get_request_credential, hash_session_credential
@@ -23,8 +23,8 @@ class SupportSessionStart(BaseModel):
     @classmethod
     def validate_reason(cls, value):
         value = value.strip()
-        if not 10 <= len(value) <= 500:
-            raise ValueError('Reason must be 10–500 characters')
+        if normalize_platform_audit_reason(value) is None:
+            raise ValueError('Reason must be 10–500 characters and must not contain contact details, links, query parameters, or credentials')
         return value
 
 

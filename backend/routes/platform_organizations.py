@@ -36,7 +36,8 @@ def create_platform_organizations_router(
         ).fetchone():
             record_platform_audit_event(
                 conn, actor_user_id, "platform_admin_granted", "denied",
-                details={"target_user_id": target_user_id},
+                details={"target_user_id": target_user_id,
+                         "reason_code": "target_has_tenant_membership"},
             )
             return None
         inserted = conn.execute(
@@ -193,6 +194,7 @@ def create_platform_organizations_router(
         except (ValueError, TypeError):
             raise HTTPException(status_code=404, detail="Organization member not found") from None
         require_postgres()
+        denial = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
@@ -205,18 +207,26 @@ def create_platform_organizations_router(
             if membership is None:
                 raise HTTPException(status_code=404, detail="Organization member not found")
             if membership["company_role"] == "owner":
-                raise HTTPException(status_code=409, detail="Transfer ownership in company settings first")
-            if membership["company_role"] == body.role:
+                record_platform_audit_event(
+                    conn, principal.user_id, "company_role_changed", "denied", org_id,
+                    {"target_user_id": user_id, "role": body.role,
+                     "reason_code": "owner_transfer_required"},
+                )
+                denial = HTTPException(status_code=409, detail="Transfer ownership in company settings first")
+            elif membership["company_role"] == body.role:
                 return {"success": True}
-            conn.execute(
-                "UPDATE organization_memberships SET company_role = %s WHERE organization_id = %s AND user_id = %s",
-                (body.role, org_id, user_id),
-            )
-            record_platform_audit_event(
-                conn, principal.user_id, "company_role_changed", "success", org_id,
-                {"target_user_id": user_id, "role": body.role, "reason": body.reason},
-            )
-            return {"success": True}
+            else:
+                conn.execute(
+                    "UPDATE organization_memberships SET company_role = %s WHERE organization_id = %s AND user_id = %s",
+                    (body.role, org_id, user_id),
+                )
+                record_platform_audit_event(
+                    conn, principal.user_id, "company_role_changed", "success", org_id,
+                    {"target_user_id": user_id, "role": body.role, "reason": body.reason},
+                )
+        if denial is not None:
+            raise denial
+        return {"success": True}
 
     @router.put("/organizations/{organization_id}/status")
     async def set_organization_status(
@@ -259,6 +269,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         created = None
+        denial = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
@@ -270,8 +281,15 @@ def create_platform_organizations_router(
                 (str(body.email),),
             ).fetchone()
             if target is None:
-                raise HTTPException(status_code=404, detail="No active account exists with that email")
-            created = add_platform_admin(conn, principal.user_id, target["id"])
+                record_platform_audit_event(
+                    conn, principal.user_id, "platform_admin_granted", "denied",
+                    details={"reason_code": "target_unavailable"},
+                )
+                denial = HTTPException(status_code=404, detail="No active account exists with that email")
+            else:
+                created = add_platform_admin(conn, principal.user_id, target["id"])
+        if denial is not None:
+            raise denial
         if created is None:
             raise HTTPException(
                 status_code=409,
@@ -286,6 +304,7 @@ def create_platform_organizations_router(
     ):
         require_postgres()
         created = None
+        denial = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
@@ -294,8 +313,16 @@ def create_platform_organizations_router(
                 "SELECT id FROM users WHERE id = %s AND archived_at IS NULL", (target_user_id,)
             ).fetchone()
             if target is None:
-                raise HTTPException(status_code=404, detail="User not found")
-            created = add_platform_admin(conn, principal.user_id, target_user_id)
+                record_platform_audit_event(
+                    conn, principal.user_id, "platform_admin_granted", "denied",
+                    details={"target_user_id": target_user_id,
+                             "reason_code": "target_unavailable"},
+                )
+                denial = HTTPException(status_code=404, detail="User not found")
+            else:
+                created = add_platform_admin(conn, principal.user_id, target_user_id)
+        if denial is not None:
+            raise denial
         if created is None:
             raise HTTPException(
                 status_code=409,
@@ -317,7 +344,8 @@ def create_platform_organizations_router(
             if target_user_id == principal.user_id:
                 record_platform_audit_event(
                     conn, principal.user_id, "platform_admin_revoked", "denied",
-                    details={"target_user_id": target_user_id},
+                    details={"target_user_id": target_user_id,
+                             "reason_code": "self_revocation"},
                 )
                 denial = HTTPException(status_code=409, detail="You cannot remove your own platform administrator access")
             else:
@@ -330,11 +358,17 @@ def create_platform_organizations_router(
                     "SELECT 1 FROM platform_admins WHERE user_id = %s FOR UPDATE", (target_user_id,)
                 ).fetchone()
                 if target is None:
-                    raise HTTPException(status_code=404, detail="Platform administrator not found")
-                if active_admins <= 1:
                     record_platform_audit_event(
                         conn, principal.user_id, "platform_admin_revoked", "denied",
-                        details={"target_user_id": target_user_id},
+                        details={"target_user_id": target_user_id,
+                                 "reason_code": "target_unavailable"},
+                    )
+                    denial = HTTPException(status_code=404, detail="Platform administrator not found")
+                elif active_admins <= 1:
+                    record_platform_audit_event(
+                        conn, principal.user_id, "platform_admin_revoked", "denied",
+                        details={"target_user_id": target_user_id,
+                                 "reason_code": "last_active_admin"},
                     )
                     denial = HTTPException(status_code=409, detail="The last platform administrator cannot be removed")
                 else:

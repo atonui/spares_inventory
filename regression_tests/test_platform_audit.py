@@ -25,6 +25,10 @@ def test_platform_organization_status_requires_valid_action_and_reason():
         PlatformOrganizationStatusRequest(action="pause", reason="not valid")
     with pytest.raises(ValidationError):
         PlatformOrganizationStatusRequest(action="suspend", reason="short")
+    with pytest.raises(ValidationError):
+        PlatformOrganizationStatusRequest(
+            action="suspend", reason="Review requested for owner@example.com"
+        )
 
 
 def test_platform_company_role_change_requires_reason():
@@ -34,6 +38,20 @@ def test_platform_company_role_change_requires_reason():
         PlatformCompanyRoleUpdateRequest(role="engineer")
     request = PlatformCompanyRoleUpdateRequest(role="manager", reason="Customer requested correction")
     assert request.reason == "Customer requested correction"
+    with pytest.raises(ValidationError):
+        PlatformCompanyRoleUpdateRequest(
+            role="manager", reason="Review request at https://example.com/path"
+        )
+
+
+def test_support_session_rejects_sensitive_reason_content():
+    from backend.routes.platform_support import SupportSessionStart
+
+    with pytest.raises(ValidationError):
+        SupportSessionStart(
+            organization_id=uuid4(), reason="Support lookup for part ABC-123?email=user@example.com",
+            current_password="provided-password",
+        )
 
 
 def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlists():
@@ -53,9 +71,30 @@ def test_platform_audit_writer_and_reader_apply_action_specific_detail_allowlist
     assert safe_platform_audit_details("company_role_changed", {
         "target_user_id": True, "role": ["malformed"], "password": "secret",
     }) == {}
+    assert safe_platform_audit_details("company_role_changed", {
+        "target_user_id": 8, "role": "admin", "reason_code": "owner_transfer_required",
+        "email": "owner@example.com",
+    }) == {
+        "target_user_id": 8, "role": "admin", "reason_code": "owner_transfer_required",
+    }
+    assert safe_platform_audit_details("company_role_changed", {
+        "reason_code": "owner@example.com",
+    }) == {}
+    assert safe_platform_audit_details("platform_admin_granted", {
+        "reason_code": "target_unavailable", "email": "owner@example.com",
+    }) == {"reason_code": "target_unavailable"}
+    assert safe_platform_audit_details("platform_admin_granted", {
+        "reason_code": "raw submitted email owner@example.com",
+    }) == {}
     assert safe_platform_audit_details("organization_suspended", {
         "reason": "Customer requested a temporary pause", "token": "secret",
     }) == {"reason": "Customer requested a temporary pause"}
+    assert safe_platform_audit_details("organization_suspended", {
+        "reason": "Review request from owner@example.com",
+    }) == {}
+    assert safe_platform_audit_details("organization_suspended", {
+        "reason": "Review request ?email=owner@example.com",
+    }) == {}
 
 
 def test_account_logout_is_recorded_in_global_audit_without_tenant_context():
