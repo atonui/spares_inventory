@@ -120,6 +120,7 @@ def test_parts_route_sets_session_derived_tenant_context(postgres_schema):
         archive_service=lambda *_args, **_kwargs: None,
         endpoint_log=lambda *_args, **_kwargs: lambda endpoint: endpoint,
         mutation_activity=lambda *_args, **_kwargs: None,
+        cursor_secret="test-cursor-secret",
     )
     endpoint = next(route.endpoint for route in router.routes if route.path == "/api/parts")
     request = type("RequestStub", (), {"cookies": {"session_token": token}})()

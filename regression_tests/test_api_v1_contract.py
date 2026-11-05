@@ -182,7 +182,11 @@ def test_v1_auth_allowlist_exposes_only_expected_auth_paths():
         and route.path.startswith("/api/v1/")
         and route.path not in {
             "/api/v1/inventory",
+            "/api/v1/overview",
+            "/api/v1/parts",
             "/api/v1/stores",
+            "/api/v1/equipment",
+            "/api/v1/inventory/movements",
             "/api/v1/inventory/transfers",
             "/api/v1/inventory/adjustments",
             "/api/v1/inventory/add",
@@ -315,7 +319,11 @@ def test_v1_openapi_is_filtered_and_versioned():
         "/api/v1/auth/mobile-pairing/complete",
         "/api/v1/me",
         "/api/v1/inventory",
+        "/api/v1/overview",
+        "/api/v1/parts",
         "/api/v1/stores",
+        "/api/v1/equipment",
+        "/api/v1/inventory/movements",
         "/api/v1/inventory/transfers",
         "/api/v1/inventory/adjustments",
         "/api/v1/inventory/add",
