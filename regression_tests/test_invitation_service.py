@@ -76,6 +76,8 @@ def test_invitation_acceptance_is_single_use_and_email_bound(invitation_db):
             conn, organization_id=org_id, token=token, name="New Person", password="long-secret",
             password_hash=lambda value: "hash:" + value,
             password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+            frontend_url="https://inventory.example.test",
+            encryption_key=key,
         )
     assert result["organization_id"] == str(org_id)
     member = conn.execute(
@@ -88,6 +90,8 @@ def test_invitation_acceptance_is_single_use_and_email_bound(invitation_db):
             accept_invitation(
                 conn, organization_id=org_id, token=token, name="Other", password="long-secret",
                 password_hash=lambda value: value, password_verify=lambda *_: True,
+                frontend_url="https://inventory.example.test",
+                encryption_key=key,
             )
     assert error.value.detail == "Invitation is invalid or expired"
 
@@ -109,6 +113,8 @@ def test_invitation_wrong_organization_scope_uses_generic_error(invitation_db):
             accept_invitation(
                 conn, organization_id=other_org, token=token, name="Nope", password="long-secret",
                 password_hash=lambda value: value, password_verify=lambda *_: True,
+                frontend_url="https://inventory.example.test",
+                encryption_key=key,
             )
     assert error.value.status_code == 400
     assert error.value.detail == "Invitation is invalid or expired"
@@ -130,6 +136,8 @@ def test_existing_identity_must_prove_password(invitation_db):
             accept_invitation(
                 conn, organization_id=org_id, token=token, name="Existing", password="wrong",
                 password_hash=lambda value: value, password_verify=lambda plain, hashed: False,
+                frontend_url="https://inventory.example.test",
+                encryption_key=key,
             )
     assert conn.execute(
         "SELECT 1 FROM organization_memberships WHERE user_id=%s", (existing,)
@@ -169,12 +177,104 @@ def test_pending_invitation_cannot_create_membership_for_platform_admin(invitati
                 conn, organization_id=org_id, token=token, name="Platform", password="password",
                 password_hash=lambda value: "hash:" + value,
                 password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+                frontend_url="https://inventory.example.test",
+                encryption_key=key,
             )
 
     assert error.value.detail == "Invitation is invalid or expired"
     assert conn.execute(
         "SELECT 1 FROM organization_memberships WHERE user_id=%s", (platform_id,)
     ).fetchone() is None
+
+
+def test_first_owner_acceptance_queues_one_encrypted_welcome(invitation_db):
+    from backend.services.invitations import accept_invitation
+    from backend.services.mail_payloads import decrypt_mail_payload
+    from backend.services.tenant_context import set_tenant_context
+
+    conn, org_id, actor_id, key = invitation_db
+    invitation = _create(conn, org_id, actor_id, key, email="owner@example.test", role="owner")
+    token = _token_from_outbox(conn, key)
+
+    with conn.transaction():
+        set_tenant_context(conn, org_id)
+        result = accept_invitation(
+            conn, organization_id=org_id, token=token, name="First Owner", password="long-secret",
+            password_hash=lambda value: "hash:" + value,
+            password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+            frontend_url="https://inventory.example.test",
+            encryption_key=key,
+        )
+
+    welcome = conn.execute(
+        """SELECT message_type, recipient_email, encrypted_payload, idempotency_key
+           FROM mail_outbox WHERE message_type='owner_welcome'"""
+    ).fetchone()
+    assert welcome["message_type"] == "owner_welcome"
+    assert welcome["recipient_email"] == "owner@example.test"
+    assert welcome["idempotency_key"] == f"owner-welcome-{invitation['id']}"
+    assert decrypt_mail_payload(welcome["encrypted_payload"], key) == {
+        "owner_name": "First Owner",
+        "organization_name": "Invite Tenant",
+        "sign_in_url": "https://inventory.example.test/static/index.html",
+    }
+    assert result["user_id"] is not None
+
+
+def test_non_owner_invitation_acceptance_does_not_queue_owner_welcome(invitation_db):
+    from backend.services.invitations import accept_invitation
+    from backend.services.tenant_context import set_tenant_context
+
+    conn, org_id, actor_id, key = invitation_db
+    _create(conn, org_id, actor_id, key, email="manager@example.test", role="manager")
+    token = _token_from_outbox(conn, key)
+    with conn.transaction():
+        set_tenant_context(conn, org_id)
+        accept_invitation(
+            conn, organization_id=org_id, token=token, name="Manager", password="long-secret",
+            password_hash=lambda value: "hash:" + value,
+            password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+            frontend_url="https://inventory.example.test",
+            encryption_key=key,
+        )
+    assert conn.execute(
+        "SELECT count(*) AS n FROM mail_outbox WHERE message_type='owner_welcome'"
+    ).fetchone()["n"] == 0
+
+
+def test_only_first_owner_acceptance_queues_welcome(invitation_db):
+    from backend.services.invitations import accept_invitation
+    from backend.services.tenant_context import set_tenant_context
+
+    conn, org_id, actor_id, key = invitation_db
+    _create(conn, org_id, actor_id, key, email="first-owner@example.test", role="owner")
+    first_token = _token_from_outbox(conn, key)
+    with conn.transaction():
+        set_tenant_context(conn, org_id)
+        accept_invitation(
+            conn, organization_id=org_id, token=first_token, name="First Owner", password="long-secret",
+            password_hash=lambda value: "hash:" + value,
+            password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+            frontend_url="https://inventory.example.test",
+            encryption_key=key,
+        )
+
+    _create(conn, org_id, actor_id, key, email="second-owner@example.test", role="owner")
+    second_token = _token_from_outbox(conn, key)
+    with conn.transaction():
+        set_tenant_context(conn, org_id)
+        accept_invitation(
+            conn, organization_id=org_id, token=second_token, name="Second Owner", password="long-secret",
+            password_hash=lambda value: "hash:" + value,
+            password_verify=lambda plain, hashed: hashed == "hash:" + plain,
+            frontend_url="https://inventory.example.test",
+            encryption_key=key,
+        )
+
+    welcome_rows = conn.execute(
+        "SELECT recipient_email FROM mail_outbox WHERE message_type='owner_welcome'"
+    ).fetchall()
+    assert [row["recipient_email"] for row in welcome_rows] == ["first-owner@example.test"]
 
 
 def test_platform_provisioning_rolls_back_if_mail_cannot_be_encrypted(invitation_db):

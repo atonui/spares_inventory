@@ -26,6 +26,7 @@ from . import (
     v0020_platform_tenant_identity_separation,
     v0021_platform_security_events,
     v0022_session_security_events,
+    v0023_owner_welcome_mail,
 )
 
 
@@ -66,6 +67,7 @@ MIGRATIONS = tuple(
         v0020_platform_tenant_identity_separation,
         v0021_platform_security_events,
         v0022_session_security_events,
+        v0023_owner_welcome_mail,
     )
 )
 

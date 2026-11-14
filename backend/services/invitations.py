@@ -39,6 +39,21 @@ def _invitation_link(base_url: str, organization_id, token: str) -> str:
                        urlencode({"organization_id": str(organization_id), "token": token}), ""))
 
 
+def _sign_in_link(base_url: str) -> str:
+    parsed = urlsplit(base_url)
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError("Application base URL must be an absolute HTTP URL")
+    base_path = parsed.path.rstrip("/")
+    if not base_path.endswith("/static"):
+        base_path += "/static"
+    return urlunsplit((parsed.scheme, parsed.netloc, base_path + "/index.html", "", ""))
+
+
 def create_invitation(
     conn, *, organization_id, invited_by: int, email: str, company_role: str,
     frontend_url: str, encryption_key: str,
@@ -119,7 +134,7 @@ def cancel_invitation(conn, *, organization_id, invitation_id: int) -> None:
 
 def accept_invitation(
     conn, *, organization_id, token: str, name: str | None, password: str,
-    password_hash, password_verify,
+    password_hash, password_verify, frontend_url: str, encryption_key: str,
 ) -> dict:
     """Accept only a valid, unexpired token within the candidate tenant RLS scope."""
     generic = HTTPException(status_code=400, detail="Invitation is invalid or expired")
@@ -139,8 +154,20 @@ def accept_invitation(
     if not isinstance(password, str) or len(password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
 
+    # Serialize owner acceptance per tenant so only its first owner receives
+    # the onboarding message when multiple owner invitations exist.
+    organization = conn.execute(
+        "SELECT name FROM organizations WHERE id = %s FOR UPDATE", (organization_id,)
+    ).fetchone()
+    if organization is None:
+        raise generic
+    is_first_owner = row["company_role"] == "owner" and conn.execute(
+        "SELECT 1 FROM organization_memberships WHERE organization_id = %s AND company_role = 'owner' LIMIT 1",
+        (organization_id,),
+    ).fetchone() is None
+
     user = conn.execute(
-        "SELECT id, email, password_hash FROM users WHERE lower(btrim(email)) = %s AND archived_at IS NULL FOR UPDATE",
+        "SELECT id, email, name, password_hash FROM users WHERE lower(btrim(email)) = %s AND archived_at IS NULL FOR UPDATE",
         (row["email_normalized"],),
     ).fetchone()
     if user:
@@ -174,6 +201,28 @@ def accept_invitation(
     )
     if accepted.rowcount != 1:
         raise generic
+    if is_first_owner:
+        owner_name = (
+            user["name"].strip()
+            if user and isinstance(user["name"], str) and user["name"].strip()
+            else name.strip() if isinstance(name, str) and name.strip() else "there"
+        )
+        encrypted_payload = encrypt_mail_payload(
+            {
+                "owner_name": owner_name,
+                "organization_name": organization["name"],
+                "sign_in_url": _sign_in_link(frontend_url),
+            },
+            encryption_key,
+        )
+        enqueue_mail(
+            conn,
+            organization_id=organization_id,
+            message_type="owner_welcome",
+            recipient_email=row["email_normalized"],
+            encrypted_payload=encrypted_payload,
+            idempotency_key=f"owner-welcome-{row['id']}",
+        )
     return {"success": True, "user_id": user_id, "organization_id": str(organization_id)}
 
 

@@ -36,6 +36,7 @@ def enqueue_mail(
 ) -> int:
     if message_type not in {
         "organization_invitation",
+        "owner_welcome",
         "password_reset",
         "email_change_verification",
         "email_changed_notice",
