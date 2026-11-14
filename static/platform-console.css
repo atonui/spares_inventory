@@ -63,6 +63,15 @@ body.platform-console { background: var(--brand-page); color: var(--brand-navy);
 .platform-console .attention-text { color:#a14637 !important; }
 .platform-console .platform-overview-grid { display:grid; grid-template-columns:minmax(15rem,.75fr) minmax(0,1.25fr); gap:1rem; }
 .platform-console .platform-overview-grid .panel { margin:0; }
+.platform-console .invitation-mail-history { margin-top:1rem; }
+.platform-console .invitation-mail-history .panel-header>div { display:grid; gap:.2rem; }
+.platform-console .invitation-mail-history .panel-header small { color:var(--brand-slate-on-page); font-size:.78rem; }
+.platform-console .invitation-mail-table-wrap { overflow:auto; }
+.platform-console .invitation-mail-table { width:100%; min-width:68rem; }
+.platform-console .invitation-mail-table td { overflow-wrap:anywhere; }
+.platform-console .invitation-mail-table td[data-label="Organization"] strong,
+.platform-console .invitation-mail-table td[data-label="Organization"] small { display:block; }
+.platform-console .invitation-mail-table td[data-label="Organization"] small { margin-top:.2rem; color:var(--brand-slate-on-page); font-size:.75rem; }
 .platform-console .attention-card { padding:1rem; border:1px solid #dce4ec; border-radius:8px; background:#f7f9fb; }
 .platform-console .attention-card p { margin:.35rem 0 0; color:#64748b; font-size:.86rem; }
 .platform-console .attention-card.needs-attention { border-color:#edd0c5; background:#fff8f5; color:#873e31; }
@@ -114,6 +123,12 @@ body.platform-console { background: var(--brand-page); color: var(--brand-navy);
   .platform-console .platform-page-intro>.btn { align-self:flex-start; }
   .platform-console .platform-overview-grid { grid-template-columns:1fr; }
   .platform-console .organization-directory { overflow:visible; }
+  .platform-console .invitation-mail-table-wrap { overflow:visible; }
+  .platform-console .invitation-mail-table, .platform-console .invitation-mail-table tbody { display:block; width:100%; min-width:0; }
+  .platform-console .invitation-mail-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  .platform-console .invitation-mail-table tr { display:block; margin-bottom:.75rem; padding:.65rem .8rem; border:1px solid #e1e6ed; border-radius:8px; background:#fff; }
+  .platform-console .invitation-mail-table td { display:grid; grid-template-columns:7rem minmax(0,1fr); gap:.6rem; padding:.4rem 0; border:0; white-space:normal; overflow-wrap:anywhere; }
+  .platform-console .invitation-mail-table td::before { content:attr(data-label); color:#64748b; font-size:.74rem; font-weight:650; }
   .platform-console .organizations-table, .platform-console .organizations-table tbody { display:block; width:100%; min-width:0; }
   .platform-console .organizations-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
   .platform-console .organizations-table tr { display:block; margin-bottom:.75rem; padding:.65rem .8rem; border:1px solid #e1e6ed; border-radius:8px; background:#fff; }

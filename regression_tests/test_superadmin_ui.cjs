@@ -200,6 +200,8 @@ test('platform audit renders readable labels and structured safe details',()=>{
  assert.equal(a.platformAuditActionLabel('organization_suspended'),'Organization suspended');
  assert.equal(a.platformAuditActionLabel('support_data_read'),'Support data accessed');
  assert.equal(a.platformAuditActionLabel('future_action'),'Other platform event');
+ assert.equal(a.platformAuditActionLabel('platform_invitation_mail_read'),'Invitation email history viewed');
+ assert.equal(a.platformAuditDetailLabel('result_count'),'Rows returned');
  assert.equal(a.platformAuditResultLabel('success'),'Success');
  assert.equal(a.platformAuditResultLabel('failure'),'Failed');
  assert.equal(a.platformAuditResultLabel('future_result'),'Other result');
@@ -305,3 +307,25 @@ test('reset validation makes no request and failed reset retains values for retr
 test('announcement loading exposes errors and successful retry clears them',async()=>{const a=app();a.api=async()=>{throw Error('offline')};await a.loadAnnouncement();assert.equal(a.announcementError,'offline');assert.equal(a.announcementLoading,false);a.api=async()=>({announcement:{message:'Notice',level:'info'},status:'active',business_timezone:'Africa/Nairobi',timezone_revision:1});await a.loadAnnouncement();assert.equal(a.announcementError,'');assert.equal(a.annForm.message,'Notice');});
 test('broadcast writes wait while the current announcement is loading',async()=>{const a=app();let calls=0,release;a.api=()=>{calls++;return new Promise(r=>release=r)};const load=a.loadAnnouncement();a.saveAnnouncement();a.clearAnnouncement();assert.equal(calls,1);release({announcement:null});await load;});
 test('announcement refresh cannot overwrite a pending removal',async()=>{const a=app();a.toast=()=>{};let calls=0,release;a.api=()=>{calls++;return new Promise(r=>release=r)};const removal=a.clearAnnouncement();a.loadAnnouncement();assert.equal(calls,1);release({success:true});await removal;assert.equal(a.announcement,null);});
+test('platform invitation mail history paginates and handles API failures',async()=>{
+ const a=app(),paths=[];a.invitationMailLimit=25;
+ a.api=async path=>{paths.push(path);return {rows:[{id:5,recipient_email:'owner@example.test',status:'sent',delivery_status:'unknown'}],total:26,limit:25,offset:Number(new URL(path,'https://example.test').searchParams.get('offset'))};};
+ await a.loadInvitationMail(25);
+ assert.equal(paths[0],'/platform/invitation-mail?limit=25&offset=25');
+ assert.equal(a.invitationMailRows[0].recipient_email,'owner@example.test');
+ assert.equal(a.invitationMailOffset,25);assert.equal(a.invitationMailTotal,26);
+ assert.equal(a.invitationMailQueueLabel('sent'),'Sent to provider');
+ assert.equal(a.invitationMailDeliveryLabel('unknown'),'Not confirmed');
+ assert.equal(a.invitationMailDeliveryLabel('delivered'),'Delivered');
+ await a.changeInvitationMailPage(-1);assert.equal(a.invitationMailOffset,0);
+ a.api=async()=>{throw Error('offline');};await a.loadInvitationMail();
+ assert.equal(a.invitationMailError,'offline');assert.equal(a.invitationMailLoading,false);
+});
+test('platform overview exposes safe paginated invitation history states and fields',()=>{
+ const section=html.split('x-show="tab===\'dashboard\' && me?.saas_mode"')[1].split('x-show="tab===\'organizations\' && me?.saas_mode"')[0];
+ for(const label of ['Organization','Recipient','Queue status','Delivery status','Attempts','Created','Updated','Sent','Failure code'])assert.ok(section.includes(label));
+ assert.match(section,/invitationMailLoading/);assert.match(section,/invitationMailError/);assert.match(section,/No invitation email history/);
+ assert.match(section,/changeInvitationMailPage\(-1\)/);assert.match(section,/changeInvitationMailPage\(1\)/);
+ assert.match(section,/invitationMailQueueLabel\(mail\.status\)/);assert.match(section,/invitationMailDeliveryLabel\(mail\.delivery_status\)/);assert.match(section,/Updated \(UTC\)/);assert.match(section,/x-text/);
+ assert.doesNotMatch(section,/resend|send again/i);
+});

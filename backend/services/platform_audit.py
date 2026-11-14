@@ -18,6 +18,7 @@ _DETAIL_FIELDS = {
     "platform_admin_revoked": {"target_user_id", "reason_code"},
     "platform_announcement_saved": {"revision", "audience", "reason_code"},
     "platform_announcement_removed": {"revision", "reason_code"},
+    "platform_invitation_mail_read": {"limit", "offset", "result_count"},
     "global_security_setting_changed": {"key", "value"},
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},
@@ -136,5 +137,10 @@ def safe_platform_audit_details(action: str, details) -> dict:
             }
             setting_key = details.get("key")
             if setting_key in limits and 1 <= value <= limits[setting_key]:
+                safe[key] = value
+        elif key in {"limit", "offset", "result_count"} and isinstance(value, int) and not isinstance(value, bool):
+            limits = {"limit": (1, 100), "offset": (0, 100000), "result_count": (0, 100)}
+            minimum, maximum = limits[key]
+            if minimum <= value <= maximum:
                 safe[key] = value
     return safe

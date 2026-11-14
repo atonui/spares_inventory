@@ -3,7 +3,7 @@ import logging
 
 from backend.services.session_credentials import get_request_credential
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.database_sql import is_postgres
 from backend.schemas.invitations import OrganizationCreateRequest
@@ -154,6 +154,42 @@ def create_platform_organizations_router(
             ).fetchall()
             return {"rows": [dict(row) for row in rows], "total": total,
                     "limit": limit, "offset": page_offset}
+
+    @router.get("/invitation-mail")
+    async def list_invitation_mail(
+        request: Request, response: Response, actor=Depends(current_user),
+        limit: int = 25, offset: int = 0,
+    ):
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["Pragma"] = "no-cache"
+        if not 1 <= limit <= 100:
+            raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
+        if not 0 <= offset <= 100000:
+            raise HTTPException(status_code=422, detail="offset must be between 0 and 100000")
+        require_postgres()
+        with authenticated_platform_transaction(
+            get_connection, session_token=get_request_credential(request).value,
+            expected_user_id=getattr(actor, "user_id", actor),
+        ) as (conn, principal):
+            total = conn.execute(
+                "SELECT count(*) AS total FROM platform_invitation_delivery_history"
+            ).fetchone()["total"]
+            rows = conn.execute(
+                """SELECT id, organization_id, organization_name, organization_slug,
+                          recipient_email, status, delivery_status, attempt_count,
+                          created_at, updated_at, sent_at, last_error_code
+                   FROM platform_invitation_delivery_history
+                   ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s""",
+                (limit, offset),
+            ).fetchall()
+            record_platform_audit_event(
+                conn, principal.user_id, "platform_invitation_mail_read", "success",
+                details={"limit": limit, "offset": offset, "result_count": len(rows)},
+            )
+            return {
+                "rows": [dict(row) for row in rows], "total": total,
+                "limit": limit, "offset": offset,
+            }
 
     @router.get("/admins")
     async def list_platform_admins(

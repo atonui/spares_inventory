@@ -140,3 +140,40 @@ def test_worker_role_cannot_access_unrelated_tables_or_mutate_queue_membership(m
             connection.execute(query)
     finally:
         connection.close()
+
+
+def test_runtime_role_reads_curated_invitation_view_without_outbox_read_access(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    admin, schema = postgres_schema
+    apply_postgres_migrations(admin)
+    organization_id = admin.execute(
+        "INSERT INTO organizations(name,slug) VALUES ('View Tenant',%s) RETURNING id",
+        ("view-tenant-" + uuid4().hex,),
+    ).fetchone()["id"]
+    admin.execute(
+        "INSERT INTO mail_outbox (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key) "
+        "VALUES (%s,'organization_invitation','view@example.test','cipher','view-" + uuid4().hex + "')",
+        (organization_id,),
+    )
+    role = "platform_mail_view_" + uuid4().hex
+    admin.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    admin.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema), sql.Identifier(role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_invitation_delivery_history TO {}").format(sql.Identifier(role)))
+    admin.commit()
+    conn = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+    try:
+        conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+        conn.commit()
+        rows = conn.execute("SELECT recipient_email, status FROM platform_invitation_delivery_history").fetchall()
+        assert rows == [{"recipient_email": "view@example.test", "status": "pending"}]
+        with pytest.raises(InsufficientPrivilege):
+            conn.execute("SELECT recipient_email FROM mail_outbox")
+    finally:
+        conn.close()
+        admin.rollback()
+        admin.execute("RESET ROLE")
+        admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        admin.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
+        admin.commit()
