@@ -190,6 +190,7 @@ def create_invitation_router(
                         conn, organization_id=organization_id, token=body.token,
                         name=body.name, password=body.password,
                         password_hash=password_hash, password_verify=password_verify,
+                        frontend_url=frontend_url, encryption_key=encryption_key,
                     )
                 except HTTPException:
                     raise

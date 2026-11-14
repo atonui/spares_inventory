@@ -110,6 +110,44 @@ def test_resend_adapter_sends_branded_password_reset():
     assert "If you did not request this" in body["text"]
 
 
+def test_resend_adapter_sends_owner_welcome_with_accessible_setup_checklist():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail(
+        {
+            "message_type": "owner_welcome",
+            "recipient_email": "owner@example.test",
+            "payload": {
+                "owner_name": "Ayo",
+                "organization_name": "Tanit Nigeria",
+                "sign_in_url": "https://inventory.example.test/static/index.html",
+            },
+        },
+        api_key="resend-secret",
+        from_address="no-reply@example.test",
+        http_transport=transport,
+    )
+
+    _url, body, _headers, _timeout = transport.calls[0]
+    assert body["to"] == ["owner@example.test"]
+    assert body["subject"] == "Welcome to Tanit Nigeria — start with these steps"
+    assert "Set up your stores, parts, opening stock and team" in body["html"]
+    assert "Hi Ayo" in body["html"]
+    assert "organisation timezone" in body["html"]
+    assert "Manage stores" in body["html"]
+    assert "Manage parts" in body["html"]
+    assert "Manage users" in body["html"]
+    assert "sets the quantities" in body["html"]
+    assert "https://inventory.example.test/static/index.html" in body["html"]
+    assert "support_contact" not in body["html"]
+    assert "Hi Ayo" in body["text"]
+    assert "CSV" in body["text"]
+    assert "support_contact" not in body["text"]
+    assert 'lang="en" dir="ltr"' in body["html"]
+    assert body["html"].count("<a href=") == 1
+
+
 
 def test_resend_adapter_sends_email_change_verification():
     from backend.services.mail_delivery import send_mail

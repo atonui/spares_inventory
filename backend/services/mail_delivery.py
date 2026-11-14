@@ -117,6 +117,8 @@ class _UrllibTransport:
 def _render_branded_email(
     *, eyebrow: str, heading: str, copy: str, link: str | None = None,
     link_label: str | None = None, detail: str | None = None,
+    sections: list[tuple[str, str]] | None = None,
+    preheader: str | None = None,
 ) -> tuple[str, str]:
     """Render accessible HTML and plain-text versions using the product brand."""
     safe_link = escape(link, quote=True) if link is not None else ""
@@ -130,13 +132,33 @@ def _render_branded_email(
         'font-weight:700;text-decoration:none;border-radius:6px;">'
         f'{escape(link_label or "Continue")}</a></p>'
         f'<p style="margin:0;color:#64748B;font-size:13px;line-height:1.5;">'
-        f'If the button does not work, copy this link into your browser:<br><a href="{safe_link}" '
-        f'style="color:#15263B;word-break:break-all;">{safe_link}</a></p>'
+        f'If the button does not work, copy this link into your browser:<br>'
+        f'<span style="color:#15263B;word-break:break-all;">{safe_link}</span></p>'
         if link is not None else ""
     )
+    sections_html = ""
+    text_sections = []
+    if sections:
+        section_items = []
+        for index, (section_heading, section_copy) in enumerate(sections, start=1):
+            section_items.append(
+                '<li style="margin:0 0 14px;padding-left:4px;">'
+                f'<h2 style="margin:0 0 4px;font-size:16px;line-height:1.4;color:#15263B;">'
+                f'{escape(section_heading)}</h2>'
+                f'<p style="margin:0;font-size:15px;line-height:1.5;color:#334155;">'
+                f'{escape(section_copy)}</p></li>'
+            )
+            text_sections.append(f"{index}. {section_heading}\n{section_copy}")
+        sections_html = '<ol style="margin:0 0 24px;padding-left:22px;">' + "".join(section_items) + "</ol>"
+    preheader_html = (
+        f'<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;'
+        f'height:0;width:0;overflow:hidden;mso-hide:all;">{escape(preheader)}</span>'
+        if preheader else ""
+    )
     html = (
-        '<div style="margin:0;padding:32px 16px;background:#F5F7FA;'
+        '<div lang="en" dir="ltr" style="margin:0;padding:32px 16px;background:#F5F7FA;'
         'font-family:Arial,Helvetica,sans-serif;color:#15263B;">'
+        f'{preheader_html}'
         '<div style="max-width:560px;margin:0 auto;background:#FFFFFF;'
         'border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;">'
         '<div style="padding:22px 28px;border-bottom:1px solid #E2E8F0;'
@@ -147,11 +169,12 @@ def _render_branded_email(
         f'<h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#15263B;">'
         f'{escape(heading)}</h1>'
         f'<p style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#334155;">'
-        f'{escape(copy)}</p>{detail_html}{action_html}'
+        f'{escape(copy)}</p>{sections_html}{detail_html}{action_html}'
         '<p style="margin:28px 0 0;color:#64748B;font-size:12px;line-height:1.5;">'
         'Spares Tracker</p></div></div></div>'
     )
     text_parts = ["Spares Tracker", eyebrow.upper(), heading, copy]
+    text_parts.extend(text_sections)
     if detail:
         text_parts.append(detail)
     if link is not None:
@@ -168,6 +191,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
     payload = message.get("payload")
     if not isinstance(payload, dict):
         raise MailDeliveryError("invalid_mail_message")
+    preheader = None
     if message_type == "organization_invitation":
         link = payload.get("invitation_url")
         subject = "You’re invited to join Spares Tracker"
@@ -177,6 +201,28 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         detail = None
         link_label = "Accept invitation"
         invalid_code = "invalid_invitation_message"
+        sections = None
+    elif message_type == "owner_welcome":
+        owner_name = payload.get("owner_name")
+        organization_name = payload.get("organization_name")
+        link = payload.get("sign_in_url")
+        if not all(isinstance(value, str) and value.strip() for value in (owner_name, organization_name, link)):
+            raise MailDeliveryError("invalid_owner_welcome_message")
+        subject = f"Welcome to {' '.join(organization_name.split())} — start with these steps"
+        preheader = "Set up your stores, parts, opening stock and team in Spares Tracker."
+        eyebrow = "Getting started"
+        heading = f"Welcome to {organization_name}"
+        copy = f"Hi {owner_name}, welcome to Spares Tracker. Your {organization_name} workspace is ready. Use this short checklist to get your team up and running."
+        sections = [
+            ("Check your organisation timezone", "Open Profile → Timezones and confirm the organisation timezone. It sets the calendar dates used by reports and business activity across your organisation."),
+            ("Set up your stores", "Open Manage stores and add the locations where stock is kept, such as a main store or workshop. Choose the store type and names your team will recognise."),
+            ("Build your parts catalogue", "Open Manage parts to add parts or import your catalogue. Check part numbers and descriptions so everyone works from the same list."),
+            ("Enter your opening stock", "Choose the correct store, then add stock or import its balances. CSV balance import sets the quantities for included parts; it does not add them to existing balances. Review the store and quantities before importing."),
+            ("Invite your team", "Open Manage users and invite each colleague with their own email address. Choose the role they need, and give Admin access only to people who manage users and settings."),
+        ]
+        detail = "For everyday work, record stock consumption against its work order number. For transfers, the receiving store should confirm receipt when the stock arrives."
+        link_label = f"Sign in to {organization_name}"
+        invalid_code = "invalid_owner_welcome_message"
     elif message_type == "password_reset":
         link = payload.get("reset_url")
         subject = "Reset your Spares Tracker password"
@@ -186,6 +232,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         detail = "If you did not request this, you can ignore this email. Your password will not change."
         link_label = "Reset password"
         invalid_code = "invalid_password_reset_message"
+        sections = None
     elif message_type == "email_change_verification":
         link = payload.get("verification_url")
         subject = "Verify your new Spares Tracker email address"
@@ -195,6 +242,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         detail = None
         link_label = "Verify email address"
         invalid_code = "invalid_email_change_message"
+        sections = None
     elif message_type == "email_changed_notice":
         new_email = payload.get("new_email")
         if not isinstance(new_email, str) or "@" not in new_email:
@@ -210,6 +258,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         link = None
         link_label = None
         invalid_code = "invalid_email_changed_notice"
+        sections = None
     elif message_type == "stock_added_notice":
         store_name = payload.get("store_name")
         part_number = payload.get("part_number")
@@ -226,6 +275,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         detail = None
         link_label = "View store inventory"
         invalid_code = "invalid_stock_added_notice"
+        sections = None
     elif message_type == "transfer_dispatched_notice":
         transfer_id = payload.get("transfer_id")
         part_number = payload.get("part_number")
@@ -250,6 +300,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         detail = None
         link_label = "View transfer"
         invalid_code = "invalid_transfer_dispatched_notice"
+        sections = None
     elif message_type == "transfer_completed_notice":
         transfer_id = payload.get("transfer_id")
         action = payload.get("action")
@@ -277,6 +328,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         detail = None
         link_label = "View source store"
         invalid_code = "invalid_transfer_completed_notice"
+        sections = None
     else:
         raise MailDeliveryError("unsupported_message_type")
     if not isinstance(recipient, str) or "@" not in recipient:
@@ -290,7 +342,7 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         raise MailDeliveryError("mail_configuration_missing")
     html, text_body = _render_branded_email(
         eyebrow=eyebrow, heading=heading, copy=copy, detail=detail,
-        link=link, link_label=link_label,
+        link=link, link_label=link_label, sections=sections, preheader=preheader,
     )
     body = {
         "from": formataddr(("Spares Tracker", sender_address)),

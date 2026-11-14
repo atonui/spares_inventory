@@ -9,6 +9,41 @@ import pytest
 pytest_plugins = ("regression_tests.postgres_fixtures",)
 
 
+def test_owner_welcome_is_accepted_by_the_outbox_queue():
+    from backend.services.mail_outbox import enqueue_mail
+
+    class _Connection:
+        def __init__(self):
+            self.params = None
+
+        def execute(self, _query, params):
+            self.params = params
+            class _Result:
+                def fetchone(self):
+                    return {"id": 42}
+
+            return _Result()
+
+    connection = _Connection()
+    mail_id = enqueue_mail(
+        connection,
+        organization_id="d4ef48b8-1247-4e08-8b8e-e971495f9a56",
+        message_type="owner_welcome",
+        recipient_email="owner@example.test",
+        encrypted_payload="encrypted-owner-welcome",
+        idempotency_key="owner-welcome-17",
+    )
+
+    assert mail_id == 42
+    assert connection.params == (
+        "d4ef48b8-1247-4e08-8b8e-e971495f9a56",
+        "owner_welcome",
+        "owner@example.test",
+        "encrypted-owner-welcome",
+        "owner-welcome-17",
+    )
+
+
 @pytest.fixture
 def migrated_outbox(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations

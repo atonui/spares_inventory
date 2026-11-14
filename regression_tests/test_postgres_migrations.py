@@ -16,6 +16,14 @@ def test_password_reset_mail_migration_remains_registered_at_version_eight():
     )
 
 
+def test_owner_welcome_message_type_is_registered_as_a_new_migration():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 23)
+    assert migration.name == "owner_welcome_mail"
+    assert "'owner_welcome'" in "\n".join(migration.statements)
+
+
 def test_email_change_verification_migration_is_registered_with_account_schema():
     from backend.postgres_migrations.registry import MIGRATIONS
 
