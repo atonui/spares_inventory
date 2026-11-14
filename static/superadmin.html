@@ -79,7 +79,7 @@
 </div>
 
 <div class="confirm-overlay" x-show="organizationCreateOpen" style="display:none" x-cloak role="dialog" aria-modal="true" aria-labelledby="organization-create-title" tabindex="-1" x-effect="syncDialog($el, organizationCreateOpen)" @keydown.tab="trapDialogFocus($event, $el)" @keydown.escape.stop="organizationCreateOpen=false">
-  <form class="confirm-box organization-create-box" @submit.prevent="provisionOrganization()"><h3 id="organization-create-title">Create organization</h3><p>Create a tenant workspace and queue an invitation for its first owner.</p><div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div><div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div><div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div><p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p><div class="confirm-actions"><button type="button" class="btn btn-outline" @click="organizationCreateOpen=false" :disabled="actionPending.provisionOrganization">Cancel</button><button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization" x-text="actionPending.provisionOrganization?'Creating…':'Create organization'"></button></div></form>
+  <form class="confirm-box organization-create-box" @submit.prevent="provisionOrganization()"><h3 id="organization-create-title">Create organization</h3><p>Create a tenant workspace and queue an invitation for its first owner.</p><div class="form-group"><label for="organization-name">Organization name</label><input id="organization-name" x-model="organizationForm.name" maxlength="200" required></div><div class="form-group"><label for="organization-slug">URL slug</label><input id="organization-slug" x-model="organizationForm.slug" pattern="[a-z0-9](?:[a-z0-9]|-){0,61}[a-z0-9]" maxlength="63" required><small>Use lowercase letters, numbers, and hyphens.</small></div><div class="form-group"><label for="owner-email">First owner email</label><input id="owner-email" type="email" x-model="organizationForm.owner_email" required></div><p class="action-error" x-show="actionErrors.provisionOrganization" role="alert" x-text="actionErrors.provisionOrganization"></p><div class="confirm-actions"><button type="button" class="btn btn-outline" @click="organizationCreateOpen=false" :disabled="actionPending.provisionOrganization">Cancel</button><button class="btn btn-success" type="submit" :disabled="actionPending.provisionOrganization" x-text="actionPending.provisionOrganization?'Creating…':'Create organization'"></button></div></form>
 </div>
 
 <div class="console-boot" x-show="!ready" role="status" aria-live="polite">Loading administration console…</div>
@@ -780,15 +780,15 @@
             <table class="tbl" x-show="queryResult?.rows?.length > 0">
               <thead>
                 <tr>
-                  <template x-for="col in queryResult.columns">
+                  <template x-for="col in (queryResult?.columns || [])">
                     <th x-text="col"></th>
                   </template>
                 </tr>
               </thead>
               <tbody>
-                <template x-for="(row, ri) in queryResult.rows" :key="ri">
+                <template x-for="(row, ri) in (queryResult?.rows || [])" :key="ri">
                   <tr>
-                    <template x-for="col in queryResult.columns">
+                    <template x-for="col in (queryResult?.columns || [])">
                       <td style="font-size:0.8rem;font-family:monospace;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                           :title="String(row[col])"
                           x-text="row[col] ?? 'NULL'"></td>

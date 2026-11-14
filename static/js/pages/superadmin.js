@@ -63,7 +63,7 @@ const PLATFORM_SECURITY_DETAIL_VALUES = Object.freeze({
 
 function superPanel() {
   return {
-    actionPending: {},
+    actionPending: { provisionOrganization: false },
     actionErrors: {},
     async runAction(key, operation) {
       if (this.actionPending[key]) return false;
