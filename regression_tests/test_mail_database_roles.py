@@ -219,6 +219,15 @@ def test_runtime_role_reads_curated_invitation_history_without_invitation_table_
         conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
         conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         conn.commit()
+        privileges = conn.execute(
+            """SELECT has_table_privilege(current_user, 'platform_invitation_history', 'SELECT') AS can_select,
+                      has_table_privilege(current_user, 'platform_invitation_history', 'INSERT') AS can_insert,
+                      has_table_privilege(current_user, 'platform_invitation_history', 'UPDATE') AS can_update,
+                      has_table_privilege(current_user, 'platform_invitation_history', 'DELETE') AS can_delete"""
+        ).fetchone()
+        assert privileges == {
+            "can_select": True, "can_insert": False, "can_update": False, "can_delete": False,
+        }
         rows = conn.execute(
             """SELECT recipient_email, company_role, accepted_at, accepted_account_name
                FROM platform_invitation_history"""
@@ -227,8 +236,6 @@ def test_runtime_role_reads_curated_invitation_history_without_invitation_table_
             "recipient_email": "owner@example.test", "company_role": "owner",
             "accepted_at": "2026-11-14T10:00:00Z", "accepted_account_name": "Accepted Owner",
         }]
-        with pytest.raises(InsufficientPrivilege):
-            conn.execute("UPDATE platform_invitation_history SET recipient_email='changed@example.test'")
         with pytest.raises(InsufficientPrivilege):
             conn.execute("SELECT token_hash FROM organization_invitations")
     finally:
