@@ -13,6 +13,7 @@ const PLATFORM_AUDIT_ACTION_LABELS = Object.freeze({
   support_access_denied: 'Support access denied',
   support_session_ended: 'Support session ended',
   user_logout: 'User signed out',
+  platform_invitation_mail_read: 'Invitation email history viewed',
 });
 const PLATFORM_AUDIT_RESULT_LABELS = Object.freeze({success:'Success', denied:'Denied', failure:'Failed'});
 const PLATFORM_AUDIT_DETAIL_LABELS = Object.freeze({
@@ -20,6 +21,7 @@ const PLATFORM_AUDIT_DETAIL_LABELS = Object.freeze({
   request_id: 'Request ID', end_reason: 'Session end reason', target_user_id: 'Target user ID',
   reason: 'Reason', invitation_created: 'Owner invitation created', role: 'Company role',
   revision: 'Revision', audience: 'Audience', key: 'Setting key', value: 'Setting value',
+  limit: 'Page size', offset: 'Page offset', result_count: 'Rows returned',
 });
 const PLATFORM_AUDIT_DETAIL_VALUES = Object.freeze({
   role: {owner:'Owner', admin:'Admin', manager:'Manager', engineer:'Engineer'},
@@ -164,6 +166,8 @@ function superPanel() {
     // data stores
     dashboard: {},
     platformDashboardError: '', overviewActivity: [], overviewActivityError: '',
+    invitationMailRows: [], invitationMailTotal: 0, invitationMailOffset: 0,
+    invitationMailLimit: 25, invitationMailLoading: false, invitationMailError: '',
     selectedOrganization: null,
     organizationAuditRows: [], organizationAuditLoading: false, organizationAuditError: '', organizationAuditRequest: 0,
     organizationCreateOpen: false,
@@ -399,8 +403,9 @@ async submitPasswordReset() {
       const headers = { ...opts.headers };
       if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
       const supportRequest = path.startsWith('/platform/support-sessions');
+      const privatePlatformRead = path.startsWith('/platform/invitation-mail');
       const r = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, {
-        ...opts, headers, ...(supportRequest ? { cache: 'no-store' } : {}),
+        ...opts, headers, ...(supportRequest || privatePlatformRead ? { cache: 'no-store' } : {}),
       }, this.apiUrl);
       if (r.status === 401) {
         const error = new Error('Unauthenticated'); error.status = 401;
@@ -435,7 +440,38 @@ async submitPasswordReset() {
       finally { this.loading = false; }
     },
 
-    async loadPlatformOverview() { await Promise.all([this.loadPlatformDashboard(), this.loadOverviewActivity()]); },
+    async loadPlatformOverview() { await Promise.all([this.loadPlatformDashboard(), this.loadOverviewActivity(), this.loadInvitationMail(0)]); },
+
+    async loadInvitationMail(offset = this.invitationMailOffset) {
+      if (this.invitationMailLoading) return;
+      this.invitationMailLoading = true;
+      this.invitationMailError = '';
+      try {
+        const query = new URLSearchParams({ limit: String(this.invitationMailLimit), offset: String(offset) });
+        const data = await this.api(`/platform/invitation-mail?${query.toString()}`);
+        this.invitationMailRows = Array.isArray(data.rows) ? data.rows : [];
+        this.invitationMailTotal = Number.isInteger(data.total) ? data.total : 0;
+        this.invitationMailOffset = Number.isInteger(data.offset) ? data.offset : offset;
+      } catch (error) {
+        this.invitationMailError = error.message || 'Unable to load invitation email history.';
+      } finally { this.invitationMailLoading = false; }
+    },
+
+    async changeInvitationMailPage(direction) {
+      if (this.invitationMailLoading || ![-1, 1].includes(direction)) return;
+      const offset = this.invitationMailOffset + direction * this.invitationMailLimit;
+      if (offset < 0 || offset >= this.invitationMailTotal) return;
+      await this.loadInvitationMail(offset);
+    },
+
+    invitationMailQueueLabel(status) {
+      return ({ pending: 'Pending', claimed: 'Processing', sent: 'Sent to provider', failed: 'Failed' })[status] || 'Unknown';
+    },
+
+    invitationMailDeliveryLabel(status) {
+      return ({ unknown: 'Not confirmed', sent: 'Provider accepted', delayed: 'Delayed', delivered: 'Delivered',
+        bounced: 'Bounced', complained: 'Complaint', failed: 'Failed', suppressed: 'Suppressed' })[status] || 'Unknown';
+    },
 
     async loadOverviewActivity() {
       try {

@@ -71,6 +71,7 @@ def platform_api(postgres_schema):
     ).format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT ON platform_mail_outbox_counts TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT ON platform_organization_invitation_mail_counts TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_invitation_delivery_history TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT USAGE, SELECT ON SEQUENCE organization_invitations_id_seq, mail_outbox_id_seq, platform_audit_events_id_seq TO {}"
     ).format(sql.Identifier(runtime_role)))
@@ -731,3 +732,145 @@ def test_platform_role_update_requires_explicit_tenant_path(platform_api):
     ).fetchone()
     assert audit["action"] == "company_role_changed"
     assert audit["details"]["reason"] == "Correct role after customer review"
+
+
+def test_platform_invitation_mail_history_is_paginated_audited_and_curated(platform_api):
+    api = platform_api
+    created = ["2026-11-12T09:00:00.000000Z", "2026-11-14T09:00:00.000000Z", "2026-11-13T09:00:00.000000Z"]
+    for index, (email, status, delivery) in enumerate((
+        ("failed-invite@example.test", "failed", "unknown"),
+        ("delivered-invite@example.test", "sent", "delivered"),
+        ("unconfirmed-invite@example.test", "sent", "unknown"),
+    )):
+        api.admin.execute(
+            """INSERT INTO mail_outbox
+               (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key,
+                status,delivery_status,attempt_count,last_error_code,created_at,updated_at,sent_at)
+               VALUES (%s,'organization_invitation',%s,'sensitive-invite-token',%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (api.org_id, email, "history-" + uuid4().hex, status, delivery, index + 1,
+             "provider_unavailable" if status == "failed" else None,
+             created[index], created[index], created[index] if status == "sent" else None),
+        )
+    for message_type, recipient in (("owner_welcome", "welcome@example.test"),
+                                    ("password_reset", "reset@example.test")):
+        api.admin.execute(
+            """INSERT INTO mail_outbox
+               (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key)
+               VALUES (%s,%s,%s,'secret',%s)""",
+            (api.org_id, message_type, recipient, message_type + "-" + uuid4().hex),
+        )
+    api.admin.commit()
+    endpoint = api.endpoint("GET", "/api/platform/invitation-mail")
+
+    from fastapi import Response
+    response = Response()
+    page = asyncio.run(endpoint(request=api.request, response=response, actor=api.principal, limit=1, offset=0))
+    assert response.headers["Cache-Control"] == "no-store, private"
+    assert page["total"] == 3
+    assert page["limit"] == 1 and page["offset"] == 0
+    assert len(page["rows"]) == 1
+    assert page["rows"][0]["recipient_email"] == "delivered-invite@example.test"
+    assert page["rows"][0]["delivery_status"] == "delivered"
+    assert set(page["rows"][0]) == {
+        "id", "organization_id", "organization_name", "organization_slug", "recipient_email",
+        "status", "delivery_status", "attempt_count", "created_at", "updated_at", "sent_at",
+        "last_error_code",
+    }
+    assert "sensitive-invite-token" not in str(page)
+    assert "encrypted_payload" not in str(page)
+    assert "welcome@example.test" not in str(page)
+    assert "reset@example.test" not in str(page)
+
+    next_page = asyncio.run(endpoint(request=api.request, response=Response(), actor=api.principal, limit=1, offset=1))
+    assert next_page["rows"][0]["recipient_email"] == "unconfirmed-invite@example.test"
+    assert next_page["rows"][0]["status"] == "sent"
+    assert next_page["rows"][0]["delivery_status"] == "unknown"
+    last_page = asyncio.run(endpoint(request=api.request, response=Response(), actor=api.principal, limit=1, offset=2))
+    assert last_page["rows"][0]["recipient_email"] == "failed-invite@example.test"
+    event = api.admin.execute(
+        "SELECT action, result, details FROM platform_audit_events ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert event == {
+        "action": "platform_invitation_mail_read", "result": "success",
+        "details": {"limit": 1, "offset": 2, "result_count": 1},
+    }
+    assert "failed-invite@example.test" not in str(event)
+    assert "unconfirmed-invite@example.test" not in str(event)
+
+
+@pytest.mark.parametrize("kwargs", [{"limit": 0}, {"limit": 101}, {"offset": -1}, {"offset": 100001}])
+def test_platform_invitation_mail_history_rejects_invalid_pagination(kwargs):
+    from fastapi import Response
+    from backend.routes.platform_organizations import create_platform_organizations_router
+
+    router = create_platform_organizations_router(
+        get_connection=lambda: pytest.fail("invalid pagination must fail before connecting"),
+        current_user=lambda: None, csrf_dependency=lambda: None,
+        encryption_key=Fernet.generate_key().decode(), frontend_url="https://example.test",
+    )
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/invitation-mail")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(request=SimpleNamespace(cookies={}), response=Response(), actor=1, **kwargs))
+    assert error.value.status_code == 422
+
+
+def test_platform_invitation_mail_history_denies_non_platform_session(platform_api):
+    from fastapi import Response
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.session_credentials import hash_session_credential
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    token = "tenant-session-" + uuid4().hex
+    api.admin.execute(
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (api.member_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
+    )
+    api.admin.commit()
+    endpoint = api.endpoint("GET", "/api/platform/invitation-mail")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(
+            request=SimpleNamespace(cookies={"session_token": token}),
+            response=Response(),
+            actor=AuthenticatedPrincipal(api.member_id, api.org_id, "manager", False),
+        ))
+    assert error.value.status_code == 403
+
+
+def test_platform_invitation_mail_history_rejects_expired_platform_session(platform_api):
+    from fastapi import Response
+    from backend.services.session_credentials import hash_session_credential
+
+    api = platform_api
+    api.admin.execute(
+        "UPDATE sessions SET expires_at='2000-01-01T00:00:00.000000Z' WHERE session_token_hash=%s",
+        (hash_session_credential(api.request.cookies["session_token"]),),
+    )
+    api.admin.commit()
+    endpoint = api.endpoint("GET", "/api/platform/invitation-mail")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(request=api.request, response=Response(), actor=api.principal))
+    assert error.value.status_code == 401
+
+
+@pytest.mark.parametrize(("revocation", "expected_status"), [
+    ("session", 401),
+    ("platform_admin", 403),
+])
+def test_platform_invitation_mail_history_revalidates_revoked_authority(platform_api, revocation, expected_status):
+    from fastapi import Response
+    from backend.services.session_credentials import hash_session_credential
+
+    api = platform_api
+    if revocation == "session":
+        api.admin.execute(
+            "UPDATE sessions SET is_active=FALSE WHERE session_token_hash=%s",
+            (hash_session_credential(api.request.cookies["session_token"]),),
+        )
+    else:
+        api.admin.execute("DELETE FROM platform_admins WHERE user_id=%s", (api.principal.user_id,))
+    api.admin.commit()
+    endpoint = api.endpoint("GET", "/api/platform/invitation-mail")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(request=api.request, response=Response(), actor=api.principal))
+    assert error.value.status_code == expected_status

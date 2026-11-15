@@ -129,6 +129,7 @@ GRANT UPDATE (idempotency_key) ON TABLE mail_outbox TO web_runtime_role;
 GRANT USAGE ON SEQUENCE mail_outbox_id_seq TO web_runtime_role;
 GRANT SELECT ON platform_mail_outbox_counts TO web_runtime_role;
 GRANT SELECT ON platform_organization_invitation_mail_counts TO web_runtime_role;
+GRANT SELECT ON platform_invitation_delivery_history TO web_runtime_role;
 
 REVOKE ALL PRIVILEGES ON TABLE email_change_requests FROM web_runtime_role;
 GRANT SELECT (id, user_id, proposed_email, token_hash, delivery_suppressed,
@@ -171,6 +172,12 @@ The `platform_organization_invitation_mail_counts` view exposes only pending
 and failed invitation-mail totals grouped by organization for the platform
 directory. Query it only through platform-authorized application routes; it
 does not expose message rows, recipients, or payloads.
+The `platform_invitation_delivery_history` view exposes only recipient,
+organization display, queue and provider delivery state, attempts, timestamps,
+and sanitized error codes for organization invitation messages. Grant the web
+runtime role `SELECT` on this view only; continue to deny it table-level reads
+from `mail_outbox`. Read it only through the audited platform administrator
+route.
 
 ## Rehearsal
 

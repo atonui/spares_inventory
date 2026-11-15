@@ -872,3 +872,23 @@ def test_manual_mobile_pairing_code_migration_adds_hashed_code_scope():
     assert "pairing_code_hash TEXT UNIQUE" in statements
     assert "DROP POLICY mobile_pairing_token_scope" in statements
     assert "app.mobile_pairing_code_hash" in statements
+
+
+def test_platform_invitation_history_migration_exposes_only_curated_invitation_metadata():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 24)
+    sql = "\\n".join(migration.statements)
+    assert migration.name == "platform_invitation_delivery_history"
+    for column in (
+        "id", "organization_id", "organization_name", "organization_slug",
+        "recipient_email", "status", "delivery_status", "attempt_count",
+        "created_at", "updated_at", "sent_at", "last_error_code",
+    ):
+        assert column in sql
+    assert "message_type = 'organization_invitation'" in sql
+    assert "organization_id IS NOT NULL" in sql
+    assert "REVOKE ALL ON platform_invitation_delivery_history FROM PUBLIC" in sql
+    assert "CREATE INDEX idx_mail_outbox_invitation_history_created" in sql
+    for forbidden in ("encrypted_payload", "idempotency_key", "provider_message_id", "claim_token"):
+        assert forbidden not in sql
