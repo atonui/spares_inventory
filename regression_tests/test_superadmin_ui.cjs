@@ -4,6 +4,9 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const html=fs.readFileSync('static/superadmin.html','utf8');
+test('superadmin page starts with its document declaration and no tool output banner',()=>{
+ assert.match(html,/^<!DOCTYPE html>/,'page must not render tool output before its HTML document');
+});
 function app(){const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},WeakMap};vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();a.timezoneContext={business_timezone:'Africa/Nairobi',display_timezone:'Africa/Nairobi',revision:1};a.auditTimezone='Africa/Nairobi';a.announcementReady=true;a.announcementTimezone='Africa/Nairobi';a.announcementTimezoneRevision=1;return a;}
 for(const [section,method] of [['users','loadUsers'],['sessions','loadSessions'],['config','loadConfig']]) {
  test(`${section} distinguishes loading, failure and successful retry`,async()=>{
