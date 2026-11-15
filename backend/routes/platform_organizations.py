@@ -88,7 +88,9 @@ def create_platform_organizations_router(
             ).fetchone()["total"]
             admins = conn.execute("SELECT count(*) AS total FROM platform_admins").fetchone()["total"]
             mail = conn.execute(
-                "SELECT pending, failed FROM platform_mail_outbox_counts"
+                """SELECT COALESCE(sum(pending), 0)::INTEGER AS pending,
+                          COALESCE(sum(failed), 0)::INTEGER AS failed
+                   FROM platform_organization_invitation_mail_counts"""
             ).fetchone()
             return {
                 "organizations_total": organizations["total"],
