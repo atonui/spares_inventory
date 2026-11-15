@@ -130,6 +130,8 @@ GRANT USAGE ON SEQUENCE mail_outbox_id_seq TO web_runtime_role;
 GRANT SELECT ON platform_mail_outbox_counts TO web_runtime_role;
 GRANT SELECT ON platform_organization_invitation_mail_counts TO web_runtime_role;
 GRANT SELECT ON platform_invitation_delivery_history TO web_runtime_role;
+REVOKE ALL PRIVILEGES ON TABLE platform_invitation_history FROM web_runtime_role;
+GRANT SELECT ON platform_invitation_history TO web_runtime_role;
 
 REVOKE ALL PRIVILEGES ON TABLE email_change_requests FROM web_runtime_role;
 GRANT SELECT (id, user_id, proposed_email, token_hash, delivery_suppressed,
@@ -178,6 +180,12 @@ and sanitized error codes for organization invitation messages. Grant the web
 runtime role `SELECT` on this view only; continue to deny it table-level reads
 from `mail_outbox`. Read it only through the audited platform administrator
 route.
+The `platform_invitation_history` view exposes curated invitation lifecycle and
+acceptance metadata without invitation token hashes. Grant the web runtime role
+`SELECT` on this view after revoking any default view privileges. This history
+route requires no additional direct reads on `organization_invitations`; retain
+only the grants needed by the existing invitation workflows. Read the view only
+through the audited platform administrator route.
 
 ## Rehearsal
 

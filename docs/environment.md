@@ -30,8 +30,12 @@ which exposes only pending and failed invitation-mail totals grouped by
 organization for platform-authorized directory requests, and
 `platform_invitation_delivery_history`, which exposes only curated organization
 invitation delivery metadata to the platform administrator history screen.
-Grant `SELECT` on this view to the web runtime role; do not grant it direct
-outbox read access. The worker role has
+The `platform_invitation_history` view exposes invitation lifecycle and
+acceptance metadata, excluding invitation token hashes. The platform history
+endpoint reads this view; it does not require any additional direct reads on
+`organization_invitations` beyond the existing invitation workflow grants.
+Grant `SELECT` on the curated views to the web runtime role; do not grant it
+direct outbox read access. The worker role has
 schema `USAGE`, column-level `SELECT` on
 `id`, `organization_id`, `message_type`, `recipient_email`,
 `encrypted_payload`, `status`, `attempt_count`, `available_at`,

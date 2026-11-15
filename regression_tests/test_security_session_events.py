@@ -436,7 +436,9 @@ def test_v22_upgrade_preserves_v21_events_and_enables_new_taxonomy(
     with pytest.raises(psycopg.errors.CheckViolation):
         with conn.transaction():
             record_security_event(conn, event="session_issued", outcome="success")
-    assert apply_postgres_migrations(conn).current_version == 22
+    with monkeypatch.context() as patch:
+        patch.setattr(registry, "MIGRATIONS", migrations[:22])
+        assert apply_postgres_migrations(conn).current_version == 22
     conn.commit()
     record_security_event(
         conn,

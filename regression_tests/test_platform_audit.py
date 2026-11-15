@@ -454,3 +454,23 @@ def test_platform_invitation_mail_read_audit_details_are_bounded_and_exclude_rec
     assert safe_platform_audit_details("platform_invitation_mail_read", {
         "limit": True, "offset": -1, "result_count": "3", "email": "private@example.test",
     }) == {}
+
+
+def test_platform_invitation_history_read_audit_details_exclude_search_and_recipient_data():
+    from backend.services.platform_audit import record_platform_audit_event, safe_platform_audit_details
+
+    class Capture:
+        args = None
+        def execute(self, query, args):
+            self.args = args
+
+    conn = Capture()
+    record_platform_audit_event(
+        conn, 10, "platform_invitation_history_read", "success",
+        details={"limit": 25, "offset": 50, "result_count": 10,
+                 "search": "private@example.test", "recipient_email": "private@example.test"},
+    )
+    assert json.loads(conn.args[-1]) == {"limit": 25, "offset": 50, "result_count": 10}
+    assert safe_platform_audit_details("platform_invitation_history_read", {
+        "limit": True, "offset": -1, "result_count": "3", "search": "private@example.test",
+    }) == {}

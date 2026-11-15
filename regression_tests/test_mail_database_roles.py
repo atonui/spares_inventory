@@ -177,3 +177,64 @@ def test_runtime_role_reads_curated_invitation_view_without_outbox_read_access(p
         admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
         admin.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
         admin.commit()
+
+
+def test_runtime_role_reads_curated_invitation_history_without_invitation_table_access(postgres_schema):
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    admin, schema = postgres_schema
+    apply_postgres_migrations(admin)
+    organization_id = admin.execute(
+        "INSERT INTO organizations(name,slug) VALUES ('Lifecycle View Tenant',%s) RETURNING id",
+        ("lifecycle-view-" + uuid4().hex,),
+    ).fetchone()["id"]
+    inviter_id = admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Inviter','x') RETURNING id",
+        (f"inviter-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    accepted_id = admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES (%s,'Accepted Owner','x') RETURNING id",
+        (f"accepted-{uuid4().hex}@example.test",),
+    ).fetchone()["id"]
+    admin.execute(
+        """INSERT INTO organization_invitations
+           (organization_id,email_normalized,company_role,token_hash,invited_by,expires_at,accepted_at,accepted_by)
+           VALUES (%s,'owner@example.test','owner','secret-invitation-token-hash',%s,
+                   '2099-01-01T00:00:00Z','2026-11-14T10:00:00Z',%s)""",
+        (organization_id, inviter_id, accepted_id),
+    )
+    role = "platform_invitation_history_" + uuid4().hex
+    admin.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    admin.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema), sql.Identifier(role)))
+    admin.execute(sql.SQL(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON platform_invitation_history TO {}"
+    ).format(sql.Identifier(role)))
+    admin.execute(sql.SQL(
+        "REVOKE ALL PRIVILEGES ON TABLE platform_invitation_history FROM {}"
+    ).format(sql.Identifier(role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_invitation_history TO {}").format(sql.Identifier(role)))
+    admin.commit()
+    conn = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+    try:
+        conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+        conn.commit()
+        rows = conn.execute(
+            """SELECT recipient_email, company_role, accepted_at, accepted_account_name
+               FROM platform_invitation_history"""
+        ).fetchall()
+        assert rows == [{
+            "recipient_email": "owner@example.test", "company_role": "owner",
+            "accepted_at": "2026-11-14T10:00:00Z", "accepted_account_name": "Accepted Owner",
+        }]
+        with pytest.raises(InsufficientPrivilege):
+            conn.execute("UPDATE platform_invitation_history SET recipient_email='changed@example.test'")
+        with pytest.raises(InsufficientPrivilege):
+            conn.execute("SELECT token_hash FROM organization_invitations")
+    finally:
+        conn.close()
+        admin.rollback()
+        admin.execute("RESET ROLE")
+        admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        admin.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
+        admin.commit()

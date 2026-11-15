@@ -892,3 +892,72 @@ def test_platform_invitation_history_migration_exposes_only_curated_invitation_m
     assert "CREATE INDEX idx_mail_outbox_invitation_history_created" in sql
     for forbidden in ("encrypted_payload", "idempotency_key", "provider_message_id", "claim_token"):
         assert forbidden not in sql
+
+
+def test_platform_invitation_lifecycle_history_migration_exposes_curated_invitation_metadata():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 25)
+    statements = "\n".join(migration.statements)
+    assert migration.name == "platform_invitation_history"
+    for column in (
+        "invitation_id", "organization_id", "organization_name", "organization_slug",
+        "recipient_email", "company_role", "invited_at", "expires_at", "accepted_at",
+        "accepted_by", "accepted_account_name", "cancelled_at",
+    ):
+        assert column in statements
+    assert "REVOKE ALL ON platform_invitation_history FROM PUBLIC" in statements
+    assert "CREATE INDEX idx_platform_invitation_history_created" in statements
+    assert "token_hash" not in statements
+
+
+def test_platform_invitation_lifecycle_history_view_returns_distinct_invitation_records(postgres_schema, monkeypatch):
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    conn, _schema = postgres_schema
+    migrations = registry.MIGRATIONS
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations[:24])
+    apply_postgres_migrations(conn)
+    org_id = conn.execute(
+        "INSERT INTO organizations(name,slug) VALUES ('Lifecycle tenant','lifecycle-tenant') RETURNING id"
+    ).fetchone()["id"]
+    inviter_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('inviter@example.test','Inviter','x') RETURNING id"
+    ).fetchone()["id"]
+    accepted_id = conn.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('owner@example.test','Accepted Owner','x') RETURNING id"
+    ).fetchone()["id"]
+    conn.execute(
+        """INSERT INTO organization_invitations
+           (organization_id,email_normalized,company_role,token_hash,invited_by,expires_at,accepted_at,accepted_by)
+           VALUES (%s,'owner@example.test','owner','private-accepted-token-hash',%s,
+                   '2099-01-02T00:00:00Z','2026-11-14T10:00:00Z',%s)""",
+        (org_id, inviter_id, accepted_id),
+    )
+    conn.execute(
+        """INSERT INTO organization_invitations
+           (organization_id,email_normalized,company_role,token_hash,invited_by,expires_at)
+           VALUES (%s,'pending@example.test','manager','private-pending-token-hash',%s,
+                   '2099-01-02T00:00:00Z')""",
+        (org_id, inviter_id),
+    )
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations)
+    assert apply_postgres_migrations(conn).current_version == 25
+    rows = conn.execute(
+        """SELECT invitation_id, organization_id, organization_name, organization_slug,
+                  recipient_email, company_role, invited_at, expires_at, accepted_at,
+                  accepted_by, accepted_account_name, cancelled_at
+           FROM platform_invitation_history ORDER BY invitation_id"""
+    ).fetchall()
+    assert len(rows) == 2
+    assert rows[0]["recipient_email"] == "owner@example.test"
+    assert rows[0]["accepted_at"] == "2026-11-14T10:00:00Z"
+    assert rows[0]["accepted_by"] == accepted_id
+    assert rows[0]["accepted_account_name"] == "Accepted Owner"
+    assert rows[0]["organization_name"] == "Lifecycle tenant"
+    assert rows[0]["organization_slug"] == "lifecycle-tenant"
+    assert rows[1]["recipient_email"] == "pending@example.test"
+    assert rows[1]["accepted_at"] is None
+    assert rows[1]["accepted_by"] is None
+    assert all("token" not in row for row in rows)

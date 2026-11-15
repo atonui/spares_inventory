@@ -72,6 +72,7 @@ def platform_api(postgres_schema):
     admin.execute(sql.SQL("GRANT SELECT ON platform_mail_outbox_counts TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT ON platform_organization_invitation_mail_counts TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL("GRANT SELECT ON platform_invitation_delivery_history TO {}").format(sql.Identifier(runtime_role)))
+    admin.execute(sql.SQL("GRANT SELECT ON platform_invitation_history TO {}").format(sql.Identifier(runtime_role)))
     admin.execute(sql.SQL(
         "GRANT USAGE, SELECT ON SEQUENCE organization_invitations_id_seq, mail_outbox_id_seq, platform_audit_events_id_seq TO {}"
     ).format(sql.Identifier(runtime_role)))
@@ -815,6 +816,137 @@ def test_platform_invitation_mail_history_is_paginated_audited_and_curated(platf
     }
     assert "failed-invite@example.test" not in str(event)
     assert "unconfirmed-invite@example.test" not in str(event)
+
+
+def test_platform_invitation_lifecycle_history_is_paginated_filtered_audited_and_curated(platform_api):
+    from fastapi import Response
+
+    api = platform_api
+    accepted_id = api.admin.execute(
+        "INSERT INTO users(email,name,password_hash) VALUES ('accepted@example.test','Accepted Account','x') RETURNING id"
+    ).fetchone()["id"]
+    invitations = [
+        ("same@example.test", "owner", "2000-01-01T00:00:00Z", "2026-11-11T09:00:00Z", None, None),
+        ("same@example.test", "owner", "2099-01-01T00:00:00Z", "2026-11-12T09:00:00Z", "2026-11-13T10:00:00Z", accepted_id),
+        ("cancelled@example.test", "manager", "2099-01-01T00:00:00Z", "2026-11-13T09:00:00Z", None, None),
+        ("pending@example.test", "engineer", "2099-01-01T00:00:00Z", "2026-11-14T09:00:00Z", None, None),
+    ]
+    for index, (email, role, expires_at, created_at, accepted_at, accepted_by) in enumerate(invitations):
+        canceled_at = (
+            "2026-11-14T10:00:00Z"
+            if email == "cancelled@example.test" or accepted_at is not None else None
+        )
+        api.admin.execute(
+            """INSERT INTO organization_invitations
+               (organization_id,email_normalized,company_role,token_hash,invited_by,expires_at,
+                created_at,accepted_at,accepted_by,canceled_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (api.org_id, email, role, f"private-token-hash-{index}-{uuid4().hex}",
+             api.principal.user_id, expires_at, created_at, accepted_at, accepted_by, canceled_at),
+        )
+    api.admin.execute(
+        "UPDATE users SET name='Renamed Archived Account', archived_at='2026-11-15T10:00:00Z' WHERE id=%s",
+        (accepted_id,),
+    )
+    api.admin.commit()
+
+    endpoint = api.endpoint("GET", "/api/platform/invitations")
+    response = Response()
+    first = asyncio.run(endpoint(
+        request=api.request, response=response, actor=api.principal,
+        limit=2, offset=0, status="all", search="",
+    ))
+    assert response.headers["Cache-Control"] == "no-store, private"
+    assert response.headers["Pragma"] == "no-cache"
+    assert first["total"] == 4
+    assert first["limit"] == 2 and first["offset"] == 0
+    assert [row["recipient_email"] for row in first["rows"]] == [
+        "pending@example.test", "cancelled@example.test",
+    ]
+    assert first["rows"][0]["status"] == "pending"
+    assert first["rows"][1]["status"] == "cancelled"
+    assert all("token" not in row for row in first["rows"])
+    assert "private-token-hash" not in str(first)
+
+    next_page = asyncio.run(endpoint(
+        request=api.request, response=Response(), actor=api.principal,
+        limit=2, offset=2, status="all", search="",
+    ))
+    assert [(row["recipient_email"], row["status"]) for row in next_page["rows"]] == [
+        ("same@example.test", "accepted"), ("same@example.test", "expired"),
+    ]
+    accepted = next_page["rows"][0]
+    assert accepted["accepted_at"] == "2026-11-13T10:00:00Z"
+    assert accepted["accepted_by"] == accepted_id
+    assert accepted["accepted_account_name"] == "Renamed Archived Account"
+    assert accepted["status"] == "accepted"  # accepted_at outranks cancellation and account archival
+    assert accepted["organization_name"] == "Existing Tenant"
+    assert accepted["organization_slug"].startswith("existing-")
+    assert set(accepted) == {
+        "invitation_id", "organization_id", "organization_name", "organization_slug",
+        "recipient_email", "company_role", "invited_at", "expires_at", "accepted_at",
+        "accepted_by", "accepted_account_name", "cancelled_at", "status",
+    }
+
+    filtered = asyncio.run(endpoint(
+        request=api.request, response=Response(), actor=api.principal,
+        limit=10, offset=0, status="accepted", search="same@example.test",
+    ))
+    assert filtered["total"] == 1
+    assert filtered["rows"][0]["status"] == "accepted"
+    event = api.admin.execute(
+        "SELECT action, result, details FROM platform_audit_events ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert event == {
+        "action": "platform_invitation_history_read", "result": "success",
+        "details": {"limit": 10, "offset": 0, "result_count": 1},
+    }
+    assert "same@example.test" not in str(event)
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"status": "sent"}, {"search": "x" * 101}, {"limit": 0},
+    {"limit": 101}, {"offset": -1}, {"offset": 100001},
+])
+def test_platform_invitation_lifecycle_history_rejects_invalid_filters_before_database_access(kwargs):
+    from fastapi import Response
+    from backend.routes.platform_organizations import create_platform_organizations_router
+
+    router = create_platform_organizations_router(
+        get_connection=lambda: pytest.fail("invalid filters must fail before connecting"),
+        current_user=lambda: None, csrf_dependency=lambda: None,
+        encryption_key=Fernet.generate_key().decode(), frontend_url="https://example.test",
+    )
+    endpoint = next(route.endpoint for route in router.routes if route.path == "/api/platform/invitations")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(
+            request=SimpleNamespace(cookies={}), response=Response(), actor=1,
+            limit=kwargs.get("limit", 25), offset=kwargs.get("offset", 0),
+            status=kwargs.get("status", "all"), search=kwargs.get("search"),
+        ))
+    assert error.value.status_code == 422
+
+
+def test_platform_invitation_lifecycle_history_denies_non_platform_session(platform_api):
+    from fastapi import Response
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.session_credentials import hash_session_credential
+    from backend.temporal import serialize_instant, utc_now
+
+    api = platform_api
+    token = "tenant-invitation-history-" + uuid4().hex
+    api.admin.execute(
+        "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
+        (api.member_id, hash_session_credential(token), serialize_instant(utc_now() + timedelta(hours=1))),
+    )
+    api.admin.commit()
+    endpoint = api.endpoint("GET", "/api/platform/invitations")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(endpoint(
+            request=SimpleNamespace(cookies={"session_token": token}), response=Response(),
+            actor=AuthenticatedPrincipal(api.member_id, api.org_id, "manager", False),
+        ))
+    assert error.value.status_code == 403
 
 
 @pytest.mark.parametrize("kwargs", [{"limit": 0}, {"limit": 101}, {"offset": -1}, {"offset": 100001}])

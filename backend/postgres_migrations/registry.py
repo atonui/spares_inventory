@@ -28,6 +28,7 @@ from . import (
     v0022_session_security_events,
     v0023_owner_welcome_mail,
     v0024_platform_invitation_delivery_history,
+    v0025_platform_invitation_history,
 )
 
 
@@ -70,6 +71,7 @@ MIGRATIONS = tuple(
         v0022_session_security_events,
         v0023_owner_welcome_mail,
         v0024_platform_invitation_delivery_history,
+        v0025_platform_invitation_history,
     )
 )
 
