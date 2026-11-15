@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 25347)
+Total output lines: 1042
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +9,7 @@
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
 <link rel="stylesheet" href="superadmin.css?v=20261115-sidebar-toggle-v1">
-<link rel="stylesheet" href="platform-console.css?v=20261101-audit-labels">
+<link rel="stylesheet" href="platform-console.css?v=20261115-invitation-table-fit-v1">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
@@ -328,184 +331,7 @@
           <div class="organization-directory" x-show="!organizationLoading && !organizationError && organizations.length"><table class="organizations-table tbl"><thead><tr><th>Organization</th><th>Status</th><th>Active members</th><th>Invitation email</th><th>Created (UTC)</th><th>Actions</th></tr></thead><tbody><template x-for="org in organizations" :key="org.id"><tr :class="selectedOrganization?.id===org.id?'selected-row':''"><td data-label="Organization"><strong x-text="org.name"></strong><small class="organization-slug" x-text="org.slug"></small></td><td data-label="Status"><span class="organization-status" :class="org.is_active?'is-active':'is-suspended'" x-text="org.is_active?'Active':'Suspended'"></span></td><td data-label="Active members" x-text="org.active_member_count"></td><td data-label="Invitation email"><span class="invitation-count">Pending <strong x-text="org.pending_invitation_mail_count"></strong></span><span class="invitation-count">Failed <strong x-text="org.failed_invitation_mail_count"></strong></span></td><td data-label="Created (UTC)" x-text="org.created_at"></td><td data-label="Actions"><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openOrganization(org)">View details</button><button class="btn btn-sm btn-outline" :class="org.is_active?'organization-suspend':'organization-reactivate'" @click="requestOrganizationStatus(org)" :disabled="dialogBusy || actionPending['organization:'+org.id]" x-text="org.is_active?'Suspend':'Reactivate'"></button></div></td></tr></template></tbody></table></div>
           <div class="organization-pagination" x-show="organizationTotal>0 && !organizationError"><span role="status" x-text="`Showing ${organizationOffset+1}–${Math.min(organizationOffset+organizations.length,organizationTotal)} of ${organizationTotal}`"></span><div class="filter-actions"><button class="btn btn-sm btn-outline" @click="loadOrganizations(Math.max(0,organizationOffset-organizationLimit))" :disabled="organizationLoading || organizationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadOrganizations(organizationOffset+organizationLimit)" :disabled="organizationLoading || organizationOffset+organizationLimit>=organizationTotal">Next</button></div></div>
         </div></section>
-        <section class="panel organization-detail" x-show="selectedOrganization"><div class="panel-header"><div><span class="panel-title" x-text="selectedOrganization?.name"></span><small class="organization-slug" x-text="selectedOrganization?.slug"></small></div><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openSupportStart(selectedOrganization)" :disabled="!!supportSession || !me?.is_platform_admin">Start support session</button><button class="btn btn-sm btn-outline" :class="selectedOrganization?.is_active?'organization-suspend':'organization-reactivate'" @click="requestOrganizationStatus(selectedOrganization)" x-text="selectedOrganization?.is_active?'Suspend organization':'Reactivate organization'"></button><button class="btn btn-sm btn-outline" @click="selectedOrganization=null;organizationAuditRows=[]">Close details</button></div></div><div class="panel-body"><div class="organization-facts"><span><small>Status</small><strong x-text="selectedOrganization?.is_active?'Active':'Suspended'"></strong></span><span><small>Active members</small><strong x-text="selectedOrganization?.active_member_count ?? '—'"></strong></span><span><small>Created (UTC)</small><strong x-text="selectedOrganization?.created_at || '—'"></strong></span><span><small>Invitation mail</small><strong><span x-text="selectedOrganization?.pending_invitation_mail_count ?? 0"></span> pending · <span x-text="selectedOrganization?.failed_invitation_mail_count ?? 0"></span> failed</strong></span></div><h3 class="activity-heading">Recent organization activity</h3><p x-show="organizationAuditLoading" role="status">Loading organization activity…</p><div x-show="organizationAuditError" class="action-error" role="alert"><span x-text="organizationAuditError"></span><button class="btn btn-sm btn-outline" @click="loadOrganizationActivity(selectedOrganization.id)">Retry</button></div><p x-show="!organizationAuditLoading && !organizationAuditError && !organizationAuditRows.length" class="empty">No platform events are recorded for this organization.</p><ol class="activity-list"><template x-for="event in organizationAuditRows" :key="event.id"><li><strong x-text="event.action"></strong><span x-text="event.result"></span><small x-text="`${event.created_at} · actor ${event.actor_user_id ?? 'System'}`"></small></li></template></ol></div></section>
-      </div>
-
-      <div x-show="tab==='support' && me?.saas_mode && supportSession">
-        <div class="panel support-workspace">
-          <div class="panel-header"><span class="panel-title">Customer support — <span x-text="supportSession?.organization?.name"></span></span></div>
-          <div class="panel-body">
-            <p>Read-only, organization-scoped lookups. Each search is audited. Search by an exact tenant identifier.</p>
-            <form class="support-lookup-form" @submit.prevent="loadSupportLookup()">
-              <label for="support-lookup-kind">Lookup type<select id="support-lookup-kind" x-model="supportLookupKind" @change="supportRows=[];supportError='';supportLookupValue='';supportHasSearched=false" :disabled="supportLoading"><template x-for="kind in supportLookupKinds" :key="kind.key"><option :value="kind.key" x-text="kind.label"></option></template></select></label>
-              <label for="support-lookup-value">Exact lookup value<input id="support-lookup-value" x-model="supportLookupValue" :maxlength="supportLookupKind==='accounts' ? 254 : 100" :placeholder="supportLookupKinds.find(kind=>kind.key===supportLookupKind)?.placeholder || ''" required :disabled="supportLoading"></label>
-              <button class="btn btn-success" type="submit" :disabled="supportLoading || !supportSession"><span x-text="supportLoading ? 'Searching…' : 'Search'">Search</span></button>
-            </form>
-            <p x-show="supportLoading" role="status">Searching this organization…</p>
-            <div x-show="supportError" class="action-error" role="alert"><span x-text="supportError"></span><button type="button" class="btn btn-sm btn-outline" @click="loadSupportLookup()" :disabled="supportLoading">Retry</button></div>
-            <div x-show="!supportLoading && !supportError && supportRows.length===0" class="empty" x-text="supportHasSearched ? 'No matching records were found.' : 'No results yet. Enter an exact identifier and search.'"></div>
-            <div class="support-results" x-show="!supportLoading && supportRows.length">
-              <template x-for="(row,index) in supportRows" :key="index"><article class="support-result">
-                <dl><template x-for="entry in Object.entries(row)" :key="entry[0]"><div><dt x-text="entry[0].replaceAll('_',' ')"></dt><dd x-text="entry[1] ?? '—'"></dd></div></template></dl>
-              </article></template>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div x-show="tab==='platformAdmins' && me?.saas_mode">
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Platform administrators</span><button class="btn btn-sm btn-outline" @click="loadPlatformAdmins()" :disabled="platformAdminLoading">Refresh</button></div>
-          <div class="panel-body">
-            <p>These identities can administer the SaaS platform. This list includes only existing platform administrators; there is no global user search.</p>
-            <form class="platform-admin-grant" @submit.prevent="requestPlatformAdminGrant()">
-              <div class="form-group"><label for="platform-admin-email">Exact email of an existing account</label><input id="platform-admin-email" type="email" autocomplete="email" x-model="platformAdminEmail" required :disabled="actionPending.platformAdminGrant"></div>
-              <button class="btn btn-success" type="submit" :disabled="platformAdminLoading || actionPending.platformAdminGrant">Grant platform admin</button>
-            </form>
-            <p x-show="actionErrors.platformAdminGrant" class="action-error" role="alert" x-text="actionErrors.platformAdminGrant"></p>
-            <p x-show="platformAdminLoading" role="status">Loading platform administrators…</p>
-            <div x-show="platformAdminError" class="action-error" role="alert"><span x-text="platformAdminError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformAdmins()" :disabled="platformAdminLoading">Retry</button></div>
-            <div x-show="!platformAdminLoading && !platformAdminError && !platformAdmins.length" class="empty">No platform administrators found.</div>
-            <div class="platform-admin-table-wrap" x-show="!platformAdminLoading && !platformAdminError && platformAdmins.length">
-              <table class="tbl platform-admins-table"><thead><tr><th>Name</th><th>Email</th><th>Access</th><th>Action</th></tr></thead>
-                <tbody><template x-for="admin in platformAdmins" :key="admin.id"><tr>
-                  <td data-label="Name" x-text="admin.name"></td>
-                  <td data-label="Email" x-text="admin.email"></td>
-                  <td data-label="Access"><span x-show="admin.id === me?.id" class="tag tag-blue">You</span><span x-show="admin.id !== me?.id" class="tag tag-green">Platform admin</span></td>
-                  <td data-label="Action"><button x-show="admin.id !== me?.id" class="btn btn-sm btn-outline btn-red" @click="requestPlatformAdminRevoke(admin)" :disabled="dialogBusy || actionPending[`platformAdminRevoke:${admin.id}`]" x-text="actionPending[`platformAdminRevoke:${admin.id}`] ? 'Revoking…' : 'Revoke access'"></button><span x-show="admin.id === me?.id">Cannot revoke your own access</span><p class="action-error" x-show="actionErrors[`platformAdminRevoke:${admin.id}`]" role="alert" x-text="actionErrors[`platformAdminRevoke:${admin.id}`]"></p></td>
-                </tr></template></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div x-show="tab==='platformAudit' && me?.saas_mode">
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Platform audit events</span><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset)" :disabled="platformAuditLoading">Refresh</button></div>
-          <div class="panel-body">
-            <p>Platform-level administrative changes across organizations. Timestamps use UTC; identifiers remain available to locate the exact records.</p>
-            <form @submit.prevent="loadPlatformAudit(0)" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;align-items:end">
-              <div class="form-group"><label for="platform-audit-actor">Actor user ID</label><input id="platform-audit-actor" type="number" min="1" x-model="platformAuditFilters.actor_user_id"></div>
-              <div class="form-group"><label for="platform-audit-org">Organization ID</label><input id="platform-audit-org" x-model="platformAuditFilters.organization_id" maxlength="36"></div>
-              <div class="form-group"><label for="platform-audit-action">Action</label><input id="platform-audit-action" x-model="platformAuditFilters.action" maxlength="100"></div>
-              <div class="form-group"><label for="platform-audit-result">Result</label><input id="platform-audit-result" x-model="platformAuditFilters.result" maxlength="100"></div>
-              <div class="form-group"><label for="platform-audit-start">From (UTC ISO timestamp)</label><input id="platform-audit-start" placeholder="2026-10-01T00:00:00Z" x-model="platformAuditFilters.start_at" maxlength="40"></div>
-              <div class="form-group"><label for="platform-audit-end">Until (UTC ISO timestamp)</label><input id="platform-audit-end" placeholder="2026-11-01T00:00:00Z" x-model="platformAuditFilters.end_at" maxlength="40"></div>
-              <div style="display:flex;gap:.5rem"><button class="btn btn-success" type="submit" :disabled="platformAuditLoading">Apply filters</button><button class="btn btn-outline" type="button" @click="platformAuditFilters={actor_user_id:'',organization_id:'',action:'',result:'',start_at:'',end_at:''};loadPlatformAudit(0)" :disabled="platformAuditLoading">Clear</button></div>
-            </form>
-            <p x-show="platformAuditLoading" role="status">Loading platform audit events…</p>
-            <div x-show="platformAuditError" role="alert" class="action-error"><span x-text="platformAuditError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset)" :disabled="platformAuditLoading">Retry</button></div>
-            <div style="overflow:auto" x-show="!platformAuditLoading && !platformAuditError">
-              <table class="tbl audit-table"><thead><tr><th>Time (UTC)</th><th>Actor</th><th>Organization</th><th>Action</th><th>Result</th><th>Details</th></tr></thead>
-                <tbody><template x-for="event in platformAuditRows" :key="event.id"><tr>
-                  <td data-label="Time (UTC)" x-text="event.created_at"></td>
-                  <td data-label="Actor"><div class="platform-audit-identity"><strong x-text="event.actor_name || (event.actor_user_id ? 'User account' : 'System')"></strong><small x-show="event.actor_user_id" x-text="'ID ' + event.actor_user_id"></small></div></td>
-                  <td data-label="Organization"><div class="platform-audit-identity"><strong x-text="event.organization_name || (event.organization_id ? 'Organization' : 'Platform-wide')"></strong><small x-show="event.organization_id" x-text="(event.organization_slug ? event.organization_slug + ' · ' : '') + 'ID ' + event.organization_id"></small></div></td>
-                  <td data-label="Action" x-text="platformAuditActionLabel(event.action)"></td>
-                  <td data-label="Result"><span class="tag tag-grey" x-text="platformAuditResultLabel(event.result)"></span></td>
-                  <td data-label="Details"><details class="platform-audit-details" x-show="platformAuditDetailEntries(event.details).length"><summary>View details</summary><dl><template x-for="[key,value] in platformAuditDetailEntries(event.details)" :key="key"><div><dt x-text="platformAuditDetailLabel(key)"></dt><dd x-text="platformAuditDetailValue(key,value)"></dd></div></template></dl></details><span x-show="!platformAuditDetailEntries(event.details).length">No additional details</span></td>
-                </tr></template></tbody>
-              </table>
-              <p x-show="!platformAuditRows.length">No platform audit events match these filters.</p>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem" x-show="platformAuditTotal>0">
-              <span x-text="`${platformAuditOffset+1}–${Math.min(platformAuditOffset+platformAuditRows.length,platformAuditTotal)} of ${platformAuditTotal}`"></span>
-              <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(Math.max(0,platformAuditOffset-50))" :disabled="platformAuditLoading || platformAuditOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset+50)" :disabled="platformAuditLoading || platformAuditOffset+50>=platformAuditTotal">Next</button></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div x-show="tab==='platformSecurityEvents' && me?.saas_mode && me?.is_platform_admin">
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Security events</span><button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(platformSecurityEventOffset)" :disabled="platformSecurityEventLoading">Refresh</button></div>
-          <div class="panel-body">
-            <p>Authentication, password, and session events. Unmatched submitted identifiers and credential details are never displayed. Timestamps use UTC.</p>
-            <form @submit.prevent="loadPlatformSecurityEvents(0)" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;align-items:end">
-              <div class="form-group"><label for="platform-security-family">Event family</label><select id="platform-security-family" x-model="platformSecurityEventFilters.event_family"><option value="">All events</option><option value="authentication">Authentication</option><option value="password">Password</option><option value="session">Sessions</option></select></div>
-              <div class="form-group"><label for="platform-security-outcome">Outcome</label><select id="platform-security-outcome" x-model="platformSecurityEventFilters.outcome"><option value="">All outcomes</option><option value="success">Succeeded</option><option value="failure">Failed</option><option value="blocked">Blocked</option></select></div>
-              <div class="form-group"><label for="platform-security-account-match">Account match</label><select id="platform-security-account-match" x-model="platformSecurityEventFilters.account_match"><option value="">All</option><option value="true">Matched</option><option value="false">No match</option></select></div>
-              <div class="form-group"><label for="platform-security-actor">Actor user ID</label><input id="platform-security-actor" type="number" min="1" x-model="platformSecurityEventFilters.actor_user_id"></div>
-              <div class="form-group"><label for="platform-security-start">From (UTC ISO timestamp)</label><input id="platform-security-start" placeholder="2026-10-01T00:00:00Z" x-model="platformSecurityEventFilters.start_at" maxlength="40"></div>
-              <div class="form-group"><label for="platform-security-end">Until (UTC ISO timestamp)</label><input id="platform-security-end" placeholder="2026-11-01T00:00:00Z" x-model="platformSecurityEventFilters.end_at" maxlength="40"></div>
-              <div style="display:flex;gap:.5rem"><button class="btn btn-success" type="submit" :disabled="platformSecurityEventLoading">Apply filters</button><button class="btn btn-outline" type="button" @click="platformSecurityEventFilters={event_family:'',outcome:'',account_match:'',actor_user_id:'',start_at:'',end_at:''};loadPlatformSecurityEvents(0)" :disabled="platformSecurityEventLoading">Clear</button></div>
-            </form>
-            <p x-show="platformSecurityEventLoading" role="status">Loading security events…</p>
-            <div x-show="platformSecurityEventError" role="alert" class="action-error"><span x-text="platformSecurityEventError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(platformSecurityEventOffset)" :disabled="platformSecurityEventLoading">Retry</button></div>
-            <div style="overflow:auto" x-show="!platformSecurityEventLoading && !platformSecurityEventError">
-              <table class="tbl audit-table"><thead><tr><th>Time (UTC)</th><th>Account</th><th>Event</th><th>Outcome</th><th>Details</th></tr></thead>
-                <tbody><template x-for="event in platformSecurityEventRows" :key="event.id"><tr>
-                  <td data-label="Time (UTC)" x-text="event.created_at"></td>
-                  <td data-label="Account"><span x-text="event.actor_user_id ? 'Matched account · ID ' + event.actor_user_id : (event.details?.account_match === false ? 'No account match' : 'Account unavailable')"></span></td>
-                  <td data-label="Event" x-text="platformSecurityEventLabel(event.event)"></td>
-                  <td data-label="Outcome"><span class="tag tag-grey" x-text="platformSecurityOutcomeLabel(event.outcome)"></span></td>
-                  <td data-label="Details"><details class="platform-audit-details" x-show="platformSecurityDetailEntries(event.details).length"><summary>View details</summary><dl><template x-for="[key,value] in platformSecurityDetailEntries(event.details)" :key="key"><div><dt x-text="platformSecurityDetailLabel(key)"></dt><dd x-text="platformSecurityDetailValue(key,value)"></dd></div></template></dl></details><span x-show="!platformSecurityDetailEntries(event.details).length">No additional details</span></td>
-                </tr></template></tbody>
-              </table>
-              <p x-show="!platformSecurityEventRows.length">No security events match these filters.</p>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem" x-show="platformSecurityEventTotal>0">
-              <span x-text="`${platformSecurityEventOffset+1}–${Math.min(platformSecurityEventOffset+platformSecurityEventRows.length,platformSecurityEventTotal)} of ${platformSecurityEventTotal}`"></span>
-              <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(Math.max(0,platformSecurityEventOffset-50))" :disabled="platformSecurityEventLoading || platformSecurityEventOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformSecurityEvents(platformSecurityEventOffset+50)" :disabled="platformSecurityEventLoading || platformSecurityEventOffset+50>=platformSecurityEventTotal">Next</button></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      <!-- ══════════ LOCKED ACCOUNTS ══════════ -->
-      <div x-show="tab==='accounts'">
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">
-              Locked Accounts
-              <span x-show="locked.length>0" class="tag tag-red" style="margin-left:6px;" x-text="locked.length"></span>
-            </span>
-            <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-sm btn-green" @click="bulkUnlock()" :disabled="locked.length===0 || actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock All</button>
-              <button class="btn btn-sm btn-outline ui-icon-only" @click="loadLocked()" aria-label="Refresh locked accounts" title="Refresh locked accounts"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#refresh"></use></svg></button>
-            </div>
-          </div>
-
-          <div class="action-feedback">
-            <p x-show="actionPending.unlock" role="status">Unlocking accounts…</p>
-            <p class="action-error" x-show="actionErrors.unlock" role="alert" x-text="actionErrors.unlock"></p>
-          </div>
-          <div x-show="locked.length===0 && !loading" class="empty"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#check"></use></svg> No accounts are currently locked</div>
-
-          <div x-show="locked.length>0" style="overflow-x:auto;">
-            <table class="tbl locked-accounts-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" aria-label="Select all locked user accounts" @change="toggleAll($event)" :disabled="actionPending.unlock" style="cursor:pointer;"></th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Failed Attempts</th>
-                  <th>Locked Until</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="u in locked" :key="u.id">
-                  <tr>
-                    <td data-label="Select"><input type="checkbox" :value="u.id" x-model="selectedLocked" :aria-label="'Select account for ' + u.name" :disabled="actionPending.unlock" style="cursor:pointer;"></td>
-                    <td data-label="Name" style="font-weight:600;" x-text="u.name"></td>
-                    <td data-label="Email" style="font-size:0.8rem;color:var(--brand-slate);" x-text="u.email"></td>
-                    <td data-label="Role"><span class="tag tag-grey" x-text="u.role"></span></td>
-                    <td data-label="Failed Attempts"><span class="tag tag-red" x-text="u.failed_login_attempts"></span></td>
-                    <td data-label="Locked Until" style="font-size:0.8rem;color:#dc3545;" x-text="fmtDate(u.account_locked_until)"></td>
-                    <td data-label="Action"><button class="btn btn-sm btn-green" @click="unlock(u)" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock</button></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- bulk action bar -->
-          <div x-show="selectedLocked.length>0"
-               style="padding:0.75rem 1rem;border-top:1px solid var(--brand-border);display:flex;align-items:center;gap:0.75rem;background:var(--brand-page);">
+        <section class="panel organization-detail" x-show="selectedOrganization"><div class="panel-header"><div><span class="panel-title" x-text="selectedOrganization?.name"></span><small class="organization-slug" x-text="selectedOrganization?.slug"></small></div><div class="organization-actions"><button class="btn btn-sm btn-outline" @click="openSupportStart(selectedOrganization)" :disabled="!!supportSession || !me?.is_platform_admin">Start support session</button><button class="btn btn-sm btn-outline" :class="selectedOrganization?.is_active?'organization-suspend':'organization-reactivate'" @click="requestOrganizationStatus(selectedOrganization)" x-text="selectedOrganization?.is_active?'Suspend organization':'Reactivate organization'"></button><button class="btn btn-sm btn-outline" @click="selectedOrganization=null;organizationAuditRows=[]">Close details</button></div></div><div class="panel-body"><div class="organization-facts"><span><small>Status</small><strong x-text="selectedOrganization?.is_active?'Active':'Suspended'"></strong></span><span><small>Active members</small><strong x-text="selectedOrganization?.active_member_count ?? '—'"></strong></span><span><small>Created (UTC)</small><strong x-text="selectedOrganization?.created_at || '—'"></strong></span><span><small>Invitation mail</small><strong><span x-text="selectedOrganization?.pending_invitation_mail_count ?? 0"></span> pending · <s…5347 tokens truncated…var(--brand-page);">
             <span style="font-size:0.8rem;color:var(--brand-navy);" x-text="selectedLocked.length + ' selected'"></span>
             <button class="btn btn-sm btn-green" @click="unlockSelected()" :disabled="actionPending.unlock"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#unlock"></use></svg> Unlock Selected</button>
           </div>
