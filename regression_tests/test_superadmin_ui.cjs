@@ -220,7 +220,7 @@ test('platform audit renders readable labels and structured safe details',()=>{
  assert.match(section,/event\.actor_name/);assert.match(section,/event\.organization_name/);
  assert.match(section,/<details[^>]*>/);assert.match(section,/platformAuditDetailEntries\(event\.details\)/);assert.match(section,/platformAuditDetailLabel/);
  assert.doesNotMatch(section,/JSON\.stringify/);assert.doesNotMatch(section,/x-html=/);
- assert.match(html,/platform-console\.css\?v=20261101-audit-labels/);
+ assert.match(html,/platform-console\.css\?v=20261115-invitation-table-fit-v1/);
 });
 test('platform organization form sends name slug and owner invitation',async()=>{
  const a=app();a.toast=()=>{};a.organizationForm={name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'};
