@@ -3,7 +3,6 @@
 body { align-items: flex-start; padding: 0; background: var(--brand-page); }
 
   .shell { display: flex; min-height: 100vh; width: 100%; }
-  .platform-console .shell.sidebar-collapsed .sidebar { display: none; }
 
   /* ── Sidebar ── */
   .sidebar {
@@ -18,6 +17,7 @@ body { align-items: flex-start; padding: 0; background: var(--brand-page); }
     height: 100vh;
     overflow-y: auto;
   }
+  .platform-console .shell.sidebar-collapsed .sidebar { display: none; }
   .sidebar-brand {
     padding: var(--space-5) var(--space-4) var(--space-4);
     border-bottom: 1px solid var(--brand-border);
@@ -99,6 +99,7 @@ body { align-items: flex-start; padding: 0; background: var(--brand-page); }
   .topbar h1 { font-size: 1.1rem; font-weight: 700; color: var(--brand-navy); }
   .topbar-heading { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
   .topbar-heading h1 { min-width: 0; overflow-wrap: anywhere; }
+  .platform-sidebar-toggle-icon { display: block; width: 1.05rem; height: 1.05rem; }
   .topbar-right { display: flex; align-items: center; gap: var(--space-3); }
 
   .content { padding: var(--space-6); flex: 1; }
