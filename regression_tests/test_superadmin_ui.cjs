@@ -39,8 +39,8 @@ test('settings cannot save before a successful load or during refresh',async()=>
  a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
-test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,18);assert.match(html,/aria-current/);});
+test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents'&&key!=='platformInvitations')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,19);assert.match(html,/aria-current/);});
 test('platform admin can end the authenticated session from the console',async()=>{
  const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},window:{location:{href:''}},WeakMap};
  vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();
@@ -92,7 +92,7 @@ test('platform security events are a separate platform-only console view with sa
  assert.match(platform,/Security events/);assert.match(html,/tab==='platformSecurityEvents' && me\?\.saas_mode && me\?\.is_platform_admin/);
  const section=html.split('x-show="tab===\'platformSecurityEvents\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('<!-- ══════════ LOCKED ACCOUNTS ══════════ -->')[0];
  assert.ok(section);assert.match(section,/platformSecurityEventRows/);assert.match(section,/account_match/);assert.doesNotMatch(section,/ip_address|user_agent|request_id|submitted_identifier|x-html/);
- assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'\]\.includes\(key\)/);
+ assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations'\]\.includes\(key\)/);
  assert.match(html,/!me\?\.saas_mode && key!=='support' && key!=='platformSecurityEvents'/);
 });
 test('tenant console identity cannot select the platform security events view',()=>{
@@ -323,6 +323,38 @@ test('platform invitation mail history paginates and handles API failures',async
  await a.changeInvitationMailPage(-1);assert.equal(a.invitationMailOffset,0);
  a.api=async()=>{throw Error('offline');};await a.loadInvitationMail();
  assert.equal(a.invitationMailError,'offline');assert.equal(a.invitationMailLoading,false);
+});
+test('platform invitation lifecycle history loads bounded filters, paginates and recovers from failures',async()=>{
+ const a=app(),paths=[];a.platformInvitationFilters={status:'accepted',search:'  owner@example.test  '};
+ a.api=async path=>{paths.push(path);return {rows:[{invitation_id:8,status:'accepted',recipient_email:'owner@example.test'}],total:51,limit:25,offset:Number(new URL(path,'https://example.test').searchParams.get('offset'))};};
+ await a.loadPlatformInvitations(25);
+ const query=new URL(paths[0],'https://example.test').searchParams;
+ assert.equal(query.get('limit'),'25');assert.equal(query.get('offset'),'25');assert.equal(query.get('status'),'accepted');assert.equal(query.get('search'),'owner@example.test');
+ assert.equal(a.platformInvitationRows[0].invitation_id,8);assert.equal(a.platformInvitationOffset,25);assert.equal(a.platformInvitationTotal,51);
+ assert.equal(a.platformInvitationStatusLabel('accepted'),'Accepted');assert.equal(a.platformInvitationStatusLabel('expired'),'Expired');assert.equal(a.platformInvitationStatusLabel('__proto__'),'Unknown status');
+ assert.equal(a.platformAuditActionLabel('platform_invitation_history_read'),'Invitation lifecycle history viewed');
+ await a.changePlatformInvitationPage(-1);assert.equal(a.platformInvitationOffset,0);
+ a.api=async()=>{throw Error('offline');};await a.loadPlatformInvitations();
+ assert.equal(a.platformInvitationRows.length,0);assert.equal(a.platformInvitationError,'offline');assert.equal(a.platformInvitationLoading,false);
+});
+test('platform invitation history retry keeps the attempted first-page offset after filter changes',async()=>{
+ const a=app(),paths=[];a.platformInvitationOffset=25;a.platformInvitationFilters={status:'accepted',search:'owner@example.test'};
+ a.api=async path=>{paths.push(path);if(paths.length===1)throw Error('offline');return {rows:[{invitation_id:1,status:'accepted'}],total:1,limit:25,offset:Number(new URL(path,'https://example.test').searchParams.get('offset'))};};
+ await a.loadPlatformInvitations(0);assert.equal(a.platformInvitationError,'offline');
+ assert.equal(a.platformInvitationOffset,0);
+ await a.loadPlatformInvitations(a.platformInvitationOffset);
+ assert.equal(new URL(paths[1],'https://example.test').searchParams.get('offset'),'0');
+ assert.equal(a.platformInvitationRows[0].invitation_id,1);assert.equal(a.platformInvitationTotal,1);
+});
+test('platform invitation lifecycle history is a distinct platform-only view',()=>{
+ const platform=html.slice(html.indexOf('x-show="me?.saas_mode && me?.is_platform_admin"'),html.indexOf('</nav>'));
+ assert.match(platform,/Invitations/);assert.match(html,/tab==='platformInvitations' && me\?\.saas_mode && me\?\.is_platform_admin/);
+ const section=html.split('x-show="tab===\'platformInvitations\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('x-show="tab===\'platformSecurityEvents\'')[0];
+ assert.ok(section);for(const field of ['Organization','Invitee','Role','Status','Invited (UTC)','Accepted (UTC)','Accepted account'])assert.ok(section.includes(field));
+ assert.match(section,/platformInvitationLoading/);assert.match(section,/platformInvitationError/);assert.match(section,/No invitations match/);
+ assert.match(section,/platformInvitationFilters\.status/);assert.match(section,/platformInvitationFilters\.search/);assert.doesNotMatch(section,/token_hash|encrypted_payload|invitation-mail/);
+ const a=app();a.me={saas_mode:false};a.tab='dashboard';a.selectSection('platformInvitations');assert.equal(a.tab,'dashboard');
+ a.me={saas_mode:true,is_platform_admin:true};a.refresh=()=>{};a.selectSection('platformInvitations');assert.equal(a.tab,'platformInvitations');
 });
 test('platform overview exposes safe paginated invitation history states and fields',()=>{
  const section=html.split('x-show="tab===\'dashboard\' && me?.saas_mode"')[1].split('x-show="tab===\'organizations\' && me?.saas_mode"')[0];

@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261115-sidebar-toggle-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261115-invitation-history-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -152,6 +152,9 @@
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
           <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use></svg></span> Organizations
         </button>
+        <button type="button" class="nav-item" :class="tab==='platformInvitations'&&'active'" @click="selectSection('platformInvitations')" :aria-current="tab==='platformInvitations' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use></svg></span> Invitations
+        </button>
         <button type="button" class="nav-item" x-show="supportSession" :class="tab==='support'&&'active'" @click="selectSection('support')" :aria-current="tab==='support' ? 'page' : null">
           <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use></svg></span> Customer support
         </button>
@@ -198,7 +201,7 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" :value="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents' && key!=='platformInvitations') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
       <div class="topbar-heading">
@@ -413,6 +416,36 @@
               <span x-text="`${platformAuditOffset+1}–${Math.min(platformAuditOffset+platformAuditRows.length,platformAuditTotal)} of ${platformAuditTotal}`"></span>
               <div style="display:flex;gap:.5rem"><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(Math.max(0,platformAuditOffset-50))" :disabled="platformAuditLoading || platformAuditOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="loadPlatformAudit(platformAuditOffset+50)" :disabled="platformAuditLoading || platformAuditOffset+50>=platformAuditTotal">Next</button></div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='platformInvitations' && me?.saas_mode && me?.is_platform_admin">
+        <div class="panel">
+          <div class="panel-header"><div><span class="panel-title">Invitation history</span><small>Invitation lifecycle and acceptance are shown separately from email delivery.</small></div><button class="btn btn-sm btn-outline" @click="loadPlatformInvitations(platformInvitationOffset)" :disabled="platformInvitationLoading">Refresh</button></div>
+          <div class="panel-body">
+            <form class="list-filters" @submit.prevent="loadPlatformInvitations(0)">
+              <label for="platform-invitation-search">Search invitations<input id="platform-invitation-search" type="search" maxlength="100" placeholder="Email, organization name or slug" x-model="platformInvitationFilters.search" :disabled="platformInvitationLoading"></label>
+              <label for="platform-invitation-status">Status<select id="platform-invitation-status" x-model="platformInvitationFilters.status" :disabled="platformInvitationLoading"><option value="all">All statuses</option><option value="pending">Pending</option><option value="accepted">Accepted</option><option value="cancelled">Cancelled</option><option value="expired">Expired</option></select></label>
+              <div class="filter-actions"><button class="btn btn-success" type="submit" :disabled="platformInvitationLoading">Search</button><button class="btn btn-outline" type="button" @click="platformInvitationFilters={status:'all',search:''};loadPlatformInvitations(0)" :disabled="platformInvitationLoading">Clear</button></div>
+            </form>
+            <p x-show="platformInvitationLoading" class="list-count" role="status">Loading invitation history…</p>
+            <div x-show="platformInvitationError" class="action-error" role="alert"><span x-text="platformInvitationError"></span> <button class="btn btn-sm btn-outline" @click="loadPlatformInvitations(platformInvitationOffset)" :disabled="platformInvitationLoading">Retry</button></div>
+            <p x-show="!platformInvitationLoading && !platformInvitationError && !platformInvitationRows.length" class="empty">No invitations match these filters.</p>
+            <div style="overflow:auto" x-show="!platformInvitationLoading && !platformInvitationError && platformInvitationRows.length">
+              <table class="tbl"><thead><tr><th>Organization</th><th>Invitee</th><th>Role</th><th>Status</th><th>Invited (UTC)</th><th>Accepted (UTC)</th><th>Accepted account</th></tr></thead>
+                <tbody><template x-for="invitation in platformInvitationRows" :key="invitation.invitation_id"><tr>
+                  <td data-label="Organization"><strong x-text="invitation.organization_name"></strong><small class="organization-slug" x-text="invitation.organization_slug"></small></td>
+                  <td data-label="Invitee" x-text="invitation.recipient_email"></td>
+                  <td data-label="Role" x-text="invitation.company_role"></td>
+                  <td data-label="Status"><span class="tag tag-grey" x-text="platformInvitationStatusLabel(invitation.status)"></span></td>
+                  <td data-label="Invited (UTC)" x-text="invitation.invited_at"></td>
+                  <td data-label="Accepted (UTC)" x-text="invitation.accepted_at || '—'"></td>
+                  <td data-label="Accepted account" x-text="invitation.accepted_account_name || '—'"></td>
+                </tr></template></tbody>
+              </table>
+            </div>
+            <div class="organization-pagination" x-show="platformInvitationTotal>0 && !platformInvitationError"><span role="status" x-text="`Showing ${platformInvitationOffset+1}–${Math.min(platformInvitationOffset+platformInvitationRows.length,platformInvitationTotal)} of ${platformInvitationTotal}`"></span><div class="filter-actions"><button class="btn btn-sm btn-outline" @click="changePlatformInvitationPage(-1)" :disabled="platformInvitationLoading || platformInvitationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="changePlatformInvitationPage(1)" :disabled="platformInvitationLoading || platformInvitationOffset+platformInvitationLimit>=platformInvitationTotal">Next</button></div></div>
           </div>
         </div>
       </div>

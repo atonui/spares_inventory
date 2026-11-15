@@ -19,6 +19,7 @@ _DETAIL_FIELDS = {
     "platform_announcement_saved": {"revision", "audience", "reason_code"},
     "platform_announcement_removed": {"revision", "reason_code"},
     "platform_invitation_mail_read": {"limit", "offset", "result_count"},
+    "platform_invitation_history_read": {"limit", "offset", "result_count"},
     "global_security_setting_changed": {"key", "value"},
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},

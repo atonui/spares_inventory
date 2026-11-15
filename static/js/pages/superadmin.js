@@ -14,6 +14,7 @@ const PLATFORM_AUDIT_ACTION_LABELS = Object.freeze({
   support_session_ended: 'Support session ended',
   user_logout: 'User signed out',
   platform_invitation_mail_read: 'Invitation email history viewed',
+  platform_invitation_history_read: 'Invitation lifecycle history viewed',
 });
 const PLATFORM_AUDIT_RESULT_LABELS = Object.freeze({success:'Success', denied:'Denied', failure:'Failed'});
 const PLATFORM_AUDIT_DETAIL_LABELS = Object.freeze({
@@ -104,9 +105,9 @@ function superPanel() {
     selectSection(section) {
       if (!Object.hasOwn(this.tabTitles, section)) return;
       if (section === 'support' && !this.me?.saas_mode) return;
-      if (section === 'platformSecurityEvents' && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
+      if (['platformSecurityEvents', 'platformInvitations'].includes(section) && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
       if (this.me?.saas_mode) {
-        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'];
+        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations'];
         if (section === 'support' && this.supportSession) allowed.push('support');
         if (!allowed.includes(section)) return;
       }
@@ -155,13 +156,14 @@ function superPanel() {
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
       organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
-      platformSecurityEvents: 'Security events',
+      platformSecurityEvents: 'Security events', platformInvitations: 'Invitations',
       support: 'Customer Support',
     },
     platformTabTitles: {
       dashboard: 'Overview', organizations: 'Organizations', support: 'Customer support',
       platformAdmins: 'Platform access', config: 'Security settings',
       announcement: 'Announcements', platformAudit: 'Audit log', platformSecurityEvents: 'Security events',
+      platformInvitations: 'Invitations',
     },
 
     // data stores
@@ -182,6 +184,9 @@ function superPanel() {
     platformSecurityEventRows: [], platformSecurityEventTotal: 0, platformSecurityEventOffset: 0,
     platformSecurityEventLoading: false, platformSecurityEventError: '',
     platformSecurityEventFilters: { event_family: '', outcome: '', account_match: '', actor_user_id: '', start_at: '', end_at: '' },
+    platformInvitationRows: [], platformInvitationTotal: 0, platformInvitationOffset: 0,
+    platformInvitationLimit: 25, platformInvitationLoading: false, platformInvitationError: '',
+    platformInvitationFilters: { status: 'all', search: '' },
     organizationForm: { name: '', slug: '', owner_email: '' },
     supportSession: null, supportNow: Date.now(), supportExpiryTimer: null,
     supportStartOrg: null, supportStartOpen: false, supportStartPending: false,
@@ -310,6 +315,7 @@ function superPanel() {
         platformAdmins: () => this.loadPlatformAdmins(),
         platformAudit: () => this.loadPlatformAudit(),
         platformSecurityEvents: () => this.loadPlatformSecurityEvents(),
+        platformInvitations: () => this.loadPlatformInvitations(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
@@ -463,6 +469,42 @@ async submitPasswordReset() {
       const offset = this.invitationMailOffset + direction * this.invitationMailLimit;
       if (offset < 0 || offset >= this.invitationMailTotal) return;
       await this.loadInvitationMail(offset);
+    },
+
+    async loadPlatformInvitations(offset = this.platformInvitationOffset) {
+      if (this.platformInvitationLoading) return;
+      const request = new URLSearchParams({
+        limit: String(this.platformInvitationLimit), offset: String(offset),
+      });
+      const status = String(this.platformInvitationFilters.status || 'all').trim();
+      const search = String(this.platformInvitationFilters.search || '').trim();
+      if (status && status !== 'all') request.set('status', status);
+      if (search) request.set('search', search);
+      this.platformInvitationLoading = true;
+      this.platformInvitationError = '';
+      this.platformInvitationOffset = offset;
+      try {
+        const data = await this.api(`/platform/invitations?${request.toString()}`);
+        this.platformInvitationRows = Array.isArray(data.rows) ? data.rows : [];
+        this.platformInvitationTotal = Number.isInteger(data.total) ? data.total : 0;
+        this.platformInvitationOffset = Number.isInteger(data.offset) ? data.offset : offset;
+      } catch (error) {
+        this.platformInvitationRows = [];
+        this.platformInvitationTotal = 0;
+        this.platformInvitationError = error.message || 'Unable to load invitation history.';
+      } finally { this.platformInvitationLoading = false; }
+    },
+
+    async changePlatformInvitationPage(direction) {
+      if (this.platformInvitationLoading || ![-1, 1].includes(direction)) return;
+      const offset = this.platformInvitationOffset + direction * this.platformInvitationLimit;
+      if (offset < 0 || offset >= this.platformInvitationTotal) return;
+      await this.loadPlatformInvitations(offset);
+    },
+
+    platformInvitationStatusLabel(status) {
+      const labels = { pending: 'Pending', accepted: 'Accepted', cancelled: 'Cancelled', expired: 'Expired' };
+      return Object.hasOwn(labels, status) ? labels[status] : 'Unknown status';
     },
 
     invitationMailQueueLabel(status) {
