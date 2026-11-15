@@ -133,6 +133,33 @@ GRANT SELECT ON platform_invitation_delivery_history TO web_runtime_role;
 REVOKE ALL PRIVILEGES ON TABLE platform_invitation_history FROM web_runtime_role;
 GRANT SELECT ON platform_invitation_history TO web_runtime_role;
 
+-- Platform support inbox data: content is application-encrypted in payload.
+REVOKE ALL PRIVILEGES ON TABLE platform_support_conversations,
+  platform_support_messages, platform_support_webhook_events FROM web_runtime_role;
+GRANT SELECT ON TABLE platform_support_conversations TO web_runtime_role;
+GRANT UPDATE (status, is_read, updated_at)
+  ON TABLE platform_support_conversations TO web_runtime_role;
+GRANT SELECT ON TABLE platform_support_messages TO web_runtime_role;
+GRANT INSERT (conversation_id,direction,encrypted_payload,delivery_status,idempotency_key,created_at)
+  ON TABLE platform_support_messages TO web_runtime_role;
+GRANT USAGE ON SEQUENCE platform_support_conversations_id_seq,
+  platform_support_messages_id_seq TO web_runtime_role;
+REVOKE ALL PRIVILEGES ON TABLE platform_support_conversations,
+  platform_support_messages FROM mail_worker_role;
+GRANT SELECT ON TABLE platform_support_conversations TO mail_worker_role;
+GRANT INSERT (status,is_read,original_sender_hash,created_at,updated_at,latest_message_at)
+  ON TABLE platform_support_conversations TO mail_worker_role;
+GRANT UPDATE (status,latest_message_at,updated_at)
+  ON TABLE platform_support_conversations TO mail_worker_role;
+GRANT SELECT ON TABLE platform_support_messages TO mail_worker_role;
+GRANT INSERT (conversation_id,direction,encrypted_payload,provider_email_id,provider_message_id,delivery_status,attachment_count,created_at)
+  ON TABLE platform_support_messages TO mail_worker_role;
+GRANT UPDATE (provider_message_id,provider_email_id,delivery_status)
+  ON TABLE platform_support_messages TO mail_worker_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE platform_support_webhook_events TO mail_worker_role;
+GRANT USAGE ON SEQUENCE platform_support_conversations_id_seq,
+  platform_support_messages_id_seq TO mail_worker_role;
+
 REVOKE ALL PRIVILEGES ON TABLE email_change_requests FROM web_runtime_role;
 GRANT SELECT (id, user_id, proposed_email, token_hash, delivery_suppressed,
               created_at, expires_at, consumed_at, canceled_at)
@@ -165,6 +192,19 @@ timestamps. The webhook receiver accepts signed events at
 `RESEND_WEBHOOK_SECRET` on `spares_mail_worker`. Configure Resend to send
 `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`,
 `email.complained`, `email.failed`, and `email.suppressed` events.
+
+For the platform support inbox, configure `RESEND_SUPPORT_FROM_EMAIL` on
+`spares_mail_worker` as `Spares Tracker Support <support@sparestracker.com>` and
+set `RESEND_INBOUND_WEBHOOK_SECRET` to the signing secret for a separate
+`email.received` webhook at
+`https://<mail-worker-domain>/webhooks/resend/inbound`. Set
+`RESEND_SUPPORT_ADDRESS=support@sparestracker.com` and provide the worker with
+its existing `RESEND_API_KEY` and `MAIL_PAYLOAD_ENCRYPTION_KEY`. The API service
+also needs `RESEND_SUPPORT_FROM_EMAIL` and `MAIL_PAYLOAD_ENCRYPTION_KEY` to queue
+and display replies. Do not enable receiving or change MX until the endpoint is
+deployed and existing MX routing has been checked. The worker retrieves message
+content through Resend's receiving API. Attachment downloads must be proxied
+through the authenticated platform API.
 The API process receives the migration identity only for startup migrations;
 request handling uses the web runtime identity. The worker must not receive
 the migration identity.

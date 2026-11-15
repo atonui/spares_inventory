@@ -39,8 +39,8 @@ test('settings cannot save before a successful load or during refresh',async()=>
  a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
-test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents'&&key!=='platformInvitations')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,19);assert.match(html,/aria-current/);});
+test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents'&&key!=='platformInvitations'&&key!=='platformSupportInbox')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,20);assert.match(html,/aria-current/);});
 test('platform admin can end the authenticated session from the console',async()=>{
  const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},window:{location:{href:''}},WeakMap};
  vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();
@@ -92,7 +92,7 @@ test('platform security events are a separate platform-only console view with sa
  assert.match(platform,/Security events/);assert.match(html,/tab==='platformSecurityEvents' && me\?\.saas_mode && me\?\.is_platform_admin/);
  const section=html.split('x-show="tab===\'platformSecurityEvents\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('<!-- ══════════ LOCKED ACCOUNTS ══════════ -->')[0];
  assert.ok(section);assert.match(section,/platformSecurityEventRows/);assert.match(section,/account_match/);assert.doesNotMatch(section,/ip_address|user_agent|request_id|submitted_identifier|x-html/);
- assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations'\]\.includes\(key\)/);
+ assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox'\]\.includes\(key\)/);
  assert.match(html,/!me\?\.saas_mode && key!=='support' && key!=='platformSecurityEvents'/);
 });
 test('tenant console identity cannot select the platform security events view',()=>{
@@ -223,7 +223,7 @@ test('platform audit renders readable labels and structured safe details',()=>{
  assert.match(section,/event\.actor_name/);assert.match(section,/event\.organization_name/);
  assert.match(section,/<details[^>]*>/);assert.match(section,/platformAuditDetailEntries\(event\.details\)/);assert.match(section,/platformAuditDetailLabel/);
  assert.doesNotMatch(section,/JSON\.stringify/);assert.doesNotMatch(section,/x-html=/);
- assert.match(html,/platform-console\.css\?v=20261115-invitation-table-fit-v1/);
+ assert.match(html,/platform-console\.css\?v=20261115-support-inbox-v1/);
 });
 test('platform organization form sends name slug and owner invitation',async()=>{
  const a=app();a.toast=()=>{};a.organizationForm={name:'Acme Services',slug:'acme-services',owner_email:'owner@example.test'};
@@ -363,4 +363,20 @@ test('platform overview exposes safe paginated invitation history states and fie
  assert.match(section,/changeInvitationMailPage\(-1\)/);assert.match(section,/changeInvitationMailPage\(1\)/);
  assert.match(section,/invitationMailQueueLabel\(mail\.status\)/);assert.match(section,/invitationMailDeliveryLabel\(mail\.delivery_status\)/);assert.match(section,/Updated \(UTC\)/);assert.match(section,/x-text/);
  assert.doesNotMatch(section,/resend|send again/i);
+});
+test('platform support inbox loads bounded conversations and recovers after failure',async()=>{
+ const a=app();a.api=async path=>{assert.match(path,/\/platform\/support-inbox\?status=open&limit=50&offset=0/);return {items:[{id:4,sender:'owner@example.com'}]};};
+ await a.loadSupportInbox();assert.equal(a.supportInboxRows[0].id,4);assert.equal(a.supportInboxError,'');
+ a.api=async()=>{throw Error('offline');};await a.loadSupportInbox();assert.equal(a.supportInboxRows.length,0);assert.equal(a.supportInboxError,'offline');
+});
+
+test('support conversation uses read state and sends replies with a stable idempotency key',async()=>{
+ const a=app();a.supportConversation={conversation:{id:8,is_read:false,status:'open'},messages:[]};a.supportReplyText='  Thanks  ';a.supportReplyIdempotencyKey='123e4567-e89b-42d3-a456-426614174000';let call;
+ a.openSupportConversation=async()=>{};a.loadSupportInbox=async()=>{};a.api=async(path,opts)=>{call={path,opts};return {};};
+ await a.sendSupportReply();assert.match(call.path,/\/8\/reply$/);assert.deepEqual(JSON.parse(call.opts.body),{text:'Thanks',idempotency_key:'123e4567-e89b-42d3-a456-426614174000'});assert.equal(a.supportReplyText,'');assert.equal(a.supportReplyIdempotencyKey,'');
+});
+
+test('support message content uses text-only DOM bindings',()=>{
+ assert.match(html,/class="support-message-list"[\s\S]*?x-text="message\.payload\.text"/);
+ assert.doesNotMatch(html,/x-html="message\.payload\.(?:html|text)"/);
 });

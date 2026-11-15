@@ -29,6 +29,7 @@ from . import (
     v0023_owner_welcome_mail,
     v0024_platform_invitation_delivery_history,
     v0025_platform_invitation_history,
+    v0026_platform_support_inbox,
 )
 
 
@@ -72,6 +73,7 @@ MIGRATIONS = tuple(
         v0023_owner_welcome_mail,
         v0024_platform_invitation_delivery_history,
         v0025_platform_invitation_history,
+        v0026_platform_support_inbox,
     )
 )
 

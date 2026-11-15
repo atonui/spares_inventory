@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     NATIVE_REFRESH_ENCRYPTION_KEY: str | None = None
     RESEND_API_KEY: str | None = None
     RESEND_FROM_EMAIL: str | None = None
+    RESEND_SUPPORT_FROM_EMAIL: str | None = None
     INVITATION_BASE_URL: str | None = None
     CORS_ALLOWED_ORIGINS: List[str] = ["https://sparesinventory-production.up.railway.app"]
     ALLOW_MOBILE_VERCEL_PREVIEWS: bool = False

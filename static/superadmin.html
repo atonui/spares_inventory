@@ -6,7 +6,7 @@
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
 <link rel="stylesheet" href="superadmin.css?v=20261115-sidebar-toggle-v1">
-<link rel="stylesheet" href="platform-console.css?v=20261115-invitation-table-fit-v1">
+<link rel="stylesheet" href="platform-console.css?v=20261115-support-inbox-v1">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="audit.js?v=20261013-frontend-1" defer></script>
@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261115-invitation-history-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261115-platform-support-inbox-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -155,6 +155,9 @@
         <button type="button" class="nav-item" :class="tab==='platformInvitations'&&'active'" @click="selectSection('platformInvitations')" :aria-current="tab==='platformInvitations' ? 'page' : null">
           <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use></svg></span> Invitations
         </button>
+        <button type="button" class="nav-item" :class="tab==='platformSupportInbox'&&'active'" @click="selectSection('platformSupportInbox')" :aria-current="tab==='platformSupportInbox' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use></svg></span> Support inbox
+        </button>
         <button type="button" class="nav-item" x-show="supportSession" :class="tab==='support'&&'active'" @click="selectSection('support')" :aria-current="tab==='support' ? 'page' : null">
           <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use></svg></span> Customer support
         </button>
@@ -201,7 +204,7 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" :value="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents' && key!=='platformInvitations') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents' && key!=='platformInvitations' && key!=='platformSupportInbox') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
       <div class="topbar-heading">
@@ -446,6 +449,30 @@
               </table>
             </div>
             <div class="organization-pagination" x-show="platformInvitationTotal>0 && !platformInvitationError"><span role="status" x-text="`Showing ${platformInvitationOffset+1}–${Math.min(platformInvitationOffset+platformInvitationRows.length,platformInvitationTotal)} of ${platformInvitationTotal}`"></span><div class="filter-actions"><button class="btn btn-sm btn-outline" @click="changePlatformInvitationPage(-1)" :disabled="platformInvitationLoading || platformInvitationOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="changePlatformInvitationPage(1)" :disabled="platformInvitationLoading || platformInvitationOffset+platformInvitationLimit>=platformInvitationTotal">Next</button></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='platformSupportInbox' && me?.saas_mode && me?.is_platform_admin">
+        <div class="panel">
+          <div class="panel-header"><div><span class="panel-title">Support inbox</span><small>Messages sent to support@sparestracker.com</small></div><button class="btn btn-sm btn-outline" @click="loadSupportInbox()" :disabled="supportInboxLoading">Refresh</button></div>
+          <div class="panel-body">
+            <div class="list-filters"><label for="support-inbox-status">Status<select id="support-inbox-status" x-model="supportInboxStatus" @change="supportInboxOffset=0;loadSupportInbox(0)"><option value="open">Open</option><option value="closed">Closed</option><option value="all">All</option></select></label></div>
+            <p x-show="supportInboxLoading" role="status">Loading support messages…</p>
+            <div x-show="supportInboxError" class="action-error" role="alert"><span x-text="supportInboxError"></span> <button class="btn btn-sm btn-outline" @click="loadSupportInbox()">Retry</button></div>
+            <p x-show="!supportInboxLoading && !supportInboxError && !supportInboxRows.length" class="empty">No conversations in this view.</p>
+            <div class="support-inbox-layout" x-show="!supportInboxLoading && !supportInboxError">
+              <nav class="support-inbox-list" aria-label="Support conversations"><template x-for="item in supportInboxRows" :key="item.id"><button type="button" class="support-inbox-item" :class="{'is-unread':!item.is_read}" @click="openSupportConversation(item.id)"><strong x-text="item.sender"></strong><span x-text="item.subject || '(No subject)'"></span><small x-text="item.latest_message_at"></small><span class="support-inbox-preview" x-text="item.preview"></span></button></template></nav>
+              <section class="support-inbox-detail" aria-label="Conversation detail">
+                <p x-show="supportConversationLoading" role="status">Loading conversation…</p>
+                <template x-if="supportConversation && !supportConversationLoading"><div>
+                  <div class="panel-header"><div><strong x-text="supportConversation.messages[0]?.payload.subject || '(No subject)'"></strong><small x-text="supportConversation.messages[0]?.payload.sender"></small></div><div class="filter-actions"><button class="btn btn-sm btn-outline" @click="changeSupportConversationState({is_read:!supportConversation.conversation.is_read})" x-text="supportConversation.conversation.is_read?'Mark unread':'Mark read'"></button><button class="btn btn-sm btn-outline" @click="changeSupportConversationState({status:supportConversation.conversation.status==='open'?'closed':'open'})" x-text="supportConversation.conversation.status==='open'?'Close':'Reopen'"></button></div></div>
+                  <div class="support-message-list"><template x-for="message in supportConversation.messages" :key="message.id"><article class="support-message" :class="message.direction"><header><strong x-text="message.direction==='inbound'?message.payload.sender:'Spares Tracker Support'"></strong><time x-text="message.created_at"></time><small x-show="message.direction==='outbound'" x-text="message.delivery_status"></small></header><pre x-text="message.payload.text"></pre><div class="support-attachments" x-show="message.payload.attachments?.length"><template x-for="attachment in message.payload.attachments" :key="attachment.id"><button type="button" class="btn btn-sm btn-outline" @click="downloadSupportAttachment(message,attachment)" :disabled="supportAttachmentPending" x-text="attachment.filename || 'Download attachment'"></button></template></div></article></template></div>
+                  <form class="support-reply" @submit.prevent="sendSupportReply()"><label for="support-reply-text">Reply</label><textarea id="support-reply-text" rows="6" maxlength="20000" x-model="supportReplyText" required placeholder="Write a plain-text reply"></textarea><button class="btn btn-primary" type="submit" :disabled="supportReplyPending || !supportReplyText.trim()" x-text="supportReplyPending?'Sending…':'Send reply'"></button></form>
+                </div></template>
+              </section>
+            </div>
+            <div class="organization-pagination" x-show="supportInboxTotal>0 && !supportInboxError"><span role="status" x-text="`Showing ${supportInboxOffset+1}–${supportInboxOffset+supportInboxRows.length} of ${supportInboxTotal}`"></span><div class="filter-actions"><button class="btn btn-sm btn-outline" @click="changeSupportInboxPage(-1)" :disabled="supportInboxLoading || supportInboxOffset===0">Previous</button><button class="btn btn-sm btn-outline" @click="changeSupportInboxPage(1)" :disabled="supportInboxLoading || supportInboxOffset+supportInboxLimit>=supportInboxTotal">Next</button></div></div>
           </div>
         </div>
       </div>

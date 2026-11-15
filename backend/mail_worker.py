@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 
 from backend.services.mail_delivery import MailDeliveryError, send_mail
 from backend.services.mail_outbox import (
+    RESEND_EVENT_STATUS,
     RETRY_DELAYS_SECONDS,
     claim_pending_mail,
     mark_mail_failed,
@@ -24,11 +25,13 @@ logger = logging.getLogger("backend.mail_worker")
 
 def deliver_claimed_mail(
     message: dict, *, encryption_key: str, api_key: str, from_address: str,
-    http_transport=None, decrypt=decrypt_mail_payload, now=None,
+    support_from_address: str | None = None, http_transport=None, decrypt=decrypt_mail_payload, now=None,
 ) -> bool:
     try:
         payload = decrypt(message["encrypted_payload"], encryption_key)
         message_type = message.get("message_type")
+        if message_type == "support_reply":
+            message["_support_message_id"] = payload.get("support_message_id")
         if message_type in {"password_reset", "email_change_verification"}:
             error_prefix = (
                 "password_reset" if message_type == "password_reset" else "email_change"
@@ -45,10 +48,13 @@ def deliver_claimed_mail(
                 message["_delivery_terminal"] = True
                 logger.warning("mail delivery failed code=%s", message["_delivery_error_code"])
                 return False
+        selected_from = support_from_address if message_type == "support_reply" else from_address
+        if not selected_from:
+            raise MailDeliveryError("mail_configuration_missing")
         provider_message_id = send_mail(
             {**message, "payload": payload},
             api_key=api_key,
-            from_address=from_address,
+            from_address=selected_from,
             http_transport=http_transport,
         )
         message["_provider_message_id"] = provider_message_id
@@ -82,7 +88,7 @@ def deliver_claimed_mail(
 
 def claim_and_deliver_once(
     conn, *, encryption_key: str, api_key: str, from_address: str,
-    http_transport=None, now=None,
+    support_from_address: str | None = None, http_transport=None, now=None,
 ) -> bool:
     """Claim and deliver one item; invalid key configuration consumes no claim."""
     validate_mail_encryption_key(encryption_key)
@@ -96,6 +102,7 @@ def claim_and_deliver_once(
         encryption_key=encryption_key,
         api_key=api_key,
         from_address=from_address,
+        support_from_address=support_from_address,
         http_transport=http_transport,
         now=current,
     )
@@ -105,6 +112,27 @@ def claim_and_deliver_once(
                 conn, mail_id=message["id"], claim_token=str(message["claim_token"]),
                 provider_message_id=message.get("_provider_message_id"),
             )
+            if message.get("message_type") == "support_reply" and message.get("_provider_message_id"):
+                support_message_id = message.get("_support_message_id")
+                if isinstance(support_message_id, int) and not isinstance(support_message_id, bool):
+                    latest_event = conn.execute(
+                        """SELECT provider_rfc_message_id,event_type FROM resend_webhook_events
+                           WHERE provider_message_id=%s
+                           ORDER BY CASE event_type WHEN 'email.sent' THEN 1
+                             WHEN 'email.delivery_delayed' THEN 2 WHEN 'email.delivered' THEN 3
+                             WHEN 'email.bounced' THEN 4 WHEN 'email.failed' THEN 4
+                             WHEN 'email.complained' THEN 5 WHEN 'email.suppressed' THEN 5 ELSE 0 END DESC,
+                             occurred_at DESC,event_id DESC LIMIT 1""",
+                        (message["_provider_message_id"],),
+                    ).fetchone()
+                    provider_rfc_id = latest_event.get("provider_rfc_message_id") if latest_event else None
+                    delivery_status = RESEND_EVENT_STATUS.get(latest_event.get("event_type"), "sent") if latest_event else "sent"
+                    conn.execute(
+                        """UPDATE platform_support_messages SET provider_email_id=%s,
+                                  provider_message_id=COALESCE(%s,provider_message_id),delivery_status=%s
+                           WHERE id=%s AND direction='outbound'""",
+                        (message["_provider_message_id"],provider_rfc_id,delivery_status,support_message_id),
+                    )
         else:
             attempt = int(message["attempt_count"])
             terminal = message.get("_delivery_terminal", False) or attempt >= len(RETRY_DELAYS_SECONDS) + 1
@@ -117,6 +145,13 @@ def claim_and_deliver_once(
                 error_code=message.get("_delivery_error_code", "delivery_failed"),
                 terminal=terminal,
             )
+            if message.get("message_type") == "support_reply":
+                support_message_id = message.get("_support_message_id")
+                if isinstance(support_message_id, int) and not isinstance(support_message_id, bool):
+                    conn.execute(
+                        "UPDATE platform_support_messages SET delivery_status=%s WHERE id=%s AND direction='outbound'",
+                        ("failed" if terminal else "queued", support_message_id),
+                    )
     return True
 
 
@@ -125,6 +160,7 @@ def run(*, once: bool = False) -> bool | None:
     encryption_key = os.environ.get("MAIL_PAYLOAD_ENCRYPTION_KEY")
     api_key = os.environ.get("RESEND_API_KEY")
     from_address = os.environ.get("RESEND_FROM_EMAIL")
+    support_from_address = os.environ.get("RESEND_SUPPORT_FROM_EMAIL")
     # Validate secrets and sender configuration before opening a DB connection
     # or claiming a message, so a bad deployment is non-destructive.
     validate_mail_encryption_key(encryption_key)
@@ -139,6 +175,7 @@ def run(*, once: bool = False) -> bool | None:
                 encryption_key=encryption_key,
                 api_key=api_key,
                 from_address=from_address,
+                support_from_address=support_from_address,
             )
             if once:
                 return did_work

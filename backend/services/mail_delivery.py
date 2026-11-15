@@ -191,6 +191,8 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
     payload = message.get("payload")
     if not isinstance(payload, dict):
         raise MailDeliveryError("invalid_mail_message")
+    if not isinstance(recipient, str) or "@" not in recipient or any(ord(char) < 32 for char in recipient):
+        raise MailDeliveryError("invalid_mail_message")
     preheader = None
     if message_type == "organization_invitation":
         link = payload.get("invitation_url")
@@ -329,10 +331,40 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         link_label = "View source store"
         invalid_code = "invalid_transfer_completed_notice"
         sections = None
+    elif message_type == "support_reply":
+        text = payload.get("text")
+        subject_value = payload.get("subject")
+        reply_headers = payload.get("headers", {})
+        if (not isinstance(text, str) or not text.strip() or len(text) > 20000
+                or not isinstance(subject_value, str) or not subject_value.strip()
+                or len(subject_value) > 998 or not isinstance(reply_headers, dict)):
+            raise MailDeliveryError("invalid_support_reply")
+        allowed_headers = {"In-Reply-To", "References"}
+        if any(key not in allowed_headers or not isinstance(value, str) or len(value) > 2000
+               or any(ord(char) < 32 and char != "\t" for char in value)
+               for key, value in reply_headers.items()):
+            raise MailDeliveryError("invalid_support_reply")
+        subject = " ".join(subject_value.split())
+        if not subject:
+            raise MailDeliveryError("invalid_support_reply")
+        sender_address = parseaddr(from_address)[1]
+        if not sender_address or any(ord(char) < 32 for char in sender_address):
+            raise MailDeliveryError("mail_configuration_missing")
+        html = f'<div style="white-space:pre-wrap">{escape(text)}</div>'
+        text_body = text
+        link = None
+        link_label = None
+        invalid_code = "invalid_support_reply"
+        body = {
+            "from": formataddr(("Spares Tracker Support", sender_address)),
+            "to": [recipient], "subject": subject, "html": html, "text": text_body,
+            "tags": [{"name": "app", "value": "spares_tracker"}],
+        }
+        if reply_headers:
+            body["headers"] = reply_headers
+        return _send_resend(body, api_key=api_key, message=message, http_transport=http_transport)
     else:
         raise MailDeliveryError("unsupported_message_type")
-    if not isinstance(recipient, str) or "@" not in recipient:
-        raise MailDeliveryError(invalid_code)
     if link is not None:
         parsed = urlsplit(link) if isinstance(link, str) else None
         if parsed is None or parsed.scheme not in ("https", "http") or not parsed.netloc:
@@ -352,6 +384,10 @@ def send_mail(message: dict, *, api_key: str, from_address: str, http_transport=
         "text": text_body,
         "tags": [{"name": "app", "value": "spares_tracker"}],
     }
+    return _send_resend(body, api_key=api_key, message=message, http_transport=http_transport)
+
+
+def _send_resend(body: dict, *, api_key: str, message: dict, http_transport=None) -> str | None:
     transport = http_transport or _UrllibTransport()
     headers = {"Authorization": f"Bearer {api_key}"}
     message_id = message.get("id")
