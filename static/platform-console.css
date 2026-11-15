@@ -137,6 +137,7 @@ body.platform-console { background: var(--brand-page); color: var(--brand-navy);
   .platform-console .invitation-mail-table, .platform-console .invitation-mail-table tbody { display:block; width:100%; min-width:0; }
   .platform-console .invitation-mail-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
   .platform-console .invitation-mail-table tr { display:block; margin-bottom:.75rem; padding:.65rem .8rem; border:1px solid #e1e6ed; border-radius:8px; background:#fff; }
+  .platform-console .invitation-mail-table td:nth-child(n) { width:auto; }
   .platform-console .invitation-mail-table td { display:grid; grid-template-columns:7rem minmax(0,1fr); gap:.6rem; padding:.4rem 0; border:0; white-space:normal; overflow-wrap:anywhere; }
   .platform-console .invitation-mail-table td::before { content:attr(data-label); color:#64748b; font-size:.74rem; font-weight:650; }
   .platform-console .organizations-table, .platform-console .organizations-table tbody { display:block; width:100%; min-width:0; }
