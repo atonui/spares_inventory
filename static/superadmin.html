@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
-<link rel="stylesheet" href="superadmin.css?v=20261031-console-ready-v1">
+<link rel="stylesheet" href="superadmin.css?v=20261115-sidebar-toggle-v1">
 <link rel="stylesheet" href="platform-console.css?v=20261101-audit-labels">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261101-platform-security-events" defer></script>
+<script src="js/pages/superadmin.js?v=20261115-sidebar-toggle-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -84,10 +84,10 @@
 
 <div class="console-boot" x-show="!ready" role="status" aria-live="polite">Loading administration console…</div>
 
-<div class="shell" x-show="ready" x-cloak style="display: none;" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
+<div class="shell" x-show="ready" x-cloak style="display: none;" :class="{'sidebar-collapsed': sidebarCollapsed}" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
 
   <!-- ── Sidebar ── -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="superadmin-sidebar">
     <div class="sidebar-brand">
       <a class="sidebar-brand-link" href="/" aria-label="Spares Tracker home"><img src="brand/source/mark-color.svg" alt=""><span>Spares Tracker</span></a>
       <p x-text="me?.saas_mode ? 'Platform Administration' : 'Superadmin Panel'">Superadmin Panel</p>
@@ -201,7 +201,12 @@
         <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
-      <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
+      <div class="topbar-heading">
+        <button type="button" class="btn btn-sm btn-outline ui-icon-only platform-sidebar-toggle" x-show="me?.saas_mode && me?.is_platform_admin" @click="sidebarCollapsed = !sidebarCollapsed" :aria-expanded="!sidebarCollapsed" aria-controls="superadmin-sidebar" :aria-label="sidebarCollapsed ? 'Show navigation' : 'Hide navigation'" :title="sidebarCollapsed ? 'Show navigation' : 'Hide navigation'">
+          <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="17" height="15" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 5v14" stroke="currentColor" stroke-width="1.7"/><path x-show="!sidebarCollapsed" d="m15 9-3 3 3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path x-show="sidebarCollapsed" d="m12 9 3 3-3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
+      </div>
       <div class="topbar-right">
         <span class="platform-context" x-show="me?.saas_mode">Platform level</span>
         <button type="button" class="btn btn-sm btn-outline" x-show="me?.saas_mode && me?.is_platform_admin" @click="logout()" :disabled="logoutPending" aria-label="Log out"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> <span x-text="logoutPending ? 'Logging out…' : 'Log out'"></span></button>
