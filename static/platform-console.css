@@ -67,8 +67,18 @@ body.platform-console { background: var(--brand-page); color: var(--brand-navy);
 .platform-console .invitation-mail-history .panel-header>div { display:grid; gap:.2rem; }
 .platform-console .invitation-mail-history .panel-header small { color:var(--brand-slate-on-page); font-size:.78rem; }
 .platform-console .invitation-mail-table-wrap { overflow:auto; }
-.platform-console .invitation-mail-table { width:100%; min-width:68rem; }
+.platform-console .invitation-mail-table { width:100%; min-width:68rem; table-layout:fixed; }
+.platform-console .invitation-mail-table th { white-space:normal; overflow-wrap:anywhere; }
 .platform-console .invitation-mail-table td { overflow-wrap:anywhere; }
+.platform-console .invitation-mail-table th:nth-child(1), .platform-console .invitation-mail-table td:nth-child(1) { width:13%; }
+.platform-console .invitation-mail-table th:nth-child(2), .platform-console .invitation-mail-table td:nth-child(2) { width:18%; }
+.platform-console .invitation-mail-table th:nth-child(3), .platform-console .invitation-mail-table td:nth-child(3) { width:10%; }
+.platform-console .invitation-mail-table th:nth-child(4), .platform-console .invitation-mail-table td:nth-child(4) { width:12%; }
+.platform-console .invitation-mail-table th:nth-child(5), .platform-console .invitation-mail-table td:nth-child(5) { width:7%; }
+.platform-console .invitation-mail-table th:nth-child(6), .platform-console .invitation-mail-table td:nth-child(6),
+.platform-console .invitation-mail-table th:nth-child(7), .platform-console .invitation-mail-table td:nth-child(7) { width:11%; }
+.platform-console .invitation-mail-table th:nth-child(8), .platform-console .invitation-mail-table td:nth-child(8),
+.platform-console .invitation-mail-table th:nth-child(9), .platform-console .invitation-mail-table td:nth-child(9) { width:9%; }
 .platform-console .invitation-mail-table td[data-label="Organization"] strong,
 .platform-console .invitation-mail-table td[data-label="Organization"] small { display:block; }
 .platform-console .invitation-mail-table td[data-label="Organization"] small { margin-top:.2rem; color:var(--brand-slate-on-page); font-size:.75rem; }
