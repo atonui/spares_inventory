@@ -140,6 +140,7 @@ function superPanel() {
       }
     },
     tab: 'dashboard',
+    sidebarCollapsed: false,
     loading: false,
     logoutPending: false,
     apiUrl: '/api',

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spares Tracker — Superadmin</title>
 <link rel="stylesheet" href="mystyle.css?v=20261031-keyboard-controls">
-<link rel="stylesheet" href="superadmin.css?v=20261031-console-ready-v1">
+<link rel="stylesheet" href="superadmin.css?v=20261115-sidebar-toggle-v1">
 <link rel="stylesheet" href="platform-console.css?v=20261101-audit-labels">
 <link rel="stylesheet" href="back-to-top.css?v=20261029-back-to-top-frame">
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261101-platform-security-events" defer></script>
+<script src="js/pages/superadmin.js?v=20261115-sidebar-toggle-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -84,10 +84,10 @@
 
 <div class="console-boot" x-show="!ready" role="status" aria-live="polite">Loading administration console…</div>
 
-<div class="shell" x-show="ready" x-cloak style="display: none;" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
+<div class="shell" x-show="ready" x-cloak style="display: none;" :class="{'sidebar-collapsed': sidebarCollapsed}" :inert="dlg.open || resetModal.open || supportStartOpen || organizationCreateOpen">
 
   <!-- ── Sidebar ── -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="superadmin-sidebar">
     <div class="sidebar-brand">
       <a class="sidebar-brand-link" href="/" aria-label="Spares Tracker home"><img src="brand/source/mark-color.svg" alt=""><span>Spares Tracker</span></a>
       <p x-text="me?.saas_mode ? 'Platform Administration' : 'Superadmin Panel'">Superadmin Panel</p>
@@ -147,31 +147,31 @@
       <div class="nav-section" x-show="me?.saas_mode && me?.is_platform_admin">
         <div class="nav-label">Platform</div>
         <button type="button" class="nav-item" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'; loadPlatformOverview()" :aria-current="tab==='dashboard' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#overview"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#overview"></use></svg></span> Overview
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#overview"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#overview"></use></svg></span> Overview
         </button>
         <button type="button" class="nav-item" :class="tab==='organizations'&&'active'" @click="tab='organizations'; loadOrganizations()" :aria-current="tab==='organizations' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#organization"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#organization"></use></svg></span> Organizations
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#organization"></use></svg></span> Organizations
         </button>
         <button type="button" class="nav-item" x-show="supportSession" :class="tab==='support'&&'active'" @click="selectSection('support')" :aria-current="tab==='support' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#support"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#support"></use></svg></span> Customer support
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#support"></use></svg></span> Customer support
         </button>
       </div>
       <div class="nav-section" x-show="me?.saas_mode && me?.is_platform_admin">
         <div class="nav-label">Administration</div>
         <button type="button" class="nav-item" :class="tab==='platformAdmins'&&'active'" @click="tab='platformAdmins'; loadPlatformAdmins()" :aria-current="tab==='platformAdmins' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#platform-access"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#platform-access"></use></svg></span> Platform access
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#platform-access"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#platform-access"></use></svg></span> Platform access
         </button>
         <button type="button" class="nav-item" :class="tab==='config'&&'active'" @click="tab='config'; loadConfig()" :aria-current="tab==='config' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use></svg></span> Security settings
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#security"></use></svg></span> Security settings
         </button>
         <button type="button" class="nav-item" :class="tab==='announcement'&&'active'" @click="tab='announcement'; openAnnouncement()" :aria-current="tab==='announcement' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#announcement"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#announcement"></use></svg></span> Announcements
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#announcement"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#announcement"></use></svg></span> Announcements
         </button>
         <button type="button" class="nav-item" :class="tab==='platformAudit'&&'active'" @click="tab='platformAudit'; loadPlatformAudit()" :aria-current="tab==='platformAudit' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#audit"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#audit"></use></svg></span> Audit log
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#audit"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#audit"></use></svg></span> Audit log
         </button>
         <button type="button" class="nav-item" :class="tab==='platformSecurityEvents'&&'active'" @click="tab='platformSecurityEvents'; loadPlatformSecurityEvents()" :aria-current="tab==='platformSecurityEvents' ? 'page' : null">
-          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261031-platform-console-v1#security"></use></svg></span> Security events
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#security"></use></svg></span> Security events
         </button>
       </div>
     </nav>
@@ -201,7 +201,12 @@
         <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
-      <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
+      <div class="topbar-heading">
+        <button type="button" class="btn btn-sm btn-outline ui-icon-only platform-sidebar-toggle" x-show="me?.saas_mode && me?.is_platform_admin" @click="sidebarCollapsed = !sidebarCollapsed" :aria-expanded="!sidebarCollapsed" aria-controls="superadmin-sidebar" aria-label="Close navigation" title="Close navigation" :aria-label="sidebarCollapsed ? 'Show navigation' : 'Close navigation'" :title="sidebarCollapsed ? 'Show navigation' : 'Close navigation'">
+          <svg class="platform-sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use x-show="!sidebarCollapsed" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#sidebar-collapse"></use><use x-show="sidebarCollapsed" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#sidebar-expand"></use></svg>
+        </button>
+        <h1 x-text="me?.saas_mode ? (platformTabTitles[tab] || tabTitles[tab] || 'Platform administration') : (tabTitles[tab] || 'Superadmin')"></h1>
+      </div>
       <div class="topbar-right">
         <span class="platform-context" x-show="me?.saas_mode">Platform level</span>
         <button type="button" class="btn btn-sm btn-outline" x-show="me?.saas_mode && me?.is_platform_admin" @click="logout()" :disabled="logoutPending" aria-label="Log out"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="icons.svg?v=20261019-icon-pack-v4#logout"></use></svg> <span x-text="logoutPending ? 'Logging out…' : 'Log out'"></span></button>
