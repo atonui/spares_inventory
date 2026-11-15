@@ -165,13 +165,32 @@ def test_platform_provision_conflict_records_failure_without_submitted_values(pl
     assert submitted_email not in str(events)
 
 
-def test_platform_dashboard_preserves_mail_count_fields_from_counts_view(platform_api):
+def test_platform_dashboard_counts_only_failed_and_pending_invitation_mail(platform_api):
     api = platform_api
+    api.admin.execute(
+        """INSERT INTO mail_outbox
+           (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key,status,attempt_count,last_error_code)
+           VALUES (%s,'organization_invitation','invite-pending@example.test','payload',%s,'pending',0,NULL)""",
+        (api.org_id, "dashboard-pending-" + uuid4().hex),
+    )
+    api.admin.execute(
+        """INSERT INTO mail_outbox
+           (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key,status,attempt_count,last_error_code)
+           VALUES (%s,'organization_invitation','invite-failed@example.test','payload',%s,'failed',1,'provider_unavailable')""",
+        (api.org_id, "dashboard-failed-" + uuid4().hex),
+    )
+    api.admin.execute(
+        """INSERT INTO mail_outbox
+           (organization_id,message_type,recipient_email,encrypted_payload,idempotency_key,status,attempt_count,last_error_code)
+           VALUES (%s,'owner_welcome','welcome-failed@example.test','payload',%s,'failed',1,'provider_unavailable')""",
+        (api.org_id, "dashboard-welcome-" + uuid4().hex),
+    )
+    api.admin.commit()
     dashboard = api.endpoint("GET", "/api/platform/dashboard")
     result = asyncio.run(dashboard(request=api.request, actor=api.principal))
 
-    assert result["mail_pending"] == 0
-    assert result["mail_failed"] == 0
+    assert result["mail_pending"] == 1
+    assert result["mail_failed"] == 1
     assert {
         "organizations_total",
         "organizations_active",
