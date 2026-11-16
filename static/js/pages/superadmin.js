@@ -105,9 +105,9 @@ function superPanel() {
     selectSection(section) {
       if (!Object.hasOwn(this.tabTitles, section)) return;
       if (section === 'support' && !this.me?.saas_mode) return;
-      if (['platformSecurityEvents', 'platformInvitations'].includes(section) && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
+      if (['platformSecurityEvents', 'platformInvitations', 'platformSupportInbox'].includes(section) && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
       if (this.me?.saas_mode) {
-        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations'];
+        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox'];
         if (section === 'support' && this.supportSession) allowed.push('support');
         if (!allowed.includes(section)) return;
       }
@@ -156,14 +156,14 @@ function superPanel() {
       query:     'SQL Console',  maintenance: 'Maintenance',
       announcement: 'System Announcement', audit: 'Audit Log',
       organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
-      platformSecurityEvents: 'Security events', platformInvitations: 'Invitations',
+      platformSecurityEvents: 'Security events', platformInvitations: 'Invitations', platformSupportInbox: 'Support inbox',
       support: 'Customer Support',
     },
     platformTabTitles: {
       dashboard: 'Overview', organizations: 'Organizations', support: 'Customer support',
       platformAdmins: 'Platform access', config: 'Security settings',
       announcement: 'Announcements', platformAudit: 'Audit log', platformSecurityEvents: 'Security events',
-      platformInvitations: 'Invitations',
+      platformInvitations: 'Invitations', platformSupportInbox: 'Support inbox',
     },
 
     // data stores
@@ -187,6 +187,9 @@ function superPanel() {
     platformInvitationRows: [], platformInvitationTotal: 0, platformInvitationOffset: 0,
     platformInvitationLimit: 25, platformInvitationLoading: false, platformInvitationError: '',
     platformInvitationFilters: { status: 'all', search: '' },
+    supportInboxRows: [], supportInboxLoading: false, supportInboxError: '', supportInboxStatus: 'open', supportInboxOffset: 0, supportInboxTotal: 0, supportInboxLimit: 50,
+    supportConversation: null, supportConversationLoading: false, supportReplyText: '', supportReplyPending: false, supportReplyIdempotencyKey: '',
+    supportAttachmentPending: '',
     organizationForm: { name: '', slug: '', owner_email: '' },
     supportSession: null, supportNow: Date.now(), supportExpiryTimer: null,
     supportStartOrg: null, supportStartOpen: false, supportStartPending: false,
@@ -316,6 +319,7 @@ function superPanel() {
         platformAudit: () => this.loadPlatformAudit(),
         platformSecurityEvents: () => this.loadPlatformSecurityEvents(),
         platformInvitations: () => this.loadPlatformInvitations(),
+        platformSupportInbox: () => this.loadSupportInbox(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
@@ -410,7 +414,7 @@ async submitPasswordReset() {
       const headers = { ...opts.headers };
       if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
       const supportRequest = path.startsWith('/platform/support-sessions');
-      const privatePlatformRead = path.startsWith('/platform/invitation-mail');
+      const privatePlatformRead = path.startsWith('/platform/invitation-mail') || path.startsWith('/platform/support-inbox');
       const r = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, {
         ...opts, headers, ...(supportRequest || privatePlatformRead ? { cache: 'no-store' } : {}),
       }, this.apiUrl);
@@ -505,6 +509,76 @@ async submitPasswordReset() {
     platformInvitationStatusLabel(status) {
       const labels = { pending: 'Pending', accepted: 'Accepted', cancelled: 'Cancelled', expired: 'Expired' };
       return Object.hasOwn(labels, status) ? labels[status] : 'Unknown status';
+    },
+
+    async loadSupportInbox(offset = this.supportInboxOffset) {
+      this.supportInboxLoading = true; this.supportInboxError = '';
+      try {
+        const query = new URLSearchParams({ status: this.supportInboxStatus, limit: String(this.supportInboxLimit), offset: String(offset) });
+        const result = await this.api(`/platform/support-inbox?${query}`);
+        this.supportInboxRows = Array.isArray(result.items) ? result.items : [];
+        this.supportInboxOffset = Number.isInteger(result.offset) ? result.offset : offset;
+        this.supportInboxTotal = Number.isInteger(result.total) ? result.total : 0;
+      } catch (error) {
+        this.supportInboxRows = []; this.supportInboxTotal = 0; this.supportInboxError = error.message || 'Unable to load support inbox.';
+      } finally { this.supportInboxLoading = false; }
+    },
+
+    async changeSupportInboxPage(direction) {
+      if (this.supportInboxLoading || ![-1, 1].includes(direction)) return;
+      const offset = this.supportInboxOffset + direction * this.supportInboxLimit;
+      if (offset < 0 || offset >= this.supportInboxTotal) return;
+      await this.loadSupportInbox(offset);
+    },
+
+    async openSupportConversation(id) {
+      this.supportConversationLoading = true;
+      try {
+        this.supportConversation = await this.api(`/platform/support-inbox/${id}`);
+        await this.api(`/platform/support-inbox/${id}/state`, { method: 'PATCH', body: JSON.stringify({ is_read: true }) });
+        this.supportConversation.conversation.is_read = true;
+        const row = this.supportInboxRows.find(item => item.id === id);
+        if (row) row.is_read = true;
+      } catch (error) { this.toast(error.message || 'Unable to open conversation.', 'danger'); }
+      finally { this.supportConversationLoading = false; }
+    },
+
+    async changeSupportConversationState(patch) {
+      const conversation = this.supportConversation?.conversation;
+      if (!conversation) return;
+      try {
+        await this.api(`/platform/support-inbox/${conversation.id}/state`, { method: 'PATCH', body: JSON.stringify(patch) });
+        Object.assign(conversation, patch); await this.loadSupportInbox();
+      } catch (error) { this.toast(error.message || 'Unable to update conversation.', 'danger'); }
+    },
+
+    async sendSupportReply() {
+      const conversation = this.supportConversation?.conversation;
+      const text = this.supportReplyText.trim();
+      if (!conversation || !text || this.supportReplyPending) return;
+      this.supportReplyPending = true;
+      try {
+        if (!this.supportReplyIdempotencyKey) this.supportReplyIdempotencyKey = crypto.randomUUID();
+        await this.api(`/platform/support-inbox/${conversation.id}/reply`, { method: 'POST', body: JSON.stringify({ text, idempotency_key: this.supportReplyIdempotencyKey }) });
+        this.supportReplyText = ''; this.supportReplyIdempotencyKey = ''; await this.openSupportConversation(conversation.id); await this.loadSupportInbox();
+      } catch (error) { this.toast(error.message || 'Unable to queue reply.', 'danger'); }
+      finally { this.supportReplyPending = false; }
+    },
+
+    async downloadSupportAttachment(message, attachment) {
+      const conversationId = this.supportConversation?.conversation?.id;
+      if (!conversationId || !message?.id || !attachment?.id || this.supportAttachmentPending) return;
+      this.supportAttachmentPending = `${message.id}:${attachment.id}`;
+      try {
+        const path = `/platform/support-inbox/${conversationId}/messages/${message.id}/attachments/${encodeURIComponent(attachment.id)}`;
+        const response = await InventoryCsrf.request(this, `${this.apiUrl}${path}`, { method: 'GET', cache: 'no-store' }, this.apiUrl);
+        if (response.status === 401) { location.href = '/static/index.html'; return; }
+        if (!response.ok) { const detail = await response.json().catch(() => ({})); throw Error(detail.detail || `HTTP ${response.status}`); }
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a'); link.href = url; link.download = attachment.filename || 'attachment';
+        document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) { this.toast(error.message || 'Unable to download attachment.', 'danger'); }
+      finally { this.supportAttachmentPending = ''; }
     },
 
     invitationMailQueueLabel(status) {

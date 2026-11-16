@@ -24,6 +24,52 @@ class _Transport:
         return _Response()
 
 
+def test_support_reply_uses_plain_text_and_only_allowlisted_thread_headers():
+    from backend.services.mail_delivery import send_mail
+
+    transport = _Transport()
+    send_mail({"id": 9, "message_type": "support_reply", "recipient_email": "owner@example.test",
+               "payload": {"text": "<hello> & thanks", "subject": "Re: Help",
+                           "headers": {"In-Reply-To": "<inbound@example.test>"}}},
+              api_key="key", from_address="Spares Tracker Support <support@sparestracker.com>",
+              http_transport=transport)
+    _, body, headers, _ = transport.calls[0]
+    assert body["from"] == "Spares Tracker Support <support@sparestracker.com>"
+    assert body["to"] == ["owner@example.test"]
+    assert body["text"] == "<hello> & thanks"
+    assert "&lt;hello&gt; &amp; thanks" in body["html"]
+    assert body["headers"] == {"In-Reply-To": "<inbound@example.test>"}
+    assert "cc" not in body and "bcc" not in body and "reply_to" not in body
+    assert headers["Idempotency-Key"] == "spares-tracker-mail-9"
+
+
+def test_support_reply_rejects_unapproved_headers():
+    from backend.services.mail_delivery import MailDeliveryError, send_mail
+
+    with pytest.raises(MailDeliveryError, match="invalid_support_reply"):
+        send_mail({"message_type": "support_reply", "recipient_email": "owner@example.test",
+                   "payload": {"text": "hello", "subject": "Help",
+                               "headers": {"Bcc": "attacker@example.test"}}},
+                  api_key="key", from_address="support@sparestracker.com", http_transport=_Transport())
+
+
+def test_mail_worker_uses_dedicated_support_sender_without_changing_transactional_sender(monkeypatch):
+    from cryptography.fernet import Fernet
+    import backend.mail_worker as worker
+    from backend.services.mail_payloads import encrypt_mail_payload
+
+    key = Fernet.generate_key().decode("ascii")
+    selected = {}
+    monkeypatch.setattr(worker, "send_mail", lambda message, **kwargs: selected.update(kwargs) or "resend-id")
+    message = {"id": 10, "message_type": "support_reply", "recipient_email": "owner@example.test",
+               "encrypted_payload": encrypt_mail_payload({"text": "hello", "subject": "Help",
+                   "support_message_id": 2, "headers": {}}, key)}
+    assert worker.deliver_claimed_mail(message, encryption_key=key, api_key="key",
+        from_address="Transactional <no-reply@sparestracker.com>",
+        support_from_address="Support <support@sparestracker.com>")
+    assert selected["from_address"] == "Support <support@sparestracker.com>"
+
+
 def test_missing_payload_key_does_not_claim_pending_message():
     from backend.mail_worker import claim_and_deliver_once
 

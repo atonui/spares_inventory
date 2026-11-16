@@ -20,6 +20,11 @@ _DETAIL_FIELDS = {
     "platform_announcement_removed": {"revision", "reason_code"},
     "platform_invitation_mail_read": {"limit", "offset", "result_count"},
     "platform_invitation_history_read": {"limit", "offset", "result_count"},
+    "platform_support_inbox_read": {"limit", "offset", "result_count"},
+    "platform_support_conversation_read": {"conversation_id"},
+    "platform_support_state_changed": {"conversation_id", "status", "is_read"},
+    "platform_support_reply_queued": {"conversation_id", "message_id"},
+    "platform_support_attachment_downloaded": {"conversation_id", "message_id"},
     "global_security_setting_changed": {"key", "value"},
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},
@@ -109,6 +114,12 @@ def safe_platform_audit_details(action: str, details) -> dict:
         elif key == "invitation_created" and isinstance(value, bool):
             safe[key] = value
         elif key == "target_user_id" and isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            safe[key] = value
+        elif key in {"conversation_id", "message_id"} and isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            safe[key] = value
+        elif key == "status" and isinstance(value, str) and value in {"open", "closed"}:
+            safe[key] = value
+        elif key == "is_read" and isinstance(value, bool):
             safe[key] = value
         elif key == "role" and isinstance(value, str) and value in {"owner", "admin", "manager", "engineer"}:
             safe[key] = value

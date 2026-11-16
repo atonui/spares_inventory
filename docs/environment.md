@@ -45,8 +45,9 @@ schema `USAGE`, column-level `SELECT` on
 `sent_at`, `last_error_code`, `available_at`, `provider_message_id`,
 `delivery_status`, `delivery_event_at`, `delivered_at`, `bounced_at`, and
 `complained_at`. It can select, insert, and update the minimal
-`resend_webhook_events` table. It has no access to other application tables and
-no outbox `INSERT`, `DELETE`, or DDL privileges.
+`resend_webhook_events` and platform support inbox tables. It has no access to
+identity, tenant, or inventory tables and no outbox `INSERT`, `DELETE`, or DDL
+privileges.
 
 PostgreSQL SaaS password-reset and invitation delivery require
 `MAIL_PAYLOAD_ENCRYPTION_KEY`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL`.
@@ -55,6 +56,15 @@ secrets. Generate the encryption key with the application's Fernet key
 generator, keep it separate from `SECRET_KEY`, and retain a protected recovery
 copy. Password-reset delivery uses `FRONTEND_URL`; legacy SQLite mode retains
 the synchronous SMTP password-reset path.
+
+The platform support inbox uses `RESEND_SUPPORT_FROM_EMAIL` for replies and
+`RESEND_INBOUND_WEBHOOK_SECRET` for a separate `email.received` webhook endpoint
+at `/webhooks/resend/inbound`. The worker also needs `RESEND_SUPPORT_ADDRESS`
+(default `support@sparestracker.com`), `RESEND_API_KEY`, and
+`MAIL_PAYLOAD_ENCRYPTION_KEY`; the API needs the support sender and encryption
+key. Keep `RESEND_FROM_EMAIL` unchanged for transactional mail. Do not enable
+receiving or change MX records until deployment and current routing have been
+checked.
 
 The mail worker requires `MAIL_WORKER_DATABASE_URL`; it does not fall back to
 `DATABASE_URL`. It also hosts the signed Resend webhook receiver at

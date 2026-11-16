@@ -24,6 +24,22 @@ def test_owner_welcome_message_type_is_registered_as_a_new_migration():
     assert "'owner_welcome'" in "\n".join(migration.statements)
 
 
+def test_platform_support_inbox_migration_is_registered_and_keeps_content_encrypted():
+    from backend.postgres_migrations.registry import MIGRATIONS
+
+    migration = next(item for item in MIGRATIONS if item.version == 26)
+    sql = "\n".join(migration.statements)
+    assert migration.name == "platform_support_inbox"
+    assert "CREATE TABLE platform_support_conversations" in sql
+    assert "CREATE TABLE platform_support_messages" in sql
+    assert "encrypted_payload BYTEA NOT NULL" in sql
+    assert "provider_email_id TEXT UNIQUE" in sql
+    assert "idempotency_key TEXT UNIQUE" in sql
+    assert "provider_rfc_message_id TEXT" in sql
+    assert "REVOKE ALL PRIVILEGES" in sql
+    assert "'support_reply'" in sql
+
+
 def test_email_change_verification_migration_is_registered_with_account_schema():
     from backend.postgres_migrations.registry import MIGRATIONS
 
