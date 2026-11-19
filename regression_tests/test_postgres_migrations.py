@@ -1007,3 +1007,33 @@ def test_calibration_reminder_migration_keeps_the_platform_value_per_company(pos
     ).fetchone()["n"] == 0
     with pytest.raises(psycopg.errors.CheckViolation):
         conn.execute("UPDATE organization_settings SET calibration_reminder_days = 0")
+
+
+def test_default_store_types_migration_fills_only_companies_without_types(postgres_schema, monkeypatch):
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.services.store_types import DEFAULT_STORE_TYPES
+
+    conn, _schema = postgres_schema
+    migrations = registry.MIGRATIONS
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations[:27])
+    apply_postgres_migrations(conn)
+    empty, custom = (
+        conn.execute("INSERT INTO organizations(name,slug) VALUES (%s,%s) RETURNING id", (slug, slug)).fetchone()["id"]
+        for slug in ("empty-company", "custom-company")
+    )
+    conn.execute(
+        "INSERT INTO store_types(organization_id,type_code,type_name,is_active) VALUES (%s,'van','Service van',FALSE)",
+        (custom,),
+    )
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations[:28])
+    assert apply_postgres_migrations(conn).current_version == 28
+
+    def types(org):
+        return conn.execute(
+            "SELECT type_code, type_name, description, display_order FROM store_types WHERE organization_id=%s ORDER BY display_order, type_code",
+            (org,),
+        ).fetchall()
+
+    assert [(r["type_code"], r["type_name"], r["description"], r["display_order"]) for r in types(empty)] == list(DEFAULT_STORE_TYPES)
+    assert [r["type_code"] for r in types(custom)] == ["van"]

@@ -86,16 +86,10 @@ def _seed(conn) -> None:
         "INSERT INTO inventory(id,organization_id,store_id,part_id,quantity) OVERRIDING SYSTEM VALUE VALUES (1,%s,1,1,10)",
         (ORG_A,),
     )
-    # New companies get no store types on PostgreSQL; seed the former SQLite defaults
-    # plus 'central', which stock-access rules treat specially.
-    from backend.database import STORE_TYPES
+    # Company creation seeds the default store types (services/store_types.py).
+    from backend.services.store_types import seed_default_store_types
     for org in (ORG_A, ORG_B):
-        for code, name, description, active, order in (*STORE_TYPES, ("central", "Central store", "Shared central stock", 1, 7)):
-            conn.execute(
-                """INSERT INTO store_types(organization_id,type_code,type_name,description,is_active,display_order)
-                   VALUES (%s,%s,%s,%s,%s,%s)""",
-                (org, code, name, description, bool(active), order),
-            )
+        seed_default_store_types(conn, org)
     conn.execute("INSERT INTO store_types(organization_id,type_code,type_name) VALUES (%s,'unused','Unused')", (ORG_A,))
     conn.execute(
         """INSERT INTO equipment(id,organization_id,equipment_name,make,model,serial_number,assigned_user_id)

@@ -182,3 +182,12 @@ def test_store_imports_are_inert(tmp_path):
     result = subprocess.run([sys.executable, '-c', script], cwd=tmp_path, capture_output=True, text=True,
                             env={**os.environ, 'PYTHONPATH': str(ROOT) + os.pathsep + os.environ.get('PYTHONPATH', '')})
     assert result.returncode == 0, result.stderr
+
+
+def test_a_new_company_can_create_a_store_with_the_default_form_type(tenant_api):
+    """The web form defaults to 'customer_site'; a fresh company must accept it."""
+    client = tenant_api.as_actor('other')
+    response = client.post('/api/stores', json={'name': 'First site', 'type': 'customer_site'})
+    assert response.status_code == 200, response.text
+    assert tenant_api.db.execute("SELECT organization_id FROM stores WHERE name='First site'").fetchone() == {
+        'organization_id': tenant_api.org_b}

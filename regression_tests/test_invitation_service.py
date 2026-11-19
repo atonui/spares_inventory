@@ -290,3 +290,23 @@ def test_platform_provisioning_rolls_back_if_mail_cannot_be_encrypted(invitation
                 encryption_key="invalid",
             )
     assert conn.execute("SELECT 1 FROM organizations WHERE slug=%s", (slug,)).fetchone() is None
+
+
+def test_new_company_starts_with_the_default_store_types(invitation_db):
+    from backend.services.invitations import create_organization_with_owner_invitation
+    from backend.services.store_types import DEFAULT_STORE_TYPES
+
+    conn, _org_id, actor_id, key = invitation_db
+    with conn.transaction():
+        created = create_organization_with_owner_invitation(
+            conn, name="Fresh Tenant", slug="fresh-" + uuid4().hex, owner_email="fresh-owner@example.test",
+            actor_user_id=actor_id, frontend_url="https://inventory.example.test", encryption_key=key,
+        )
+    rows = conn.execute(
+        """SELECT type_code, type_name, description, display_order, is_active FROM store_types
+           WHERE organization_id=%s ORDER BY display_order""",
+        (created["id"],),
+    ).fetchall()
+    assert [(r["type_code"], r["type_name"], r["description"], r["display_order"]) for r in rows] == list(DEFAULT_STORE_TYPES)
+    assert all(r["is_active"] for r in rows)
+    assert "central" in {r["type_code"] for r in rows}
