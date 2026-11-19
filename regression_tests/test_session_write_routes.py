@@ -323,6 +323,8 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('POST', '/api/platform/organizations'),
         ('POST', '/api/platform/support-sessions'),
         ('DELETE', '/api/platform/support-sessions/{support_session_id}'),
+        ('PATCH', '/api/platform/support-inbox/{conversation_id}/state'),
+        ('POST', '/api/platform/support-inbox/{conversation_id}/reply'),
         ('PUT', '/api/platform/organizations/{organization_id}/members/{user_id}/role'),
         ('POST', '/api/platform/admins'),
         ('PUT', '/api/platform/admins/{target_user_id}'),
@@ -351,7 +353,7 @@ def test_every_registered_mutation_has_a_behavioral_classification():
     bearer_only.update(('POST', '/api/v1/inventory/' + path) for path in (
         'add', 'consume', 'transfer', 'transfers/{transfer_id}/receive', 'transfers/{transfer_id}/return'))
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==85
+    assert len(protected)==87
     assert registered==protected|exempt|bearer_only
 
 

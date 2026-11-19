@@ -958,7 +958,7 @@ def test_platform_invitation_lifecycle_history_view_returns_distinct_invitation_
                    '2099-01-02T00:00:00Z')""",
         (org_id, inviter_id),
     )
-    monkeypatch.setattr(registry, "MIGRATIONS", migrations)
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations[:25])
     assert apply_postgres_migrations(conn).current_version == 25
     rows = conn.execute(
         """SELECT invitation_id, organization_id, organization_name, organization_slug,
