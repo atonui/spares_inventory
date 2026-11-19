@@ -21,4 +21,4 @@ Use amber as an accent. Use navy on amber for text and controls; amber on white 
 - `generated/favicon-*.png`, `favicon.ico`, and `apple-touch-icon.png` — supplied web icon exports.
 - `generated/app-icon-*.png` and platform layers — supplied mobile icon exports.
 
-The web UI uses the supplied white wordmark on navy and color mark on pale or white surfaces. The Expo app uses the supplied `mobile/assets/icon.png` plus supplied Android adaptive layers.
+The web UI uses the supplied white wordmark on navy and color mark on pale or white surfaces. The Expo app (separate `spares_inventory_mobile` repository) uses the supplied `assets/icon.png` plus supplied Android adaptive layers.
