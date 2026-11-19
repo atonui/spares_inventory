@@ -14,7 +14,7 @@
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/back-to-top.js?v=20261029-back-to-top-frame" defer></script>
 <script src="js/shared/announcement-time.js?v=20261014-announcement-controls" defer></script>
-<script src="js/pages/superadmin.js?v=20261115-platform-support-inbox-v1" defer></script>
+<script src="js/pages/superadmin.js?v=20261119-platform-account-tools-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -179,6 +179,9 @@
         <button type="button" class="nav-item" :class="tab==='platformSecurityEvents'&&'active'" @click="tab='platformSecurityEvents'; loadPlatformSecurityEvents()" :aria-current="tab==='platformSecurityEvents' ? 'page' : null">
           <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#security"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#security"></use></svg></span> Security events
         </button>
+        <button type="button" class="nav-item" :class="tab==='platformMaintenance'&&'active'" @click="selectSection('platformMaintenance')" :aria-current="tab==='platformMaintenance' ? 'page' : null">
+          <span class="ni"><svg class="platform-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use class="platform-icon-offset" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#audit"></use><use class="platform-icon-line" href="superadmin-icons.svg?v=20261115-sidebar-toggle-v2#audit"></use></svg></span> Database maintenance
+        </button>
       </div>
     </nav>
 
@@ -204,7 +207,7 @@
       <div class="mobile-section">
         <label for="superadmin-section">Section</label>
         <select id="superadmin-section" aria-label="Superadmin section" :value="tab" @change="selectSection($event.target.value)">
-        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents' && key!=='platformInvitations' && key!=='platformSupportInbox') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
+        <template x-for="(title, key) in tabTitles" :key="key"><option :value="key" x-show="(!me?.saas_mode && key!=='support' && key!=='platformSecurityEvents' && key!=='platformInvitations' && key!=='platformSupportInbox' && key!=='platformMaintenance') || (me?.saas_mode && ((me?.is_platform_admin && ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance'].includes(key)) || (key==='support' && supportSession)))" x-text="me?.saas_mode ? (platformTabTitles[key] || title) : title"></option></template>
         </select>
       </div>
       <div class="topbar-heading">
@@ -341,7 +344,7 @@
         <div class="panel support-workspace">
           <div class="panel-header"><span class="panel-title">Customer support — <span x-text="supportSession?.organization?.name"></span></span></div>
           <div class="panel-body">
-            <p>Read-only, organization-scoped lookups. Each search is audited. Search by an exact tenant identifier.</p>
+            <p>Organization-scoped lookups and account support actions. Every search and action is audited. Search by an exact tenant identifier.</p>
             <form class="support-lookup-form" @submit.prevent="loadSupportLookup()">
               <label for="support-lookup-kind">Lookup type<select id="support-lookup-kind" x-model="supportLookupKind" @change="supportRows=[];supportError='';supportLookupValue='';supportHasSearched=false" :disabled="supportLoading"><template x-for="kind in supportLookupKinds" :key="kind.key"><option :value="kind.key" x-text="kind.label"></option></template></select></label>
               <label for="support-lookup-value">Exact lookup value<input id="support-lookup-value" x-model="supportLookupValue" :maxlength="supportLookupKind==='accounts' ? 254 : 100" :placeholder="supportLookupKinds.find(kind=>kind.key===supportLookupKind)?.placeholder || ''" required :disabled="supportLoading"></label>
@@ -353,8 +356,61 @@
             <div class="support-results" x-show="!supportLoading && supportRows.length">
               <template x-for="(row,index) in supportRows" :key="index"><article class="support-result">
                 <dl><template x-for="entry in Object.entries(row)" :key="entry[0]"><div><dt x-text="entry[0].replaceAll('_',' ')"></dt><dd x-text="entry[1] ?? '—'"></dd></div></template></dl>
+                <div class="support-account-actions" x-show="supportLookupKind==='accounts' && Number.isInteger(row.user_id)">
+                  <button type="button" class="btn btn-sm btn-outline" x-show="isAccountLocked(row)" @click="requestSupportAccountAction(row,'unlock')" :disabled="dialogBusy">Unlock account</button>
+                  <button type="button" class="btn btn-sm btn-outline" x-show="row.active_session_count > 0" @click="requestSupportAccountAction(row,'sign_out')" :disabled="dialogBusy">Sign out everywhere</button>
+                  <button type="button" class="btn btn-sm btn-outline" x-show="!row.archived_at" @click="requestSupportAccountAction(row,'password_reset')" :disabled="dialogBusy">Send password reset</button>
+                </div>
               </article></template>
             </div>
+            <section class="support-locked" aria-labelledby="support-locked-title">
+              <div class="panel-header"><span class="panel-title" id="support-locked-title">Locked accounts in this organization</span><button type="button" class="btn btn-sm btn-outline" @click="loadSupportLockedAccounts()" :disabled="supportLockedLoading || !supportSession" x-text="supportLockedLoaded ? 'Refresh' : 'Show locked accounts'">Show locked accounts</button></div>
+              <p x-show="supportLockedLoading" role="status">Loading locked accounts…</p>
+              <p x-show="supportLockedError" class="action-error" role="alert" x-text="supportLockedError"></p>
+              <div x-show="supportLockedLoaded && !supportLockedLoading && !supportLockedError && supportLocked.length===0" class="empty">No accounts in this organization are locked.</div>
+              <div x-show="supportLockedLoaded && supportLocked.length" class="tbl-wrap">
+                <table>
+                  <thead><tr><th scope="col" aria-label="Select"></th><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Failed attempts</th><th scope="col">Locked until (UTC)</th></tr></thead>
+                  <tbody><template x-for="row in supportLocked" :key="row.user_id"><tr>
+                    <td><input type="checkbox" :value="row.user_id" x-model.number="supportLockedSelected" :aria-label="'Select ' + (row.email || row.name)"></td>
+                    <td x-text="row.name || '—'"></td><td x-text="row.email"></td><td x-text="row.failed_login_attempts"></td><td x-text="row.account_locked_until"></td>
+                  </tr></template></tbody>
+                </table>
+                <button type="button" class="btn btn-success" @click="requestSupportBulkUnlock()" :disabled="dialogBusy || supportLockedSelected.length===0">Unlock selected</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="tab==='platformMaintenance' && me?.saas_mode && me?.is_platform_admin">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Database size</span><button class="btn btn-sm btn-outline" @click="loadDatabaseStats()" :disabled="databaseStatsLoading">Refresh</button></div>
+          <div class="panel-body">
+            <p>Table names, estimated row counts and storage only. Backups and storage maintenance are handled by the database host.</p>
+            <p x-show="databaseStatsLoading" role="status">Loading database statistics…</p>
+            <p x-show="databaseStatsError" class="action-error" role="alert" x-text="databaseStatsError"></p>
+            <p x-show="databaseStats"><strong>Total database size:</strong> <span x-text="fmtBytes(databaseStats?.database_bytes || 0)"></span></p>
+            <div class="tbl-wrap" x-show="databaseStats?.tables?.length">
+              <table>
+                <thead><tr><th scope="col">Table</th><th scope="col">Estimated rows</th><th scope="col">Size</th></tr></thead>
+                <tbody><template x-for="table in databaseStats?.tables || []" :key="table.table_name"><tr>
+                  <td x-text="table.table_name"></td><td x-text="Number(table.estimated_rows).toLocaleString()"></td><td x-text="fmtBytes(table.total_bytes)"></td>
+                </tr></template></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Delete old logs</span></div>
+          <div class="panel-body">
+            <p>Deletes activity and system logs for every organization. Stock audit history and the platform audit log are never deleted.</p>
+            <form @submit.prevent="requestLogPurge()">
+              <div class="form-group"><label for="log-purge-days">Delete entries older than (days)</label><input id="log-purge-days" type="number" min="30" max="3650" step="1" x-model.number="logPurgeDays" required :disabled="dialogBusy"></div>
+              <button class="btn btn-red" type="submit" :disabled="dialogBusy">Delete old logs</button>
+            </form>
+            <p x-show="logPurgeError" class="action-error" role="alert" x-text="logPurgeError"></p>
+            <p x-show="logPurgeResult" role="status" x-text="logPurgeResult ? `Last purge deleted ${logPurgeResult.activity_logs_deleted} activity and ${logPurgeResult.system_logs_deleted} system log entries.` : ''"></p>
           </div>
         </div>
       </div>

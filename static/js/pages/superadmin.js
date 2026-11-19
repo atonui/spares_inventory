@@ -15,6 +15,9 @@ const PLATFORM_AUDIT_ACTION_LABELS = Object.freeze({
   user_logout: 'User signed out',
   platform_invitation_mail_read: 'Invitation email history viewed',
   platform_invitation_history_read: 'Invitation lifecycle history viewed',
+  support_account_action: 'Support account action',
+  platform_database_stats_read: 'Database statistics viewed',
+  platform_logs_purged: 'Old logs purged',
 });
 const PLATFORM_AUDIT_RESULT_LABELS = Object.freeze({success:'Success', denied:'Denied', failure:'Failed'});
 const PLATFORM_AUDIT_DETAIL_LABELS = Object.freeze({
@@ -23,12 +26,15 @@ const PLATFORM_AUDIT_DETAIL_LABELS = Object.freeze({
   reason: 'Reason', invitation_created: 'Owner invitation created', role: 'Company role',
   revision: 'Revision', audience: 'Audience', key: 'Setting key', value: 'Setting value',
   limit: 'Page size', offset: 'Page offset', result_count: 'Rows returned',
+  session_count: 'Sessions ended', older_than_days: 'Older than (days)',
+  activity_logs_deleted: 'Activity logs deleted', system_logs_deleted: 'System logs deleted',
 });
 const PLATFORM_AUDIT_DETAIL_VALUES = Object.freeze({
   role: {owner:'Owner', admin:'Admin', manager:'Manager', engineer:'Engineer'},
   audience: {everyone:'Everyone', authenticated:'Authenticated users', roles:'Selected roles'},
-  operation: {start:'Started', lookup:'Looked up', end:'Ended', logout:'Signed out'},
-  resource: {session:'Support session', accounts:'Account access', inventory:'Inventory',
+  operation: {start:'Started', lookup:'Looked up', end:'Ended', logout:'Signed out',
+    unlock:'Unlocked account', sign_out:'Signed out everywhere', password_reset:'Sent password reset'},
+  resource: {session:'Support session', accounts:'Account access', 'locked-accounts':'Locked accounts', inventory:'Inventory',
     'work-orders':'Work orders', equipment:'Equipment', 'equipment-history':'Equipment history',
     movements:'Stock movements'},
   end_reason: {user_logout:'User signed out', password_changed:'Password changed',
@@ -105,9 +111,9 @@ function superPanel() {
     selectSection(section) {
       if (!Object.hasOwn(this.tabTitles, section)) return;
       if (section === 'support' && !this.me?.saas_mode) return;
-      if (['platformSecurityEvents', 'platformInvitations', 'platformSupportInbox'].includes(section) && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
+      if (['platformSecurityEvents', 'platformInvitations', 'platformSupportInbox', 'platformMaintenance'].includes(section) && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
       if (this.me?.saas_mode) {
-        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox'];
+        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance'];
         if (section === 'support' && this.supportSession) allowed.push('support');
         if (!allowed.includes(section)) return;
       }
@@ -157,13 +163,14 @@ function superPanel() {
       announcement: 'System Announcement', audit: 'Audit Log',
       organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
       platformSecurityEvents: 'Security events', platformInvitations: 'Invitations', platformSupportInbox: 'Support inbox',
-      support: 'Customer Support',
+      support: 'Customer Support', platformMaintenance: 'Database maintenance',
     },
     platformTabTitles: {
       dashboard: 'Overview', organizations: 'Organizations', support: 'Customer support',
       platformAdmins: 'Platform access', config: 'Security settings',
       announcement: 'Announcements', platformAudit: 'Audit log', platformSecurityEvents: 'Security events',
       platformInvitations: 'Invitations', platformSupportInbox: 'Support inbox',
+      platformMaintenance: 'Database maintenance',
     },
 
     // data stores
@@ -196,6 +203,9 @@ function superPanel() {
     supportStartError: '', supportStartForm: { reason: '', current_password: '' },
     supportLookupKind: 'accounts', supportLookupValue: '', supportRows: [],
     supportLoading: false, supportError: '', supportRequest: 0, supportHasSearched: false,
+    supportLocked: [], supportLockedSelected: [], supportLockedLoading: false, supportLockedError: '', supportLockedLoaded: false,
+    databaseStats: null, databaseStatsLoading: false, databaseStatsError: '',
+    logPurgeDays: 365, logPurgeError: '', logPurgeResult: null,
     supportLookupKinds: [
       { key:'accounts', label:'Account access', placeholder:'Exact email address', param:'email' },
       { key:'inventory', label:'Inventory and parts', placeholder:'Exact part number', param:'query' },
@@ -320,6 +330,7 @@ function superPanel() {
         platformSecurityEvents: () => this.loadPlatformSecurityEvents(),
         platformInvitations: () => this.loadPlatformInvitations(),
         platformSupportInbox: () => this.loadSupportInbox(),
+        platformMaintenance: () => this.loadDatabaseStats(),
         accounts:  () => this.loadLocked(),
         sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
@@ -729,6 +740,11 @@ async submitPasswordReset() {
       this.supportLoading = false;
       this.supportLookupValue = '';
       this.supportHasSearched = false;
+      this.supportLocked = [];
+      this.supportLockedSelected = [];
+      this.supportLockedError = '';
+      this.supportLockedLoading = false;
+      this.supportLockedLoaded = false;
     },
 
     clearSupportSession() {
@@ -788,6 +804,129 @@ async submitPasswordReset() {
       } finally {
         if (request === this.supportRequest) this.supportLoading = false;
       }
+    },
+
+    isAccountLocked(row) {
+      const until = Date.parse(row?.account_locked_until || '');
+      return Number.isFinite(until) && until > Date.now();
+    },
+
+    supportAccountPath(suffix) {
+      return `/platform/support-sessions/${encodeURIComponent(this.supportSession.support_session_id)}/${suffix}`;
+    },
+
+    async refreshSupportAccounts() {
+      if (this.supportLookupKind === 'accounts' && this.supportHasSearched) await this.loadSupportLookup();
+      if (this.supportLockedLoaded) await this.loadSupportLockedAccounts();
+    },
+
+    requestSupportAccountAction(row, operation) {
+      if (!this.supportSession || this.dialogBusy || !Number.isInteger(row?.user_id)) return;
+      const name = row.name || row.email || `user ${row.user_id}`;
+      const actions = {
+        unlock: {
+          path: 'unlock', title: `Unlock ${name}?`, action: 'Unlock account', button_class: 'btn-green',
+          msg: `Clear the failed sign-in count and lockout for ${row.email}. They can sign in again straight away.`,
+          done: () => 'Account unlocked.',
+        },
+        sign_out: {
+          path: 'sign-out', title: `Sign out ${name} everywhere?`, action: 'Sign out everywhere', button_class: 'btn-red',
+          msg: `End every active browser and mobile session for ${row.email}. They must sign in again, and paired phones must be paired again.`,
+          done: result => `${result?.sessions_revoked ?? 0} session(s) ended.`,
+        },
+        password_reset: {
+          path: 'password-reset', title: `Send ${name} a password reset?`, action: 'Send reset email', button_class: 'btn-green',
+          msg: `Email a password reset link to ${row.email}. The link expires in one hour, and their current password keeps working until they set a new one.`,
+          done: () => 'Password reset email queued.',
+        },
+      };
+      const config = actions[operation];
+      if (!config) return;
+      this.dlg = {
+        open: true, title: config.title, msg: config.msg, action: config.action, button_class: config.button_class,
+        resolve: async () => {
+          let result;
+          try {
+            result = await this.api(this.supportAccountPath(`accounts/${encodeURIComponent(row.user_id)}/${config.path}`), { method: 'POST' });
+          } catch (error) {
+            if (this.handleTerminalSupportError(error)) return;
+            throw error;
+          }
+          this.toast(config.done(result));
+          await this.refreshSupportAccounts();
+        },
+      };
+    },
+
+    async loadSupportLockedAccounts() {
+      if (!this.supportSession || this.supportLockedLoading) return;
+      this.supportLockedLoading = true;
+      this.supportLockedError = '';
+      try {
+        const result = await this.api(this.supportAccountPath('locked-accounts'));
+        this.supportLocked = Array.isArray(result?.rows) ? result.rows : [];
+        this.supportLockedSelected = [];
+        this.supportLockedLoaded = true;
+      } catch (error) {
+        if (!this.handleTerminalSupportError(error)) this.supportLockedError = error.message || 'Unable to load locked accounts.';
+      } finally {
+        this.supportLockedLoading = false;
+      }
+    },
+
+    requestSupportBulkUnlock() {
+      const userIds = this.supportLockedSelected.filter(id => Number.isInteger(id));
+      if (!this.supportSession || this.dialogBusy || !userIds.length) return;
+      this.dlg = {
+        open: true, title: `Unlock ${userIds.length} account(s)?`, action: 'Unlock accounts', button_class: 'btn-green',
+        msg: 'Clear the lockout for the selected accounts in this organization. Each unlock is recorded in the platform audit log.',
+        resolve: async () => {
+          let result;
+          try {
+            result = await this.api(this.supportAccountPath('locked-accounts/unlock'), {
+              method: 'POST', body: JSON.stringify({ user_ids: userIds }),
+            });
+          } catch (error) {
+            if (this.handleTerminalSupportError(error)) return;
+            throw error;
+          }
+          this.toast(`${result?.unlocked_count ?? 0} account(s) unlocked.`);
+          await this.refreshSupportAccounts();
+        },
+      };
+    },
+
+    // ── Database maintenance ───────────────────────────────────
+    async loadDatabaseStats() {
+      if (this.databaseStatsLoading) return;
+      this.databaseStatsLoading = true;
+      this.databaseStatsError = '';
+      try {
+        this.databaseStats = await this.api('/platform/database/tables');
+      } catch (error) {
+        this.databaseStatsError = error.message || 'Unable to load database statistics.';
+      } finally {
+        this.databaseStatsLoading = false;
+      }
+    },
+
+    requestLogPurge() {
+      const days = Number(this.logPurgeDays);
+      if (this.dialogBusy) return;
+      if (!Number.isInteger(days) || days < 30 || days > 3650) {
+        this.logPurgeError = 'Enter a whole number of days from 30 to 3650.';
+        return;
+      }
+      this.logPurgeError = '';
+      this.dlg = {
+        open: true, title: `Delete logs older than ${days} days?`, action: 'Delete old logs', button_class: 'btn-red',
+        msg: `Permanently delete activity and system logs older than ${days} days for every organization. Stock audit history and the platform audit log are kept.`,
+        resolve: async () => {
+          this.logPurgeResult = await this.api(`/platform/database/logs?older_than_days=${encodeURIComponent(days)}`, { method: 'DELETE' });
+          this.toast(`Deleted ${this.logPurgeResult.activity_logs_deleted} activity and ${this.logPurgeResult.system_logs_deleted} system log entries.`);
+          await this.loadDatabaseStats();
+        },
+      };
     },
 
     requestOrganizationStatus(org) {

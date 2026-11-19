@@ -516,6 +516,7 @@ from backend.routes.platform_security_events import create_platform_security_eve
 from backend.routes.platform_settings import create_platform_settings_router
 from backend.routes.platform_support import create_platform_support_router
 from backend.routes.platform_support_inbox import create_platform_support_inbox_router
+from backend.routes.platform_database import create_platform_database_router
 
 app.include_router(create_invitation_router(
     get_connection=lambda: get_db_connection(),
@@ -547,6 +548,15 @@ app.include_router(create_platform_support_router(
     get_connection=lambda: get_db_connection(), current_user=get_current_user,
     csrf_dependency=verify_authenticated_csrf,
     password_verify=lambda plain, hashed: verify_password(plain, hashed), limiter=limiter,
+    queue_reset_email=lambda conn, email, token, expires_at: enqueue_password_reset_mail(
+        conn, email=email, token=token, frontend_url=FRONTEND_URL,
+        encryption_key=settings.MAIL_PAYLOAD_ENCRYPTION_KEY, expires_at=expires_at,
+    ),
+    security_event=log_platform_security_event,
+))
+app.include_router(create_platform_database_router(
+    get_connection=lambda: get_db_connection(), current_user=get_current_user,
+    csrf_dependency=verify_authenticated_csrf,
 ))
 app.include_router(create_platform_support_inbox_router(
     get_connection=lambda: get_db_connection(), current_user=get_current_user,

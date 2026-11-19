@@ -28,6 +28,9 @@ _DETAIL_FIELDS = {
     "global_security_setting_changed": {"key", "value"},
     "organization_suspended": {"reason"},
     "organization_reactivated": {"reason"},
+    "support_account_action": {"support_session_id", "operation", "target_user_id", "request_id", "session_count"},
+    "platform_database_stats_read": {"result_count"},
+    "platform_logs_purged": {"older_than_days", "activity_logs_deleted", "system_logs_deleted"},
 }
 _RESULTS = {"success", "denied", "failure"}
 _REASON_CODES = {
@@ -102,9 +105,9 @@ def safe_platform_audit_details(action: str, details) -> dict:
                 safe[key] = str(UUID(value))
             except (ValueError, TypeError):
                 pass
-        elif key == "resource" and isinstance(value, str) and value in {"session", "accounts", "inventory", "work-orders", "equipment", "equipment-history", "movements"}:
+        elif key == "resource" and isinstance(value, str) and value in {"session", "accounts", "locked-accounts", "inventory", "work-orders", "equipment", "equipment-history", "movements"}:
             safe[key] = value
-        elif key == "operation" and isinstance(value, str) and value in {"start", "lookup", "end", "logout"}:
+        elif key == "operation" and isinstance(value, str) and value in {"start", "lookup", "end", "logout", "unlock", "sign_out", "password_reset"}:
             safe[key] = value
         elif key == "end_reason" and isinstance(value, str) and value in {
             "user_logout", "password_changed", "sessions_revoked", "platform_admin_revoked", "expired",
@@ -150,6 +153,12 @@ def safe_platform_audit_details(action: str, details) -> dict:
             setting_key = details.get("key")
             if setting_key in limits and 1 <= value <= limits[setting_key]:
                 safe[key] = value
+        elif key == "session_count" and isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 2147483647:
+            safe[key] = value
+        elif key == "older_than_days" and isinstance(value, int) and not isinstance(value, bool) and 30 <= value <= 3650:
+            safe[key] = value
+        elif key in {"activity_logs_deleted", "system_logs_deleted"} and isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 9223372036854775807:
+            safe[key] = value
         elif key in {"limit", "offset", "result_count"} and isinstance(value, int) and not isinstance(value, bool):
             limits = {"limit": (1, 100), "offset": (0, 100000), "result_count": (0, 100)}
             minimum, maximum = limits[key]
