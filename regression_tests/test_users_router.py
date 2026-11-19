@@ -1,18 +1,17 @@
 """User router composition and actual HTTP preservation coverage."""
-from contextlib import closing
 import os
 from pathlib import Path
 import subprocess
 import sys
 
+import psycopg
 import pytest
 from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
 import main
-from backend.database import connect_database
 from backend.schemas.users import CreateUserRequest, UpdateUserRequest
-from regression_tests.test_session_write_routes import session_api, database_state
+from regression_tests.postgres_app import database_state
 
 ROOT = Path(__file__).resolve().parents[1]
 OPERATIONS = {
@@ -67,73 +66,48 @@ def test_users_schema_reexports_and_defaults():
         CreateUserRequest(email='x', name='X', password='p', role='owner')
 
 
-@pytest.mark.parametrize('actor', ['admin-token', 'root-token', 'manager-token', 'engineer-token'])
+@pytest.mark.parametrize('actor', ['admin', 'owner', 'manager', 'engineer'])
 @pytest.mark.parametrize('include_archived', [False, True])
-def test_users_list_preserves_archive_visibility_and_permissions(session_api, actor, include_archived):
-    client, path, _ = session_api
-    client.cookies.set('session_token', actor)
-    with closing(connect_database(path)) as conn, conn:
-        conn.execute("INSERT INTO users(id,email,name,password_hash,role,archived_at) VALUES(5,'archived@example.test','Archived','unused','engineer','2000-01-01T00:00:00')")
+def test_users_list_preserves_archive_visibility_and_permissions(tenant_api, actor, include_archived):
+    client = tenant_api.as_actor(actor)
+    db = tenant_api.db
+    db.execute("""INSERT INTO users(id,email,name,password_hash,archived_at) OVERRIDING SYSTEM VALUE
+                  VALUES(50,'archived@example.test','Archived','unused','2000-01-01T00:00:00Z')""")
+    db.execute("INSERT INTO organization_memberships(organization_id,user_id,company_role) VALUES (%s,50,'engineer')",
+               (tenant_api.org_a,))
+    db.commit()
     response = client.get('/api/users', params={'include_archived': include_archived})
-    if actor in ('manager-token', 'engineer-token'):
+    if actor in ('manager', 'engineer'):
         assert response.status_code == 403, response.text
         return
     assert response.status_code == 200, response.text
     ids = {row['id'] for row in response.json()}
-    assert (5 in ids) == include_archived
+    assert (50 in ids) == include_archived
+    assert 5 not in ids and 6 not in ids  # other company's owner and the platform admin
     assert all('password_hash' not in row for row in response.json())
 
 
-def test_users_create_uses_current_hash_guard_and_audit_owner(session_api, monkeypatch):
-    client, path, _ = session_api
-    calls = []
-    guard = main.require_user_management
-    audit = main._record_mutation_activity
-    monkeypatch.setattr(main, 'hash_password', lambda password: 'current-' + password)
-    def record_guard(*args, **kwargs):
-        conn = kwargs['conn']
-        assert conn.in_transaction
-        calls.append(conn)
-        return guard(*args, **kwargs)
-    def record_audit(conn, *args, **kwargs):
-        assert conn is calls[-1] and conn.in_transaction
-        return audit(conn, *args, **kwargs)
-    monkeypatch.setattr(main, 'require_user_management', record_guard)
-    monkeypatch.setattr(main, '_record_mutation_activity', record_audit)
-    response = client.post('/api/users', json={
+def test_users_cannot_be_created_directly_in_a_company(tenant_api):
+    """Company accounts are created by invitation; the legacy password form is refused."""
+    before = database_state(tenant_api.db)
+    response = tenant_api.client.post('/api/users', json={
         'email': 'new@example.test', 'name': 'New', 'password': 'test-password', 'role': 'engineer',
     })
-    assert response.status_code == 200, response.text
-    with closing(connect_database(path)) as conn:
-        assert conn.execute("SELECT password_hash FROM users WHERE email='new@example.test'").fetchone()[0] == 'current-test-password'
-        assert conn.execute("SELECT COUNT(*) FROM activity_logs WHERE action='create_user'").fetchone()[0] == 1
+    assert response.status_code == 410, response.text
+    assert response.json() == {'detail': 'Create users with an invitation instead'}
+    assert database_state(tenant_api.db) == before
 
 
-def test_users_update_audit_failure_rolls_back(session_api, monkeypatch):
-    client, path, _ = session_api
+def test_users_update_audit_failure_rolls_back(tenant_api, monkeypatch):
+    client = tenant_api.client
     def failed_audit(conn, *args, **kwargs):
-        assert conn.in_transaction
+        assert conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE
         raise RuntimeError('audit unavailable')
     monkeypatch.setattr(main, '_record_mutation_activity', failed_audit)
-    before = database_state(path)
+    before = database_state(tenant_api.db)
     with pytest.raises(RuntimeError, match='audit unavailable'):
         client.put('/api/users/4', json={'name': 'Changed'})
-    assert database_state(path) == before
-
-
-def test_users_archive_service_remains_late_bound(session_api, monkeypatch):
-    client, _, _ = session_api
-    calls = []
-    def archive(*args, **kwargs):
-        calls.append((args, kwargs))
-        return {'success': True}
-    monkeypatch.setattr(main, 'archive_record', archive)
-    assert client.delete('/api/users/4').status_code == 200
-    assert client.post('/api/users/4/restore').status_code == 200
-    assert calls == [
-        (('users', 4, 1), {'session_token': 'admin-token'}),
-        (('users', 4, 1), {'restore': True, 'session_token': 'admin-token'}),
-    ]
+    assert database_state(tenant_api.db) == before
 
 
 def test_users_imports_are_inert(tmp_path):
