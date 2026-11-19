@@ -55,10 +55,16 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 else:
                     table_exists = execute(conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='activity_logs'").fetchone() is not None
                 log_count = execute(conn, "SELECT COUNT(*) AS count FROM activity_logs").fetchone()["count"] if table_exists else 0
-                user = execute(conn, "SELECT name, role FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
+                if is_postgres(conn):
+                    # Company roles live on the membership, not on the user row.
+                    user = execute(conn, "SELECT name FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
+                    current_user = dict(user) | {"role": principal.company_role} if user else None
+                else:
+                    user = execute(conn, "SELECT name, role FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
+                    current_user = dict(user) if user else None
                 return {
                     "status": "ok", "table_exists": table_exists, "log_count": log_count,
-                    "current_user": dict(user) if user else None,
+                    "current_user": current_user,
                     "can_view_logs": log_manager(principal, conn),
                 }
         except Exception as e:

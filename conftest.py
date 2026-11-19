@@ -1,4 +1,7 @@
 """Run tests with disposable settings, logs and database; never load repository secrets."""
+
+# Shared PostgreSQL fixtures (postgres_schema, tenant_database, tenant_api).
+pytest_plugins = ("regression_tests.postgres_fixtures", "regression_tests.postgres_app")
 import os
 import sys
 import tempfile
