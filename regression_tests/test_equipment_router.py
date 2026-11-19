@@ -152,15 +152,7 @@ def test_equipment_archive_listing_is_admin_only_and_restore_preserves_history(t
     assert [row['id'] for row in client.get('/api/equipment', params={'show_all': True}).json()] == [1]
 
 
-KNOWN_REMINDER_BUG = pytest.mark.xfail(strict=True, raises=psycopg.ProgrammingError, reason=(
-    'Known PostgreSQL bug: PUT /api/settings/calibration-reminder-days uses SQLite strftime() and '
-    'writes the platform-wide system_settings row instead of a per-company setting.'))
-
-
-@pytest.mark.parametrize('days,status', [
-    (0, 400), (366, 400),
-    pytest.param(1, 200, marks=KNOWN_REMINDER_BUG), pytest.param(365, 200, marks=KNOWN_REMINDER_BUG),
-])
+@pytest.mark.parametrize('days,status', [(0, 400), (366, 400), (1, 200), (365, 200)])
 def test_equipment_reminder_bounds_and_readback(tenant_api, days, status):
     client = tenant_api.client
     before = database_state(tenant_api.db)
@@ -225,3 +217,41 @@ def test_equipment_imports_are_inert(tmp_path):
     result = subprocess.run([sys.executable, '-c', script], cwd=tmp_path, capture_output=True, text=True,
                             env={**os.environ, 'PYTHONPATH': str(ROOT) + os.pathsep + os.environ.get('PYTHONPATH', '')})
     assert result.returncode == 0, result.stderr
+
+
+def test_calibration_reminder_is_per_company(tenant_api):
+    client = tenant_api.as_actor('admin')
+    assert client.get('/api/settings/calibration-reminder-days').json() == {'days': 30}
+    assert client.put('/api/settings/calibration-reminder-days', params={'days': 7}).status_code == 200
+    assert client.get('/api/settings/calibration-reminder-days').json() == {'days': 7}
+
+    other = tenant_api.as_actor('other')
+    assert other.get('/api/settings/calibration-reminder-days').json() == {'days': 30}
+    rows = tenant_api.db.execute(
+        'SELECT organization_id, calibration_reminder_days, updated_by FROM organization_settings ORDER BY organization_id'
+    ).fetchall()
+    assert rows == [
+        {'organization_id': tenant_api.org_a, 'calibration_reminder_days': 7, 'updated_by': 1},
+        {'organization_id': tenant_api.org_b, 'calibration_reminder_days': 30, 'updated_by': None},
+    ]
+    assert tenant_api.db.execute(
+        "SELECT count(*) AS n FROM system_settings WHERE setting_key='calibration_reminder_days'"
+    ).fetchone()['n'] == 0
+
+
+@pytest.mark.parametrize('actor', ['manager', 'engineer'])
+def test_only_company_admins_change_the_calibration_reminder(tenant_api, actor):
+    before = database_state(tenant_api.db)
+    response = tenant_api.as_actor(actor).put('/api/settings/calibration-reminder-days', params={'days': 7})
+    assert response.status_code == 403, response.text
+    assert database_state(tenant_api.db) == before
+
+
+def test_due_soon_uses_the_company_reminder_window(tenant_api):
+    db = tenant_api.db
+    db.execute("UPDATE equipment SET next_calibration_date=%s WHERE id=1", ((date.today() + timedelta(days=20)).isoformat(),))
+    db.commit()
+    client = tenant_api.as_actor('admin')
+    assert client.get('/api/equipment/statistics').json()['due_soon'] == 1  # default 30 days
+    assert client.put('/api/settings/calibration-reminder-days', params={'days': 10}).status_code == 200
+    assert client.get('/api/equipment/statistics').json()['due_soon'] == 0

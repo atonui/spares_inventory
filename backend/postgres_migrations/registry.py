@@ -30,6 +30,7 @@ from . import (
     v0024_platform_invitation_delivery_history,
     v0025_platform_invitation_history,
     v0026_platform_support_inbox,
+    v0027_organization_calibration_reminder,
 )
 
 
@@ -74,6 +75,7 @@ MIGRATIONS = tuple(
         v0024_platform_invitation_delivery_history,
         v0025_platform_invitation_history,
         v0026_platform_support_inbox,
+        v0027_organization_calibration_reminder,
     )
 )
 

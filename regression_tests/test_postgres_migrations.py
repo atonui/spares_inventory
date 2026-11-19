@@ -977,3 +977,33 @@ def test_platform_invitation_lifecycle_history_view_returns_distinct_invitation_
     assert rows[1]["accepted_at"] is None
     assert rows[1]["accepted_by"] is None
     assert all("token" not in row for row in rows)
+
+
+@pytest.mark.parametrize('legacy,expected', [('14', 14), (None, 30), ('not-a-number', 30), ('900', 30)])
+def test_calibration_reminder_migration_keeps_the_platform_value_per_company(postgres_schema, monkeypatch, legacy, expected):
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    conn, _schema = postgres_schema
+    migrations = registry.MIGRATIONS
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations[:26])
+    apply_postgres_migrations(conn)
+    for slug in ("first", "second"):
+        org = conn.execute(
+            "INSERT INTO organizations(name,slug) VALUES (%s,%s) RETURNING id", (slug, slug)
+        ).fetchone()["id"]
+        conn.execute("INSERT INTO organization_settings(organization_id) VALUES (%s)", (org,))
+    if legacy is not None:
+        conn.execute(
+            "INSERT INTO system_settings(setting_key,setting_value) VALUES ('calibration_reminder_days',%s)", (legacy,)
+        )
+    monkeypatch.setattr(registry, "MIGRATIONS", migrations[:27])
+    assert apply_postgres_migrations(conn).current_version == 27
+    assert [row["calibration_reminder_days"] for row in conn.execute(
+        "SELECT calibration_reminder_days FROM organization_settings"
+    ).fetchall()] == [expected, expected]
+    assert conn.execute(
+        "SELECT count(*) AS n FROM system_settings WHERE setting_key='calibration_reminder_days'"
+    ).fetchone()["n"] == 0
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute("UPDATE organization_settings SET calibration_reminder_days = 0")
