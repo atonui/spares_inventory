@@ -214,7 +214,7 @@ def support_api(support_database):
     owner.commit()
     class Limiter:
         def limit(self, rule):
-            assert rule == '5/minute'
+            assert rule in {'5/minute', '10/minute', '30/minute'}
             return lambda endpoint: endpoint
     router = create_platform_support_router(get_connection=db[1], current_user=lambda: None,
         csrf_dependency=lambda: True, password_verify=lambda plain, hashed: plain == 'correct-password' and hashed == 'x', limiter=Limiter())
@@ -261,7 +261,7 @@ def test_account_lookup_is_exact_and_support_organization_scoped(support_api):
     result = call_support(api,'{support_session_id}/accounts',support_session_id=session['id'],email='tenant0@example.test')
     assert [r['user_id'] for r in result['rows']] == [ids[0]]
     assert result['rows'][0]['membership_active'] is False
-    assert set(result['rows'][0]) == {'user_id','name','email','archived_at','role','membership_active','failed_login_attempts','account_locked_until','last_login'}
+    assert set(result['rows'][0]) == {'user_id','name','email','archived_at','role','membership_active','failed_login_attempts','account_locked_until','last_login','active_session_count'}
     for email in ('tenant1@example.test','tenant0','absent@example.test'):
         assert call_support(api,'{support_session_id}/accounts',support_session_id=session['id'],email=email)['rows'] == []
 

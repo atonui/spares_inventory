@@ -39,8 +39,8 @@ test('settings cannot save before a successful load or during refresh',async()=>
  a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
-test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents'&&key!=='platformInvitations'&&key!=='platformSupportInbox')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,20);assert.match(html,/aria-current/);});
+test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents'&&key!=='platformInvitations'&&key!=='platformSupportInbox'&&key!=='platformMaintenance')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,21);assert.match(html,/aria-current/);});
 test('platform admin can end the authenticated session from the console',async()=>{
  const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},window:{location:{href:''}},WeakMap};
  vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();
@@ -92,7 +92,7 @@ test('platform security events are a separate platform-only console view with sa
  assert.match(platform,/Security events/);assert.match(html,/tab==='platformSecurityEvents' && me\?\.saas_mode && me\?\.is_platform_admin/);
  const section=html.split('x-show="tab===\'platformSecurityEvents\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('<!-- ══════════ LOCKED ACCOUNTS ══════════ -->')[0];
  assert.ok(section);assert.match(section,/platformSecurityEventRows/);assert.match(section,/account_match/);assert.doesNotMatch(section,/ip_address|user_agent|request_id|submitted_identifier|x-html/);
- assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox'\]\.includes\(key\)/);
+ assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance'\]\.includes\(key\)/);
  assert.match(html,/!me\?\.saas_mode && key!=='support' && key!=='platformSecurityEvents'/);
 });
 test('tenant console identity cannot select the platform security events view',()=>{
@@ -379,4 +379,46 @@ test('support conversation uses read state and sends replies with a stable idemp
 test('support message content uses text-only DOM bindings',()=>{
  assert.match(html,/class="support-message-list"[\s\S]*?x-text="message\.payload\.text"/);
  assert.doesNotMatch(html,/x-html="message\.payload\.(?:html|text)"/);
+});
+
+test('support account actions confirm first, post to the session-scoped route, and refresh results',async()=>{
+ const a=app();a.supportSession={support_session_id:'support/a'};a.toast=()=>{};
+ const calls=[];a.api=async(path,opts={})=>{calls.push([path,opts.method||'GET']);return path.includes('sign-out')?{sessions_revoked:2}:{rows:[]};};
+ const row={user_id:7,name:'Jane',email:'jane@example.test',account_locked_until:'2999-01-01T00:00:00Z',active_session_count:2};
+ for(const [operation,suffix] of [['unlock','unlock'],['sign_out','sign-out'],['password_reset','password-reset']]){
+  calls.length=0;a.supportLookupKind='accounts';a.supportHasSearched=true;a.supportLookupValue='jane@example.test';
+  a.requestSupportAccountAction(row,operation);assert.equal(calls.length,0);assert.equal(a.dlg.open,true);
+  await a.submitDialog();
+  assert.deepEqual(calls[0],[`/platform/support-sessions/support%2Fa/accounts/7/${suffix}`,'POST']);
+  assert.match(calls[1][0],/\/platform\/support-sessions\/support%2Fa\/accounts\?email=/);
+ }
+ a.requestSupportAccountAction({user_id:'7'},'unlock');assert.equal(a.dlg.open,false);
+});
+test('support account action errors stay in the dialog, and ended sessions clear tenant data',async()=>{
+ const a=app();a.supportSession={support_session_id:'s'};a.toast=()=>{};
+ a.api=async()=>{const e=Error('Organization is suspended');e.status=409;throw e;};
+ a.requestSupportAccountAction({user_id:7,email:'j@example.test'},'unlock');await a.submitDialog();
+ assert.equal(a.dlg.open,true);assert.equal(a.dialogError,'Organization is suspended');assert.ok(a.supportSession);
+ a.dlg.open=false;a.supportLocked=[{user_id:7}];
+ a.api=async()=>{const e=Error('gone');e.status=404;throw e;};
+ a.requestSupportAccountAction({user_id:7,email:'j@example.test'},'sign_out');await a.submitDialog();
+ assert.equal(a.supportSession,null);assert.equal(a.supportLocked.length,0);assert.equal(a.dlg.open,false);
+});
+test('locked accounts load per support session and bulk unlock sends only selected integer IDs',async()=>{
+ const a=app();a.supportSession={support_session_id:'s'};a.toast=()=>{};let body,path;
+ a.api=async(p,opts={})=>{if(opts.method==='POST'){path=p;body=JSON.parse(opts.body);return {unlocked_count:1};}return {rows:[{user_id:7},{user_id:8}]};};
+ await a.loadSupportLockedAccounts();assert.equal(a.supportLocked.length,2);assert.equal(a.supportLockedLoaded,true);
+ a.requestSupportBulkUnlock();assert.equal(a.dlg.open,false);
+ a.supportLockedSelected=[8,'9'];a.requestSupportBulkUnlock();await a.submitDialog();
+ assert.equal(path,'/platform/support-sessions/s/locked-accounts/unlock');assert.deepEqual(body,{user_ids:[8]});
+});
+test('log purge validates retention before confirming and maintenance is platform-only',async()=>{
+ const a=app();a.toast=()=>{};let calls=0,path;a.api=async p=>{calls++;path=p;return p.includes('/logs')?{activity_logs_deleted:3,system_logs_deleted:1}:{database_bytes:1,tables:[]};};
+ for(const days of [0,29,3651,30.5,'x']){a.logPurgeDays=days;a.requestLogPurge();assert.equal(a.dlg.open,false);assert.match(a.logPurgeError,/30 to 3650/);}
+ assert.equal(calls,0);
+ a.logPurgeDays=365;a.requestLogPurge();assert.equal(a.dlg.open,true);await a.submitDialog();
+ assert.match(path,/\/platform\/database\/tables$/);assert.equal(a.logPurgeResult.activity_logs_deleted,3);
+ const legacy=app();legacy.me={saas_mode:false};legacy.tab='dashboard';legacy.selectSection('platformMaintenance');assert.equal(legacy.tab,'dashboard');
+ const section=html.split('x-show="tab===\'platformMaintenance\' && me?.saas_mode && me?.is_platform_admin"')[1].split('x-show="tab===\'platformAdmins\'')[0];
+ assert.doesNotMatch(section,/x-html|SQL console|VACUUM|restore/i);
 });
