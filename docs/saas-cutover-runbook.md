@@ -1,5 +1,9 @@
 # SaaS PostgreSQL cutover runbook
 
+> **Historical record.** Production completed this cutover and runs on
+> PostgreSQL. The `backend.migration_import` tool referenced below has been
+> removed from the codebase and remains in git history only.
+
 This runbook describes preparation and a future cutover from the existing
 single-company SQLite installation to the invitation-only SaaS on shared
 PostgreSQL. It is not authorization to provision production resources, change
