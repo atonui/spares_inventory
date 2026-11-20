@@ -1,6 +1,5 @@
 import csv
 import io
-import sqlite3
 import pytest
 import main
 from regression_tests.test_stock_safety import api

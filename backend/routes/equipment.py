@@ -1,6 +1,5 @@
 """Equipment administration routes with explicit application dependencies."""
 from backend.services.session_credentials import get_request_credential
-from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from typing import List
 from datetime import timedelta
@@ -8,7 +7,7 @@ from backend.temporal import utc_now, validate_zone
 from backend.services.timezone_policy import resolve_business_context
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.services.principals import AuthenticatedPrincipal
-from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.database_sql import execute, execute_cursor
 from backend.temporal import serialize_instant
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.schemas.equipment import (
@@ -24,16 +23,14 @@ def _actor_id(user):
 def _organization_id(conn, user):
     if isinstance(user, AuthenticatedPrincipal):
         return user.organization_id
-    if is_postgres(conn):
-        return execute(
-            conn,
-            "SELECT NULLIF(current_setting('app.organization_id', true), '')::uuid AS id",
-        ).fetchone()["id"]
-    return None
+    return execute(
+        conn,
+        "SELECT NULLIF(current_setting('app.organization_id', true), '')::uuid AS id",
+    ).fetchone()["id"]
 
 
 def _require_company_user(conn, actor, target_user_id):
-    if target_user_id is None or not is_postgres(conn):
+    if target_user_id is None:
         return
     organization_id = _organization_id(conn, actor)
     member = execute(
@@ -51,11 +48,10 @@ def _require_active_equipment(equipment):
 
 
 def _equipment_history_insert(conn, cursor, user, sql, values):
-    if is_postgres(conn):
-        sql = sql.replace("INSERT INTO equipment_history (", "INSERT INTO equipment_history (organization_id, ")
-        marker = "VALUES ("
-        sql = sql.replace(marker, "VALUES (?, ", 1)
-        values = (_organization_id(conn, user), *values)
+    sql = sql.replace("INSERT INTO equipment_history (", "INSERT INTO equipment_history (organization_id, ")
+    marker = "VALUES ("
+    sql = sql.replace(marker, "VALUES (?, ", 1)
+    values = (_organization_id(conn, user), *values)
     return execute_cursor(conn, cursor, sql, values)
 
 
@@ -213,7 +209,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             if include_archived and not check_admin(user_id, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
 
-            delta = "CAST(CAST(e.next_calibration_date AS date) - CAST(? AS date) AS integer)" if is_postgres(conn) else "CAST(julianday(e.next_calibration_date) - julianday(?) AS INTEGER)"
+            delta = "CAST(CAST(e.next_calibration_date AS date) - CAST(? AS date) AS integer)"
             query = f"""
                 SELECT
                     e.*,
@@ -276,24 +272,14 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                 request_data.next_calibration_date,
                 request_data.notes,
             )
-            if is_postgres(conn):
-                execute_cursor(conn, cursor, """INSERT INTO equipment (
+            execute_cursor(conn, cursor, """INSERT INTO equipment (
                     organization_id, equipment_name, make, model, serial_number, assigned_user_id,
                     calibration_cert_number, calibration_authority, calibration_date,
                     next_calibration_date, notes
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
-                    (_organization_id(conn, user_id), *values))
-            else:
-                execute_cursor(conn, cursor, """
-                INSERT INTO equipment (
-                    equipment_name, make, model, serial_number, assigned_user_id,
-                    calibration_cert_number, calibration_authority, calibration_date,
-                    next_calibration_date, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                    values)
+                (_organization_id(conn, user_id), *values))
 
-            equipment_id = cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid
+            equipment_id = cursor.fetchone()["id"]
 
             # Log history
             _equipment_history_insert(conn, cursor, user_id,
@@ -600,8 +586,6 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, _principal):
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             history = execute(conn, """
             SELECT
                 eh.*,
@@ -650,28 +634,17 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
 
             if not check_admin(user_id, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
-
-            if is_postgres(conn):
-                # Each company owns its reminder window (migration 27).
-                organization_id = user_id.organization_id
-                execute(conn, "SELECT organization_id FROM organization_settings WHERE organization_id = ? FOR UPDATE",
-                        (organization_id,))
-                execute(
-                    conn,
-                    """UPDATE organization_settings
+            # Each company owns its reminder window (migration 27).
+            organization_id = user_id.organization_id
+            execute(conn, "SELECT organization_id FROM organization_settings WHERE organization_id = ? FOR UPDATE",
+                    (organization_id,))
+            execute(
+                conn,
+                """UPDATE organization_settings
                        SET calibration_reminder_days = ?, revision = revision + 1, updated_at = ?, updated_by = ?
                        WHERE organization_id = ?""",
-                    (days, serialize_instant(utc_now()), user_id.user_id, organization_id),
-                )
-            else:
-                conn.execute(
-                    """
-                    UPDATE system_settings
-                    SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
-                    WHERE setting_key = 'calibration_reminder_days'
-                """,
-                    (str(days), user_id),
-                )
+                (days, serialize_instant(utc_now()), user_id.user_id, organization_id),
+            )
 
 
             _result = {"success": True, "message": f"Calibration reminder set to {days} days"}

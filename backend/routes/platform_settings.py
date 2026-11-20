@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from backend.database_sql import is_postgres
 from backend.schemas.superadmin import SystemAnnouncementRequest, SystemSettingUpdate
 from backend.services import announcements
 from backend.services.platform_audit import record_platform_audit_event
@@ -26,19 +25,11 @@ def create_platform_settings_router(
     router = APIRouter(prefix="/api/platform", tags=["platform"])
     log_security_event = security_event or (lambda **_event: None)
 
-    def require_postgres():
-        conn = get_connection()
-        try:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
-        finally:
-            conn.close()
 
     @router.get("/announcement/manage")
     async def manage_platform_announcement(
         request: Request, response: Response, actor=Depends(current_user),
     ):
-        require_postgres()
         with authenticated_platform_transaction(
             get_connection,
             session_token=get_request_credential(request).value,
@@ -61,7 +52,6 @@ def create_platform_settings_router(
         actor=Depends(current_user),
         csrf_valid=Depends(csrf_dependency),
     ):
-        require_postgres()
         denial = None
         with authenticated_platform_transaction(
             get_connection,
@@ -105,7 +95,6 @@ def create_platform_settings_router(
         actor=Depends(current_user),
         csrf_valid=Depends(csrf_dependency),
     ):
-        require_postgres()
         denial = None
         with authenticated_platform_transaction(
             get_connection,
@@ -136,7 +125,6 @@ def create_platform_settings_router(
     async def get_platform_security_config(
         request: Request, response: Response, actor=Depends(current_user),
     ):
-        require_postgres()
         keys = tuple(SECURITY_SETTING_LIMITS)
         placeholders = ", ".join("%s" for _ in keys)
         with authenticated_platform_transaction(
@@ -177,7 +165,6 @@ def create_platform_settings_router(
                 raise ValueError
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail=f"Value must be an integer between 1 and {limit}") from None
-        require_postgres()
         revoked_session_count = 0
         with authenticated_platform_transaction(
             get_connection,

@@ -1,9 +1,7 @@
 """Administrative authorization guards with explicit connection ownership."""
 
-import sqlite3
 from dataclasses import replace
 from fastapi import HTTPException
-from backend.database_sql import is_postgres
 from .principals import AuthenticatedPrincipal
 
 
@@ -23,10 +21,7 @@ def check_admin(user_id: int | AuthenticatedPrincipal, conn=None, get_connection
     if close:
         conn = get_connection()
     try:
-        if is_postgres(conn):
-            return False
-        user = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
-        return bool(user and user['role'] in {'admin', 'superadmin'})
+        return False
     finally:
         if close:
             conn.close()
@@ -89,11 +84,7 @@ def require_archive_admin(conn,user_id):
     if isinstance(user_id, AuthenticatedPrincipal):
         require_company_admin(user_id, conn=conn)
         return
-    if is_postgres(conn):
-        raise HTTPException(status_code=403, detail="Company administrator access required")
-    actor=conn.execute('SELECT role FROM users WHERE id=? AND archived_at IS NULL',(user_id,)).fetchone()
-    if not actor or actor['role'] not in ('admin','superadmin'):
-        raise HTTPException(status_code=403,detail='Admin access required')
+    raise HTTPException(status_code=403, detail="Company administrator access required")
 
 
 def require_user_management(user_id: int | AuthenticatedPrincipal, requested_role=None,
@@ -140,11 +131,7 @@ def require_user_management(user_id: int | AuthenticatedPrincipal, requested_rol
     if close:
         conn = get_connection()
     try:
-        if is_postgres(conn):
-            raise HTTPException(status_code=403, detail="Company administrator access required")
-        actor = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
-        target = (conn.execute("SELECT role FROM users WHERE id = ?", (target_user_id,)).fetchone()
-                  if target_user_id is not None else None)
+        raise HTTPException(status_code=403, detail="Company administrator access required")
     finally:
         if close:
             conn.close()
@@ -156,55 +143,25 @@ def require_user_management(user_id: int | AuthenticatedPrincipal, requested_rol
         raise HTTPException(status_code=403, detail="Superadmin access required")
 
 
-def require_superadmin(user_id: int, conn=None, get_connection=None):
-    """Require platform authority on PostgreSQL and preserve SQLite compatibility."""
-    if isinstance(user_id, AuthenticatedPrincipal):
-        close = conn is None
-        if close:
-            conn = get_connection() if get_connection else None
-        if conn is None:
-            if user_id.is_platform_admin:
-                return
-            raise HTTPException(status_code=403, detail="Platform administrator access required")
-        try:
-            import psycopg
-            if isinstance(conn, psycopg.Connection):
-                row = conn.execute(
-                    "SELECT 1 FROM platform_admins WHERE user_id = %s", (user_id.user_id,)
-                ).fetchone()
-                allowed = row is not None
-            else:
-                row = conn.execute(
-                    "SELECT role FROM users WHERE id = ?", (user_id.user_id,)
-                ).fetchone()
-                allowed = bool(row and row["role"] == "superadmin")
-        finally:
-            if close and conn is not None:
-                conn.close()
-        if not allowed:
-            raise HTTPException(status_code=403, detail="Platform administrator access required")
-        return
+def require_superadmin(user_id, conn=None, get_connection=None):
+    """Require a row in platform_admins for the authenticated user."""
+    principal = user_id if isinstance(user_id, AuthenticatedPrincipal) else None
     close = conn is None
     if close:
-        conn = get_connection()
+        conn = get_connection() if get_connection else None
+    if conn is None:
+        if principal is not None and principal.is_platform_admin:
+            return
+        raise HTTPException(status_code=403, detail="Platform administrator access required")
     try:
-        import psycopg
-        if isinstance(conn, psycopg.Connection):
-            row = conn.execute(
-                "SELECT 1 FROM platform_admins WHERE user_id = %s", (user_id,)
-            ).fetchone()
-            allowed = row is not None
-        else:
-            cur = conn.cursor()
-            cur.row_factory = sqlite3.Row
-            try:
-                row = cur.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
-            finally:
-                cur.close()
-            allowed = bool(row and row["role"] == "superadmin")
+        row = conn.execute(
+            "SELECT 1 FROM platform_admins WHERE user_id = %s",
+            (principal.user_id if principal else user_id,),
+        ).fetchone()
     finally:
         if close:
             conn.close()
-    if not allowed:
-        raise HTTPException(status_code=403, detail="Superadmin access required")
+    if row is None:
+        detail = "Platform administrator access required" if principal else "Superadmin access required"
+        raise HTTPException(status_code=403, detail=detail)
 

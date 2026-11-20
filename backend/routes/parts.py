@@ -5,7 +5,7 @@ import csv
 import io
 from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.database_sql import execute, execute_cursor
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.schemas.parts import PART_NUMBER_MAX_LENGTH, PartResponse, CreatePartRequest, UpdatePartRequest
 from backend.schemas.api_v1 import PartPageResponse
@@ -118,21 +118,13 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
             # Create part
             values = (request_data.part_number, request_data.description,
                       request_data.category, request_data.unit_cost)
-            if is_postgres(conn):
-                execute_cursor(
-                    conn, cursor,
-                    """INSERT INTO parts
+            execute_cursor(
+                conn, cursor,
+                """INSERT INTO parts
                        (organization_id, part_number, description, category, unit_cost)
                        VALUES (?, ?, ?, ?, ?)""",
-                    (user_id.organization_id, *values),
-                )
-            else:
-                execute_cursor(
-                    conn, cursor,
-                    """INSERT INTO parts (part_number, description, category, unit_cost)
-                       VALUES (?, ?, ?, ?)""",
-                    values,
-                )
+                (user_id.organization_id, *values),
+            )
 
 
             _result = {
@@ -206,26 +198,19 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
 
                     values = (row["part_number"], row["description"],
                               row.get("category", ""), float(row.get("unit_cost", 0)))
-                    if is_postgres(conn):
-                        with conn.transaction():
-                            execute_cursor(
-                                conn, cursor,
-                                """INSERT INTO parts
+                    with conn.transaction():
+                        execute_cursor(
+                            conn, cursor,
+                            """INSERT INTO parts
                                    (organization_id, part_number, description, category, unit_cost)
                                    VALUES (?, ?, ?, ?, ?) ON CONFLICT (organization_id, part_number)
                                    DO NOTHING""",
-                                (user_id.organization_id, *values),
-                            )
-                        if cursor.rowcount == 0:
-                            skipped += 1
-                            skipped_details.append(f"Part {row['part_number']} already exists")
-                            continue
-                    else:
-                        execute_cursor(
-                            conn, cursor,
-                            "INSERT INTO parts (part_number, description, category, unit_cost) VALUES (?, ?, ?, ?)",
-                            values,
+                            (user_id.organization_id, *values),
                         )
+                    if cursor.rowcount == 0:
+                        skipped += 1
+                        skipped_details.append(f"Part {row['part_number']} already exists")
+                        continue
                     added += 1
                 except Exception as e:
                     skipped += 1
@@ -258,13 +243,8 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
             cursor = conn.cursor()
 
             # Check if current user is admin
-            if is_postgres(conn) and not check_admin(user_id, conn):
+            if not check_admin(user_id, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
-            if not is_postgres(conn):
-                execute_cursor(conn, cursor, "SELECT role FROM users WHERE id = ?", (user_id,))
-                user = cursor.fetchone()
-                if not user or user["role"] != "admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
 
             # Check if part exists
             execute_cursor(conn, cursor, "SELECT id FROM parts WHERE id = ?", (part_id,))

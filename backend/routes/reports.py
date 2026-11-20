@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from backend.temporal import serialize_instant, validate_zone
-from backend.temporal_contract import stored_instant, date_metadata, date_predicates, register_instant_comparison
+from backend.temporal_contract import stored_instant, date_metadata, date_predicates
 from backend.services.timezone_policy import resolve_business_context
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
 BASE = '''FROM movements m LEFT JOIN stores s ON s.id=m.from_store_id
@@ -55,14 +55,14 @@ def create_stock_report_router(*, get_connection, current_user, require_active) 
             conditions.append('m.created_by=?');params.append(user_id)
         elif f['engineer_id'] is not None:
             conditions.append('m.created_by=?');params.append(f['engineer_id'])
-        date_sql,date_params=date_predicates('m.created_at',metadata,canonical_instants=is_postgres(conn))
+        date_sql,date_params=date_predicates('m.created_at',metadata,canonical_instants=True)
         if date_sql: conditions.append(date_sql.removeprefix(' AND '));params.extend(date_params)
         for key,column in [('part_id','m.part_id'),('store_id','m.from_store_id'),('work_order_number','wo.work_order_number')]:
             if f[key] is not None: conditions.append(column+'=?');params.append(f[key])
         return ' WHERE '+' AND '.join(conditions),params,'all' if privileged else 'own'
 
     def event_rows(conn,where,params,limit=None,offset=0):
-        order_by = "m.created_at DESC,m.id DESC" if is_postgres(conn) else "utc_instant(m.created_at) DESC,m.id DESC"
+        order_by = "m.created_at DESC,m.id DESC"
         statement='''SELECT m.id AS movement_id,m.quantity,m.part_id,p.part_number,p.description,
             m.from_store_id AS store_id,s.name AS store_name,m.created_by AS engineer_id,u.name AS engineer_name,
             m.work_order_id,wo.work_order_number AS work_order,m.created_at,m.notes '''+BASE+where+' ORDER BY '+order_by
@@ -81,7 +81,6 @@ def create_stock_report_router(*, get_connection, current_user, require_active) 
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,f['start_date'],f['end_date'])
-            if not is_postgres(conn): register_instant_comparison(conn)
             where,params,scope=query_scope(conn,principal,f,metadata)
             totals=dict(execute(conn,'SELECT COUNT(*) AS events,COALESCE(SUM(m.quantity),0) AS quantity,COUNT(DISTINCT m.part_id) AS parts '+BASE+where,params).fetchone())
             by_part=[dict(r) for r in execute(conn,'SELECT m.part_id,p.part_number,p.description,SUM(m.quantity) AS quantity,COUNT(*) AS events '+BASE+where+' GROUP BY m.part_id,p.part_number,p.description ORDER BY quantity DESC,m.part_id',params).fetchall()]
@@ -106,7 +105,6 @@ def create_stock_report_router(*, get_connection, current_user, require_active) 
             if expected_timezone_revision is not None and expected_timezone_revision!=context.revision:
                 raise HTTPException(409,'Business timezone changed. Refresh the report before exporting.')
             metadata=date_metadata(context,f['start_date'],f['end_date'])
-            if not is_postgres(conn): register_instant_comparison(conn)
             where,params,_=query_scope(conn,principal,f,metadata)
             rows=event_rows(conn,where,params)
         output=io.StringIO(newline='');writer=csv.writer(output)

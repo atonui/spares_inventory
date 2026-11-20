@@ -136,7 +136,6 @@ def email_change_api(postgres_schema):
         authenticated_account_writer=lambda principal, token: authenticated_account_transaction(
             get_connection, principal_or_user=principal, session_token=token
         ),
-        stock_writer=lambda: None,
         current_user=current_user,
         csrf_dependency=public_csrf,
         authenticated_csrf_dependency=csrf,

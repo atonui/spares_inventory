@@ -6,7 +6,6 @@ import uuid
 from datetime import datetime,timezone
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException
-from backend.database_sql import is_postgres
 from backend.temporal import parse_api_instant,serialize_instant,utc_now
 ROLES={'engineer','manager','admin','owner','superadmin'}
 
@@ -29,16 +28,13 @@ def normalize_notice(payload):
     return n
 
 def load_notice(conn):
-    if is_postgres(conn):
-        row=conn.execute("SELECT revision, payload FROM platform_announcements ORDER BY updated_at DESC, id DESC LIMIT 1").fetchone()
-        if not row:return None
-        payload=row['payload']
-        if isinstance(payload,str):payload=json.loads(payload)
-        notice=normalize_notice(payload)
-        if notice['revision']!=row['revision']:raise ValueError('Invalid saved announcement revision')
-        return notice
-    row=conn.execute("SELECT setting_value FROM system_settings WHERE setting_key='system_announcement'").fetchone()
-    return normalize_notice(json.loads(row['setting_value'])) if row else None
+    row=conn.execute("SELECT revision, payload FROM platform_announcements ORDER BY updated_at DESC, id DESC LIMIT 1").fetchone()
+    if not row:return None
+    payload=row['payload']
+    if isinstance(payload,str):payload=json.loads(payload)
+    notice=normalize_notice(payload)
+    if notice['revision']!=row['revision']:raise ValueError('Invalid saved announcement revision')
+    return notice
 
 def check_revision(conn,expected_revision):
     old=load_notice(conn)
@@ -47,30 +43,20 @@ def check_revision(conn,expected_revision):
     return old
 
 def save_notice(conn,notice,*,actor_id,expected_revision):
-    postgres=is_postgres(conn)
-    if postgres:conn.execute('LOCK TABLE platform_announcements IN EXCLUSIVE MODE')
+    conn.execute('LOCK TABLE platform_announcements IN EXCLUSIVE MODE')
     check_revision(conn,expected_revision)
     saved=normalize_notice({'audience':'everyone','roles':[],'starts_at':None,'expires_at':None,'dismissible':False,**notice,'revision':str(uuid.uuid4()),'set_at':serialize_instant(utc_now())})
-    if postgres:
-        conn.execute('DELETE FROM platform_announcements')
-        conn.execute(
-            "INSERT INTO platform_announcements(revision,payload,updated_by) VALUES (%s,%s::jsonb,%s)",
-            (saved['revision'],json.dumps(saved,separators=(',',':')),actor_id),
-        )
-    else:
-        conn.execute("""INSERT INTO system_settings(setting_key,setting_value,updated_by) VALUES('system_announcement',?,?)
-        ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_by=excluded.updated_by,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now')""",(json.dumps(saved),actor_id))
-        conn.execute('DELETE FROM announcement_dismissals')
+    conn.execute('DELETE FROM platform_announcements')
+    conn.execute(
+        "INSERT INTO platform_announcements(revision,payload,updated_by) VALUES (%s,%s::jsonb,%s)",
+        (saved['revision'],json.dumps(saved,separators=(',',':')),actor_id),
+    )
     return saved
 
 def remove_notice(conn,*,expected_revision):
-    postgres=is_postgres(conn)
-    if postgres:conn.execute('LOCK TABLE platform_announcements IN EXCLUSIVE MODE')
+    conn.execute('LOCK TABLE platform_announcements IN EXCLUSIVE MODE')
     previous=check_revision(conn,expected_revision)
-    if postgres:conn.execute('DELETE FROM platform_announcements')
-    else:
-        conn.execute("DELETE FROM system_settings WHERE setting_key='system_announcement'")
-        conn.execute('DELETE FROM announcement_dismissals')
+    conn.execute('DELETE FROM platform_announcements')
     return previous
 
 def dismiss_notice(conn,*,user_id,revision,now):

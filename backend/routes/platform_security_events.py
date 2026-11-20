@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from backend.database_sql import is_postgres
 from backend.services.platform_transactions import authenticated_platform_transaction
 from backend.services.security_events import safe_security_event_details
 from backend.services.session_credentials import get_request_credential
@@ -62,8 +61,7 @@ def create_platform_security_events_router(*, get_connection, current_user) -> A
 
         conn = get_connection()
         try:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
+            pass
         finally:
             conn.close()
 

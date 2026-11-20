@@ -22,7 +22,6 @@ def test_postgres_user_archive_passes_principal_to_membership_guard(monkeypatch)
         seen.append(actor)
         raise RuntimeError("stop after verifying authorization input")
 
-    monkeypatch.setattr(archiving, "is_postgres", lambda _conn: True)
     with pytest.raises(RuntimeError, match="stop after verifying"):
         archiving.archive_record(
             "users", 34, principal, session_token="session",

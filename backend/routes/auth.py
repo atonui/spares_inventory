@@ -1,7 +1,6 @@
 """Authentication routes composed with explicit application dependencies."""
 from contextlib import contextmanager
 from backend.services.session_credentials import get_optional_request_credential, get_request_credential
-from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from datetime import timedelta
 from backend.temporal import utc_now, serialize_instant
@@ -30,16 +29,11 @@ from backend.schemas.email_change import (
     EmailChangeStatus,
 )
 from backend.services.session_credentials import hash_session_credential
-from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.database_sql import execute, execute_cursor
 from backend.security import password_needs_rehash
 
 
-def register_sqlite_instant_comparison(conn):
-    if not is_postgres(conn):
-        register_instant_comparison(conn)
-
-
-def create_auth_router(*, get_connection, authenticated_writer, stock_writer, current_user,
+def create_auth_router(*, get_connection, authenticated_writer, current_user,
                        csrf_dependency, authenticated_csrf_dependency, csrf_token_factory, password_hash,
                        password_verify, security_config, reset_email,
                        queue_reset_email,
@@ -53,7 +47,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     get_db_connection = get_connection
     authenticated_write_transaction = authenticated_writer
     authenticated_account_write_transaction = authenticated_account_writer or authenticated_writer
-    stock_write_transaction = stock_writer
     get_current_user = current_user
     verify_csrf = authenticated_csrf_dependency
     verify_public_csrf = csrf_dependency
@@ -110,13 +103,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request.state.email_change_user_id = authenticated_user_id(user)
         return user
 
-    def require_postgres(conn):
-        if not is_postgres(conn):
-            raise HTTPException(status_code=503, detail="Email change is unavailable")
 
-    def require_mobile_pairing_postgres(conn):
-        if not is_postgres(conn):
-            raise HTTPException(status_code=503, detail="Mobile pairing requires the SaaS account service")
 
     def set_email_change_user_scope(conn, user_id):
         conn.execute(
@@ -125,11 +112,10 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         )
 
     def set_mobile_pairing_user_scope(conn, user_id):
-        if is_postgres(conn):
-            conn.execute(
-                "SELECT set_config('app.mobile_pairing_user_id', %s, true)",
-                (str(user_id),),
-            )
+        conn.execute(
+            "SELECT set_config('app.mobile_pairing_user_id', %s, true)",
+            (str(user_id),),
+        )
 
     def set_mobile_pairing_token_scope(conn, setting, token_hash):
         if setting not in {'app.mobile_pairing_qr_token_hash', 'app.mobile_pairing_code_hash', 'app.mobile_pairing_claim_token_hash'}:
@@ -162,35 +148,21 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     ):
         """Get current user's profile"""
         conn = get_db_connection()
-        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
-
-        if is_postgres(conn):
-            principal = user_id
-            cursor = conn.cursor()
-            execute_cursor(conn, cursor,
-                "SELECT id, email, name, territory, created_at, display_timezone FROM users WHERE id = %s",
-                (principal.user_id,),
-            )
-            user = cursor.fetchone()
-            conn.close()
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-            return dict(user) | {
-                "role": principal.company_role or "platform_admin",
-                "saas_mode": True,
-            }
+        principal = user_id
+        cursor = conn.cursor()
         execute_cursor(conn, cursor,
-            "SELECT id, email, name, role, territory, created_at, display_timezone FROM users WHERE id = ?",
-            (user_id,),
+            "SELECT id, email, name, territory, created_at, display_timezone FROM users WHERE id = %s",
+            (principal.user_id,),
         )
         user = cursor.fetchone()
         conn.close()
-
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
-        return dict(user)
+        return dict(user) | {
+            "role": principal.company_role or "platform_admin",
+            "saas_mode": True,
+        }
 
 
     @router.put("/api/profile")
@@ -211,21 +183,9 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 raise HTTPException(status_code=404, detail="User not found")
 
             if profile_update.email:
-                if is_postgres(conn):
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Ask your company owner or administrator to change your email address.",
-                    )
-                # Check if email already exists
-                execute_cursor(conn, cursor,
-                    "SELECT id FROM users WHERE email = ? AND id != ?",
-                    (profile_update.email, actor_id),
-                )
-                if cursor.fetchone():
-                    raise HTTPException(status_code=400, detail="Email already in use")
-
-                execute_cursor(conn, cursor,
-                    "UPDATE users SET email = ? WHERE id = ?", (profile_update.email, actor_id)
+                raise HTTPException(
+                    status_code=403,
+                    detail="Ask your company owner or administrator to change your email address.",
                 )
 
 
@@ -299,7 +259,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
         conn = get_db_connection()
         try:
-            require_postgres(conn)
             with postgres_transaction(conn):
                 result = confirm_email_change(
                     conn,
@@ -370,9 +329,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
             # Deactivate all sessions for this user i.e. force logout from all devices
             execute_cursor(conn, cursor, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (actor_id,))
-            if is_postgres(conn):
-                from backend.services.platform_support import end_support_sessions
-                end_support_sessions(conn, actor_user_id=actor_id, end_reason="password_changed")
+            from backend.services.platform_support import end_support_sessions
+            end_support_sessions(conn, actor_user_id=actor_id, end_reason="password_changed")
 
         log_security_event(
             event="password_changed", outcome="success", actor_user_id=actor_id,
@@ -395,26 +353,16 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             cursor = conn.cursor()
 
             current_token = get_request_credential(request).value
-            from backend.database_sql import execute, is_postgres
             current_key = hash_session_credential(current_token)
-            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
-
-            if is_postgres(conn):
-                revoked = conn.execute(
-                    f"UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND {token_column} != %s AND is_active = TRUE RETURNING id",
-                    (actor_id, current_key),
-                ).fetchall()
-                from backend.services.platform_support import end_support_sessions
-                end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
-                                     auth_session_ids=[row["id"] for row in revoked])
-                revoked_count = len(revoked)
-            else:
-                cursor = execute(
-                    conn,
-                    f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} != ? AND is_active = TRUE",
-                    (actor_id, current_key),
-                )
-                revoked_count = cursor.rowcount
+            token_column = "session_token_hash"
+            revoked = conn.execute(
+                f"UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND {token_column} != %s AND is_active = TRUE RETURNING id",
+                (actor_id, current_key),
+            ).fetchall()
+            from backend.services.platform_support import end_support_sessions
+            end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
+                                 auth_session_ids=[row["id"] for row in revoked])
+            revoked_count = len(revoked)
 
 
         log_session_event("session_revoked", actor_id, request,
@@ -437,7 +385,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_agent = request.headers.get("user-agent", "")[:200]
 
         conn = get_db_connection()
-        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Find user by email
@@ -469,26 +416,15 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                WHERE id = ? AND archived_at IS NULL""",
             (token, serialize_instant(expires_at), user_id),
         )
-
-        if is_postgres(conn):
-            try:
-                queue_reset_email(conn, request_data.email, token, expires_at)
-                conn.commit()
-                logger.info("Password reset email queued")
-            except Exception:
-                conn.rollback()
-                logger.error("Failed to queue password reset email")
-            finally:
-                conn.close()
-        else:
+        try:
+            queue_reset_email(conn, request_data.email, token, expires_at)
             conn.commit()
+            logger.info("Password reset email queued")
+        except Exception:
+            conn.rollback()
+            logger.error("Failed to queue password reset email")
+        finally:
             conn.close()
-            try:
-                send_reset_email(request_data.email, token)
-                logger.info("Password reset email sent")
-            except Exception:
-                logger.error("Failed to send password reset email")
-                # Don't reveal email send failure to prevent information disclosure
 
         return {"message": "If the email exists, a reset link has been sent"}
 
@@ -505,7 +441,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_agent = request.headers.get("user-agent", "")[:200]
 
         conn = get_db_connection()
-        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
         # Validate token
@@ -583,9 +518,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=400,detail='Invalid or expired token')
 
         execute_cursor(conn, cursor, "UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (user["id"],))
-        if is_postgres(conn):
-            from backend.services.platform_support import end_support_sessions
-            end_support_sessions(conn, actor_user_id=user["id"], end_reason="password_changed")
+        from backend.services.platform_support import end_support_sessions
+        end_support_sessions(conn, actor_user_id=user["id"], end_reason="password_changed")
 
         conn.commit()
         conn.close()
@@ -607,7 +541,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         ip_address = request.client.host if hasattr(request, "client") else None
 
         conn = get_db_connection()
-        register_sqlite_instant_comparison(conn)
         cursor = conn.cursor()
 
         execute_cursor(conn, cursor,
@@ -646,15 +579,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
 
 
     def perform_login(user_login: UserLogin, request: Request, *, native: bool):
-        from backend.database_sql import execute, is_postgres
+        from backend.database_sql import execute
         from backend.postgres_database import postgres_transaction
 
         ip_address = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent", "")[:200]
         cfg = get_security_config()
         conn = get_db_connection()
-        postgres = is_postgres(conn)
-        if native and not postgres:
+        if native and False:
             conn.close()
             raise HTTPException(status_code=503, detail="Native login requires PostgreSQL")
         if native:
@@ -664,11 +596,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             except (ValueError, TypeError):
                 conn.close()
                 raise HTTPException(status_code=503, detail="Native refresh is unavailable") from None
-        if not postgres:
-            register_sqlite_instant_comparison(conn)
-
-        if postgres:
-            query = """SELECT u.id, u.email, u.name,
+        query = """SELECT u.id, u.email, u.name,
                               COALESCE(om.company_role, CASE WHEN pa.user_id IS NOT NULL THEN 'platform_admin' END) AS role,
                               u.territory, u.password_hash, u.failed_login_attempts,
                               u.account_locked_until
@@ -676,10 +604,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                        LEFT JOIN organization_memberships AS om ON om.user_id = u.id AND om.is_active = TRUE
                        LEFT JOIN platform_admins AS pa ON pa.user_id = u.id
                        WHERE u.email = ? AND u.archived_at IS NULL"""
-        else:
-            query = """SELECT id, email, name, role, territory, password_hash,
-                              failed_login_attempts, account_locked_until
-                       FROM users WHERE email = ? AND archived_at IS NULL"""
         user = execute(conn, query, (user_login.email,)).fetchone()
 
         if user and user["account_locked_until"]:
@@ -756,101 +680,76 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         conn.close()
 
         replaced_mobile_count = 0
-        if postgres:
-            session_conn = get_db_connection()
-            try:
-                with postgres_transaction(session_conn):
-                    active = session_conn.execute(
-                        "SELECT id FROM users WHERE id = %s AND archived_at IS NULL FOR UPDATE",
+        session_conn = get_db_connection()
+        try:
+            with postgres_transaction(session_conn):
+                active = session_conn.execute(
+                    "SELECT id FROM users WHERE id = %s AND archived_at IS NULL FOR UPDATE",
+                    (user["id"],),
+                ).fetchone()
+                if active is None:
+                    raise HTTPException(status_code=401, detail="Invalid credentials")
+                if native:
+                    set_mobile_pairing_user_scope(session_conn, user["id"])
+                    replaced_mobile_count = session_conn.execute(
+                        "UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND is_mobile = TRUE AND is_active = TRUE",
                         (user["id"],),
-                    ).fetchone()
-                    if active is None:
-                        raise HTTPException(status_code=401, detail="Invalid credentials")
-                    if native:
-                        set_mobile_pairing_user_scope(session_conn, user["id"])
-                        replaced_mobile_count = session_conn.execute(
-                            "UPDATE sessions SET is_active = FALSE WHERE user_id = %s AND is_mobile = TRUE AND is_active = TRUE",
-                            (user["id"],),
-                        ).rowcount
-                        revoked_at = serialize_instant(utc_now())
-                        session_conn.execute(
-                            """UPDATE session_refresh_credentials AS r SET expires_at = %s,
+                    ).rowcount
+                    revoked_at = serialize_instant(utc_now())
+                    session_conn.execute(
+                        """UPDATE session_refresh_credentials AS r SET expires_at = %s,
                                       consumed_at = COALESCE(r.consumed_at, %s)
                                FROM sessions AS s WHERE s.id = r.session_id AND s.user_id = %s
                                  AND s.is_mobile = TRUE AND s.is_active = FALSE""",
-                            (revoked_at, revoked_at, user["id"]),
-                        )
-                        session_conn.execute(
-                            "UPDATE mobile_device_sessions SET revoked_at = %s WHERE user_id = %s AND revoked_at IS NULL",
-                            (revoked_at, user["id"]),
-                        )
-                    session_id = session_conn.execute(
-                        """INSERT INTO sessions (user_id, session_token_hash, expires_at,
+                        (revoked_at, revoked_at, user["id"]),
+                    )
+                    session_conn.execute(
+                        "UPDATE mobile_device_sessions SET revoked_at = %s WHERE user_id = %s AND revoked_at IS NULL",
+                        (revoked_at, user["id"]),
+                    )
+                session_id = session_conn.execute(
+                    """INSERT INTO sessions (user_id, session_token_hash, expires_at,
                                                   absolute_expires_at, ip_address, user_agent, is_mobile)
                            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                        (user["id"], hash_session_credential(raw_credential),
-                         serialize_instant(expires), serialize_instant(absolute_expires),
-                         ip_address, user_agent, native),
-                    ).fetchone()["id"]
-                    session_conn.execute(
-                        """UPDATE users SET failed_login_attempts = 0,
+                    (user["id"], hash_session_credential(raw_credential),
+                     serialize_instant(expires), serialize_instant(absolute_expires),
+                     ip_address, user_agent, native),
+                ).fetchone()["id"]
+                session_conn.execute(
+                    """UPDATE users SET failed_login_attempts = 0,
                                   account_locked_until = NULL, last_login = %s
                            WHERE id = %s""",
-                        (serialize_instant(utc_now()), user["id"]),
+                    (serialize_instant(utc_now()), user["id"]),
+                )
+                from backend.services.principals import resolve_principal
+                principal = resolve_principal(session_conn, raw_credential)
+                if (principal.company_role is not None and not principal.organization_is_active
+                        and not principal.is_platform_admin):
+                    raise HTTPException(status_code=403, detail="Organization is suspended")
+                if native:
+                    now = utc_now()
+                    set_mobile_pairing_user_scope(session_conn, user["id"])
+                    from backend.services.mobile_session_policy import effective_mobile_session_duration_hours
+                    absolute_expires = now + timedelta(hours=effective_mobile_session_duration_hours(session_conn, principal.organization_id))
+                    expires = min(now + timedelta(minutes=15), absolute_expires)
+                    session_conn.execute(
+                        "UPDATE sessions SET expires_at = %s, absolute_expires_at = %s WHERE id = %s",
+                        (serialize_instant(expires), serialize_instant(absolute_expires), session_id),
                     )
-                    from backend.services.principals import resolve_principal
-                    principal = resolve_principal(session_conn, raw_credential)
-                    if (principal.company_role is not None and not principal.organization_is_active
-                            and not principal.is_platform_admin):
-                        raise HTTPException(status_code=403, detail="Organization is suspended")
-                    if native:
-                        now = utc_now()
-                        set_mobile_pairing_user_scope(session_conn, user["id"])
-                        from backend.services.mobile_session_policy import effective_mobile_session_duration_hours
-                        absolute_expires = now + timedelta(hours=effective_mobile_session_duration_hours(session_conn, principal.organization_id))
-                        expires = min(now + timedelta(minutes=15), absolute_expires)
-                        session_conn.execute(
-                            "UPDATE sessions SET expires_at = %s, absolute_expires_at = %s WHERE id = %s",
-                            (serialize_instant(expires), serialize_instant(absolute_expires), session_id),
-                        )
-                        session_conn.execute(
-                            """INSERT INTO session_refresh_credentials
+                    session_conn.execute(
+                        """INSERT INTO session_refresh_credentials
                                (session_id, token_hash, issued_at, expires_at)
                                VALUES (%s, %s, %s, %s)""",
-                            (session_id, hash_session_credential(raw_refresh_credential),
-                             serialize_instant(now), serialize_instant(absolute_expires)),
-                        )
-                    user_role = (
-                        principal.company_role
-                        if principal.company_role is not None and principal.organization_is_active
-                        else "platform_admin"
+                        (session_id, hash_session_credential(raw_refresh_credential),
+                         serialize_instant(now), serialize_instant(absolute_expires)),
                     )
-            finally:
-                session_conn.close()
-        else:
-            with stock_write_transaction() as session_conn:
-                active = execute(
-                    session_conn,
-                    "SELECT 1 FROM users WHERE id = ? AND archived_at IS NULL",
-                    (user["id"],),
-                ).fetchone()
-                if not active:
-                    raise HTTPException(status_code=401, detail="Invalid credentials")
-                execute(
-                    session_conn,
-                    """INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (user["id"], hash_session_credential(raw_credential), serialize_instant(expires), ip_address, user_agent),
+                user_role = (
+                    principal.company_role
+                    if principal.company_role is not None and principal.organization_is_active
+                    else "platform_admin"
                 )
-                execute(
-                    session_conn,
-                    """UPDATE users SET failed_login_attempts = 0,
-                              account_locked_until = NULL,
-                              last_login = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
-                       WHERE id = ?""",
-                    (user["id"],),
-                )
-            user_role = user["role"]
+        finally:
+            session_conn.close()
 
         log_security_event(event="login_succeeded", outcome="success", actor_user_id=user["id"], ip_address=ip_address, user_agent=user_agent, details={"is_mobile": native, "remember_me": user_login.remember_me})
         log_session_event("session_revoked", user["id"], request, is_mobile=True,
@@ -913,7 +812,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request_id: str = Header(..., alias="X-Request-ID", min_length=1, max_length=64),
     ):
         """Rotate a native credential pair with a bounded exact-request retry."""
-        from backend.database_sql import is_postgres
         from backend.postgres_database import postgres_transaction
         from backend.services.native_refresh import (
             encrypt_retry_response, decrypt_retry_response, parse_native_refresh_instant,
@@ -928,9 +826,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             raise HTTPException(status_code=503, detail="Native refresh is unavailable") from None
 
         conn = get_db_connection()
-        if not is_postgres(conn):
-            conn.close()
-            raise HTTPException(status_code=503, detail="Native refresh requires PostgreSQL")
 
         now = utc_now()
         now_text = serialize_instant(now)
@@ -1095,7 +990,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
         ) as (conn, _principal):
-            require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
             conn.execute(
@@ -1126,7 +1020,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     @router.get("/api/profile/mobile-devices", response_model=list[MobileDeviceResponse])
     async def list_mobile_devices(request: Request, user=Depends(email_change_user)):
         with authenticated_account_write_transaction(user, get_request_credential(request).value) as (conn, _principal):
-            require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
             rows = conn.execute(
@@ -1149,7 +1042,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         request_id: str, request: Request, user=Depends(email_change_user), _csrf=Depends(verify_csrf),
     ):
         with authenticated_account_write_transaction(user, get_request_credential(request).value) as (conn, _principal):
-            require_mobile_pairing_postgres(conn)
             user_id = authenticated_user_id(user)
             set_mobile_pairing_user_scope(conn, user_id)
             if not request_id.isdecimal():
@@ -1189,7 +1081,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
         ) as (conn, _principal):
-            require_mobile_pairing_postgres(conn)
             set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
             row = conn.execute(
                 """SELECT status, device_name, expires_at FROM mobile_pairing_requests
@@ -1217,7 +1108,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
         ) as (conn, _principal):
-            require_mobile_pairing_postgres(conn)
             set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
             row = conn.execute(
                 """SELECT status, expires_at FROM mobile_pairing_requests
@@ -1246,7 +1136,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         with authenticated_account_write_transaction(
             user, get_request_credential(request).value
         ) as (conn, _principal):
-            require_mobile_pairing_postgres(conn)
             set_mobile_pairing_user_scope(conn, authenticated_user_id(user))
             result = conn.execute(
                 """UPDATE mobile_pairing_requests SET status = 'cancelled'
@@ -1262,7 +1151,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     @limiter.limit("10/minute")
     async def claim_mobile_pairing(payload: MobilePairingClaim, request: Request):
         from urllib.parse import parse_qs, urlsplit
-        from backend.database_sql import is_postgres
         from backend.postgres_database import postgres_transaction
 
         if payload.pairing_code is not None:
@@ -1288,9 +1176,6 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         claim_hash = hash_session_credential(claim_token)
         now = utc_now()
         conn = get_db_connection()
-        if not is_postgres(conn):
-            conn.close()
-            raise HTTPException(status_code=503, detail="Mobile pairing requires the SaaS account service")
         try:
             with postgres_transaction(conn):
                 conn.execute("SELECT set_config('app.organization_id', '', true)")
@@ -1322,16 +1207,12 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
     @router.post("/api/v1/auth/mobile-pairing/complete", response_model=MobilePairingCompleteResponse)
     @limiter.limit("10/minute")
     async def complete_mobile_pairing(payload: MobilePairingComplete, request: Request):
-        from backend.database_sql import is_postgres
         from backend.postgres_database import postgres_transaction
         claim_hash = hash_session_credential(payload.claim_token)
         now = utc_now()
         access_token = secrets.token_urlsafe(32)
         refresh_token = secrets.token_urlsafe(32)
         conn = get_db_connection()
-        if not is_postgres(conn):
-            conn.close()
-            raise HTTPException(status_code=503, detail="Mobile pairing requires the SaaS account service")
         try:
             with postgres_transaction(conn):
                 conn.execute("SELECT set_config('app.organization_id', '', true)")
@@ -1441,20 +1322,14 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         user_id: int = Depends(get_current_user), request: Request = None
     ):
         """Get user's active sessions"""
-        from backend.database_sql import execute, is_postgres
+        from backend.database_sql import execute
 
         conn = get_db_connection()
         actor_id = authenticated_user_id(user_id)
         credential = get_request_credential(request).value
-        if is_postgres(conn):
-            current_key = hash_session_credential(credential)
-            order_by = "last_activity DESC"
-            session_column = "session_token_hash"
-        else:
-            register_sqlite_instant_comparison(conn)
-            current_key = hash_session_credential(credential)
-            order_by = "utc_instant(last_activity) DESC"
-            session_column = "session_token"
+        current_key = hash_session_credential(credential)
+        order_by = "last_activity DESC"
+        session_column = "session_token_hash"
         sessions = execute(
             conn,
             f"""SELECT id, created_at, last_activity, ip_address, user_agent,
@@ -1479,31 +1354,22 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
 
-            columns = "is_active, is_mobile" if is_postgres(conn) else "is_active"
-            lock = " FOR UPDATE" if is_postgres(conn) else ""
+            columns = "is_active, is_mobile"
+            lock = " FOR UPDATE"
             previous = execute(conn, f"SELECT {columns} FROM sessions WHERE id = ? AND user_id = ?" + lock,
                                (session_id, actor_id)).fetchone()
             revoked_count = int(bool(previous and previous["is_active"]))
-            mobile = bool(previous["is_mobile"]) if previous and is_postgres(conn) else False
-            # Verify session belongs to user
-            if is_postgres(conn):
-                revoked = conn.execute(
-                    "UPDATE sessions SET is_active=FALSE WHERE id=%s AND user_id=%s RETURNING id",
-                    (session_id, actor_id),
-                ).fetchone()
-                if revoked:
-                    from backend.services.platform_support import end_support_sessions
-                    end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
-                                         auth_session_ids=[revoked["id"]])
-                else:
-                    raise HTTPException(status_code=404, detail="Session not found")
+            mobile = bool(previous["is_mobile"]) if previous else False
+            revoked = conn.execute(
+                "UPDATE sessions SET is_active=FALSE WHERE id=%s AND user_id=%s RETURNING id",
+                (session_id, actor_id),
+            ).fetchone()
+            if revoked:
+                from backend.services.platform_support import end_support_sessions
+                end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
+                                     auth_session_ids=[revoked["id"]])
             else:
-                execute_cursor(conn, cursor,
-                    "UPDATE sessions SET is_active = FALSE WHERE id = ? AND user_id = ?",
-                    (session_id, actor_id),
-                )
-                if cursor.rowcount == 0:
-                    raise HTTPException(status_code=404, detail="Session not found")
+                raise HTTPException(status_code=404, detail="Session not found")
 
 
         log_session_event("session_revoked", actor_id, request, is_mobile=mobile,
@@ -1523,26 +1389,16 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             cursor = conn.cursor()
 
             current_token = get_request_credential(request).value
-            from backend.database_sql import execute, is_postgres
             current_key = hash_session_credential(current_token)
-            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
-
-            if is_postgres(conn):
-                revoked = conn.execute(
-                    f"UPDATE sessions SET is_active=FALSE WHERE user_id=%s AND {token_column} != %s AND is_active=TRUE RETURNING id",
-                    (actor_id, current_key),
-                ).fetchall()
-                from backend.services.platform_support import end_support_sessions
-                end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
-                                     auth_session_ids=[row["id"] for row in revoked])
-                revoked_count = len(revoked)
-            else:
-                cursor = execute(
-                    conn,
-                    f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} != ? AND is_active = TRUE",
-                    (actor_id, current_key),
-                )
-                revoked_count = cursor.rowcount
+            token_column = "session_token_hash"
+            revoked = conn.execute(
+                f"UPDATE sessions SET is_active=FALSE WHERE user_id=%s AND {token_column} != %s AND is_active=TRUE RETURNING id",
+                (actor_id, current_key),
+            ).fetchall()
+            from backend.services.platform_support import end_support_sessions
+            end_support_sessions(conn, actor_user_id=actor_id, end_reason="sessions_revoked",
+                                 auth_session_ids=[row["id"] for row in revoked])
+            revoked_count = len(revoked)
 
 
         log_session_event("session_revoked", actor_id, request,
@@ -1558,26 +1414,23 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         credential = get_request_credential(request).value
         with authenticated_account_write(user_id, get_request_credential(request).value) as conn:
             cursor = conn.cursor()
-            from backend.database_sql import execute, is_postgres
-            if not is_postgres(conn):
-                execute(conn, "UPDATE users SET session_token = NULL, session_expires = NULL WHERE id = ?", (actor_id,))
-            token_column = "session_token_hash" if is_postgres(conn) else "session_token"
+            from backend.database_sql import execute
+            token_column = "session_token_hash"
             token_value = hash_session_credential(credential)
             support_auth_id = None
-            if is_postgres(conn):
-                row = conn.execute(
-                    f"SELECT id, is_mobile FROM sessions WHERE user_id=%s AND {token_column}=%s AND is_active=TRUE FOR UPDATE",
-                    (actor_id, token_value),
-                ).fetchone()
-                support_auth_id = row["id"] if row else None
+            row = conn.execute(
+                f"SELECT id, is_mobile FROM sessions WHERE user_id=%s AND {token_column}=%s AND is_active=TRUE FOR UPDATE",
+                (actor_id, token_value),
+            ).fetchone()
+            support_auth_id = row["id"] if row else None
             revoked = execute(
                 conn,
                 f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} = ? AND is_active = TRUE",
                 (actor_id, token_value),
             )
             revoked_count = revoked.rowcount
-            mobile = bool(row["is_mobile"]) if is_postgres(conn) and row else False
-            if is_postgres(conn) and support_auth_id is not None:
+            mobile = bool(row["is_mobile"]) if row else False
+            if support_auth_id is not None:
                 from backend.services.platform_support import end_support_sessions
                 end_support_sessions(conn, actor_user_id=actor_id, end_reason="user_logout",
                                      auth_session_ids=[support_auth_id])
@@ -1589,12 +1442,8 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                 response.delete_cookie(key="session_token")
 
             _result = response
-
-            if is_postgres(conn):
-                from backend.services.platform_audit import record_user_logout
-                record_user_logout(conn, actor_id)
-            else:
-                _record_mutation_activity(conn, actor_id, 'logout', None, _result, request)
+            from backend.services.platform_audit import record_user_logout
+            record_user_logout(conn, actor_id)
         log_session_event("session_revoked", actor_id, request,
                           is_mobile=mobile, reason="user_logout", session_count=revoked_count)
         return _result
@@ -1608,27 +1457,18 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
         """Get current user information"""
         conn = get_db_connection()
         try:
-            from backend.database_sql import execute, is_postgres
-            if is_postgres(conn):
-                principal = user_id
-                row = execute(
-                    conn,
-                    "SELECT id, email, name, territory, archived_at FROM users WHERE id = ?",
-                    (principal.user_id,),
-                ).fetchone()
-                user = (dict(row) | {
-                    "role": principal.company_role or "platform_admin",
-                    "is_platform_admin": principal.is_platform_admin,
-                    "saas_mode": True,
-                }) if row else None
-            else:
-                register_sqlite_instant_comparison(conn)
-                row = execute(
-                    conn,
-                    "SELECT id, email, name, role, territory, archived_at FROM users WHERE id = ?",
-                    (user_id,),
-                ).fetchone()
-                user = (dict(row) | {"is_platform_admin": False, "saas_mode": False}) if row else None
+            from backend.database_sql import execute
+            principal = user_id
+            row = execute(
+                conn,
+                "SELECT id, email, name, territory, archived_at FROM users WHERE id = ?",
+                (principal.user_id,),
+            ).fetchone()
+            user = (dict(row) | {
+                "role": principal.company_role or "platform_admin",
+                "is_platform_admin": principal.is_platform_admin,
+                "saas_mode": True,
+            }) if row else None
         finally:
             conn.close()
 

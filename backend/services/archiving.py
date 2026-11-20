@@ -1,6 +1,6 @@
 """Archive and restore records within one authenticated tenant transaction."""
 
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.temporal import serialize_instant, utc_now
 from .principals import AuthenticatedPrincipal
 from fastapi import HTTPException
@@ -17,7 +17,7 @@ def archive_record(table, identifier, user_id, restore=False, *, session_token,
         session_token,
         busy_detail="Stock is busy; no changes saved. Try again",
     ) as conn:
-        is_pg = is_postgres(conn)
+        is_pg = True
         actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
         require_archive_admin(conn, user_id)
         if table == "users":

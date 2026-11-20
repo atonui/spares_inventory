@@ -1,5 +1,4 @@
 import psycopg
-import sqlite3
 import pytest
 from regression_tests.postgres_app import fail_inserts
 from regression_tests.test_stock_safety import api

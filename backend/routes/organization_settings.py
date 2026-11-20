@@ -3,7 +3,7 @@ from backend.services.session_credentials import get_request_credential
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.schemas.organization_settings import MobileSessionPolicyUpdate, OrganizationSettingsUpdate, OwnerTransferRequest
 from backend.services.activity import record_activity
 from backend.services.authorization import require_company_admin, require_company_owner
@@ -18,8 +18,7 @@ def create_organization_settings_router(
     router = APIRouter()
 
     def require_saas_postgres(conn):
-        if not is_postgres(conn):
-            raise HTTPException(status_code=503, detail="Organization administration requires PostgreSQL")
+        pass
 
     def settings_row(conn, organization_id):
         row = execute(

@@ -1,5 +1,4 @@
 import psycopg
-import sqlite3
 import pytest
 from regression_tests.postgres_app import fail_inserts
 import main

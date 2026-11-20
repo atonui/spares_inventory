@@ -9,7 +9,7 @@ from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.services.authorization import require_company_admin
 from backend.services.archiving import require_member_can_leave
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.schemas.email_change import EmailChangeRequest, EmailChangeStatus, EmailChangeRequestResponse, EmailChangeCancelResponse
 from fastapi.responses import JSONResponse
 
@@ -75,8 +75,6 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         from backend.services.email_change import EmailChangeFailure, request_email_change
         try:
             with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-                if not is_postgres(conn):
-                    raise HTTPException(status_code=404, detail="Company email changes are available in SaaS mode")
                 principal = email_change_scope(conn, user_id, target_user_id)
                 execute(conn, "SELECT set_config('app.email_change_user_id', ?, true)", (str(target_user_id),))
                 request_email_change(conn, user_id=target_user_id, proposed_email=str(data.email),
@@ -101,8 +99,6 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                                      user_id: int = Depends(get_current_user)):
         from backend.services.email_change import get_pending_email_change
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=404, detail="Company email changes are available in SaaS mode")
             email_change_scope(conn, user_id, target_user_id)
             execute(conn, "SELECT set_config('app.email_change_user_id', ?, true)", (str(target_user_id),))
             result = get_pending_email_change(conn, user_id=target_user_id)
@@ -115,8 +111,6 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                                         csrf_valid: bool = Depends(verify_csrf)):
         from backend.services.email_change import cancel_email_change
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=404, detail="Company email changes are available in SaaS mode")
             principal = email_change_scope(conn, user_id, target_user_id)
             execute(conn, "SELECT set_config('app.email_change_user_id', ?, true)", (str(target_user_id),))
             cancel_email_change(conn, user_id=target_user_id)
@@ -127,31 +121,30 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     @router.post('/api/users/{target_user_id}/restore')
     async def restore_users(target_user_id: int, user_id: int = Depends(get_current_user), csrf_valid: bool = Depends(verify_csrf), request: Request = None):
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if is_postgres(conn):
-                user_id = require_company_admin(user_id, conn)
-                target = execute(
-                    conn,
-                    """SELECT company_role, is_active FROM organization_memberships
+            user_id = require_company_admin(user_id, conn)
+            target = execute(
+                conn,
+                """SELECT company_role, is_active FROM organization_memberships
                        WHERE organization_id = ? AND user_id = ?""",
-                    (user_id.organization_id, target_user_id),
-                ).fetchone()
-                if not target:
-                    raise HTTPException(status_code=404, detail="Company member not found")
-                if target["company_role"] == "owner":
-                    raise HTTPException(status_code=403, detail="Transfer ownership before changing the owner")
-                if target["company_role"] == "admin" and user_id.company_role != "owner":
-                    raise HTTPException(status_code=403, detail="Only the owner can restore an admin")
-                if target["is_active"]:
-                    raise HTTPException(status_code=409, detail="Company member is already active")
-                execute(
-                    conn,
-                    """UPDATE organization_memberships SET is_active = TRUE
+                (user_id.organization_id, target_user_id),
+            ).fetchone()
+            if not target:
+                raise HTTPException(status_code=404, detail="Company member not found")
+            if target["company_role"] == "owner":
+                raise HTTPException(status_code=403, detail="Transfer ownership before changing the owner")
+            if target["company_role"] == "admin" and user_id.company_role != "owner":
+                raise HTTPException(status_code=403, detail="Only the owner can restore an admin")
+            if target["is_active"]:
+                raise HTTPException(status_code=409, detail="Company member is already active")
+            execute(
+                conn,
+                """UPDATE organization_memberships SET is_active = TRUE
                        WHERE organization_id = ? AND user_id = ? AND is_active = FALSE""",
-                    (user_id.organization_id, target_user_id),
-                )
-                result = {"success": True, "message": "Company membership restored; sign in again to regain access"}
-                _record_mutation_activity(conn, user_id, "restore_user", "user", result, request)
-                return result
+                (user_id.organization_id, target_user_id),
+            )
+            result = {"success": True, "message": "Company membership restored; sign in again to regain access"}
+            _record_mutation_activity(conn, user_id, "restore_user", "user", result, request)
+            return result
         return archive_record('users',target_user_id,user_id,restore=True,session_token=get_request_credential(request).value)
 
 
@@ -163,21 +156,16 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
             get_db_connection, principal_or_user=user_id,
             session_token=get_request_credential(request).value if request else None, readonly=True,
         ) as (conn, principal):
-            if is_postgres(conn):
-                principal = require_company_admin(principal, conn)
-                where = "om.organization_id = ?"
-                if not include_archived:
-                    where += " AND om.is_active = TRUE AND u.archived_at IS NULL"
-                rows = execute(conn,
-                    """SELECT u.id,u.email,u.name,om.company_role AS role,u.territory,u.archived_at
+            principal = require_company_admin(principal, conn)
+            where = "om.organization_id = ?"
+            if not include_archived:
+                where += " AND om.is_active = TRUE AND u.archived_at IS NULL"
+            rows = execute(conn,
+                """SELECT u.id,u.email,u.name,om.company_role AS role,u.territory,u.archived_at
                        FROM users AS u JOIN organization_memberships AS om ON om.user_id=u.id
                        WHERE """ + where + " ORDER BY u.name,u.id",
-                    (principal.organization_id,),
-                ).fetchall()
-            else:
-                require_archive_admin(conn, principal)
-                where='' if include_archived else ' WHERE archived_at IS NULL'
-                rows=execute(conn,'SELECT id, email, name, role, territory, archived_at FROM users'+where+' ORDER BY name').fetchall()
+                (principal.organization_id,),
+            ).fetchall()
             return [dict(row) for row in rows]
 
 
@@ -191,46 +179,8 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     ):
         """Create new user (admin only)"""
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if is_postgres(conn):
-                user_id = require_company_admin(user_id, conn)
-                raise HTTPException(status_code=410, detail="Create users with an invitation instead")
-            password_hash = hash_password(request_data.password)
-            cursor = conn.cursor()
-
-            # Check if current user is admin
-            try:
-                require_user_management(user_id, requested_role=request_data.role, conn=conn)
-            except HTTPException:
-                raise
-
-            # Check if email already exists
-            cursor.execute("SELECT id FROM users WHERE email = ?", (request_data.email,))
-            if cursor.fetchone():
-                raise HTTPException(status_code=400, detail="Email already exists")
-
-            # Create user
-            cursor.execute(
-                """
-                INSERT INTO users (email, name, password_hash, role, territory)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    request_data.email,
-                    request_data.name,
-                    password_hash,
-                    request_data.role,
-                    request_data.territory,
-                ),
-            )
-
-
-            _result = {
-                "success": True,
-                "message": f"User {request_data.name} created successfully",
-            }
-
-            _record_mutation_activity(conn, user_id, 'create_user', 'user', _result, request)
-            return _result
+            user_id = require_company_admin(user_id, conn)
+            raise HTTPException(status_code=410, detail="Create users with an invitation instead")
 
 
 
@@ -245,106 +195,55 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     ):
         """Update user (admin only)"""
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if is_postgres(conn):
-                principal = user_id
-                principal = require_company_admin(principal, conn)
-                if request_data.password is not None:
-                    raise HTTPException(status_code=400, detail="Password changes use the account recovery flow")
-                target = execute(
-                    conn,
-                    """SELECT om.company_role, om.is_active
+            principal = user_id
+            principal = require_company_admin(principal, conn)
+            if request_data.password is not None:
+                raise HTTPException(status_code=400, detail="Password changes use the account recovery flow")
+            target = execute(
+                conn,
+                """SELECT om.company_role, om.is_active
                        FROM organization_memberships AS om
                        JOIN users AS u ON u.id = om.user_id
                        WHERE om.organization_id = ? AND om.user_id = ?
                          AND u.archived_at IS NULL FOR UPDATE OF om, u""",
-                    (principal.organization_id, target_user_id),
-                ).fetchone()
-                if target is None:
-                    raise HTTPException(status_code=404, detail="Company member not found")
-                if not target["is_active"]:
-                    raise HTTPException(status_code=409, detail="Company member is inactive")
-                if target["company_role"] == "owner":
-                    raise HTTPException(status_code=403, detail="Use the ownership transfer operation")
-                if target["company_role"] == "admin" and principal.company_role != "owner":
-                    raise HTTPException(status_code=403, detail="Only the owner can manage an admin")
-                if request_data.role in {"owner", "superadmin"}:
-                    raise HTTPException(status_code=400, detail="This role cannot be assigned through user management")
-                if request_data.role == "admin" and principal.company_role != "owner":
-                    raise HTTPException(status_code=403, detail="Only the owner can assign the admin role")
+                (principal.organization_id, target_user_id),
+            ).fetchone()
+            if target is None:
+                raise HTTPException(status_code=404, detail="Company member not found")
+            if not target["is_active"]:
+                raise HTTPException(status_code=409, detail="Company member is inactive")
+            if target["company_role"] == "owner":
+                raise HTTPException(status_code=403, detail="Use the ownership transfer operation")
+            if target["company_role"] == "admin" and principal.company_role != "owner":
+                raise HTTPException(status_code=403, detail="Only the owner can manage an admin")
+            if request_data.role in {"owner", "superadmin"}:
+                raise HTTPException(status_code=400, detail="This role cannot be assigned through user management")
+            if request_data.role == "admin" and principal.company_role != "owner":
+                raise HTTPException(status_code=403, detail="Only the owner can assign the admin role")
 
-                user_updates = []
-                values = []
-                if request_data.name is not None:
-                    user_updates.append("name = ?")
-                    values.append(request_data.name)
-                if request_data.territory is not None:
-                    user_updates.append("territory = ?")
-                    values.append(request_data.territory)
-                if user_updates:
-                    values.append(target_user_id)
-                    execute(conn, f"UPDATE users SET {', '.join(user_updates)} WHERE id = ?", values)
-                if request_data.role is not None:
-                    execute(
-                        conn,
-                        """UPDATE organization_memberships SET company_role = ?
-                           WHERE organization_id = ? AND user_id = ? AND is_active = TRUE""",
-                        (request_data.role, principal.organization_id, target_user_id),
-                    )
-                if not user_updates and request_data.role is None:
-                    raise HTTPException(status_code=400, detail="No updates provided")
-                result = {"success": True, "message": "Company member updated successfully"}
-                _record_mutation_activity(conn, principal, "update_user", "user", result, request)
-                return result
-
-            password_hash = hash_password(request_data.password) if request_data.password is not None else None
-            cursor = conn.cursor()
-
-            # Check if current user is admin
-            try:
-                require_user_management(user_id, requested_role=request_data.role, target_user_id=target_user_id, conn=conn)
-            except HTTPException:
-                raise
-
-            # Check if target user exists
-            cursor.execute("SELECT id FROM users WHERE id = ?", (target_user_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="User not found")
-
-            # Build update query dynamically
-            updates = []
+            user_updates = []
             values = []
-
             if request_data.name is not None:
-                updates.append("name = ?")
+                user_updates.append("name = ?")
                 values.append(request_data.name)
-
-            if request_data.role is not None:
-                updates.append("role = ?")
-                values.append(request_data.role)
-
             if request_data.territory is not None:
-                updates.append("territory = ?")
+                user_updates.append("territory = ?")
                 values.append(request_data.territory)
-
-            if request_data.password is not None:
-                updates.append("password_hash = ?")
-                values.append(password_hash)
-
-            if not updates:
+            if user_updates:
+                values.append(target_user_id)
+                execute(conn, f"UPDATE users SET {', '.join(user_updates)} WHERE id = ?", values)
+            if request_data.role is not None:
+                execute(
+                    conn,
+                    """UPDATE organization_memberships SET company_role = ?
+                           WHERE organization_id = ? AND user_id = ? AND is_active = TRUE""",
+                    (request_data.role, principal.organization_id, target_user_id),
+                )
+            if not user_updates and request_data.role is None:
                 raise HTTPException(status_code=400, detail="No updates provided")
-
-            values.append(target_user_id)
-
-            cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", values)
-
-            if request_data.password is not None:
-                cursor.execute("UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
-
-
-            _result = {"success": True, "message": "User updated successfully"}
-
-            _record_mutation_activity(conn, user_id, 'update_user', 'user', _result, request)
-            return _result
+            result = {"success": True, "message": "Company member updated successfully"}
+            _record_mutation_activity(conn, principal, "update_user", "user", result, request)
+            return result
 
 
     @router.post("/api/users/{target_user_id}/remove")
@@ -357,55 +256,52 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
     ):
         """Remove a company membership while retaining the global identity and history."""
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            if is_postgres(conn):
-                user_id = require_company_admin(user_id, conn)
-                organization = execute(
-                    conn,
-                    "SELECT id FROM organizations WHERE id = ? AND is_active = TRUE FOR UPDATE",
-                    (user_id.organization_id,),
-                ).fetchone()
-                if organization is None:
-                    raise HTTPException(status_code=403, detail="Active company membership required")
-                actor_membership = execute(
-                    conn,
-                    """SELECT company_role FROM organization_memberships
+            user_id = require_company_admin(user_id, conn)
+            organization = execute(
+                conn,
+                "SELECT id FROM organizations WHERE id = ? AND is_active = TRUE FOR UPDATE",
+                (user_id.organization_id,),
+            ).fetchone()
+            if organization is None:
+                raise HTTPException(status_code=403, detail="Active company membership required")
+            actor_membership = execute(
+                conn,
+                """SELECT company_role FROM organization_memberships
                        WHERE organization_id = ? AND user_id = ? AND is_active = TRUE FOR UPDATE""",
-                    (user_id.organization_id, user_id.user_id),
-                ).fetchone()
-                if actor_membership is None or actor_membership["company_role"] not in {"owner", "admin"}:
-                    raise HTTPException(status_code=403, detail="Company administrator access required")
-                current_actor = AuthenticatedPrincipal(
-                    user_id.user_id,
-                    user_id.organization_id,
-                    actor_membership["company_role"],
-                    user_id.is_platform_admin,
-                )
-                target = execute(
-                    conn,
-                    """SELECT company_role FROM organization_memberships
+                (user_id.organization_id, user_id.user_id),
+            ).fetchone()
+            if actor_membership is None or actor_membership["company_role"] not in {"owner", "admin"}:
+                raise HTTPException(status_code=403, detail="Company administrator access required")
+            current_actor = AuthenticatedPrincipal(
+                user_id.user_id,
+                user_id.organization_id,
+                actor_membership["company_role"],
+                user_id.is_platform_admin,
+            )
+            target = execute(
+                conn,
+                """SELECT company_role FROM organization_memberships
                        WHERE organization_id = ? AND user_id = ? FOR UPDATE""",
-                    (current_actor.organization_id, target_user_id),
-                ).fetchone()
-                if target is None:
-                    raise HTTPException(status_code=404, detail="Company member not found")
-                if target["company_role"] == "owner":
-                    raise HTTPException(status_code=403, detail="Transfer ownership before removing the owner")
-                if target["company_role"] == "admin" and current_actor.company_role != "owner":
-                    raise HTTPException(status_code=403, detail="Only the owner can remove an admin")
-                require_member_can_leave(conn, target_user_id)
-                revoked_count = execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND is_active = TRUE", (target_user_id,)).rowcount
-                from backend.services.platform_support import end_support_sessions
-                end_support_sessions(conn, actor_user_id=current_actor.user_id, target_user_id=target_user_id,
-                                     end_reason="membership_removed")
-                execute(
-                    conn,
-                    "DELETE FROM organization_memberships WHERE organization_id = ? AND user_id = ?",
-                    (current_actor.organization_id, target_user_id),
-                )
-                result = {"success": True, "message": "Company membership removed"}
-                _record_mutation_activity(conn, current_actor, "remove_user", "user", result, request)
-            else:
-                raise HTTPException(status_code=501, detail="Company member removal is available in SaaS mode")
+                (current_actor.organization_id, target_user_id),
+            ).fetchone()
+            if target is None:
+                raise HTTPException(status_code=404, detail="Company member not found")
+            if target["company_role"] == "owner":
+                raise HTTPException(status_code=403, detail="Transfer ownership before removing the owner")
+            if target["company_role"] == "admin" and current_actor.company_role != "owner":
+                raise HTTPException(status_code=403, detail="Only the owner can remove an admin")
+            require_member_can_leave(conn, target_user_id)
+            revoked_count = execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND is_active = TRUE", (target_user_id,)).rowcount
+            from backend.services.platform_support import end_support_sessions
+            end_support_sessions(conn, actor_user_id=current_actor.user_id, target_user_id=target_user_id,
+                                 end_reason="membership_removed")
+            execute(
+                conn,
+                "DELETE FROM organization_memberships WHERE organization_id = ? AND user_id = ?",
+                (current_actor.organization_id, target_user_id),
+            )
+            result = {"success": True, "message": "Company membership removed"}
+            _record_mutation_activity(conn, current_actor, "remove_user", "user", result, request)
         log_member_revocation(current_actor.user_id, target_user_id, revoked_count,
                               "membership_removed", request)
         return result
@@ -420,7 +316,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
         request: Request = None,
     ):
         with authenticated_write_transaction(user_id, get_request_credential(request).value) as conn:
-            postgres = is_postgres(conn)
+            postgres = True
             if postgres:
                 user_id = require_company_admin(user_id, conn)
                 target = execute(

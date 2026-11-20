@@ -1,6 +1,6 @@
 """Physical counting over existing inventory rows; no reservation redistribution."""
 from stock_audit import balance_snapshot, change_after, record_stock_audit
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.session_credentials import get_request_credential
 from backend.services.tenant_context import authenticated_database_transaction
@@ -47,11 +47,9 @@ def store_snapshot(conn, store_id):
         WHERE i.store_id=? AND p.archived_at IS NULL
         ORDER BY p.part_number,i.id
     ''', (store_id,)).fetchall()
-    movements = tuple(execute(conn, 'SELECT COALESCE(MAX(id),0) AS last_id,COUNT(*) AS total FROM movements WHERE from_store_id=? OR to_store_id=?', (store_id,store_id)).fetchone().values()) \
-        if is_postgres(conn) else tuple(execute(conn, 'SELECT COALESCE(MAX(id),0),COUNT(*) FROM movements WHERE from_store_id=? OR to_store_id=?', (store_id,store_id)).fetchone())
+    movements = tuple(execute(conn, 'SELECT COALESCE(MAX(id),0) AS last_id,COUNT(*) AS total FROM movements WHERE from_store_id=? OR to_store_id=?', (store_id,store_id)).fetchone().values())
     counts_sql = "SELECT COALESCE(MAX(id),0) AS last_id,COUNT(*) AS total FROM activity_logs WHERE action='confirm_stock_count' AND resource_type='stock_count' AND resource_id=?"
-    counts = tuple(execute(conn, counts_sql, (store_id,)).fetchone().values()) \
-        if is_postgres(conn) else tuple(execute(conn, counts_sql, (store_id,)).fetchone())
+    counts = tuple(execute(conn, counts_sql, (store_id,)).fetchone().values())
     payload = {'rows':[dict(row) for row in rows], 'movements':movements, 'counts':counts}
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     return payload['rows'],digest
@@ -77,7 +75,7 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
         require_active(conn,'users',actor_id(user))
         require_active(conn,'stores',store_id)
         store = execute(conn, 'SELECT name,type,assigned_user_id,{} FROM stores WHERE id=?'.format(
-            'organization_id' if is_postgres(conn) else 'NULL AS organization_id'), (store_id,)).fetchone()
+            'organization_id'), (store_id,)).fetchone()
         require_access(conn,user,store['type'],store['assigned_user_id'],
                        store_organization_id=store['organization_id'])
         return store
@@ -153,12 +151,8 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
                 values = (data['store_id'],row['part_id'],abs(row['difference']),
                           'add' if row['difference']>0 else 'remove',row['work_order_id'],actor_id(user_id),
                           f"Physical stock count: {row['before_quantity']} → {row['counted_quantity']}. {row['reason']}")
-                if is_postgres(conn):
-                    movement = execute(conn, '''INSERT INTO movements(organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
+                movement = execute(conn, '''INSERT INTO movements(organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
                         VALUES(?,?,?,?,?,?,?,?) RETURNING id''', (store['organization_id'], *values)).fetchone()['id']
-                else:
-                    movement = execute(conn, '''INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
-                        VALUES(?,?,?,?,?,?,?) RETURNING id''', values).fetchone()[0]
                 movement_ids.append(movement)
                 audit_changes.append(change_after(conn,before))
             # Count evidence must commit with every balance/movement, including unchanged counts.

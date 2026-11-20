@@ -5,7 +5,6 @@ from backend.services.session_credentials import get_request_credential
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from backend.database_sql import is_postgres
 from backend.schemas.invitations import OrganizationCreateRequest
 from backend.schemas.platform_organizations import (
     PlatformAdminGrantRequest,
@@ -27,13 +26,6 @@ def create_platform_organizations_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/platform", tags=["platform"])
 
-    def require_postgres():
-        conn = get_connection()
-        try:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
-        finally:
-            conn.close()
 
     def record_provision_failure_after_rollback(request, actor):
         try:
@@ -76,7 +68,6 @@ def create_platform_organizations_router(
     async def platform_dashboard(
         request: Request, actor=Depends(current_user),
     ):
-        require_postgres()
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
@@ -119,7 +110,6 @@ def create_platform_organizations_router(
             raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
         if not 0 <= offset <= 100000:
             raise HTTPException(status_code=422, detail="offset must be between 0 and 100000")
-        require_postgres()
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
@@ -169,7 +159,6 @@ def create_platform_organizations_router(
             raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
         if not 0 <= offset <= 100000:
             raise HTTPException(status_code=422, detail="offset must be between 0 and 100000")
-        require_postgres()
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor),
@@ -215,7 +204,6 @@ def create_platform_organizations_router(
             raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
         if not 0 <= offset <= 100000:
             raise HTTPException(status_code=422, detail="offset must be between 0 and 100000")
-        require_postgres()
         now = serialize_instant(utc_now())
         filters = []
         params = [now]
@@ -270,7 +258,6 @@ def create_platform_organizations_router(
     async def list_platform_admins(
         request: Request, actor=Depends(current_user),
     ):
-        require_postgres()
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
             expected_user_id=getattr(actor, "user_id", actor), readonly=True,
@@ -289,7 +276,6 @@ def create_platform_organizations_router(
         user_id=Depends(current_user),
         csrf_valid=Depends(csrf_dependency),
     ):
-        require_postgres()
         try:
             denial = None
             with authenticated_platform_transaction(
@@ -333,7 +319,6 @@ def create_platform_organizations_router(
             org_id = UUID(organization_id)
         except (ValueError, TypeError):
             raise HTTPException(status_code=404, detail="Organization member not found") from None
-        require_postgres()
         denial = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
@@ -378,7 +363,6 @@ def create_platform_organizations_router(
             org_id = UUID(organization_id)
         except (ValueError, TypeError):
             raise HTTPException(status_code=404, detail="Organization not found") from None
-        require_postgres()
         desired_active = body.action == "reactivate"
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,
@@ -407,7 +391,6 @@ def create_platform_organizations_router(
         body: PlatformAdminGrantRequest, request: Request,
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
-        require_postgres()
         created = None
         denial = None
         with authenticated_platform_transaction(
@@ -442,7 +425,6 @@ def create_platform_organizations_router(
         target_user_id: int, request: Request,
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
-        require_postgres()
         created = None
         denial = None
         with authenticated_platform_transaction(
@@ -475,7 +457,6 @@ def create_platform_organizations_router(
         target_user_id: int, request: Request,
         actor=Depends(current_user), csrf_valid=Depends(csrf_dependency),
     ):
-        require_postgres()
         denial = None
         with authenticated_platform_transaction(
             get_connection, session_token=get_request_credential(request).value,

@@ -1,4 +1,3 @@
-import sqlite3
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -28,7 +27,6 @@ def test_create_inventory_app_applies_shared_fastapi_bootstrap(tmp_path):
     assert app.version == "1.0.0"
     assert isinstance(limiter, Limiter)
     assert app.state.limiter is limiter
-    assert app.exception_handlers[sqlite3.IntegrityError] is database_integrity_error
     import psycopg
     for error in (psycopg.errors.UniqueViolation, psycopg.errors.ForeignKeyViolation):
         assert app.exception_handlers[error] is database_integrity_error

@@ -1,7 +1,6 @@
 """Stock evidence written with the balance transaction, without capturing credentials."""
-import json
 from fastapi import HTTPException
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.activity import record_activity
 
@@ -15,7 +14,7 @@ def balance_snapshot(conn, store_id, part_id, work_order_id):
         FROM stores s CROSS JOIN parts p WHERE s.id=? AND p.id=?''',(store_id,part_id)).fetchone()
     if not metadata:
         raise HTTPException(400,'Store or part does not exist')
-    identity = 'work_order_id IS NOT DISTINCT FROM ?' if is_postgres(conn) else 'CAST(work_order_id AS NUMERIC) IS CAST(? AS NUMERIC)'
+    identity = 'work_order_id IS NOT DISTINCT FROM ?'
     row = execute(conn, f'''SELECT id,quantity,min_threshold FROM inventory WHERE store_id=? AND part_id=?
         AND {identity}''',(store_id,part_id,work_order_id)).fetchone()
     work_order = execute(conn,'SELECT id,work_order_number FROM work_orders WHERE id=CAST(? AS NUMERIC)',(work_order_id,)).fetchone() if work_order_id is not None else None
@@ -27,11 +26,7 @@ def balance_snapshot(conn, store_id, part_id, work_order_id):
 
 def record_stock_audit(conn, user_id, action, changes, movement_ids=(), *, resource_id=None,
                        resource_type='inventory', request=None, extra=None):
-    in_transaction = (
-        conn.info.transaction_status.name != "IDLE"
-        if is_postgres(conn)
-        else conn.in_transaction
-    )
+    in_transaction = conn.info.transaction_status.name != "IDLE"
     if not in_transaction:
         raise RuntimeError('Stock audit requires an active write transaction')
     actor_id = user_id.user_id if isinstance(user_id, AuthenticatedPrincipal) else user_id
