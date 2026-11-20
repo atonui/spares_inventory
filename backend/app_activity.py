@@ -6,7 +6,7 @@ from functools import wraps
 from fastapi import HTTPException, Request
 
 from backend.services.activity import record_activity
-from backend.database_sql import execute, execute_cursor
+from backend.database_sql import execute, execute_cursor, is_postgres
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.session_credentials import get_optional_request_credential
 
@@ -46,6 +46,16 @@ def log_activity(
         return
     try:
         conn = get_connection()
+        if is_postgres(conn):
+            # Company activity needs a company context, which a standalone call does
+            # not have. Account-level events go to platform_security_events instead,
+            # so keep only the audit log line here.
+            conn.close()
+            audit_logger.info(
+                f"USER={username}({user_id}) ACTION={action} "
+                f"RESOURCE={resource_type}/{resource_id} STATUS={status}"
+            )
+            return
         cursor = conn.cursor()
         details_json = json.dumps(details) if details else None
         cursor.execute(

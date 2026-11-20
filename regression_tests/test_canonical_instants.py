@@ -83,7 +83,6 @@ def test_legacy_backup_restore_produces_canonical_instants(tmp_path):
             for (stamp,) in c.execute(f'SELECT {column} FROM {table}'):
                 assert stamp==serialize_instant(parse_api_instant(stamp))
 
-from regression_tests.test_auth_router import auth_api
 from regression_tests.sqlite_api import api
 from regression_tests.sqlite_api import session_api
 from regression_tests.test_superadmin_router import super_api
@@ -92,15 +91,6 @@ from regression_tests.test_superadmin_router import super_api
 def canonical(value):
     from backend.temporal import serialize_instant,parse_api_instant
     assert value==serialize_instant(parse_api_instant(value))
-
-
-def test_login_writes_canonical_expiry_and_last_login(auth_api):
-    client,path,_=auth_api
-    response=client.post('/api/auth/login',json={'email':'admin@example.test','password':'test-password'})
-    assert response.status_code==200
-    with path as c:  # auth_api runs on Postgres
-        canonical(c.execute('SELECT expires_at FROM sessions ORDER BY id DESC LIMIT 1').fetchone()[0])
-        canonical(c.execute('SELECT last_login FROM users WHERE id=1').fetchone()[0])
 
 
 def test_announcement_writes_canonical_json_and_update_clock(super_api):

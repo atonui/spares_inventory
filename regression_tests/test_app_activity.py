@@ -155,3 +155,33 @@ def test_main_log_endpoint_uses_current_activity_callback_after_decoration(monke
             "user_agent": None,
         }
     ]
+
+
+def test_standalone_activity_on_postgres_logs_audit_line_without_failing(stock_database):
+    """No company context: keep the audit line, never attempt a company activity row."""
+    from backend.app_activity import log_activity
+
+    audit_logger, error_logger = CapturingLogger(), CapturingLogger()
+    log_activity(stock_database.connect, audit_logger, error_logger, user_id=0, username="unknown",
+                 action="verify_reset_token_failed", details={"reason": "invalid_token"}, status="error")
+    assert audit_logger.infos == ["USER=unknown(0) ACTION=verify_reset_token_failed RESOURCE=None/None STATUS=error"]
+    assert error_logger.errors == []
+    assert stock_database.db.execute("SELECT count(*) AS n FROM activity_logs").fetchone()["n"] == 0
+
+
+def test_mutation_activity_on_postgres_is_company_scoped_and_strips_sensitive_fields(stock_database):
+    from backend.app_activity import record_mutation_activity
+    from backend.services.principals import AuthenticatedPrincipal
+    from backend.services.tenant_context import set_tenant_context
+    from regression_tests.postgres_app import ORG_A
+
+    principal = AuthenticatedPrincipal(3, ORG_A, "engineer", False)
+    with stock_database.connect() as conn, conn.transaction():
+        set_tenant_context(conn, ORG_A)
+        record_mutation_activity(conn, user_id=principal, action="create_part", resource_type="part",
+                                 result={"id": 55, "name": "Created", "password_hash": "secret",
+                                         "session_token": "token", "reset_token": "reset"}, request=None)
+    row = stock_database.db.execute(
+        "SELECT organization_id, user_id, username, resource_id, details FROM activity_logs").fetchone()
+    assert (row["organization_id"], row["user_id"], row["username"], row["resource_id"]) == (ORG_A, 3, "Engineer", 55)
+    assert json.loads(row["details"]) == {"id": 55, "name": "Created"}
