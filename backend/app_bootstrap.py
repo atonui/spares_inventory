@@ -1,6 +1,8 @@
 """FastAPI application bootstrap wiring."""
 
 import sqlite3
+
+import psycopg
 from pathlib import Path
 from ipaddress import ip_address
 from typing import Sequence
@@ -70,8 +72,17 @@ class RevalidatingHtmlStaticFiles(StaticFiles):
         return response
 
 
+POSTGRES_REFERENCE_OR_DUPLICATE_ERRORS = (
+    psycopg.errors.UniqueViolation,
+    psycopg.errors.ForeignKeyViolation,
+)
+
+
 async def database_integrity_error(request: Request, exc):
-    if getattr(exc, "sqlite_errorcode", None) not in (
+    if isinstance(exc, psycopg.errors.IntegrityError):
+        if not isinstance(exc, POSTGRES_REFERENCE_OR_DUPLICATE_ERRORS):
+            raise exc
+    elif getattr(exc, "sqlite_errorcode", None) not in (
         sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY,
         sqlite3.SQLITE_CONSTRAINT_UNIQUE,
         sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
@@ -103,6 +114,9 @@ def create_inventory_app(
     )
 
     app.add_exception_handler(sqlite3.IntegrityError, database_integrity_error)
+    # Duplicate keys and missing references on PostgreSQL get the same 409 response.
+    for error in POSTGRES_REFERENCE_OR_DUPLICATE_ERRORS:
+        app.add_exception_handler(error, database_integrity_error)
 
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         if request.url.path.startswith("/api/v1/"):
