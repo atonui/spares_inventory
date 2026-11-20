@@ -7,8 +7,8 @@ const html=fs.readFileSync('static/superadmin.html','utf8');
 test('superadmin page starts with its document declaration and no tool output banner',()=>{
  assert.match(html,/^<!DOCTYPE html>/,'page must not render tool output before its HTML document');
 });
-function app(){const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},WeakMap};vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();a.timezoneContext={business_timezone:'Africa/Nairobi',display_timezone:'Africa/Nairobi',revision:1};a.auditTimezone='Africa/Nairobi';a.announcementReady=true;a.announcementTimezone='Africa/Nairobi';a.announcementTimezoneRevision=1;return a;}
-for(const [section,method] of [['users','loadUsers'],['sessions','loadSessions'],['config','loadConfig']]) {
+function app(){const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},WeakMap};vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();a.announcementReady=true;a.announcementTimezone='Africa/Nairobi';a.announcementTimezoneRevision=1;return a;}
+for(const [section,method] of [['config','loadConfig']]) {
  test(`${section} distinguishes loading, failure and successful retry`,async()=>{
   const a=app();let release,calls=0;a.toast=()=>{};
   a.api=()=>{calls++;return new Promise(r=>release=r);};
@@ -26,12 +26,6 @@ for(const [section,method] of [['users','loadUsers'],['sessions','loadSessions']
   assert.equal(a.panelLoads[section].error,'');assert.equal(a.panelReady(section),true);
  });
 }
-test('loading one panel cannot clear another panel loading state',async()=>{
- const a=app();let release;a.api=path=>path.endsWith('/users')?new Promise(r=>release=r):Promise.resolve([]);
- const users=a.loadUsers();await a.loadSessions();
- assert.equal(a.panelLoads.users.loading,true);assert.equal(a.panelLoads.sessions.loading,false);
- release([]);await users;
-});
 test('settings cannot save before a successful load or during refresh',async()=>{
  const a=app();let writes=0,release;a.toast=()=>{};a.cfgVals.max_login_attempts='5';
  a.api=async()=>{writes++;};await a.saveConfig('max_login_attempts');assert.equal(writes,0);
@@ -39,8 +33,9 @@ test('settings cannot save before a successful load or during refresh',async()=>
  a.api=()=>new Promise(r=>release=r);const refresh=a.loadConfig();
  await a.saveConfig('max_login_attempts');release({});await refresh;assert.equal(writes,0);
 });
-test('mobile navigation reaches every available panel and loads its data',()=>{const a=app();a.me={saas_mode:false};for(const section of Object.keys(a.tabTitles).filter(key=>key!=='support'&&key!=='platformSecurityEvents'&&key!=='platformInvitations'&&key!=='platformSupportInbox'&&key!=='platformMaintenance')){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance','support']){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
-test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,21);assert.match(html,/aria-current/);});
+test('mobile navigation reaches every platform panel and loads its data',()=>{const a=app();a.me={saas_mode:true,is_platform_admin:true};a.supportSession={support_session_id:'support-a'};for(const section of Object.keys(a.tabTitles)){let refreshed=false;a.refresh=()=>{refreshed=true;};a.selectSection(section);assert.equal(a.tab,section);assert.equal(refreshed,true);}a.selectSection('invalid');assert.notEqual(a.tab,'invalid');});
+test('support workspace and platform panels need a platform admin and an active support session',()=>{const a=app();a.me={saas_mode:true,is_platform_admin:true};a.tab='dashboard';a.selectSection('support');assert.equal(a.tab,'dashboard');a.me={saas_mode:true,is_platform_admin:false};a.selectSection('organizations');assert.equal(a.tab,'dashboard');});
+test('mobile menu and desktop buttons expose section names',()=>{assert.match(html,/aria-label="Superadmin section"/);assert.equal((html.match(/<button type="button" class="nav-item"/g)||[]).length,11);assert.match(html,/aria-current/);});
 test('platform admin can end the authenticated session from the console',async()=>{
  const c={console,Date,URLSearchParams,Intl,setTimeout:()=>{},document:{activeElement:null},window:{location:{href:''}},WeakMap};
  vm.createContext(c);loadPageScripts('superadmin.html',c);const a=c.superPanel();
@@ -52,7 +47,6 @@ test('platform admin can end the authenticated session from the console',async()
  assert.equal(c.window.location.href,'/static/index.html');
  assert.match(html,/<button[^>]*x-show="me\?\.saas_mode && me\?\.is_platform_admin"[^>]*@click="logout\(\)"[^>]*>.*?Log out/s);
 });
-test('legacy superadmin cannot navigate to the SaaS support workspace',()=>{const a=app();a.me={saas_mode:false};a.tab='dashboard';a.selectSection('support');assert.equal(a.tab,'dashboard');assert.match(html,/!me\?\.saas_mode && key!=='support'/);});
 test('SaaS platform boot loads only platform data',async()=>{
  const a=app(),calls=[];
  a.getCsrf=async()=>calls.push('csrf');
@@ -90,10 +84,9 @@ test('security events load with bounded filters and recover after an API failure
 test('platform security events are a separate platform-only console view with safe fields',()=>{
  const platform=html.slice(html.indexOf('x-show="me?.saas_mode && me?.is_platform_admin"'),html.indexOf('</nav>'));
  assert.match(platform,/Security events/);assert.match(html,/tab==='platformSecurityEvents' && me\?\.saas_mode && me\?\.is_platform_admin/);
- const section=html.split('x-show="tab===\'platformSecurityEvents\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('<!-- ══════════ LOCKED ACCOUNTS ══════════ -->')[0];
+ const section=html.split('x-show="tab===\'platformSecurityEvents\' && me?.saas_mode && me?.is_platform_admin"')[1]?.split('<!-- ══════════ SECURITY CONFIG ══════════ -->')[0];
  assert.ok(section);assert.match(section,/platformSecurityEventRows/);assert.match(section,/account_match/);assert.doesNotMatch(section,/ip_address|user_agent|request_id|submitted_identifier|x-html/);
- assert.match(html,/me\?\.is_platform_admin && \['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance'\]\.includes\(key\)/);
- assert.match(html,/!me\?\.saas_mode && key!=='support' && key!=='platformSecurityEvents'/);
+ assert.match(html,/x-show="me\?\.is_platform_admin && \(key!=='support' \|\| supportSession\)"/);
 });
 test('tenant console identity cannot select the platform security events view',()=>{
  const a=app();a.me={saas_mode:true,is_platform_admin:false};a.tab='dashboard';a.selectSection('platformSecurityEvents');assert.equal(a.tab,'dashboard');
@@ -114,15 +107,12 @@ test('platform admin revocation requires confirmation and hides self-removal act
  await a.submitDialog();assert.deepEqual(calls,[['/platform/admins/3','DELETE'],'admins']);
  assert.match(html,/requestPlatformAdminRevoke\(admin\)/);assert.match(html,/Cannot revoke your own access/);
 });
-test('SaaS settings load and save use platform routes while SQLite keeps legacy routes',async()=>{
+test('settings load and save use platform routes',async()=>{
  const a=app(),paths=[];a.me={saas_mode:true};
  assert.ok(a.availableCfgMeta.mobile_session_max_duration_hours);
  a.api=async(path,options={})=>{paths.push([path,options.method||'GET']);return path.endsWith('/security-config')?{}:{success:true};};
  await a.loadConfig();a.panelLoads.config.loaded=true;a.cfgVals.max_login_attempts='8';await a.saveConfig('max_login_attempts');
  assert.deepEqual(paths,[['/platform/security-config','GET'],['/platform/security-config/max_login_attempts','PUT'],['/platform/security-config','GET']]);
- paths.length=0;a.me={saas_mode:false};a.api=async(path,options={})=>{paths.push([path,options.method||'GET']);return {};};
- await a.loadConfig();assert.deepEqual(paths,[['/superadmin/security-config','GET']]);
- assert.equal(a.availableCfgMeta.mobile_session_max_duration_hours,undefined);
  assert.match(html,/MFA and global password policy are not managed here/);
 });
 test('SaaS announcement management uses platform routes and accepts fixed UTC timezone revision',async()=>{
@@ -136,12 +126,10 @@ test('SaaS announcement management uses platform routes and accepts fixed UTC ti
  assert.equal(paths[1][0],'/platform/announcement');assert.equal(paths[1][1],'POST');assert.equal(paths[1][2].timezone_revision,0);
  assert.equal(paths[2][0],'/platform/announcement/manage');
 });
-test('SaaS announcement removal uses platform route and SQLite removal remains compatible',async()=>{
+test('announcement removal uses the platform route',async()=>{
  const a=app(),paths=[];a.me={saas_mode:true};a.announcementReady=true;a.savedAnnouncement={revision:'current'};
  a.api=async(path,options={})=>{paths.push([path,options.method]);return {success:true};};await a.clearAnnouncement();
  assert.deepEqual(paths,[['/platform/announcement?expected_revision=current','DELETE']]);
- paths.length=0;a.me={saas_mode:false};a.announcementReady=true;a.savedAnnouncement={revision:'legacy'};a.api=async(path,options={})=>{paths.push([path,options.method]);return {success:true};};await a.clearAnnouncement();
- assert.deepEqual(paths,[['/superadmin/announcement?expected_revision=legacy','DELETE']]);
 });
 test('SaaS platform admin section does not expose tenant identity search',()=>{
  const section=html.split('x-show="tab===\'platformAdmins\' && me?.saas_mode"')[1].split('x-show="tab===\'platformAudit\'')[0];
@@ -150,8 +138,8 @@ test('SaaS platform admin section does not expose tenant identity search',()=>{
 test('SaaS navigation exposes only supported platform settings and announcement controls',()=>{
  const platform=html.slice(html.indexOf('x-show="me?.saas_mode && me?.is_platform_admin"'), html.indexOf('</nav>'));
  assert.match(platform,/Security settings/);assert.match(platform,/Announcements/);assert.match(platform,/Security events/);
- assert.match(fs.readFileSync('static/js/pages/superadmin.js','utf8'),/platformAudit','platformSecurityEvents'/);
- assert.match(html,/key==='support' && supportSession/);
+ assert.deepEqual(Object.keys(app().tabTitles).sort(),['announcement','config','dashboard','organizations','platformAdmins','platformAudit','platformInvitations','platformMaintenance','platformSecurityEvents','platformSupportInbox','support']);
+ assert.match(html,/key!=='support' \|\| supportSession/);
  assert.match(html,/Scheduled announcements use UTC/);
 });
 test('support start requires organization, reason, and password, then clears the password',async()=>{
@@ -281,32 +269,22 @@ test('shared dialog lifecycle restores focus after the background stops being in
   ticks.splice(0).forEach(fn=>fn());
   assert.equal(document.activeElement,opener);
 });
-test('role save has one request, preserves draft on failure, and clears busy state',async()=>{const a=app();const u={id:7,role:'engineer',_role:'manager'};let release,calls=0;a.toast=()=>{};a.api=async()=>{calls++;await new Promise(r=>release=r);return {message:'saved'};};const pending=a.changeRole(u);assert.equal(u._saving,true);await a.changeRole(u);assert.equal(calls,1);assert.equal(u.role,'engineer');release();await pending;assert.equal(u.role,'manager');assert.equal(u._saving,false);u._role='admin';a.api=async()=>{throw Error('offline');};await a.changeRole(u);assert.equal(u.role,'manager');assert.equal(u._role,'admin');assert.equal(u._error,'offline');});
 test('confirmed action stays open while saving and preserves errors for retry',async()=>{const a=app();let calls=0,release;a.dlg={open:true,resolve:async()=>{calls++;await new Promise(r=>release=r);}};const pending=a.submitDialog();await a.submitDialog();assert.equal(calls,1);assert.equal(a.dlg.open,true);release();await pending;assert.equal(a.dlg.open,false);assert.equal(a.dialogBusy,false);a.dlg={open:true,resolve:async()=>{throw Error('offline');}};await a.submitDialog();assert.equal(a.dlg.open,true);assert.equal(a.dialogError,'offline');});
-test('role selection waits for explicit Save and bulk logout stays in sessions',()=>{assert.doesNotMatch(html,/@change="changeRole\(u\)"/);assert.match(html,/@click="changeRole\(u\)"/);assert.doesNotMatch(html.split('<!-- /dashboard -->')[0],/@click="confirmLogoutAll\(\)"/);assert.match(html,/@click="confirmLogoutAll\(\)"/);});
-test('logout confirmation makes no request until submitted and keeps server errors visible',async()=>{const a=app();let calls=0;a.api=async()=>{calls++;throw Error('server unavailable');};a.forceLogout({id:7,name:'Test User'});assert.equal(calls,0);assert.match(a.dlg.title,/Test User/);await a.submitDialog();assert.equal(calls,1);assert.equal(a.dlg.open,true);assert.equal(a.dialogError,'server unavailable');});
-test('user filters combine search role and lock state without losing editable records',()=>{const a=app();const u={id:1,name:'Jane Smith',email:'jane@example.com',role:'engineer',_role:'manager',account_locked_until:'2999-01-01T00:00:00Z'};a.allUsers=[u,{id:2,name:'Other',email:null,role:'admin'}];a.userFilters={search:' JANE ',role:'engineer',status:'locked'};assert.equal(a.filteredUsers.length,1);assert.equal(a.filteredUsers[0],u);a.userFilters.role='manager';assert.equal(a.filteredUsers.length,0);a.userFilters={search:'',role:'',status:'active'};assert.equal(a.filteredUsers.length,1);});
-test('session filters match email or IP and exclude invalid expired dates from upcoming expiry',()=>{const a=app();a.sessions=[{name:'Jane',email:'jane@example.com',role:'engineer',ip_address:'10.0.0.1',expires_at:new Date(Date.now()+3600000).toISOString()},{name:'Other',role:'admin',expires_at:'invalid'},{name:'Expired',role:'engineer',expires_at:'2020-01-01T00:00:00Z'}];a.sessionFilters={search:'10.0.0.1',role:'engineer',expiry:'soon'};assert.equal(a.filteredSessions.length,1);a.sessionFilters.search='';assert.equal(a.filteredSessions.length,1);a.sessionFilters.expiry='';assert.equal(a.filteredSessions.length,2);});
-test('audit filters query full backend history and pagination preserves applied filters',async()=>{const a=app();a.auditFilters={start_date:'2026-10-05',end_date:'2026-10-05',action:'DB_BACKUP',status:'success'};a.api=async path=>{assert.match(path,/paginated=true/);assert.match(path,/limit=50/);assert.match(path,/action=DB_BACKUP/);return {rows:[{id:1}],total:101,actions:['DB_BACKUP']};};await a.loadAudit(50);assert.equal(a.auditOffset,50);assert.equal(a.auditTotal,101);a.api=async()=>{throw Error('offline');};await a.loadAudit();assert.equal(a.auditLog.length,0);assert.equal(a.auditError,'offline');});
-test('audit dates show Nairobi independently of browser timezone',()=>{const a=app();assert.match(a.fmtAuditDate('2026-10-04T21:00:00Z'),/2026-10-05/);assert.match(a.fmtAuditDate('2026-10-04T21:00:00Z'),/00:00:00/);});
-test('late audit response cannot overwrite a newer filter request',async()=>{const a=app();let first;a.api=()=>new Promise(r=>first=r);const pending=a.loadAudit();a.api=async()=>({rows:[{id:2}],total:1,actions:[]});await a.loadAudit();first({rows:[{id:1}],total:99,actions:[]});await pending;assert.equal(a.auditLog[0].id,2);assert.equal(a.auditTotal,1);});
-for (const method of ['unlock','bulkUnlock','unlockSelected','saveConfig','saveAnnouncement','clearAnnouncement','submitPasswordReset']) {
+for (const method of ['saveConfig','saveAnnouncement','clearAnnouncement']) {
  test(method+' prevents duplicate requests and exposes errors for retry',async()=>{
-  const a=app();a.toast=()=>{};a.loadLocked=a.loadDashboard=a.loadConfig=a.loadAnnouncement=async()=>{};
-  a.locked=[{id:7}];a.selectedLocked=[7];a.cfgVals.max_login_attempts='5';a.panelLoads.config.loaded=true;a.annForm={message:'Notice',level:'info'};
-  a.resetModal={open:true,userId:7,password:'password123',confirm:'password123',error:''};
-  let release,calls=0;a.api=async()=>{calls++;await new Promise(r=>release=r);return {message:'saved',unlocked_count:1};};
-  const args=method==='unlock'?[{id:7}]:method==='saveConfig'?['max_login_attempts']:[];
+  const a=app();a.toast=()=>{};a.loadConfig=a.loadAnnouncement=async()=>{};
+  a.cfgVals.max_login_attempts='5';a.panelLoads.config.loaded=true;a.annForm={message:'Notice',level:'info'};
+  let release,calls=0;a.api=async()=>{calls++;await new Promise(r=>release=r);return {message:'saved'};};
+  const args=method==='saveConfig'?['max_login_attempts']:[];
   const pending=a[method](...args);
   assert.ok(Object.values(a.actionPending).some(Boolean));
   await a[method](...args);assert.equal(calls,1);release();await pending;
   assert.equal(Object.values(a.actionPending).some(Boolean),false);
-  a.resetModal={open:true,userId:7,password:'password123',confirm:'password123',error:''};a.annForm.message='Notice';a.api=async()=>{throw Error('offline');};
+  a.annForm.message='Notice';a.api=async()=>{throw Error('offline');};
   await a[method](...args);assert.ok(Object.values(a.actionErrors).includes('offline'));
  });
 }
 test('announcement removal cannot race a pending broadcast',async()=>{const a=app();a.toast=()=>{};a.loadAnnouncement=async()=>{};a.annForm.message='Notice';let release,calls=0;a.api=async()=>{calls++;await new Promise(r=>release=r);};const pending=a.saveAnnouncement();await a.clearAnnouncement();assert.equal(calls,1);release();await pending;});
-test('reset validation makes no request and failed reset retains values for retry',async()=>{const a=app();let calls=0;a.api=async()=>{calls++;throw Error('offline');};a.resetModal={open:true,userId:7,password:'short',confirm:'short',error:''};await a.submitPasswordReset();assert.equal(calls,0);assert.match(a.resetModal.error,/8 characters/);a.resetModal.password=a.resetModal.confirm='password123';await a.submitPasswordReset();assert.equal(a.resetModal.open,true);assert.equal(a.resetModal.password,'password123');assert.equal(a.actionErrors.reset,'offline');});
 test('announcement loading exposes errors and successful retry clears them',async()=>{const a=app();a.api=async()=>{throw Error('offline')};await a.loadAnnouncement();assert.equal(a.announcementError,'offline');assert.equal(a.announcementLoading,false);a.api=async()=>({announcement:{message:'Notice',level:'info'},status:'active',business_timezone:'Africa/Nairobi',timezone_revision:1});await a.loadAnnouncement();assert.equal(a.announcementError,'');assert.equal(a.annForm.message,'Notice');});
 test('broadcast writes wait while the current announcement is loading',async()=>{const a=app();let calls=0,release;a.api=()=>{calls++;return new Promise(r=>release=r)};const load=a.loadAnnouncement();a.saveAnnouncement();a.clearAnnouncement();assert.equal(calls,1);release({announcement:null});await load;});
 test('announcement refresh cannot overwrite a pending removal',async()=>{const a=app();a.toast=()=>{};let calls=0,release;a.api=()=>{calls++;return new Promise(r=>release=r)};const removal=a.clearAnnouncement();a.loadAnnouncement();assert.equal(calls,1);release({success:true});await removal;assert.equal(a.announcement,null);});
@@ -423,8 +401,8 @@ test('log purge validates retention before confirming and maintenance is platfor
  assert.doesNotMatch(section,/x-html|SQL console|VACUUM|restore/i);
 });
 
-test('platform announcement form offers company owners as a SaaS-only target role',()=>{
+test('platform announcement form offers company owners as a target role',()=>{
  const roles=html.split('class="announcement-roles"')[1].split('</div>')[0];
- assert.match(roles,/<label x-show="me\?\.saas_mode"><input type="checkbox" value="owner" x-model="annForm\.roles"> Owner<\/label>/);
+ assert.match(roles,/<label><input type="checkbox" value="owner" x-model="annForm\.roles"> Owner<\/label>/);
  for(const role of ['engineer','manager','admin','superadmin'])assert.match(roles,new RegExp('value="'+role+'"'));
 });

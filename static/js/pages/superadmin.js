@@ -109,14 +109,8 @@ function superPanel() {
     },
     dialogFocus: new WeakMap(),
     selectSection(section) {
-      if (!Object.hasOwn(this.tabTitles, section)) return;
-      if (section === 'support' && !this.me?.saas_mode) return;
-      if (['platformSecurityEvents', 'platformInvitations', 'platformSupportInbox', 'platformMaintenance'].includes(section) && (!this.me?.saas_mode || !this.me?.is_platform_admin)) return;
-      if (this.me?.saas_mode) {
-        const allowed = ['dashboard','config','announcement','organizations','platformAdmins','platformAudit','platformSecurityEvents','platformInvitations','platformSupportInbox','platformMaintenance'];
-        if (section === 'support' && this.supportSession) allowed.push('support');
-        if (!allowed.includes(section)) return;
-      }
+      if (!Object.hasOwn(this.tabTitles, section) || !this.me?.is_platform_admin) return;
+      if (section === 'support' && !this.supportSession) return;
       this.tab = section;
       this.refresh();
     },
@@ -156,16 +150,6 @@ function superPanel() {
     ready: false,
 
     tabTitles: {
-      dashboard: 'Dashboard',    accounts: 'Locked Accounts',
-      sessions:  'Active Sessions', config: 'Security Config',
-      users:     'All Users',    tables: 'Database Tables',
-      query:     'SQL Console',  maintenance: 'Maintenance',
-      announcement: 'System Announcement', audit: 'Audit Log',
-      organizations: 'Organizations', platformAdmins: 'Platform Admins', platformAudit: 'Platform Audit',
-      platformSecurityEvents: 'Security events', platformInvitations: 'Invitations', platformSupportInbox: 'Support inbox',
-      support: 'Customer Support', platformMaintenance: 'Database maintenance',
-    },
-    platformTabTitles: {
       dashboard: 'Overview', organizations: 'Organizations', support: 'Customer support',
       platformAdmins: 'Platform access', config: 'Security settings',
       announcement: 'Announcements', platformAudit: 'Audit log', platformSecurityEvents: 'Security events',
@@ -215,11 +199,7 @@ function superPanel() {
       { key:'movements', label:'Movements and transfers', placeholder:'Exact part number', param:'query' },
     ],
     platformAdmins: [], platformAdminLoading: false, platformAdminError: '', platformAdminEmail: '',
-    locked: [], selectedLocked: [],
-    sessions: [],
     panelLoads: {
-      users: { loading: false, loaded: false, error: '' },
-      sessions: { loading: false, loaded: false, error: '' },
       config: { loading: false, loaded: false, error: '' },
     },
     panelReady(section) {
@@ -241,46 +221,6 @@ function superPanel() {
       }
     },
     secConfig: {}, cfgVals: {},
-    userFilters: { search: '', role: '', status: '' },
-    sessionFilters: { search: '', role: '', expiry: '' },
-    matchesIdentity(record, search) {
-      const query = search.trim().toLowerCase();
-      return !query || [record.name, record.email, record.ip_address].some(value => String(value || '').toLowerCase().includes(query));
-    },
-    get filteredUsers() {
-      return this.allUsers.filter(user => this.matchesIdentity(user, this.userFilters.search)
-        && (!this.userFilters.role || user.role === this.userFilters.role)
-        && (!this.userFilters.status || this.isLocked(user) === (this.userFilters.status === 'locked')));
-    },
-    get filteredSessions() {
-      const now = Date.now();
-      return this.sessions.filter(session => {
-        const expiry = this.utcTimestamp(session.expires_at);
-        return this.matchesIdentity(session, this.sessionFilters.search)
-          && (!this.sessionFilters.role || session.role === this.sessionFilters.role)
-          && (!this.sessionFilters.expiry || (expiry > now && expiry <= now + 86400000));
-      });
-    },
-    utcTimestamp(value) {
-      return InventoryTime.parseInstant(value);
-    },
-    timezoneContext: null, timezoneError: '', timezoneLoading: false,
-    async loadTimezoneContext() {
-      if(this.timezoneLoading)return;
-      this.timezoneLoading=true;this.timezoneError='';
-      try {const data=await this.api('/timezone-context');if(!validTimezoneContext(data))throw Error('Timezone settings are unavailable.');this.timezoneContext=data;}
-      catch(error){this.timezoneContext=null;this.timezoneError=error.message;}
-      finally{this.timezoneLoading=false;}
-    },
-    allUsers: [],
-    dbTables: {},
-    sqlInput: 'SELECT * FROM users LIMIT 20',
-    queryResult: null,
-    restoreFile: null,
-    vacuumResult: null, purgeResult: null, purgeDays: 90,
-    auditLog: [], auditTotal: 0, auditOffset: 0, auditActions: [], auditError: '', auditLoading: false,
-    auditRequest: 0, auditTimezone: null,
-    auditFilters: { start_date: '', end_date: '', action: '', status: '' },
     announcement: null, announcementLoading: false, announcementError: '',
     savedAnnouncement: null, announcementReady: false, announcementConflict: false,
     announcementStatus: 'none', announcementTimezone: '', announcementTimezoneRevision: null,
@@ -290,8 +230,6 @@ function superPanel() {
     toasts: [],
     dlg: { open: false, title: '', msg: '', action: '', resolve: () => {} },
 
-    resetModal: { open: false, userId: null, userName: '', password: '', confirm: '', error: '' },
-
     cfgMeta: {
       max_login_attempts:        { label: 'Max Login Attempts',     desc: 'Consecutive failures before account lockout',      unit: 'attempts', min: 1, max: 100  },
       lockout_duration_minutes:  { label: 'Lockout Duration',       desc: 'How long an account stays locked after failure',   unit: 'minutes',  min: 1, max: 1440 },
@@ -300,29 +238,23 @@ function superPanel() {
       remember_me_duration_days: { label: '"Remember Me" Duration', desc: 'Session lifetime when remember-me is checked',    unit: 'days',     min: 1, max: 365  },
     },
     get availableCfgMeta() {
-      return Object.fromEntries(Object.entries(this.cfgMeta).filter(([key]) => this.me?.saas_mode || key !== 'mobile_session_max_duration_hours'));
+      return this.cfgMeta;
     },
 
     // ── Boot ──────────────────────────────────────────────────
     async init() {
       await this.getCsrf();
       if (!await this.getMe()) return;
-      if (this.me?.saas_mode) {
-        await this.loadCurrentSupportSession();
-        await this.loadPlatformOverview();
-        await this.loadOrganizations();
-        await this.loadPlatformAudit();
-        await this.loadPlatformAdmins();
-        return;
-      }
-      await this.loadTimezoneContext();
-      await this.loadDashboard();
-      await this.loadAnnouncement();
+      await this.loadCurrentSupportSession();
+      await this.loadPlatformOverview();
+      await this.loadOrganizations();
+      await this.loadPlatformAudit();
+      await this.loadPlatformAdmins();
     },
 
     refresh() {
       const loaders = {
-        dashboard: () => this.me?.saas_mode ? this.loadPlatformOverview() : this.loadDashboard(),
+        dashboard: () => this.loadPlatformOverview(),
         support: () => this.loadCurrentSupportSession(),
         organizations: () => this.loadOrganizations(),
         platformAdmins: () => this.loadPlatformAdmins(),
@@ -331,59 +263,11 @@ function superPanel() {
         platformInvitations: () => this.loadPlatformInvitations(),
         platformSupportInbox: () => this.loadSupportInbox(),
         platformMaintenance: () => this.loadDatabaseStats(),
-        accounts:  () => this.loadLocked(),
-        sessions:  () => this.loadSessions(),
         config:    () => this.loadConfig(),
-        users:     () => this.loadUsers(),
-        tables:    () => this.loadTables(),
-        audit:     () => this.loadAudit(),
         announcement: () => this.openAnnouncement(),
       };
-      (loaders[this.tab] || (() => this.loadDashboard()))();
+      (loaders[this.tab] || (() => this.loadPlatformOverview()))();
     },
-
-    // add these two methods alongside your other methods:
-openResetModal(u) {
-    if (this.actionPending.reset) return;
-    this.actionErrors.reset = '';
-    this.resetModal = {
-        open: true,
-        userId: u.id,
-        userName: u.name,
-        password: '',
-        confirm: '',
-        error: '',
-    };
-},
-
-async submitPasswordReset() {
-    if (this.actionPending.reset) return;
-    this.resetModal.error = '';
-    this.actionErrors.reset = '';
-
-    if (this.resetModal.password.length < 8) {
-        this.resetModal.error = 'Password must be at least 8 characters.';
-        return;
-    }
-    if (this.resetModal.password !== this.resetModal.confirm) {
-        this.resetModal.error = 'Passwords do not match.';
-        return;
-    }
-
-    return this.runAction('reset', async () => {
-        const r = await this.api(`/superadmin/users/${this.resetModal.userId}/reset-password`, {
-            method: 'POST',
-            body: JSON.stringify({
-                user_id: this.resetModal.userId,
-                new_password: this.resetModal.password,
-            }),
-        });
-        this.toast(r.message, 'ok');
-        this.resetModal.open = false;
-        this.resetModal.password = '';
-        this.resetModal.confirm = '';
-    });
-},
 
     // ── Auth helpers ──────────────────────────────────────────
     async getCsrf() {
@@ -444,14 +328,6 @@ async submitPasswordReset() {
       const id = Date.now();
       this.toasts.push({ id, msg, type });
       setTimeout(() => this.toasts = this.toasts.filter(t => t.id !== id), 3500);
-    },
-
-    // ── Dashboard ──────────────────────────────────────────────
-    async loadDashboard() {
-      this.loading = true;
-      try { this.dashboard = await this.api('/superadmin/dashboard'); }
-      catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
     },
 
     async loadPlatformDashboard() {
@@ -656,7 +532,7 @@ async submitPasswordReset() {
     },
 
     openSupportStart(org) {
-      if (!this.me?.saas_mode || !this.me?.is_platform_admin || !org?.id) return;
+      if (!this.me?.is_platform_admin || !org?.id) return;
       this.supportStartOrg = org;
       this.supportStartForm = { reason: '', current_password: '' };
       this.supportStartError = '';
@@ -694,7 +570,6 @@ async submitPasswordReset() {
     },
 
     async loadCurrentSupportSession() {
-      if (!this.me?.saas_mode) return;
       try {
         const data = await this.api('/platform/support-sessions/current');
         this.supportSession = data || null;
@@ -1161,104 +1036,10 @@ async submitPasswordReset() {
       });
     },
 
-    // ── Locked accounts ────────────────────────────────────────
-    async loadLocked() {
-      this.loading = true;
-      try { this.locked = await this.api('/superadmin/locked-accounts'); this.selectedLocked = []; }
-      catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
-    },
-
-    async unlock(u) {
-      return this.runAction('unlock', async () => {
-        const r = await this.api('/superadmin/unlock-account', {
-          method: 'POST', body: JSON.stringify({ user_id: u.id }),
-        });
-        this.toast(r.message, 'ok');
-        await this.loadLocked(); await this.loadDashboard();
-      });
-    },
-
-    async bulkUnlock() {
-      if (!this.locked.length) return;
-      return this.runAction('unlock', async () => {
-        const r = await this.api('/superadmin/unlock-accounts/bulk', {
-          method: 'POST', body: JSON.stringify({ user_ids: this.locked.map(u => u.id) }),
-        });
-        this.toast(`Unlocked ${r.unlocked_count} account(s)`, 'ok');
-        await this.loadLocked(); await this.loadDashboard();
-      });
-    },
-
-    async unlockSelected() {
-      if (!this.selectedLocked.length) return;
-      return this.runAction('unlock', async () => {
-        const r = await this.api('/superadmin/unlock-accounts/bulk', {
-          method: 'POST', body: JSON.stringify({ user_ids: this.selectedLocked }),
-        });
-        this.toast(`Unlocked ${r.unlocked_count} account(s)`, 'ok');
-        await this.loadLocked(); await this.loadDashboard();
-      });
-    },
-
-    toggleAll(e) {
-      this.selectedLocked = e.target.checked ? this.locked.map(u => u.id) : [];
-    },
-
-    isLocked(u) {
-      return Boolean(u.account_locked_until && this.utcTimestamp(u.account_locked_until) > Date.now());
-    },
-
-    // ── Sessions ───────────────────────────────────────────────
-    async loadSessions() {
-      return this.loadPanel('sessions', async () => {
-        this.sessions = await this.api('/superadmin/sessions');
-      });
-    },
-
-    forceLogout(u) {
-      if (this.dialogBusy) return;
-      this.dialogError = '';
-      this.dlg = {
-        open: true,
-        title: `Force logout ${u.name || u.email}?`,
-        msg: 'All active sessions for this user will be terminated immediately.',
-        action: 'Force Logout',
-        resolve: async () => {
-          try {
-            const r = await this.api('/superadmin/sessions/force-logout', {
-              method: 'POST', body: JSON.stringify({ user_id: u.user_id || u.id }),
-            });
-            this.toast(`Terminated ${r.sessions_terminated} session(s)`, 'ok');
-            await this.loadSessions();
-          } catch (e) { throw e; }
-        },
-      };
-    },
-
-    confirmLogoutAll() {
-      if (this.dialogBusy) return;
-      this.dialogError = '';
-      this.dlg = {
-        open: true,
-        title: 'Force logout ALL users?',
-        msg: 'Every active session except yours will be terminated immediately. Users will need to log in again.',
-        action: 'Logout Everyone',
-        resolve: async () => {
-          try {
-            const r = await this.api('/superadmin/sessions/force-logout-all', { method: 'POST' });
-            this.toast(`Terminated ${r.sessions_terminated} session(s)`, 'ok');
-            await this.loadSessions(); await this.loadDashboard();
-          } catch (e) { throw e; }
-        },
-      };
-    },
-
     // ── Security config ────────────────────────────────────────
     async loadConfig() {
       return this.loadPanel('config', async () => {
-        const path = this.me?.saas_mode ? '/platform/security-config' : '/superadmin/security-config';
-        this.secConfig = await this.api(path);
+        this.secConfig = await this.api('/platform/security-config');
         for (const k of Object.keys(this.cfgMeta))
           this.cfgVals[k] = this.secConfig[k]?.setting_value ?? '';
       });
@@ -1269,122 +1050,12 @@ async submitPasswordReset() {
       const val = this.cfgVals[key];
       if (!val) { this.toast('Please enter a value', 'warn'); return; }
       return this.runAction('config:' + key, async () => {
-        const path = this.me?.saas_mode ? `/platform/security-config/${key}` : `/superadmin/security-config/${key}`;
-        await this.api(path, {
+        await this.api(`/platform/security-config/${key}`, {
           method: 'PUT', body: JSON.stringify({ value: String(val) }),
         });
         this.toast(`${key} updated to ${val}`, 'ok');
         await this.loadConfig();
       });
-    },
-
-    // ── Users ──────────────────────────────────────────────────
-    async loadUsers() {
-      return this.loadPanel('users', async () => {
-        this.allUsers = (await this.api('/superadmin/users')).map(u => ({ ...u, _role: u.role, _saving: false, _error: '' }));
-      });
-    },
-
-    async changeRole(u) {
-      if (u._saving || u._role === u.role) return;
-      const requestedRole = u._role;
-      u._saving = true;
-      u._error = '';
-      try {
-        const r = await this.api(`/superadmin/users/${u.id}/role`, {
-          method: 'PUT', body: JSON.stringify({ role: requestedRole }),
-        });
-        this.toast(r.message, 'ok');
-        u.role = requestedRole;
-      } catch (e) { u._error = e.message; }
-      finally { u._saving = false; }
-    },
-
-    // ── DB Tables ──────────────────────────────────────────────
-    async loadTables() {
-      this.loading = true;
-      try { this.dbTables = await this.api('/superadmin/database/tables'); }
-      catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
-    },
-
-    // ── SQL ────────────────────────────────────────────────────
-    async runQuery() {
-      if (!this.sqlInput.trim()) return;
-      this.loading = true; this.queryResult = null;
-      try {
-        this.queryResult = await this.api('/superadmin/database/query', {
-          method: 'POST', body: JSON.stringify({ sql: this.sqlInput }),
-        });
-      } catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
-    },
-
-    // ── Maintenance ────────────────────────────────────────────
-    backupDB() {
-      const a = document.createElement('a');
-      a.href = `${this.apiUrl}/superadmin/database/backup`;
-      a.click();
-      this.toast('Backup download started', 'ok');
-    },
-
-    async restoreDB() {
-      if (!this.restoreFile || !confirm('Replace the entire live database with this file? Changes since the backup will be overwritten.')) return;
-      this.loading = true;
-      try {
-        const data = new FormData(); data.append('file', this.restoreFile);
-        const result = await this.api('/superadmin/database/restore', {method:'POST',body:data});
-        alert(result.message + '\nPrevious database saved as: ' + result.backup_name);
-        location.href = '/static/index.html';
-      } catch (e) { this.toast(e.message, 'danger'); }
-      finally { this.loading = false; }
-    },
-
-    vacuumDB() {
-      if (this.dialogBusy) return;
-      this.dialogError = '';
-      this.dlg = {
-        open: true, title: 'Run VACUUM?',
-        msg: 'This defragments the database and reclaims unused space. Takes a few seconds.',
-        action: 'Run VACUUM',
-        resolve: async () => {
-          this.loading = true;
-          try {
-            this.vacuumResult = await this.api('/superadmin/database/vacuum', { method: 'POST' });
-            this.toast(`Saved ${this.fmtBytes(this.vacuumResult.saved_bytes)}`, 'ok');
-            await this.loadDashboard();
-          } catch (e) { throw e; }
-          finally { this.loading = false; }
-        },
-      };
-    },
-
-    purgeLogs() {
-      const days = parseInt(this.purgeDays) || 0;
-      if (this.dialogBusy) return;
-      this.dialogError = '';
-      this.dlg = {
-        open: true,
-        title: days === 0 ? 'Purge All General Logs?' : `Purge Logs Older Than ${days} Days?`,
-        msg: days === 0
-          ? 'This permanently deletes general logs. Stock audit evidence is retained. This cannot be undone.'
-          : `This deletes general logs older than ${days} days. Stock audit evidence is retained. This cannot be undone.`,
-        action: 'Purge',
-        resolve: async () => {
-          this.loading = true;
-          try {
-            this.purgeResult = await this.api(
-              `/superadmin/database/logs/purge?days=${days}`, { method: 'DELETE' }
-            );
-            this.toast(
-              `Deleted ${this.purgeResult.activity_logs_deleted + this.purgeResult.system_logs_deleted} entries`,
-              'ok'
-            );
-            await this.loadDashboard();
-          } catch (e) { throw e; }
-          finally { this.loading = false; }
-        },
-      };
     },
 
     // ── Announcement ───────────────────────────────────────────
@@ -1400,10 +1071,8 @@ async submitPasswordReset() {
       if (this.announcementLoading || (this.actionPending.announcement && !afterWrite)) return;
       this.announcementLoading = true; this.announcementError = ''; this.announcementReady=false;
       try {
-        const path = this.me?.saas_mode ? '/platform/announcement/manage' : '/superadmin/announcement/manage';
-        const r = await this.api(path);
-        const minRevision = this.me?.saas_mode ? 0 : 1;
-        if (!InventoryTime.isValidZone(r.business_timezone) || !Number.isInteger(r.timezone_revision) || r.timezone_revision<minRevision) throw Error('Announcement timezone metadata unavailable');
+        const r = await this.api('/platform/announcement/manage');
+        if (!InventoryTime.isValidZone(r.business_timezone) || !Number.isInteger(r.timezone_revision) || r.timezone_revision<0) throw Error('Announcement timezone metadata unavailable');
         this.announcementTimezone=r.business_timezone;this.announcementTimezoneRevision=r.timezone_revision;
         this.savedAnnouncement=r.announcement;this.announcement=r.announcement;
         this.announcementStatus=r.status;this.annForm=this.announcementFormFor(r.announcement);
@@ -1419,8 +1088,7 @@ async submitPasswordReset() {
         if (!this.announcementPublishNow && !this.annForm.starts_local) throw Error('Select a start time');
         if (this.announcementHasExpiry && !this.annForm.expires_local) throw Error('Select an expiry time');
         try {
-          const path = this.me?.saas_mode ? '/platform/announcement' : '/superadmin/announcement';
-          await this.api(path, {method:'POST',body:JSON.stringify({...this.annForm,
+          await this.api('/platform/announcement', {method:'POST',body:JSON.stringify({...this.annForm,
             starts_local:this.announcementPublishNow?null:this.annForm.starts_local,
             expires_local:this.announcementHasExpiry?this.annForm.expires_local:null,
             timezone_revision:this.announcementTimezoneRevision,expected_revision:this.savedAnnouncement?.revision || null})});
@@ -1433,37 +1101,12 @@ async submitPasswordReset() {
       if (this.announcementLoading || !this.announcementReady || this.announcementConflict) return;
       return this.runAction('announcement', async () => {
         const query=this.savedAnnouncement?.revision?'?expected_revision='+encodeURIComponent(this.savedAnnouncement.revision):'';
-        const path = this.me?.saas_mode ? '/platform/announcement' : '/superadmin/announcement';
-        try {await this.api(path+query,{method:'DELETE'});}
+        try {await this.api('/platform/announcement'+query,{method:'DELETE'});}
         catch(error) {if(error.status===409)this.announcementConflict=true;throw error;}
         this.announcement=null;this.savedAnnouncement=null;this.announcementStatus='none';this.announcementError='';
         this.annForm=this.announcementFormFor(null);this.announcementPublishNow=true;this.announcementHasExpiry=false;
         this.toast('Announcement removed', 'ok');
       });
-    },
-
-    // ── Audit ──────────────────────────────────────────────────
-    async loadAudit(offset = 0) {
-      const request = ++this.auditRequest;
-      this.auditLoading = true; this.auditError = '';
-      const query = new URLSearchParams({paginated:'true', limit:'50', offset:String(offset)});
-      for (const [key,value] of Object.entries(this.auditFilters)) if (value) query.set(key,value);
-      try {
-        const result = await this.api('/superadmin/audit-log?' + query);
-        if (request !== this.auditRequest) return;
-        this.auditTimezone=result.timezone;
-        this.auditLog = result.rows; this.auditTotal = result.total;
-        this.auditActions = result.actions; this.auditOffset = offset;
-      } catch (error) {
-        if (request !== this.auditRequest) return;
-        this.auditLog = []; this.auditTotal = 0; this.auditOffset = 0;
-        this.auditError = error.message;
-      } finally {
-        if (request === this.auditRequest) this.auditLoading = false;
-      }
-    },
-    fmtAuditDate(value) {
-      return InventoryTime.formatInstant(value,this.auditTimezone);
     },
 
     // ── Helpers ────────────────────────────────────────────────
@@ -1474,15 +1117,6 @@ async submitPasswordReset() {
       return (b / 1048576).toFixed(2) + ' MB';
     },
 
-    fmtDate(d) { return d ? InventoryTime.formatInstant(d,this.timezoneContext?.display_timezone) : '—'; },
-
-    parseUA(ua) {
-      if (!ua) return '—';
-      if (ua.includes('Chrome'))  return 'Chrome';
-      if (ua.includes('Firefox')) return 'Firefox';
-      if (ua.includes('Safari'))  return 'Safari';
-      if (ua.includes('Edge'))    return 'Edge';
-      return ua.slice(0, 25);
-    },
+    fmtDate(d) { return d ? InventoryTime.formatInstant(d) : '—'; },
   };
 }

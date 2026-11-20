@@ -228,13 +228,11 @@ test('all date and date-time fields share mobile sizing', () => {
     const html = read('index.html');
     const adminHtml = read('superadmin.html');
     assert.equal([...html.matchAll(/type="date"/g)].length, 10, 'Inventory page should expose six history filters and four equipment dates');
-    assert.equal([...adminHtml.matchAll(/type="date"/g)].length, 2, 'Platform audit should expose both date filters');
+    assert.equal([...adminHtml.matchAll(/type="date"/g)].length, 0, 'Platform audit filters take UTC timestamps, not dates');
     assert.equal([...adminHtml.matchAll(/type="datetime-local"/g)].length, 2, 'Announcement controls should expose both date-time fields');
 
     const css = read('mystyle.css');
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?input\[type="date"\]\s*,\s*input\[type="datetime-local"\]\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*48px;[^}]*font-size:\s*16px;/s.test(css), 'Date controls should share full-width, touch-sized mobile rules');
-    const adminCss = read('superadmin.css');
-    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.audit-filters\s+input\[type="date"\]\s*\{[^}]*min-height:\s*48px;[^}]*font-size:\s*16px;/s.test(adminCss), 'Platform audit date filters should keep the shared mobile touch size');
 });
 
 test('platform organization table becomes labeled cards on mobile', () => {
@@ -251,67 +249,23 @@ test('platform organization table becomes labeled cards on mobile', () => {
     assert.ok(/\.organizations-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile values should retain visible field labels');
 });
 
-test('active session table becomes labeled cards on mobile', () => {
-    const html = read('superadmin.html');
-    const sessionsTab = html.indexOf("<div x-show=\"tab==='sessions'\">");
-    const start = html.indexOf('<table class="tbl sessions-table">', sessionsTab);
-    const end = html.indexOf('</table>', start);
-    assert.ok(sessionsTab >= 0 && start > sessionsTab && end > start, 'Missing active sessions table');
-    const table = html.slice(start, end);
-    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
-        'User', 'Role', 'IP Address', 'Last Activity', 'Expires', 'Browser', 'Action'
-    ]);
-    const css = read('superadmin.css');
-    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.sessions-table[^}]*display:\s*block/s.test(css), 'Active sessions should switch to a mobile card layout');
-    assert.ok(/\.sessions-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile session values should retain visible field labels');
-});
 
-test('platform user table becomes labeled cards on mobile', () => {
-    const html = read('superadmin.html');
-    const usersTab = html.indexOf("<div x-show=\"tab==='users'\">");
-    const start = html.indexOf('<table class="tbl users-table">', usersTab);
-    const end = html.indexOf('</table>', start);
-    assert.ok(usersTab >= 0 && start > usersTab && end > start, 'Missing platform users table');
-    const table = html.slice(start, end);
-    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
-        'Name', 'Email', 'Role', 'Territory', 'Failed Logins', 'Last Login', 'Status', 'Account Actions', 'Reset Password'
-    ]);
-    const css = read('superadmin.css');
-    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.users-table[^}]*display:\s*block/s.test(css), 'Platform users should switch to a mobile card layout');
-    assert.ok(/\.users-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile user values should retain visible field labels');
-});
 
 test('platform audit entries become labeled cards on mobile', () => {
     const html = read('superadmin.html');
-    const section = html.slice(html.indexOf("x-show=\"tab==='audit'\""), html.indexOf('class="audit-pagination"'));
-    const start = section.indexOf('<table class="audit-table tbl">');
+    const section = html.slice(html.indexOf("x-show=\"tab==='platformAudit' && me?.saas_mode\""), html.indexOf("x-show=\"tab==='platformInvitations'"));
+    const start = section.indexOf('<table class="tbl audit-table">');
     const end = section.indexOf('</table>', start);
     assert.ok(start >= 0 && end > start, 'Missing audit table');
     const table = section.slice(start, end);
     assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
-        'Time', 'Action', 'Resource', 'Status', 'Details'
+        'Time (UTC)', 'Actor', 'Organization', 'Action', 'Result', 'Details'
     ]);
     const css = read('superadmin.css');
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.audit-table[^}]*display:\s*block/s.test(css), 'Audit table should switch to a mobile card layout');
     assert.ok(/\.audit-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile audit values should retain visible field labels');
 });
 
-test('locked account table becomes labeled cards on mobile without losing selection or unlock actions', () => {
-    const html = read('superadmin.html');
-    const accountsTab = html.indexOf("<div x-show=\"tab==='accounts'\">");
-    const start = html.indexOf('<table class="tbl locked-accounts-table">', accountsTab);
-    const end = html.indexOf('</table>', start);
-    assert.ok(accountsTab >= 0 && start > accountsTab && end > start, 'Missing locked accounts table');
-    const table = html.slice(start, end);
-    assert.deepEqual([...table.matchAll(/<td\b[^>]*data-label="([^"]+)"/g)].map(([, label]) => label), [
-        'Select', 'Name', 'Email', 'Role', 'Failed Attempts', 'Locked Until', 'Action'
-    ]);
-    assert.match(table, /x-model="selectedLocked"/, 'Locked account selection should remain available');
-    assert.match(table, /@click="unlock\(u\)"/, 'Per-account unlock action should remain available');
-    const css = read('superadmin.css');
-    assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.locked-accounts-table[^}]*display:\s*block/s.test(css), 'Locked accounts should switch to a mobile card layout');
-    assert.ok(/\.locked-accounts-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile locked account values should retain visible field labels');
-});
 
 test('remaining fixed inventory tables become labeled mobile cards and keep row actions', () => {
     const html = read('index.html');
@@ -351,6 +305,5 @@ test('remaining fixed inventory tables become labeled mobile cards and keep row 
     assert.ok(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.inventory-reference-table,\s*\.inventory-reference-table tbody\s*\{[^}]*display:\s*block/s.test(css), 'Fixed inventory tables should switch to mobile cards');
     assert.ok(/\.inventory-reference-table\s+td::before\s*\{[^}]*content:\s*attr\(data-label\)/s.test(css), 'Mobile inventory values should retain field labels');
     assert.ok(/\.inventory-reference-table\s+td\[data-label="Actions?"\]\s+\.btn\s*\{[^}]*min-height:\s*44px/s.test(css), 'Row actions should retain mobile touch size');
-    assert.match(read('superadmin.html'), /class="tbl" x-show="queryResult\?\.rows\?\.length > 0"/, 'Dynamic query results should retain their separate scrollable table');
     assert.match(html, /href="mystyle\.css\?v=20261031-keyboard-controls"/, 'Header stylesheet changes should use a fresh cache version');
 });
