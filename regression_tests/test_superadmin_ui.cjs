@@ -422,3 +422,9 @@ test('log purge validates retention before confirming and maintenance is platfor
  const section=html.split('x-show="tab===\'platformMaintenance\' && me?.saas_mode && me?.is_platform_admin"')[1].split('x-show="tab===\'platformAdmins\'')[0];
  assert.doesNotMatch(section,/x-html|SQL console|VACUUM|restore/i);
 });
+
+test('platform announcement form offers company owners as a SaaS-only target role',()=>{
+ const roles=html.split('class="announcement-roles"')[1].split('</div>')[0];
+ assert.match(roles,/<label x-show="me\?\.saas_mode"><input type="checkbox" value="owner" x-model="annForm\.roles"> Owner<\/label>/);
+ for(const role of ['engineer','manager','admin','superadmin'])assert.match(roles,new RegExp('value="'+role+'"'));
+});
