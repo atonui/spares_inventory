@@ -2,7 +2,9 @@
 
 # Shared PostgreSQL fixtures (postgres_schema, tenant_database, tenant_api).
 pytest_plugins = ("regression_tests.postgres_fixtures", "regression_tests.postgres_app")
+import base64
 import os
+import secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -17,8 +19,9 @@ for key, value in {
     'SMTP_SERVER': 'localhost', 'SMTP_PORT': '1025',
     'SMTP_USERNAME': 'test', 'SMTP_PASSWORD': 'test',
     'FRONTEND_URL': 'http://testserver',
-    # Disposable test key, same shape as production (openssl rand -base64 32).
-    'NATIVE_REFRESH_ENCRYPTION_KEY': 'dGVzdC1vbmx5LW5hdGl2ZS1yZWZyZXNoLWtleS0zMmI=',
+    # Fresh random key per test run, same shape as production (openssl rand -base64 32).
+    # Generated rather than committed so no key-shaped value lives in the repository.
+    'NATIVE_REFRESH_ENCRYPTION_KEY': base64.b64encode(secrets.token_bytes(32)).decode(),
 }.items():
     os.environ[key] = value
 sys.path.insert(0, str(ROOT))
