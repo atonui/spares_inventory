@@ -88,7 +88,6 @@ def native_auth_api(postgres_schema):
         authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(
             get_connection, user_id=user_id, session_token=session_token,
         ),
-        stock_writer=lambda: pytest.fail("PostgreSQL login must not use the SQLite writer"),
         current_user=lambda: None,
         csrf_dependency=lambda: None,
         authenticated_csrf_dependency=lambda: None,

@@ -1,7 +1,7 @@
 """Stock-changing inventory routes with explicit application dependencies."""
 from backend.services.session_credentials import get_request_credential
 from fastapi import APIRouter, Depends, HTTPException, Request
-from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.database_sql import execute, execute_cursor
 from backend.temporal import serialize_instant, utc_now
 from backend.services.principals import AuthenticatedPrincipal
 from backend.schemas.inventory_writes import (
@@ -22,27 +22,23 @@ def _actor_id(user):
 def _organization_id(conn, user):
     if isinstance(user, AuthenticatedPrincipal):
         return user.organization_id
-    if is_postgres(conn):
-        return execute(
-            conn,
-            "SELECT NULLIF(current_setting('app.organization_id', true), '')::uuid AS id",
-        ).fetchone()["id"]
-    return None
+    return execute(
+        conn,
+        "SELECT NULLIF(current_setting('app.organization_id', true), '')::uuid AS id",
+    ).fetchone()["id"]
 
 
 def _store_organization_id(conn, record):
     """Read the store tenant from the database row on PostgreSQL."""
-    return record["organization_id"] if is_postgres(conn) else None
+    return record["organization_id"]
 
 
 def _locked(conn, statement, table_alias=None):
-    if not is_postgres(conn):
-        return statement
     return statement + (f" FOR UPDATE OF {table_alias}" if table_alias else " FOR UPDATE")
 
 
 def _insert_id(conn, cursor):
-    return cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid
+    return cursor.fetchone()["id"]
 
 
 def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log,
@@ -119,17 +115,11 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             if wo:
                 work_order_id = wo["id"]
             else:
-                if is_postgres(conn):
-                    execute_cursor(conn, cursor,
-                        """INSERT INTO work_orders
+                execute_cursor(conn, cursor,
+                    """INSERT INTO work_orders
                            (organization_id, work_order_number, assigned_engineer_id, status)
                            VALUES (?, ?, ?, 'in_progress') RETURNING id""",
-                        (_organization_id(conn, user_id), request_data.work_order_number, _actor_id(user_id)))
-                else:
-                    execute_cursor(conn, cursor,
-                        """INSERT INTO work_orders (work_order_number, assigned_engineer_id, status)
-                           VALUES (?, ?, 'in_progress')""",
-                        (request_data.work_order_number, _actor_id(user_id)))
+                    (_organization_id(conn, user_id), request_data.work_order_number, _actor_id(user_id)))
                 work_order_id = _insert_id(conn, cursor)
 
             # Update inventory
@@ -147,16 +137,11 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             # Log movement
             values = (item["store_id"], item["part_id"], request_data.quantity,
                       work_order_id, _actor_id(user_id), request_data.notes)
-            if is_postgres(conn):
-                execute_cursor(conn, cursor,
-                    """INSERT INTO movements(organization_id,from_store_id,part_id,quantity,
+            execute_cursor(conn, cursor,
+                """INSERT INTO movements(organization_id,from_store_id,part_id,quantity,
                        movement_type,work_order_id,created_by,notes)
                        VALUES(?,?,?,?,'consume',?,?,?) RETURNING id""",
-                    (_organization_id(conn, user_id), *values))
-            else:
-                execute_cursor(conn, cursor,
-                    """INSERT INTO movements(from_store_id,part_id,quantity,movement_type,
-                       work_order_id,created_by,notes) VALUES(?,?,?,'consume',?,?,?)""", values)
+                (_organization_id(conn, user_id), *values))
 
             record_stock_audit(conn,user_id,"consume_stock",[change_after(conn,before)],[_insert_id(conn, cursor)],resource_id=item["id"],request=request,extra={"consumed_work_order_id":work_order_id,"consumed_work_order":request_data.work_order_number,"notes":request_data.notes})
 
@@ -177,7 +162,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
         """Set previewed unallocated stock balances as one transaction."""
         with authenticated_write_transaction(user_id, get_request_credential(request).value,
                 busy_detail='Database busy; no balances saved. Try again') as conn:
-            organization_column = ",organization_id" if is_postgres(conn) else ""
+            organization_column = ",organization_id"
             store = execute(conn, f"SELECT type,assigned_user_id{organization_column} FROM stores WHERE id=?",
                             (request_data.store_id,)).fetchone()
             if not store:
@@ -215,28 +200,18 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                             (row.quantity, serialize_instant(utc_now()), stock["id"]))
                     updated += 1
                 else:
-                    if is_postgres(conn):
-                        execute(conn, "INSERT INTO inventory(organization_id,store_id,part_id,quantity) VALUES(?,?,?,?)",
-                                (_organization_id(conn, user_id), request_data.store_id, part_id, row.quantity))
-                    else:
-                        execute(conn, "INSERT INTO inventory(store_id,part_id,quantity) VALUES(?,?,?)",
-                                (request_data.store_id, part_id, row.quantity))
+                    execute(conn, "INSERT INTO inventory(organization_id,store_id,part_id,quantity) VALUES(?,?,?,?)",
+                            (_organization_id(conn, user_id), request_data.store_id, part_id, row.quantity))
                     added += 1
                 delta = row.quantity - old
                 if delta:
                     movement_values = (request_data.store_id, part_id, abs(delta),
                                        "add" if delta > 0 else "remove", _actor_id(user_id),
                                        f"CSV balance import: {old} -> {row.quantity}")
-                    if is_postgres(conn):
-                        movement_id = execute(conn, """INSERT INTO movements
+                    movement_id = execute(conn, """INSERT INTO movements
                             (organization_id,to_store_id,part_id,quantity,movement_type,created_by,notes)
                             VALUES(?,?,?,?,?,?,?) RETURNING id""",
-                            (_organization_id(conn, user_id), *movement_values)).fetchone()["id"]
-                    else:
-                        cur = execute(conn, """INSERT INTO movements
-                            (to_store_id,part_id,quantity,movement_type,created_by,notes)
-                            VALUES(?,?,?,?,?,?)""", movement_values)
-                        movement_id = cur.lastrowid
+                        (_organization_id(conn, user_id), *movement_values)).fetchone()["id"]
                     movement_ids.append(movement_id)
                 audit_changes.append(change_after(conn,before))
             record_stock_audit(conn,user_id,"import_stock_balances",audit_changes,movement_ids,resource_id=request_data.store_id,resource_type="store",request=request,extra={"added":added,"updated":updated,"unchanged":unchanged})
@@ -255,7 +230,7 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             cursor = conn.cursor()
 
             # Check if user can edit this store
-            organization_column = ", organization_id" if is_postgres(conn) else ""
+            organization_column = ", organization_id"
             execute_cursor(conn, cursor,
                 f"SELECT name, type, assigned_user_id{organization_column} FROM stores WHERE id = ?",
                 (request_data.store_id,),
@@ -279,16 +254,10 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                 if wo:
                     work_order_id = wo["id"]
                 else:
-                    # Create new work order
-                    if is_postgres(conn):
-                        execute_cursor(conn, cursor, """INSERT INTO work_orders
+                    execute_cursor(conn, cursor, """INSERT INTO work_orders
                             (organization_id, work_order_number, assigned_engineer_id)
                             VALUES(?,?,?) RETURNING id""",
-                            (_organization_id(conn, user_id), request_data.work_order_number, _actor_id(user_id)))
-                    else:
-                        execute_cursor(conn, cursor,
-                            "INSERT INTO work_orders (work_order_number, assigned_engineer_id) VALUES (?, ?)",
-                            (request_data.work_order_number, _actor_id(user_id)))
+                        (_organization_id(conn, user_id), request_data.work_order_number, _actor_id(user_id)))
                     work_order_id = _insert_id(conn, cursor)
 
             before = balance_snapshot(conn,request_data.store_id,request_data.part_id,work_order_id)
@@ -301,19 +270,14 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             # Log movement
             movement_values = (request_data.store_id, request_data.part_id,
                                request_data.quantity, work_order_id, _actor_id(user_id))
-            if is_postgres(conn):
-                execute_cursor(conn, cursor, """INSERT INTO movements
+            execute_cursor(conn, cursor, """INSERT INTO movements
                     (organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
                     VALUES(?,?,?,?,'add',?,?) RETURNING id""",
-                    (_organization_id(conn, user_id), *movement_values))
-            else:
-                execute_cursor(conn, cursor, """INSERT INTO movements
-                    (to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
-                    VALUES(?,?,?,'add',?,?)""", movement_values)
+                (_organization_id(conn, user_id), *movement_values))
 
             movement_id = _insert_id(conn, cursor)
             record_stock_audit(conn,user_id,"add_stock",[change_after(conn,before)],[movement_id],resource_id=inventory_id,request=request)
-            if is_postgres(conn) and notification_enqueuer:
+            if notification_enqueuer:
                 notification_enqueuer(
                     conn,
                     event_type="stock_added",
@@ -379,15 +343,10 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             movement_type = "add" if quantity_change > 0 else "remove"
             movement_values = (item["store_id"], item["part_id"], abs(quantity_change),
                                movement_type, item["work_order_id"], _actor_id(user_id))
-            if is_postgres(conn):
-                execute_cursor(conn, cursor, """INSERT INTO movements
+            execute_cursor(conn, cursor, """INSERT INTO movements
                     (organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
                     VALUES(?,?,?,?,?,?,?) RETURNING id""",
-                    (_organization_id(conn, user_id), *movement_values))
-            else:
-                execute_cursor(conn, cursor, """INSERT INTO movements
-                    (to_store_id,part_id,quantity,movement_type,work_order_id,created_by)
-                    VALUES(?,?,?,?,?,?)""", movement_values)
+                (_organization_id(conn, user_id), *movement_values))
 
             record_stock_audit(conn,user_id,"update_stock",[change_after(conn,before)],[_insert_id(conn, cursor)],resource_id=item["id"],request=request)
 
@@ -432,22 +391,16 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
             movement_values = (item['store_id'], request_data.to_store_id, item['part_id'],
                                request_data.quantity, item['work_order_id'], _actor_id(user_id),
                                'Dispatched; awaiting receipt')
-            if is_postgres(conn):
-                mid = execute(conn, """INSERT INTO movements
+            mid = execute(conn, """INSERT INTO movements
                     (organization_id,from_store_id,to_store_id,part_id,quantity,movement_type,
                      work_order_id,created_by,notes)
                     VALUES(?,?,?,?,?,'transfer',?,?,?) RETURNING id""",
-                    (_organization_id(conn, user_id), *movement_values)).fetchone()["id"]
-                execute(conn, "INSERT INTO stock_transfers(organization_id,movement_id,source_min_threshold) VALUES(?,?,?)",
-                        (_organization_id(conn, user_id), mid, item['min_threshold'] or 0))
-            else:
-                mid = execute(conn, """INSERT INTO movements
-                    (from_store_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
-                    VALUES(?,?,?,?,'transfer',?,?,?)""", movement_values).lastrowid
-                execute(conn,'INSERT INTO stock_transfers(movement_id,source_min_threshold) VALUES(?,?)',(mid,item['min_threshold'] or 0))
+                (_organization_id(conn, user_id), *movement_values)).fetchone()["id"]
+            execute(conn, "INSERT INTO stock_transfers(organization_id,movement_id,source_min_threshold) VALUES(?,?,?)",
+                    (_organization_id(conn, user_id), mid, item['min_threshold'] or 0))
             destination = execute(conn,'SELECT name FROM stores WHERE id=?',(request_data.to_store_id,)).fetchone()
             record_stock_audit(conn,user_id,'transfer_stock',[change_after(conn,before)],[mid],resource_id=item['id'],request=request,extra={'transfer_id':mid,'before_status':None,'after_status':'in_transit','to_store_id':request_data.to_store_id,'to_store_name':destination['name']})
-            if is_postgres(conn) and notification_enqueuer:
+            if notification_enqueuer:
                 notification_enqueuer(
                     conn,
                     event_type="transfer_dispatched",
@@ -519,15 +472,10 @@ def create_inventory_write_router(*, current_user, csrf_dependency, endpoint_log
                       item['part_id'], abs(delta), _actor_id(user_id),
                       f"Mobile stock count: {data.expected_quantity} -> {data.new_quantity}",
                       data.operation_id)
-            if is_postgres(conn):
-                movement_id = execute(conn, """INSERT INTO movements
+            movement_id = execute(conn, """INSERT INTO movements
                     (organization_id,from_store_id,to_store_id,part_id,quantity,movement_type,created_by,notes,client_operation_id)
                     VALUES(?,?,?,?,?,'adjust',?,?,?) RETURNING id""",
-                    (_organization_id(conn, user_id), *values)).fetchone()['id']
-            else:
-                movement_id = execute(conn, """INSERT INTO movements
-                    (from_store_id,to_store_id,part_id,quantity,movement_type,created_by,notes,client_operation_id)
-                    VALUES(?,?,?,?,'adjust',?,?,?)""", values).lastrowid
+                (_organization_id(conn, user_id), *values)).fetchone()['id']
             record_stock_audit(conn, user_id, 'mobile_stock_adjustment',
                 [change_after(conn, before)], [movement_id], resource_id=item['id'], request=request,
                 extra={'operation_id': data.operation_id, 'expected_quantity': data.expected_quantity,

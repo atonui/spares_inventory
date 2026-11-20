@@ -10,7 +10,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.database_sql import is_postgres
 from backend.database_sql import execute
 from backend.schemas.invitations import InvitationAcceptRequest, InvitationCreateRequest
 from backend.services.authorization import require_company_admin, require_company_owner
@@ -41,12 +40,10 @@ def create_invitation_router(
         try:
             row = execute(
                 conn,
-                "SELECT user_id FROM sessions WHERE session_token_hash = ? AND is_active = TRUE"
-                if is_postgres(conn)
-                else "SELECT user_id FROM sessions WHERE session_token = ? AND is_active = TRUE",
+                "SELECT user_id FROM sessions WHERE session_token_hash = ? AND is_active = TRUE",
                 (hash_session_credential(token),),
             ).fetchone()
-            if row is None and not is_postgres(conn):
+            if row is None and False:
                 row = execute(
                     conn,
                     "SELECT user_id FROM sessions WHERE session_token = ? AND is_active = TRUE",
@@ -67,8 +64,6 @@ def create_invitation_router(
         csrf_valid=Depends(verify_authenticated_csrf),
     ):
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             principal = require_company_admin(user_id, conn)
             if body.role == "admin":
                 principal = require_company_owner(principal, conn)
@@ -102,8 +97,6 @@ def create_invitation_router(
         request: Request, user_id=Depends(current_user),
     ):
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             user_id = require_company_admin(user_id, conn)
             now = serialize_instant(utc_now())
             rows = conn.execute(
@@ -122,8 +115,6 @@ def create_invitation_router(
         user_id=Depends(current_user), csrf_valid=Depends(verify_authenticated_csrf),
     ):
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             user_id = require_company_admin(user_id, conn)
             cancel_invitation(conn, organization_id=user_id.organization_id, invitation_id=invitation_id)
             return {"success": True}
@@ -133,8 +124,6 @@ def create_invitation_router(
         user_id=Depends(current_user), csrf_valid=Depends(verify_authenticated_csrf),
     ):
         with authenticated_writer(user_id, get_request_credential(request).value) as conn:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             user_id = require_company_admin(user_id, conn)
             prior = conn.execute(
                 """SELECT email_normalized, company_role FROM organization_invitations
@@ -176,8 +165,6 @@ def create_invitation_router(
             raise HTTPException(status_code=400, detail="Invitation is invalid or expired") from None
         conn = get_connection()
         try:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Invitations require PostgreSQL")
             with conn.transaction():
                 organization = conn.execute(
                     "SELECT is_active FROM organizations WHERE id = %s", (organization_id,)

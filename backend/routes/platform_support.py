@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
-from backend.database_sql import is_postgres
 from backend.services.platform_audit import normalize_platform_audit_reason, record_platform_audit_event
 from backend.services.platform_support import authenticated_support_transaction, create_support_session
 from backend.services.platform_transactions import authenticated_platform_transaction
@@ -125,13 +124,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
     router = APIRouter(prefix='/api/platform/support-sessions', tags=['platform'])
     log_security_event = security_event or (lambda **_event: None)
 
-    def require_postgres():
-        conn = get_connection()
-        try:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail='Platform administration requires PostgreSQL')
-        finally:
-            conn.close()
 
     def platform(request, actor, *, readonly=False):
         return authenticated_platform_transaction(
@@ -196,7 +188,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
     @limiter.limit('5/minute')
     async def start_session(body: SupportSessionStart, request: Request,
                             actor=Depends(current_user), csrf_valid=Depends(csrf_dependency)):
-        require_postgres()
         request_id = str(uuid4())
         try:
             with platform(request, actor) as (conn, principal):
@@ -219,7 +210,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
 
     @router.get('/current')
     async def current_session(request: Request, actor=Depends(current_user)):
-        require_postgres()
         with platform(request, actor, readonly=True) as (conn, principal):
             # No row locks in this read-only metadata transaction.
             row = conn.execute(
@@ -236,7 +226,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
     @router.delete('/{support_session_id}')
     async def end_session(support_session_id: UUID, request: Request,
                           actor=Depends(current_user), csrf_valid=Depends(csrf_dependency)):
-        require_postgres()
         request_id = str(uuid4())
         try:
             with platform(request, actor) as (conn, principal):
@@ -260,7 +249,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
             raise
 
     def lookup(request, actor, support_session_id, resource, value):
-        require_postgres()
         request_id = str(uuid4())
         with audited_scope(request,actor,support_session_id,resource,request_id) as (conn,principal,support):
             if not isinstance(value,str) or not 1 <= len(value.strip()) <= (254 if resource == 'accounts' else 100):
@@ -296,7 +284,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
 
     @router.get('/{support_session_id}/locked-accounts')
     async def locked_accounts(support_session_id: UUID, request: Request, actor=Depends(current_user)):
-        require_postgres()
         request_id = str(uuid4())
         with audited_scope(request, actor, support_session_id, 'locked-accounts', request_id) as (conn, principal, support):
             rows = conn.execute(_LOCKED_ACCOUNTS, (support['organization_id'], serialize_instant(utc_now()))).fetchall()
@@ -319,7 +306,6 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
 
     def account_action(request, actor, support_session_id, user_ids, operation, apply):
         """Run one audited account action per user inside the bound support organization."""
-        require_postgres()
         request_id = str(uuid4())
         with audited_scope(request, actor, support_session_id, 'accounts', request_id, operation) as (conn, principal, support):
             organization_id = support['organization_id']

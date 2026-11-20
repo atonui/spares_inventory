@@ -1,6 +1,5 @@
 """FastAPI application bootstrap wiring."""
 
-import sqlite3
 
 import psycopg
 from pathlib import Path
@@ -79,15 +78,6 @@ POSTGRES_REFERENCE_OR_DUPLICATE_ERRORS = (
 
 
 async def database_integrity_error(request: Request, exc):
-    if isinstance(exc, psycopg.errors.IntegrityError):
-        if not isinstance(exc, POSTGRES_REFERENCE_OR_DUPLICATE_ERRORS):
-            raise exc
-    elif getattr(exc, "sqlite_errorcode", None) not in (
-        sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY,
-        sqlite3.SQLITE_CONSTRAINT_UNIQUE,
-        sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
-    ):
-        raise exc
     if request.url.path.startswith("/api/v1/"):
         return api_v1_error_response(request, 409)
     return JSONResponse(
@@ -113,8 +103,7 @@ def create_inventory_app(
         lifespan=lifespan,
     )
 
-    app.add_exception_handler(sqlite3.IntegrityError, database_integrity_error)
-    # Duplicate keys and missing references on PostgreSQL get the same 409 response.
+    # Duplicate keys and missing references get a 409 response.
     for error in POSTGRES_REFERENCE_OR_DUPLICATE_ERRORS:
         app.add_exception_handler(error, database_integrity_error)
 

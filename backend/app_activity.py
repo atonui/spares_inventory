@@ -6,7 +6,7 @@ from functools import wraps
 from fastapi import HTTPException, Request
 
 from backend.services.activity import record_activity
-from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.database_sql import execute, execute_cursor
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.session_credentials import get_optional_request_credential
 
@@ -46,44 +46,15 @@ def log_activity(
         return
     try:
         conn = get_connection()
-        if is_postgres(conn):
-            # Company activity needs a company context, which a standalone call does
-            # not have. Account-level events go to platform_security_events instead,
-            # so keep only the audit log line here.
-            conn.close()
-            audit_logger.info(
-                f"USER={username}({user_id}) ACTION={action} "
-                f"RESOURCE={resource_type}/{resource_id} STATUS={status}"
-            )
-            return
-        cursor = conn.cursor()
-        details_json = json.dumps(details) if details else None
-        cursor.execute(
-            """
-            INSERT INTO activity_logs
-            (user_id, username, action, resource_type, resource_id, details,
-             ip_address, user_agent, status, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                user_id if user_id else None,
-                username,
-                action,
-                resource_type,
-                resource_id,
-                details_json,
-                ip_address,
-                user_agent,
-                status,
-                error_message,
-            ),
-        )
-        conn.commit()
+        # Company activity needs a company context, which a standalone call does
+        # not have. Account-level events go to platform_security_events instead,
+        # so keep only the audit log line here.
         conn.close()
         audit_logger.info(
             f"USER={username}({user_id}) ACTION={action} "
             f"RESOURCE={resource_type}/{resource_id} STATUS={status}"
         )
+        return
     except Exception as e:
         error_logger.error(f"Failed to log activity: {str(e)}")
 

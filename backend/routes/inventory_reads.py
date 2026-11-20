@@ -1,12 +1,11 @@
 """Read-only inventory routes with explicit application dependencies."""
 from backend.services.session_credentials import get_request_credential
-from backend.temporal_contract import register_instant_comparison
 from backend.temporal_contract import instant_response
 from typing import List
 import hashlib
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.schemas.inventory_reads import InventoryResponse, StatsResponse
 from backend.schemas.api_v1 import InventoryPageResponse, StorePageResponse, PendingTransferPageResponse
 from backend.services.mobile_list_cursor import decode_list_cursor, encode_list_cursor
@@ -131,8 +130,6 @@ def create_inventory_read_router(*, get_connection, current_user,
             session_token=credential.value,
             readonly=True,
         ) as (conn, _principal):
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             rows = execute(conn, query, tuple(cursor_prefix_params + params)).fetchall()
 
         has_more = len(rows) > limit
@@ -162,8 +159,6 @@ def create_inventory_read_router(*, get_connection, current_user,
             session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, _principal):
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             query = """
             SELECT
                 i.id,
@@ -200,8 +195,6 @@ def create_inventory_read_router(*, get_connection, current_user,
             session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             actor_id = principal.user_id if isinstance(principal, AuthenticatedPrincipal) else principal
             # Total unique parts
             total_parts = execute(conn, "SELECT COUNT(DISTINCT part_number) AS count FROM parts WHERE archived_at IS NULL").fetchone()
@@ -247,8 +240,6 @@ def create_inventory_read_router(*, get_connection, current_user,
             session_token=get_request_credential(request).value if request else None,
             readonly=True,
         ) as (conn, principal):
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             actor = principal if isinstance(principal, AuthenticatedPrincipal) else execute(
                 conn, "SELECT role FROM users WHERE id = ?", (principal,)
             ).fetchone()

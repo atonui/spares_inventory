@@ -3,12 +3,12 @@ from backend.services.session_credentials import get_request_credential
 from datetime import timedelta
 from backend.temporal_contract import instant_response
 from typing import List, Optional
-from backend.temporal_contract import date_metadata, date_predicates, register_instant_comparison
+from backend.temporal_contract import date_metadata, date_predicates
 from backend.services.timezone_policy import resolve_business_context
 import json
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from backend.schemas.history import MovementResponse, ActivityLogResponse
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.temporal import serialize_instant, utc_now
@@ -50,18 +50,11 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 get_db_connection, principal_or_user=user_id,
                 session_token=get_request_credential(request).value if request else None, readonly=True,
             ) as (conn, principal):
-                if is_postgres(conn):
-                    table_exists = bool(execute(conn, "SELECT to_regclass('activity_logs') AS name").fetchone()["name"])
-                else:
-                    table_exists = execute(conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='activity_logs'").fetchone() is not None
+                table_exists = bool(execute(conn, "SELECT to_regclass('activity_logs') AS name").fetchone()["name"])
                 log_count = execute(conn, "SELECT COUNT(*) AS count FROM activity_logs").fetchone()["count"] if table_exists else 0
-                if is_postgres(conn):
-                    # Company roles live on the membership, not on the user row.
-                    user = execute(conn, "SELECT name FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
-                    current_user = dict(user) | {"role": principal.company_role} if user else None
-                else:
-                    user = execute(conn, "SELECT name, role FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
-                    current_user = dict(user) if user else None
+                # Company roles live on the membership, not on the user row.
+                user = execute(conn, "SELECT name FROM users WHERE id = ?", (actor_id(principal),)).fetchone()
+                current_user = dict(user) | {"role": principal.company_role} if user else None
                 return {
                     "status": "ok", "table_exists": table_exists, "log_count": log_count,
                     "current_user": current_user,
@@ -92,8 +85,6 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             metadata=date_metadata(context,start_date,end_date)
             if response is not None:
                 response.headers['X-Report-Time-Context']=json.dumps(metadata,separators=(',',':'))
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             query = """
                 SELECT
                     m.id,
@@ -127,7 +118,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             #     """
             # params.extend([user_id, user_id, user_id])
 
-            date_sql,date_params=date_predicates('m.created_at',metadata,canonical_instants=is_postgres(conn))
+            date_sql,date_params=date_predicates('m.created_at',metadata,canonical_instants=True)
             query+=date_sql;params.extend(date_params)
 
             # Movement type filtering
@@ -145,8 +136,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 query += " AND (m.from_store_id = ? OR m.to_store_id = ?)"
                 params.extend([store_id, store_id])
 
-            query += (" ORDER BY m.created_at DESC, m.id DESC LIMIT ?" if is_postgres(conn)
-                      else " ORDER BY utc_instant(m.created_at) DESC, m.id DESC LIMIT ?")
+            query += " ORDER BY m.created_at DESC, m.id DESC LIMIT ?"
             params.append(limit)
 
             movements = execute(conn, query, params).fetchall()
@@ -175,8 +165,6 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             metadata=date_metadata(context,start_date,end_date)
             if response is not None:
                 response.headers['X-Report-Time-Context']=json.dumps(metadata,separators=(',',':'))
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
             query = "SELECT * FROM activity_logs WHERE 1=1"
             params = []
 
@@ -195,15 +183,14 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
                 query += " AND action = ?"
                 params.append(action)
 
-            date_sql,date_params=date_predicates('created_at',metadata,canonical_instants=is_postgres(conn))
+            date_sql,date_params=date_predicates('created_at',metadata,canonical_instants=True)
             query+=date_sql;params.extend(date_params)
 
             if status:
                 query += " AND status = ?"
                 params.append(status)
 
-            query += (" ORDER BY created_at DESC, id DESC LIMIT ?" if is_postgres(conn)
-                      else " ORDER BY utc_instant(created_at) DESC, id DESC LIMIT ?")
+            query += " ORDER BY created_at DESC, id DESC LIMIT ?"
             params.append(limit)
 
             logs = execute(conn, query, params).fetchall()
@@ -242,14 +229,12 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
         ) as (conn, principal):
             context=resolve_business_context(conn,actor_id=principal)
             metadata=date_metadata(context,start_date,end_date)
-            if not is_postgres(conn):
-                register_instant_comparison(conn)
 
             # Check if user is admin
             if not log_manager(principal, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
 
-            date_filter,params=date_predicates('created_at',metadata,canonical_instants=is_postgres(conn))
+            date_filter,params=date_predicates('created_at',metadata,canonical_instants=True)
 
             # Total activities
             total_activities = execute(conn,
@@ -295,7 +280,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
             ).fetchone())
 
             # Recent logins
-            recent_order = "created_at DESC, id DESC" if is_postgres(conn) else "utc_instant(created_at) DESC, id DESC"
+            recent_order = "created_at DESC, id DESC"
             recent_logins = [dict(row) for row in execute(conn,
                 f"""
                 SELECT username, created_at, ip_address
@@ -333,7 +318,7 @@ def create_history_router(*, get_connection, authenticated_writer, current_user,
 
             # Delete old logs
             cutoff = serialize_instant(utc_now() - timedelta(days=days))
-            older_than_cutoff = "created_at < ?" if is_postgres(conn) else "julianday(created_at) < julianday(?)"
+            older_than_cutoff = "created_at < ?"
             deleted_count = execute(conn,
                 f"""
                 DELETE FROM activity_logs

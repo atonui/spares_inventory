@@ -1,7 +1,7 @@
 """Transfer permissions, pending-record guards, and atomic completion."""
 
 from fastapi import HTTPException
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from .principals import AuthenticatedPrincipal
 from backend.temporal import serialize_instant, utc_now
 
@@ -42,8 +42,7 @@ def complete_transfer(transfer_id, data, user_id, action, request=None, *, sessi
             JOIN stores s1 ON s1.id=m.from_store_id JOIN stores s2 ON s2.id=m.to_store_id
             JOIN parts p ON p.id=m.part_id
             WHERE t.movement_id=?"""
-        if is_postgres(conn):
-            query += " FOR UPDATE OF t"
+        query += " FOR UPDATE OF t"
         row=execute(conn, query, (transfer_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404,detail='Pending transfer not found')
@@ -68,21 +67,16 @@ def complete_transfer(transfer_id, data, user_id, action, request=None, *, sessi
         if action=='returned':
             values=(store_id,row['part_id'],row['quantity'],row['work_order_id'],actor_id,
                     f'Physical return confirmed for transfer #{transfer_id}')
-            if is_postgres(conn):
-                movement_id=execute(conn,"""INSERT INTO movements
+            movement_id=execute(conn,"""INSERT INTO movements
                     (organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
                     VALUES((SELECT NULLIF(current_setting('app.organization_id',true),'')::uuid),?,?,?,'return',?,?,?)
                     RETURNING id""",values).fetchone()["id"]
-            else:
-                movement_id=execute(conn,"""INSERT INTO movements
-                    (to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
-                    VALUES(?,?,?,'return',?,?,?)""",values).lastrowid
         else:
             movement_id=None
         movement_ids=[transfer_id]
         if movement_id is not None: movement_ids.append(movement_id)
         record_stock_audit(conn,user_id,'receive_transfer' if action=='received' else 'return_transfer',[change_after(conn,before)],movement_ids,resource_id=inventory_id,request=request,extra={'transfer_id':transfer_id,'before_status':'in_transit','after_status':action,'notes':data.notes})
-        if is_postgres(conn) and notification_enqueuer:
+        if notification_enqueuer:
             organization_id = (
                 user_id.organization_id if isinstance(user_id, AuthenticatedPrincipal)
                 else conn.execute(

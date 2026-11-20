@@ -43,12 +43,6 @@ def instant_response(handler):
     return wrapped
 
 
-def register_instant_comparison(conn):
-    def normalise(value):
-        return None if value is None else serialize_instant(stored_instant(value))
-    conn.create_function('utc_instant', 1, normalise, deterministic=True)
-
-
 def date_metadata(context, start=None, end=None):
     try:
         for value in (start, end):

@@ -1,9 +1,8 @@
 """Minimum settings and a read-only, globally allocated replenishment plan."""
-import json
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from stock_audit import balance_snapshot, change_after, record_stock_audit
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.session_credentials import get_request_credential
 from backend.services.tenant_context import authenticated_database_transaction
@@ -89,7 +88,7 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
             require_active(conn,'users',actor_id)
             require_active(conn,'stores',data.store_id)
             require_active(conn,'parts',data.part_id)
-            org_column = ',organization_id' if is_postgres(conn) else ',NULL AS organization_id'
+            org_column = ',organization_id'
             store = execute(conn,'SELECT type,assigned_user_id'+org_column+' FROM stores WHERE id=?',(data.store_id,)).fetchone()
             require_access(conn,user_id,store['type'],store['assigned_user_id'],store_organization_id=store['organization_id'])
             before_balance = balance_snapshot(conn,data.store_id,data.part_id,None)
@@ -102,11 +101,8 @@ def register_replenishment_routes(app, *, get_connection, write_transaction, req
                 identifier = item['id']
                 execute(conn,'UPDATE inventory SET min_threshold=?,updated_at=? WHERE id=?',(data.min_threshold,updated_at,identifier))
             elif data.min_threshold:
-                if is_postgres(conn):
-                    identifier = execute(conn,'INSERT INTO inventory(organization_id,store_id,part_id,quantity,min_threshold) VALUES(?,?,?,0,?) RETURNING id',
-                        (store['organization_id'],data.store_id,data.part_id,data.min_threshold)).fetchone()['id']
-                else:
-                    identifier = execute(conn,'INSERT INTO inventory(store_id,part_id,quantity,min_threshold) VALUES(?,?,0,?)',(data.store_id,data.part_id,data.min_threshold)).lastrowid
+                identifier = execute(conn,'INSERT INTO inventory(organization_id,store_id,part_id,quantity,min_threshold) VALUES(?,?,?,0,?) RETURNING id',
+                    (store['organization_id'],data.store_id,data.part_id,data.min_threshold)).fetchone()['id']
             else:
                 identifier = None
             # A later physical return must honor minimum edits made during transit.

@@ -173,7 +173,6 @@ def reset_unit_api(stock_api):
     router = create_auth_router(
         get_connection=main.get_db_connection,
         authenticated_writer=main.authenticated_write_transaction,
-        stock_writer=main.stock_write_transaction,
         current_user=lambda: 1,
         csrf_dependency=lambda: True,
         authenticated_csrf_dependency=lambda: True,

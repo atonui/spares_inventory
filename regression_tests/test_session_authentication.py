@@ -1,6 +1,5 @@
 from contextlib import closing
 import asyncio
-import sqlite3
 
 import pytest
 from fastapi import HTTPException

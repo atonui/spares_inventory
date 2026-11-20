@@ -179,16 +179,6 @@ def add_inventory_quantity(conn, store_id, part_id, quantity, work_order_id):
     return _add_inventory_quantity(conn,store_id,part_id,quantity,work_order_id)
 
 
-from backend.services.stock_transactions import write_stock_transaction
-
-
-@contextmanager
-def stock_write_transaction():
-    """Use the current application connection factory for atomic stock writes."""
-    with write_stock_transaction(get_db_connection) as conn:
-        yield conn
-
-from backend.services.session_access import require_session
 from backend.services.session_authentication import authenticate_session
 from backend.services.security_settings import load_security_settings
 from backend.services.archiving import archive_record as _archive_record
@@ -281,13 +271,9 @@ def log_activity(
 
 def log_platform_security_event(**event):
     """Best-effort global auth telemetry; do not leak payloads on failures."""
-    from backend.database_sql import is_postgres
-
     conn = None
     try:
         conn = get_db_connection()
-        if not is_postgres(conn):
-            return
         with conn.transaction():
             record_security_event(conn, **event)
     except Exception:
@@ -414,12 +400,7 @@ async def get_current_user(
         if request is not None
         else resolve_request_credential(session_token, None)
     )
-    return authenticate_session(
-        credential.value, get_db_connection,
-        session_validator=require_session,
-        transaction_factory=write_stock_transaction,
-        busy_detail=GENERIC_BUSY_DETAIL,
-    )
+    return authenticate_session(credential.value, get_db_connection)
 
 
 # csrf middleware
@@ -457,7 +438,6 @@ from backend.services.authenticated_account_transactions import authenticated_ac
 app.include_router(create_auth_router(
     get_connection=lambda: get_db_connection(),
     authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
-    stock_writer=lambda: stock_write_transaction(),
     current_user=get_current_user,
     csrf_dependency=verify_csrf,
     authenticated_csrf_dependency=verify_authenticated_csrf,

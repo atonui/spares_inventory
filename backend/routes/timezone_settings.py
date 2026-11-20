@@ -7,7 +7,7 @@ from backend.services.activity import record_activity
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.authorization import require_company_admin
 from backend.services.tenant_context import authenticated_database_transaction
-from backend.database_sql import execute, is_postgres
+from backend.database_sql import execute
 from backend.temporal import serialize_instant, utc_now
 
 
@@ -49,14 +49,9 @@ def create_timezone_settings_router(*, get_connection, authenticated_writer, cur
                 raise HTTPException(403,'Admin access required')
             if body.expected_revision!=context.revision:
                 raise HTTPException(409,'Timezone settings changed. Refresh before saving.')
-            if is_postgres(conn):
-                changed = execute(conn,'''UPDATE organization_settings SET business_timezone=?,revision=revision+1,
+            changed = execute(conn,'''UPDATE organization_settings SET business_timezone=?,revision=revision+1,
                             updated_at=?,updated_by=? WHERE organization_id=? AND revision=?''',
-                         (body.timezone,serialize_instant(utc_now()),actor_id,context.organisation_id,body.expected_revision)).rowcount
-            else:
-                changed = execute(conn,'''UPDATE organisation_settings SET business_timezone=?,revision=revision+1,
-                            updated_at=?,updated_by=? WHERE id=1 AND revision=?''',
-                         (body.timezone,serialize_instant(utc_now()),actor_id,body.expected_revision)).rowcount
+                     (body.timezone,serialize_instant(utc_now()),actor_id,context.organisation_id,body.expected_revision)).rowcount
             if changed != 1:
                 raise HTTPException(409,'Timezone settings changed. Refresh before saving.')
             record_activity(conn,user_id=user_id,username=actor['name'],action='update_business_timezone',

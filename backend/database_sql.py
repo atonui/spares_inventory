@@ -1,14 +1,8 @@
-"""Small dialect helpers for SQL shared by SQLite and Psycopg connections."""
-
-import psycopg
-
-
-def is_postgres(conn) -> bool:
-    return isinstance(conn, psycopg.Connection)
+"""Run SQL written with qmark (`?`) placeholders on a psycopg connection."""
 
 
 def _postgres_placeholders(statement: str) -> str:
-    """Translate SQLite qmark parameters without changing quoted question marks."""
+    """Translate qmark parameters without changing quoted question marks."""
     output = []
     quote = None
     index = 0
@@ -34,13 +28,11 @@ def _postgres_placeholders(statement: str) -> str:
 
 
 def execute_cursor(conn, cursor, statement: str, params=()):
-    if is_postgres(conn):
-        statement = _postgres_placeholders(statement)
+    statement = _postgres_placeholders(statement)
     cursor.execute(statement, params)
     return cursor
 
 
 def execute(conn, statement: str, params=()):
-    if is_postgres(conn):
-        statement = _postgres_placeholders(statement)
+    statement = _postgres_placeholders(statement)
     return conn.execute(statement, params)

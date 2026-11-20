@@ -46,18 +46,6 @@ def error_contract_client(tmp_path):
         error.headers = {"Retry-After": "60"}
         raise error
 
-    @app.get("/api/v1/test-integrity-conflict")
-    def test_integrity_conflict():
-        import sqlite3
-
-        conn = sqlite3.connect(":memory:")
-        conn.execute("CREATE TABLE records (id INTEGER UNIQUE)")
-        conn.execute("INSERT INTO records VALUES (1)")
-        try:
-            conn.execute("INSERT INTO records VALUES (1)")
-        except sqlite3.IntegrityError as error:
-            raise error
-
     @app.get("/api/v1/test-postgres-integrity/{kind}")
     def test_postgres_integrity(kind: str):
         import psycopg
@@ -148,13 +136,6 @@ def test_v1_rate_limiter_errors_use_standard_envelope(error_contract_client):
     assert response.status_code == 429
     assert response.json()["error"]["code"] == "rate_limited"
     assert response.headers["retry-after"] == "60"
-
-
-def test_v1_integrity_conflict_uses_standard_envelope(error_contract_client):
-    response = error_contract_client.get("/api/v1/test-integrity-conflict")
-
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "conflict"
 
 
 @pytest.mark.parametrize("kind", ["unique", "foreign"])

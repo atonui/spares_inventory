@@ -1,5 +1,4 @@
 from contextlib import closing
-import sqlite3
 
 import pytest
 from fastapi import HTTPException
@@ -74,7 +73,6 @@ def test_legacy_admin_guards_fail_closed_for_integer_identity_on_postgres(monkey
             raise AssertionError("legacy users.role guard queried on PostgreSQL")
 
     conn = ConnectionThatMustNotBeQueried()
-    monkeypatch.setattr(authorization, "is_postgres", lambda _conn: True)
 
     assert authorization.check_admin(1, conn=conn) is False
     for guard in (

@@ -56,7 +56,6 @@ def test_security_event_persistence_failure_does_not_leak_exception_payload(monk
 
     conn = BrokenConnection()
     monkeypatch.setattr(main, 'get_db_connection', lambda: conn)
-    monkeypatch.setattr(backend.database_sql, 'is_postgres', lambda _conn: True)
     main.log_platform_security_event(event='login_failed', outcome='failure')
     assert conn.closed
     assert 'Failed to persist platform security event' in caplog.text

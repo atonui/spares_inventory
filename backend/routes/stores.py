@@ -5,7 +5,7 @@ import csv
 import io
 from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from backend.database_sql import execute, execute_cursor, is_postgres
+from backend.database_sql import execute, execute_cursor
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.temporal import serialize_instant, utc_now
 from backend.schemas.stores import (
@@ -106,28 +106,16 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                     status_code=400,
                     detail=f"Store type '{request_data.type}' is inactive. Please select an active store type.",
                 )
-
-            # Create store
-            if is_postgres(conn):
-                execute_cursor(
-                    conn,
-                    cursor,
-                    """INSERT INTO stores
+            execute_cursor(
+                conn,
+                cursor,
+                """INSERT INTO stores
                        (organization_id, name, type, location, assigned_user_id)
                        VALUES (?, ?, ?, ?, ?) RETURNING id""",
-                    (user_id.organization_id, request_data.name, request_data.type,
-                     request_data.location, request_data.assigned_user_id),
-                )
-                store_id = cursor.fetchone()["id"]
-            else:
-                execute_cursor(
-                    conn, cursor,
-                    """INSERT INTO stores (name, type, location, assigned_user_id)
-                       VALUES (?, ?, ?, ?)""",
-                    (request_data.name, request_data.type, request_data.location,
-                     request_data.assigned_user_id),
-                )
-                store_id = cursor.lastrowid
+                (user_id.organization_id, request_data.name, request_data.type,
+                 request_data.location, request_data.assigned_user_id),
+            )
+            store_id = cursor.fetchone()["id"]
 
 
             _result = {
@@ -182,21 +170,14 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                     )
                     if assigned_user_id is not None:
                         require_active_record(conn,"users",assigned_user_id)
-                    if is_postgres(conn):
-                        with conn.transaction():
-                            execute_cursor(
-                                conn, cursor,
-                                """INSERT INTO stores
-                                   (organization_id, name, type, location, assigned_user_id)
-                                   VALUES (?, ?, ?, ?, ?)""",
-                                (user_id.organization_id, row["name"], row["type"],
-                                 row.get("location"), assigned_user_id),
-                            )
-                    else:
+                    with conn.transaction():
                         execute_cursor(
                             conn, cursor,
-                            "INSERT INTO stores (name, type, location, assigned_user_id) VALUES (?, ?, ?, ?)",
-                            (row["name"], row["type"], row.get("location"), assigned_user_id),
+                            """INSERT INTO stores
+                                   (organization_id, name, type, location, assigned_user_id)
+                                   VALUES (?, ?, ?, ?, ?)""",
+                            (user_id.organization_id, row["name"], row["type"],
+                             row.get("location"), assigned_user_id),
                         )
                     added += 1
                 except Exception as e:
@@ -350,25 +331,15 @@ def create_stores_router(*, get_connection, authenticated_writer, current_user,
                 raise HTTPException(status_code=400, detail="Store type code already exists")
 
             try:
-                if is_postgres(conn):
-                    execute_cursor(
-                        conn, cursor,
-                        """INSERT INTO store_types
+                execute_cursor(
+                    conn, cursor,
+                    """INSERT INTO store_types
                            (organization_id, type_code, type_name, description, display_order)
                            VALUES (?, ?, ?, ?, ?) RETURNING id""",
-                        (user_id.organization_id, request_data.type_code, request_data.type_name,
-                         request_data.description, request_data.display_order),
-                    )
-                    store_type_id = cursor.fetchone()["id"]
-                else:
-                    execute_cursor(
-                        conn, cursor,
-                        """INSERT INTO store_types (type_code, type_name, description, display_order)
-                           VALUES (?, ?, ?, ?)""",
-                        (request_data.type_code, request_data.type_name,
-                         request_data.description, request_data.display_order),
-                    )
-                    store_type_id = cursor.lastrowid
+                    (user_id.organization_id, request_data.type_code, request_data.type_name,
+                     request_data.description, request_data.display_order),
+                )
+                store_type_id = cursor.fetchone()["id"]
 
                 _result = {
                     "success": True,

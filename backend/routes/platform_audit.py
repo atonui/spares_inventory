@@ -5,7 +5,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.database_sql import is_postgres
 from backend.services.platform_transactions import authenticated_platform_transaction
 from backend.services.session_credentials import get_request_credential
 from backend.services.platform_audit import safe_platform_audit_details
@@ -58,8 +57,7 @@ def create_platform_audit_router(*, get_connection, current_user) -> APIRouter:
 
         conn = get_connection()
         try:
-            if not is_postgres(conn):
-                raise HTTPException(status_code=503, detail="Platform administration requires PostgreSQL")
+            pass
         finally:
             conn.close()
 
