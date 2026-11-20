@@ -44,24 +44,11 @@ Each protected row must revalidate the original session inside its owning transa
 | POST | `/api/equipment/{equipment_id}/calibrate` | protected record write | `main.py:update_calibration`; guarded owner; `test_catalog_and_equipment_write_routes` valid/revoked pairs; atomic success activity |
 | DELETE | `/api/equipment/{equipment_id}` | protected record write | `main.py:delete_equipment`; guarded owner; `test_catalog_and_equipment_write_routes` valid/revoked pairs; atomic success activity |
 | PUT | `/api/settings/calibration-reminder-days` | protected record write | `main.py:update_calibration_reminder_days`; guarded owner; `test_catalog_and_equipment_write_routes` valid/revoked pairs; atomic success activity |
-| POST | `/api/superadmin/users/{target_id}/reset-password` | protected record write | `main.py:superadmin_reset_password`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| POST | `/api/superadmin/unlock-account` | protected record write | `main.py:unlock_account`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| POST | `/api/superadmin/unlock-accounts/bulk` | protected record write | `main.py:bulk_unlock_accounts`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| POST | `/api/superadmin/sessions/force-logout` | protected record write | `main.py:force_logout_user`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| POST | `/api/superadmin/sessions/force-logout-all` | protected record write | `main.py:force_logout_all`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| PUT | `/api/superadmin/security-config/{key}` | protected record write | `main.py:update_security_config`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| PUT | `/api/superadmin/users/{target_id}/role` | protected record write | `main.py:update_user_role`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| POST | `/api/superadmin/database/query` | read/maintenance; guard audit | `main.py:run_readonly_query`; guarded standalone audit; `test_maintenance_audit_uses_current_session` |
-| POST | `/api/superadmin/database/restore` | protected record write | Existing live restore owner + mandatory session/role callback; `test_restore_rechecks_original_session_under_lock`, real-ordering tests |
-| POST | `/api/superadmin/database/vacuum` | read/maintenance; guard audit | `main.py:vacuum_database`; guarded standalone audit; `test_maintenance_audit_uses_current_session` |
-| DELETE | `/api/superadmin/database/logs/purge` | protected record write | `main.py:purge_all_logs`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| POST | `/api/superadmin/announcement` | protected record write | `main.py:set_announcement`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
-| DELETE | `/api/superadmin/announcement` | protected record write | `main.py:clear_announcement`; guarded owner; `test_profile_session_and_admin_write_routes` valid/revoked pairs; atomic existing activity |
 | POST | `/api/inventory/count-preview` | read/maintenance; guard audit | Read-only snapshot and signed preview; `test_stock_counts.py`; no mutation audit |
 | POST | `/api/inventory/count-confirm` | protected record write | `stock_counts.py:count_confirm`; `test_stock_write_routes` valid/revoked pairs; borrowed current permissions |
 | PUT | `/api/inventory/minimum` | protected record write | `replenishment.py:minimum`; `test_stock_write_routes` valid/revoked pairs; borrowed current permissions |
 
-Authenticated GET activity audits use the same guarded standalone adapter. Their responses remain reads; an invalidated session cannot emit a database activity row. `test_read_audit_after_restore_does_not_write` exercises the actual decorator and `test_maintenance_audit_uses_current_session` exercises backup/query/VACUUM.
+Authenticated GET activity audits use the same guarded standalone adapter. Their responses remain reads; an invalidated session cannot emit a database activity row. `test_read_audit_after_restore_does_not_write` exercises the actual decorator. The legacy superadmin maintenance routes (backup, restore, SQL query, VACUUM) were removed with SQLite; platform maintenance lives under `/api/platform/database`.
 
 | GET path | Existing activity owner |
 |---|---|
@@ -71,6 +58,5 @@ Authenticated GET activity audits use the same guarded standalone adapter. Their
 | `/api/equipment` | Read decorator → guarded standalone activity |
 | `/api/equipment/{equipment_id}/history` | Read decorator → guarded standalone activity |
 | `/api/settings/calibration-reminder-days` | Read decorator → guarded standalone activity |
-| `/api/superadmin/database/backup` | Explicit guarded standalone activity |
 
-Initial authentication last-activity has its own short owning transaction, verified by `test_initial_auth_holds_lock_through_activity_update`. All other read/report/export routes emit no application-record mutation beyond initial authentication. `VACUUM`, file creation/download and public authentication remain the spec-defined exclusions. Schema/deployment are unchanged.
+Initial authentication last-activity has its own short owning transaction, verified by `test_initial_auth_holds_lock_through_activity_update`. All other read/report/export routes emit no application-record mutation beyond initial authentication. File downloads and public authentication remain the spec-defined exclusions. Schema/deployment are unchanged.

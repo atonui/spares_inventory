@@ -20,7 +20,7 @@ test('all web password fields have accessible show controls and shared assets', 
     }
     assert.equal(new Set(pageIds).size, pageIds.length, `${page} password field IDs must be unique`);
   }
-  assert.equal(ids.length, 12);
+  assert.equal(ids.length, 10);
 });
 
 test('reset recovery link targets the shipped forgot password page', () => {

@@ -79,14 +79,9 @@ test('the updated icon pack has dedicated icons for matching equipment and platf
   }
 
   const index = read('index.html');
-  const admin = read('superadmin.html');
   assert.match(index, new RegExp('#equipment"><\\/use><\\/svg> Equipment'));
   assert.match(index, new RegExp('#history"><\\/use><\\/svg> Movement history'));
   assert.match(index, new RegExp('#audit"><\\/use><\\/svg> Activity log'));
-  assert.match(admin, new RegExp('#sessions"><\\/use><\\/svg><\\/span> Active Sessions'));
-  assert.match(admin, new RegExp('#secconfig"><\\/use><\\/svg><\\/span> Security Config'));
-  assert.match(admin, new RegExp('#console"><\\/use><\\/svg><\\/span> SQL Console'));
-  assert.match(admin, new RegExp('#audit"><\\/use><\\/svg><\\/span> Audit Log'));
   for (const file of ['index.html', 'profile.html', 'superadmin.html']) {
     assert.match(read(file), /icons\.svg\?v=20261019-icon-pack-v4/);
   }
@@ -109,7 +104,7 @@ test('profile, clear filters, and open-in-new-window icons retain distinct meani
     if (/Clear filters/.test(button)) assert.match(button, /#clearfilters/);
   }
   assert.equal(buttons(index).filter(button => /Clear filters/.test(button)).length, 3);
-  assert.equal(buttons(admin).filter(button => /Clear filters/.test(button)).length, 3);
+  assert.equal(buttons(admin).filter(button => /Clear filters/.test(button)).length, 0);
   const openStore = buttons(index).find(button => button.includes('Open store'));
   assert.ok(openStore);
   assert.doesNotMatch(openStore, /#open/);
