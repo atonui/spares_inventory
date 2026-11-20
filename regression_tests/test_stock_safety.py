@@ -1,44 +1,14 @@
-import os
-import sqlite3
-
+import psycopg
 import pytest
-from fastapi.testclient import TestClient
 
 import main
 from backend.security import hash_session_credential
 
 
 @pytest.fixture
-def api(tmp_path, monkeypatch):
-    db = tmp_path / 'inventory.db'
-    backup = os.environ.get('INVENTORY_TEST_BACKUP')
-    if backup:
-        with sqlite3.connect('file:' + backup + '?mode=ro', uri=True) as src:
-            with sqlite3.connect(db) as dst:
-                src.backup(dst)
-    monkeypatch.setattr(main, 'DATABASE', str(db))
-    main.init_db()
-    with sqlite3.connect(db) as conn:
-        conn.execute('DELETE FROM users')
-        password_hash = main.hash_password('test-password')
-        for uid, role in [(1, 'admin'), (2, 'superadmin'), (3, 'engineer'), (4, 'manager')]:
-            conn.execute('INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)',
-                         (uid, f'user{uid}@example.com', f'User {uid}', password_hash, role))
-        conn.executemany('INSERT INTO sessions(user_id,session_token,expires_at) VALUES(?,?,?)',
-            [(uid,hash_session_credential(f'fixture-session-{uid}'),'2099-01-01T00:00:00.000000Z') for uid in (1,2,3,4)])
-    current = {'id': 1}
-    main.app.dependency_overrides[main.get_current_user] = lambda: current['id']
-    main.app.dependency_overrides[main.verify_csrf] = lambda: True
-    main.app.dependency_overrides[main.verify_authenticated_csrf] = lambda: True
-    with TestClient(main.app) as client:
-        def credential(request):
-            # Preserve tokens explicitly supplied by session-management tests.
-            if main.get_current_user in main.app.dependency_overrides and 'session_token=' not in request.headers.get('cookie',''):
-                prior=request.headers.get('cookie','')
-                request.headers['cookie']=(prior+'; ' if prior else '')+f"session_token=fixture-session-{current['id']}"
-        client.event_hooks['request'].append(credential)
-        yield client, db, current
-    main.app.dependency_overrides.clear()
+def api(stock_api):
+    """Shared by the stock test files: (client, db, current) on PostgreSQL."""
+    return stock_api
 
 
 @pytest.mark.parametrize('endpoint,payload', [
@@ -49,30 +19,16 @@ def api(tmp_path, monkeypatch):
 ])
 def test_invalid_quantity_is_rejected_before_writing(api, endpoint, payload):
     client, db, _ = api
-    before = sqlite3.connect(db).execute('SELECT SUM(quantity),COUNT(*) FROM inventory').fetchone()
+    before = db.execute('SELECT SUM(quantity),COUNT(*) FROM inventory').fetchone()
     response = client.request('PUT' if endpoint.endswith('/update') else 'POST', endpoint, json=payload)
     assert response.status_code == 422
-    assert sqlite3.connect(db).execute('SELECT SUM(quantity),COUNT(*) FROM inventory').fetchone() == before
+    assert db.execute('SELECT SUM(quantity),COUNT(*) FROM inventory').fetchone() == before
 
 
 @pytest.mark.parametrize('quantity', [1.5, True, '2'])
 def test_quantity_must_be_integer(api, quantity):
     response = api[0].post('/api/inventory/add', json={'part_id': 1, 'store_id': 1, 'quantity': quantity})
     assert response.status_code == 422
-
-
-@pytest.mark.parametrize('method,path,payload', [
-    ('POST', '/api/users', {'email': 'new@example.com', 'name': 'New', 'password': 'test-password', 'role': 'superadmin'}),
-    ('PUT', '/api/users/3', {'role': 'superadmin'}),
-    ('PUT', '/api/users/2', {'name': 'Changed'}),
-    ('DELETE', '/api/users/2', None),
-])
-def test_admin_cannot_assign_or_modify_superadmin(api, method, path, payload):
-    response = api[0].request(method, path, json=payload)
-    assert response.status_code == 403
-    with sqlite3.connect(api[1]) as conn:
-        assert conn.execute('SELECT role,name FROM users WHERE id=2').fetchone() == ('superadmin', 'User 2')
-        assert conn.execute('SELECT role FROM users WHERE id=3').fetchone()[0] == 'engineer'
 
 
 def test_invalid_role_rejected(api):
@@ -83,34 +39,36 @@ def test_admin_can_update_engineer(api):
     assert api[0].put('/api/users/3', json={'name': 'Updated'}).status_code == 200
 
 
-def test_superadmin_can_assign_privileged_role(api):
-    api[2]['id'] = 2
-    assert api[0].put('/api/users/3', json={'role': 'superadmin'}).status_code == 200
+def test_owner_can_assign_privileged_role(api):
+    client, db, current = api
+    current['id'] = 2
+    assert client.put('/api/users/3', json={'role': 'admin'}).status_code == 200
+    assert db.execute('SELECT company_role FROM organization_memberships WHERE user_id=3').fetchone()[0] == 'admin'
 
 
 def test_same_store_transfer_rejected(api):
-    with sqlite3.connect(api[1]) as conn:
+    with api[1] as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Test Store','central')")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'TEST','Test','test',0)")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,10)')
     response = api[0].post('/api/inventory/transfer', json={'inventory_id': 9999, 'to_store_id': 999, 'quantity': 2})
     assert response.status_code == 400
-    assert sqlite3.connect(api[1]).execute('SELECT quantity FROM inventory WHERE id=9999').fetchone()[0] == 10
+    assert api[1].execute('SELECT quantity FROM inventory WHERE id=9999').fetchone()[0] == 10
 
 
 def test_valid_stock_workflow(api):
     client, db, _ = api
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Test Source','central'),(998,'Test Destination','central')")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'TEST','Test','test',0)")
     assert client.post('/api/inventory/add', json={'part_id': 999, 'store_id': 999, 'quantity': 10}).status_code == 200
-    iid = sqlite3.connect(db).execute('SELECT id FROM inventory WHERE part_id=999').fetchone()[0]
+    iid = db.execute('SELECT id FROM inventory WHERE part_id=999').fetchone()[0]
     transfer = client.post('/api/inventory/transfer', json={'inventory_id': iid, 'to_store_id': 998, 'quantity': 3})
     assert transfer.status_code == 200
     assert client.post(f"/api/inventory/transfers/{transfer.json()['transfer_id']}/receive", json={'confirmed':True}).status_code == 200
     assert client.post('/api/inventory/consume', json={'inventory_id': iid, 'quantity': 2, 'work_order_number': 'TEST-WO'}).status_code == 200
     assert client.put('/api/inventory/update', json={'inventory_id': iid, 'new_quantity': 0}).status_code == 200
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT quantity FROM inventory WHERE part_id=999 AND store_id=999').fetchone()[0] == 0
         assert conn.execute('SELECT quantity FROM inventory WHERE part_id=999 AND store_id=998').fetchone()[0] == 3
 
@@ -139,7 +97,7 @@ if (sent.quantity !== 2) throw new Error('Stock form must send quantity as a num
 def test_other_users_store_cannot_be_changed(api, role, operation):
     client, db, current = api
     current['id'] = role
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(999,'Other Store','car',2),(998,'Destination','central',NULL)")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'PERM','Permission Test','test',0)")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,10)')
@@ -151,16 +109,9 @@ def test_other_users_store_cannot_be_changed(api, role, operation):
     }
     response = client.request('PUT' if operation == 'update' else 'POST', '/api/inventory/' + operation, json=payloads[operation])
     assert response.status_code == 403
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT quantity FROM inventory WHERE id=9999').fetchone()[0] == 10
         assert conn.execute('SELECT COUNT(*) FROM inventory WHERE part_id=999').fetchone()[0] == 1
-
-@pytest.mark.parametrize('actor,owner,kind', [(1,2,'car'),(2,1,'car'),(3,3,'car'),(3,None,'central')])
-def test_existing_authorized_store_access(api, actor, owner, kind):
-    with sqlite3.connect(api[1]) as conn:
-        conn.row_factory = sqlite3.Row
-        main.require_stock_access(conn, actor, kind, owner)
-
 
 def test_temporary_restore_route_removed():
     assert not any(route.path == '/upload-database' for route in main.app.routes)
@@ -169,7 +120,7 @@ def test_temporary_restore_route_removed():
 def test_engineer_can_deliver_from_own_store_to_other_engineer(api):
     client, db, current = api
     current['id'] = 3
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(999,'Mine','car',3),(998,'Other','car',4)")
         conn.execute("INSERT INTO parts(id,part_number,description,category,unit_cost) VALUES(999,'DELIVERY','Delivery Test','test',0)")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,10)')
@@ -177,77 +128,60 @@ def test_engineer_can_deliver_from_own_store_to_other_engineer(api):
     assert transfer.status_code == 200
     current['id'] = 4
     assert client.post(f"/api/inventory/transfers/{transfer.json()['transfer_id']}/receive",json={'confirmed':True}).status_code == 200
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT quantity FROM inventory WHERE store_id=999 AND part_id=999').fetchone()[0] == 8
         assert conn.execute('SELECT quantity FROM inventory WHERE store_id=998 AND part_id=999').fetchone()[0] == 2
 
-@pytest.mark.parametrize('operation', ['logout', 'reset', 'admin_password'])
+@pytest.mark.parametrize('operation', ['logout', 'reset'])
 def test_session_revocation(api, operation):
-    from datetime import datetime, timedelta, timezone
+    import asyncio
+    from datetime import timedelta
+    from backend.temporal import serialize_instant, utc_now
     client, db, current = api
-    with sqlite3.connect(db) as conn:
-        columns = {row[1] for row in conn.execute('PRAGMA table_info(users)')}
-        for column in ['reset_token', 'reset_token_expires', 'session_token']:
-            if column not in columns:
-                conn.execute(f'ALTER TABLE users ADD COLUMN {column} TEXT')
-        conn.execute('DELETE FROM sessions')
-        for token, uid in [('current',3),('other',3),('unrelated',4)]:
-            conn.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(?,?,?,1)', (uid,hash_session_credential(token),(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(days=1)).isoformat()))
-        conn.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3', ('reset-test',(datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(hours=1)).isoformat()))
+    expires = serialize_instant(utc_now() + timedelta(days=1))
+    for token, uid in [('current', 3), ('other', 3), ('unrelated', 4)]:
+        db.execute('INSERT INTO sessions(user_id,session_token_hash,expires_at,is_active) VALUES(?,?,?,TRUE)',
+                   (uid, hash_session_credential(token), expires))
+    db.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=3',
+               ('reset-test', serialize_instant(utc_now() + timedelta(hours=1))))
     if operation == 'logout':
         current['id'] = 3
-        client.cookies.set('session_token','current')
-        response = client.post('/api/auth/logout')
-    elif operation == 'reset':
-        response = client.post('/api/reset-password',json={'token':'reset-test','new_password':'new-test-password'})
+        client.cookies.set('session_token', 'current')
+        response = client.post('/api/auth/logout', headers={'X-CSRF-Token': main.generate_csrf_token('current')})
     else:
-        with sqlite3.connect(db) as conn:
-            conn.execute('INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(?,?,?,1)',(1,hash_session_credential('fixture-session-1'),'2099-01-01T00:00:00.000000Z'))
-        response = client.put('/api/users/3',json={'password':'new-test-password'})
-    assert response.status_code == 200
-    with sqlite3.connect(db) as conn:
-        states = dict(conn.execute('SELECT session_token,is_active FROM sessions'))
-    assert states[hash_session_credential('current')] == 0
-    assert states[hash_session_credential('other')] == (1 if operation == 'logout' else 0)
-    assert states[hash_session_credential('unrelated')] == 1
-    # Exercise the real auth dependency, independently of the test API override.
-    import asyncio
+        response = client.post('/api/reset-password', json={'token': 'reset-test', 'new_password': 'new-test-password'})
+    assert response.status_code == 200, response.text
+    states = {row[0]: row[1] for row in db.execute('SELECT session_token_hash,is_active FROM sessions')}
+    assert states[hash_session_credential('current')] is False
+    assert states[hash_session_credential('other')] is (operation == 'logout')
+    assert states[hash_session_credential('unrelated')] is True
+    # Exercise the real auth dependency directly.
     with pytest.raises(main.HTTPException) as error:
         asyncio.run(main.get_current_user('current'))
     assert error.value.status_code == 401
 
 
-def test_initializer_creates_complete_schema_and_preserves_stock(tmp_path, monkeypatch):
-    db = tmp_path / 'fresh.db'
-    monkeypatch.setattr(main, 'DATABASE', str(db))
-    main.init_db()
-    with sqlite3.connect(db) as conn:
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert {'users','stores','parts','inventory','movements','work_orders','activity_logs','system_logs','sessions','equipment','equipment_history','store_types','system_settings'} <= tables
-        columns = {row[1] for row in conn.execute('PRAGMA table_info(users)')}
-        assert {'reset_token','reset_token_expires'} <= columns
-        conn.execute("INSERT INTO stores(id,name,type) VALUES(99,'Keep','central')")
-        conn.execute("INSERT INTO parts(id,part_number) VALUES(99,'KEEP')")
-        conn.execute('INSERT INTO inventory(store_id,part_id,quantity) VALUES(99,99,7)')
-        conn.execute("UPDATE system_settings SET setting_value='42' WHERE setting_key='calibration_reminder_days'")
-        conn.execute("UPDATE store_types SET type_name='Customized' WHERE type_code='office'")
-    main.init_db()
-    main.init_db()
-    with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT quantity FROM inventory WHERE part_id=99').fetchall() == [(7,)]
-        assert conn.execute("SELECT setting_value FROM system_settings WHERE setting_key='calibration_reminder_days'").fetchone()[0] == '42'
-        assert conn.execute("SELECT type_name FROM store_types WHERE type_code='office'").fetchone()[0] == 'Customized'
-        assert conn.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+def test_company_admin_cannot_set_another_users_password(api):
+    """SaaS password changes go through account recovery, never an admin-chosen password."""
+    client, db, _ = api
+    before = db.execute('SELECT password_hash FROM users WHERE id=3').fetchone()[0]
+    sessions = db.execute('SELECT id,is_active FROM sessions ORDER BY id').fetchall()
+    response = client.put('/api/users/3', json={'password': 'new-test-password'})
+    assert response.status_code == 400
+    assert response.json() == {'detail': 'Password changes use the account recovery flow'}
+    assert db.execute('SELECT password_hash FROM users WHERE id=3').fetchone()[0] == before
+    assert db.execute('SELECT id,is_active FROM sessions ORDER BY id').fetchall() == sessions
+
 
 @pytest.mark.parametrize('work_order', [None, 'DUP-WO'])
 def test_repeated_receipts_and_transfers_reuse_inventory_row(api, work_order):
     client, db, _ = api
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Source','central'),(998,'Destination','central')")
         conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'DUP-TEST')")
     for store, qty in [(999,10),(999,5),(998,2)]:
         assert client.post('/api/inventory/add',json={'store_id':store,'part_id':999,'quantity':qty,'work_order_number':work_order}).status_code == 200
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         rows = conn.execute('SELECT id,store_id,quantity FROM inventory WHERE part_id=999 ORDER BY store_id').fetchall()
         assert len(rows) == 2
         source_id = next(row[0] for row in rows if row[1] == 999)
@@ -255,40 +189,43 @@ def test_repeated_receipts_and_transfers_reuse_inventory_row(api, work_order):
         transfer = client.post('/api/inventory/transfer',json={'inventory_id':source_id,'to_store_id':998,'quantity':3})
         assert transfer.status_code == 200
         assert client.post(f"/api/inventory/transfers/{transfer.json()['transfer_id']}/receive",json={'confirmed':True}).status_code == 200
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT store_id,quantity FROM inventory WHERE part_id=999 ORDER BY store_id').fetchall() == [(998,8),(999,9)]
         assert conn.execute('SELECT COUNT(*) FROM movements WHERE part_id=999').fetchone()[0] == 5
 
 
 def test_duplicate_stock_is_rejected_and_receipt_preserves_existing_balance(api):
     client, db, _ = api
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Source','central')")
         conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'OLD-DUP')")
         conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9998,999,999,4)')
-        with pytest.raises(sqlite3.IntegrityError):
+        with pytest.raises(psycopg.errors.UniqueViolation):
             conn.execute('INSERT INTO inventory(id,store_id,part_id,quantity) VALUES(9999,999,999,7)')
     assert client.post('/api/inventory/add',json={'store_id':999,'part_id':999,'quantity':2}).status_code == 200
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT id,quantity FROM inventory WHERE part_id=999 ORDER BY id').fetchall() == [(9998,6)]
 
 
-def test_simultaneous_receipts_create_one_row(api):
+def test_simultaneous_receipts_create_one_row(api, stock_database):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+    from backend.services.tenant_context import set_tenant_context
+    from regression_tests.postgres_app import ORG_A
     db = api[1]
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(999,'Concurrent','central')")
         conn.execute("INSERT INTO parts(id,part_number) VALUES(999,'CONCURRENT')")
     start = Barrier(2)
     def receipt():
-        with sqlite3.connect(db, timeout=5) as conn:
-            conn.row_factory = sqlite3.Row
+        # Two runtime-role connections inside company A's RLS context.
+        with stock_database.connect() as conn, conn.transaction():
+            set_tenant_context(conn, ORG_A)
             start.wait(timeout=5)
             main.add_inventory_quantity(conn,999,999,3,None)
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(receipt) for _ in range(2)]
         for future in futures:
             future.result(timeout=10)
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT quantity FROM inventory WHERE part_id=999').fetchall() == [(6,)]

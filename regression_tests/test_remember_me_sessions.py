@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 import main
 from regression_tests.test_auth_router import auth_api
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 @pytest.mark.parametrize('remember,seconds',[(False,3*3600),(True,7*86400)])
 def test_configured_cookie_lifetime_and_session_expiry(auth_api,monkeypatch,remember,seconds):

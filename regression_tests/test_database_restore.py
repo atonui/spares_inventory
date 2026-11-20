@@ -35,7 +35,7 @@ def test_wrong_schema_is_rejected_without_live_changes(tmp_path):
     assert live.read_bytes()==before
 
 
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 @pytest.mark.parametrize('actor',[1,3,4])
 def test_restore_requires_superadmin(api,actor):

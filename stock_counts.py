@@ -1,9 +1,12 @@
 """Physical counting over existing inventory rows; no reservation redistribution."""
 from stock_audit import balance_snapshot, change_after, record_stock_audit
+from backend.database_sql import execute, is_postgres
+from backend.services.principals import AuthenticatedPrincipal
 from backend.services.session_credentials import get_request_credential
+from backend.services.tenant_context import authenticated_database_transaction
+from backend.temporal import serialize_instant, utc_now
 import hashlib
 import json
-from contextlib import closing
 
 from fastapi import Depends, HTTPException, Request
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -28,9 +31,14 @@ class CountConfirmRequest(BaseModel):
     confirmed: bool = Field(strict=True)
 
 
+def actor_id(user):
+    """Plain user ID for tokens, audit and created_by, from a principal or a legacy ID."""
+    return user.user_id if isinstance(user, AuthenticatedPrincipal) else user
+
+
 def store_snapshot(conn, store_id):
     """Detect row changes and movements, including a balance changed then restored."""
-    rows = conn.execute('''
+    rows = execute(conn, '''
         SELECT i.id AS inventory_id,i.part_id,i.work_order_id,i.quantity,
                i.min_threshold,i.updated_at,p.part_number,p.description,
                wo.work_order_number AS work_order
@@ -39,8 +47,11 @@ def store_snapshot(conn, store_id):
         WHERE i.store_id=? AND p.archived_at IS NULL
         ORDER BY p.part_number,i.id
     ''', (store_id,)).fetchall()
-    movements = tuple(conn.execute('SELECT COALESCE(MAX(id),0),COUNT(*) FROM movements WHERE from_store_id=? OR to_store_id=?', (store_id,store_id)).fetchone())
-    counts = tuple(conn.execute("SELECT COALESCE(MAX(id),0),COUNT(*) FROM activity_logs WHERE action='confirm_stock_count' AND resource_type='stock_count' AND resource_id=?", (store_id,)).fetchone())
+    movements = tuple(execute(conn, 'SELECT COALESCE(MAX(id),0) AS last_id,COUNT(*) AS total FROM movements WHERE from_store_id=? OR to_store_id=?', (store_id,store_id)).fetchone().values()) \
+        if is_postgres(conn) else tuple(execute(conn, 'SELECT COALESCE(MAX(id),0),COUNT(*) FROM movements WHERE from_store_id=? OR to_store_id=?', (store_id,store_id)).fetchone())
+    counts_sql = "SELECT COALESCE(MAX(id),0) AS last_id,COUNT(*) AS total FROM activity_logs WHERE action='confirm_stock_count' AND resource_type='stock_count' AND resource_id=?"
+    counts = tuple(execute(conn, counts_sql, (store_id,)).fetchone().values()) \
+        if is_postgres(conn) else tuple(execute(conn, counts_sql, (store_id,)).fetchone())
     payload = {'rows':[dict(row) for row in rows], 'movements':movements, 'counts':counts}
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     return payload['rows'],digest
@@ -62,12 +73,20 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
             raise HTTPException(403, 'This count belongs to another user')
         return data
 
-    def permitted_store(conn, store_id, user_id):
-        require_active(conn,'users',user_id)
+    def permitted_store(conn, store_id, user):
+        require_active(conn,'users',actor_id(user))
         require_active(conn,'stores',store_id)
-        store = conn.execute('SELECT name,type,assigned_user_id FROM stores WHERE id=?', (store_id,)).fetchone()
-        require_access(conn,user_id,store['type'],store['assigned_user_id'])
+        store = execute(conn, 'SELECT name,type,assigned_user_id,{} FROM stores WHERE id=?'.format(
+            'organization_id' if is_postgres(conn) else 'NULL AS organization_id'), (store_id,)).fetchone()
+        require_access(conn,user,store['type'],store['assigned_user_id'],
+                       store_organization_id=store['organization_id'])
         return store
+
+    def read_transaction(user, request):
+        # Tenant RLS on PostgreSQL; the validated SQLite path otherwise.
+        return authenticated_database_transaction(
+            get_connection, principal_or_user=user,
+            session_token=get_request_credential(request).value, readonly=True)
 
     def fresh_snapshot(conn, data):
         rows,digest = store_snapshot(conn,data['store_id'])
@@ -76,19 +95,18 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
         return rows
 
     @app.get('/api/inventory/count-sheet/{store_id}')
-    async def count_sheet(store_id: int, user_id: int = Depends(current_user)):
-        with closing(get_connection()) as conn:
-            conn.execute('BEGIN')
+    async def count_sheet(store_id: int, request: Request, user_id: int = Depends(current_user)):
+        with read_transaction(user_id, request) as (conn, _principal):
             store = permitted_store(conn,store_id,user_id)
             rows,digest = store_snapshot(conn,store_id)
-            token = signer.dumps({'stage':'sheet','user_id':user_id,'store_id':store_id,'snapshot':digest})
+            token = signer.dumps({'stage':'sheet','user_id':actor_id(user_id),'store_id':store_id,'snapshot':digest})
             return {'store_id':store_id,'store_name':store['name'],'sheet_token':token,'rows':rows}
 
     @app.post('/api/inventory/count-preview')
-    async def count_preview(body: CountPreviewRequest, user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf)):
-        data = read_token(body.sheet_token,'sheet',user_id)
-        with closing(get_connection()) as conn:
-            conn.execute('BEGIN')
+    async def count_preview(body: CountPreviewRequest, request: Request,
+                            user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf)):
+        data = read_token(body.sheet_token,'sheet',actor_id(user_id))
+        with read_transaction(user_id, request) as (conn, _principal):
             store = permitted_store(conn,data['store_id'],user_id)
             inventory = {row['inventory_id']:row for row in fresh_snapshot(conn,data)}
             selected,seen = [],set()
@@ -118,7 +136,7 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
                             user_id: int = Depends(current_user), csrf_valid: bool = Depends(verify_csrf)):
         if not body.confirmed:
             raise HTTPException(400, 'Confirm that these are the physical counts before saving')
-        data = read_token(body.preview_token,'preview',user_id)
+        data = read_token(body.preview_token,'preview',actor_id(user_id))
         with write_transaction(user_id, get_request_credential(request).value) as conn:
             store = permitted_store(conn,data['store_id'],user_id)
             fresh_snapshot(conn,data)
@@ -130,13 +148,18 @@ def register_stock_count_routes(app, *, get_connection, write_transaction,
                     audit_changes.append(change_after(conn,before))
                     continue
                 changed += 1
-                conn.execute("UPDATE inventory SET quantity=?,updated_at=strftime('%Y-%m-%dT%H:%M:%f000Z','now') WHERE id=?", (row['counted_quantity'],row['inventory_id']))
-                conn.execute('''INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
-                                VALUES(?,?,?,?,?,?,?)''',
-                             (data['store_id'],row['part_id'],abs(row['difference']),
-                              'add' if row['difference']>0 else 'remove',row['work_order_id'],user_id,
-                              f"Physical stock count: {row['before_quantity']} → {row['counted_quantity']}. {row['reason']}"))
-                movement_ids.append(conn.execute('SELECT last_insert_rowid()').fetchone()[0])
+                execute(conn, "UPDATE inventory SET quantity=?,updated_at=? WHERE id=?",
+                        (row['counted_quantity'],serialize_instant(utc_now()),row['inventory_id']))
+                values = (data['store_id'],row['part_id'],abs(row['difference']),
+                          'add' if row['difference']>0 else 'remove',row['work_order_id'],actor_id(user_id),
+                          f"Physical stock count: {row['before_quantity']} → {row['counted_quantity']}. {row['reason']}")
+                if is_postgres(conn):
+                    movement = execute(conn, '''INSERT INTO movements(organization_id,to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
+                        VALUES(?,?,?,?,?,?,?,?) RETURNING id''', (store['organization_id'], *values)).fetchone()['id']
+                else:
+                    movement = execute(conn, '''INSERT INTO movements(to_store_id,part_id,quantity,movement_type,work_order_id,created_by,notes)
+                        VALUES(?,?,?,?,?,?,?) RETURNING id''', values).fetchone()[0]
+                movement_ids.append(movement)
                 audit_changes.append(change_after(conn,before))
             # Count evidence must commit with every balance/movement, including unchanged counts.
             record_stock_audit(conn,user_id,'confirm_stock_count',audit_changes,movement_ids,

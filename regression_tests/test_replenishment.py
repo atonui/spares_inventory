@@ -1,14 +1,16 @@
 import json
+import psycopg
 import sqlite3
 from uuid import uuid4
 
 import pytest
+from regression_tests.postgres_app import fail_inserts
 import main
 from regression_tests.test_stock_safety import api
 
 
 def seed(api):
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         c.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(950,'A Need','car',3),(951,'B Need','car',4),(952,'Central Supply','central',NULL),(953,'Other Supply','car',4),(954,'Reserved','central',NULL)")
         c.execute("INSERT INTO parts(id,part_number,description) VALUES(950,'PLAN','Planned part'),(951,'NEW-PLAN','New target')")
         c.execute("INSERT INTO work_orders(id,work_order_number) VALUES(950,'PLAN-WO')")
@@ -35,16 +37,15 @@ def test_plan_uses_each_surplus_once_and_preserves_donor_minimums_and_reservatio
     assert [(s['inventory_id'],s['quantity']) for s in rows[1]['suggestions']]==[(952,3),(953,1)]
     assert rows[0]['suggestions'][0]['can_dispatch'] is True
     assert rows[1]['suggestions'][1]['can_dispatch'] is False
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT SUM(quantity) FROM inventory').fetchone()[0]==117
         assert c.execute('SELECT COUNT(*) FROM movements').fetchone()[0]==0
 
 
 def test_plan_accepts_authenticated_company_principal(api):
-    from backend.services.principals import AuthenticatedPrincipal
-
+    # Every request in the Postgres fixture runs as a real company principal.
     seed(api)
-    api[2]['id'] = AuthenticatedPrincipal(3, uuid4(), 'engineer', False)
+    api[2]['id'] = 3
 
     result = plan(api)
 
@@ -76,7 +77,7 @@ def test_allocated_incoming_does_not_cover_unallocated_shortage(api):
 
 def test_insufficient_internal_surplus_is_listed_for_purchase(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         c.execute('UPDATE inventory SET quantity=5 WHERE id=952')
     rows=plan(api)['rows']
     assert sum(r['purchase_quantity'] for r in rows)==5
@@ -87,7 +88,7 @@ def test_minimum_change_is_audited_without_changing_stock(api):
     seed(api)
     response=minimum(api)
     assert response.status_code==200,response.text
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity,min_threshold FROM inventory WHERE id=950').fetchone()==(1,7)
         assert c.execute('SELECT COUNT(*) FROM movements').fetchone()[0]==0
         log=c.execute("SELECT user_id,details FROM activity_logs WHERE action='set_stock_minimum'").fetchone()
@@ -101,7 +102,7 @@ def test_minimum_can_configure_missing_unallocated_stock_without_adding_units(ap
     seed(api)
     response=minimum(api,part=951,value=2,expected=0)
     assert response.status_code==200
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity,min_threshold,work_order_id FROM inventory WHERE store_id=950 AND part_id=951').fetchone()==(0,2,None)
     assert any(r['part_id']==951 and r['shortage']==2 for r in plan(api)['rows'])
 
@@ -115,8 +116,7 @@ def test_invalid_minimum_is_rejected(api,value):
 def test_minimum_respects_store_permissions_and_csrf(api):
     seed(api)
     assert minimum(api,store=951,expected=4).status_code==403
-    main.app.dependency_overrides.pop(main.verify_csrf)
-    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
+    api[2]['csrf'] = False  # send an invalid CSRF token
     assert minimum(api).status_code==403
 
 
@@ -128,7 +128,7 @@ def test_emptying_stock_preserves_configured_minimum_and_allocation_id(api,opera
     else:
         response=api[0].post('/api/inventory/transfer',json={'inventory_id':950,'quantity':1,'to_store_id':952})
     assert response.status_code==200
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity,min_threshold,work_order_id FROM inventory WHERE id=950').fetchone()==(0,5,None)
     assert plan(api)['rows'][0]['shortage']==5
 
@@ -137,7 +137,7 @@ def test_suggested_dispatch_rechecks_plan_and_rejects_donor_minimum_violation(ap
     seed(api)
     response=api[0].post('/api/inventory/transfer',json={'inventory_id':952,'quantity':8,'to_store_id':950,'replenishment':True})
     assert response.status_code==409
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity FROM inventory WHERE id=952').fetchone()[0]==10
         assert c.execute('SELECT COUNT(*) FROM movements').fetchone()[0]==0
 
@@ -146,7 +146,7 @@ def test_suggested_dispatch_follows_existing_receipt_lifecycle(api):
     seed(api)
     response=api[0].post('/api/inventory/transfer',json={'inventory_id':952,'quantity':4,'to_store_id':950,'replenishment':True})
     assert response.status_code==200
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity FROM inventory WHERE id=952').fetchone()[0]==6
         assert c.execute('SELECT quantity FROM inventory WHERE id=950').fetchone()[0]==1
     first=plan(api)['rows'][0]
@@ -157,8 +157,8 @@ def test_suggested_dispatch_follows_existing_receipt_lifecycle(api):
 
 def test_archived_stock_is_not_a_donor_or_target(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
-        c.execute('UPDATE stores SET archived_at=CURRENT_TIMESTAMP WHERE id=952')
+    with api[1] as c:
+        c.execute('UPDATE stores SET archived_at=canonical_now() WHERE id=952')
     rows=plan(api)['rows']
     assert sum(r['purchase_quantity'] for r in rows)==7
     assert minimum(api,store=952,expected=3).status_code==400
@@ -166,11 +166,10 @@ def test_archived_stock_is_not_a_donor_or_target(api):
 
 def test_minimum_audit_failure_rolls_back_setting_and_new_target(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
-        c.execute("CREATE TRIGGER fail_minimum BEFORE INSERT ON activity_logs WHEN NEW.action='set_stock_minimum' BEGIN SELECT RAISE(ABORT,'minimum audit failed'); END")
-    with pytest.raises(sqlite3.IntegrityError):
+    fail_inserts(api[1], 'activity_logs', 'minimum audit failed', "NEW.action='set_stock_minimum'")
+    with pytest.raises(psycopg.errors.RaiseException):
         minimum(api,part=951,value=2,expected=0)
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT COUNT(*) FROM inventory WHERE part_id=951').fetchone()[0]==0
 
 
@@ -180,18 +179,18 @@ def test_return_respects_minimum_disabled_after_dispatch(api):
     assert sent.status_code==200
     assert minimum(api,value=0,expected=5).status_code==200
     assert api[0].post(f"/api/inventory/transfers/{sent.json()['transfer_id']}/return",json={'confirmed':True}).status_code==200
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity,min_threshold FROM inventory WHERE id=950').fetchone()==(1,0)
 
 
 def test_disable_target_for_legacy_deleted_source_survives_return(api):
     seed(api)
     sent=api[0].post('/api/inventory/transfer',json={'inventory_id':950,'to_store_id':952,'quantity':1})
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         c.execute('DELETE FROM inventory WHERE id=950 AND quantity=0')
     assert minimum(api,value=0,expected=0).status_code==200
     assert api[0].post(f"/api/inventory/transfers/{sent.json()['transfer_id']}/return",json={'confirmed':True}).status_code==200
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         assert c.execute('SELECT quantity,min_threshold FROM inventory WHERE store_id=950 AND part_id=950 AND work_order_id IS NULL').fetchone()==(1,0)
 
 
@@ -201,7 +200,7 @@ def test_low_stock_summary_matches_configured_unallocated_shortages(api):
     assert minimum(api,value=1,expected=5).status_code==200
     assert api[0].get('/api/stats').json()['low_stock']==1
     assert minimum(api,value=0,expected=1).status_code==200
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         c.execute('UPDATE inventory SET quantity=0 WHERE id=950')
         c.execute('UPDATE inventory SET min_threshold=200 WHERE id=954')
     assert api[0].get('/api/stats').json()['low_stock']==1

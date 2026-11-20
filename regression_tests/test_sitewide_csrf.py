@@ -2,7 +2,7 @@
 from fastapi.routing import APIRoute
 import main
 from regression_tests.test_auth_router import auth_api
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 TOKEN_AUTHENTICATED_MUTATIONS = {
     ('/api/auth/native/refresh', frozenset({'POST'})),

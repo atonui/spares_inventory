@@ -189,7 +189,7 @@ def reset_unit_api(api):
         yield client, api[1], events
 
 
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 
 @pytest.mark.parametrize(

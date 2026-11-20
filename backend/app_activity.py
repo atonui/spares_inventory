@@ -85,7 +85,8 @@ def log_system_event(get_connection, logger, error_logger, level: str, component
         conn = get_connection()
         cursor = conn.cursor()
         details_json = json.dumps(details) if details else None
-        cursor.execute(
+        execute_cursor(
+            conn, cursor,
             """
             INSERT INTO system_logs (level, component, message, details)
             VALUES (?, ?, ?, ?)

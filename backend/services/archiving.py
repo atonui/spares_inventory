@@ -91,3 +91,25 @@ def archive_record(table, identifier, user_id, restore=False, *, session_token,
             "success": True,
             "message": f'Record {"restored" if restore else "archived"}; history preserved',
         }
+
+
+def require_member_can_leave(conn, target_user_id: int) -> None:
+    """Refuse to deactivate or remove a company member who still holds stock work.
+
+    Runs inside the company's RLS context, so it only sees this company's rows.
+    Matches the checks the legacy SQLite user archive made.
+    """
+    from backend.services.transfer_helpers import require_no_pending_transfer
+
+    require_no_pending_transfer(conn, "user", target_user_id)
+    assigned = execute(
+        conn,
+        "SELECT 1 FROM stores WHERE assigned_user_id = ? AND archived_at IS NULL LIMIT 1",
+        (target_user_id,),
+    ).fetchone() or execute(
+        conn,
+        "SELECT 1 FROM equipment WHERE assigned_user_id = ? AND status <> 'deleted' LIMIT 1",
+        (target_user_id,),
+    ).fetchone()
+    if assigned:
+        raise HTTPException(status_code=400, detail="Reassign stores and equipment before deactivating this member")

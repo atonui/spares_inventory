@@ -1,17 +1,16 @@
 """Store administration HTTP contracts and collaborator ownership."""
-from contextlib import closing
 import os
-import sqlite3
 from pathlib import Path
 import subprocess
 import sys
 
+import psycopg
 import pytest
 from fastapi.routing import APIRoute
 
 import main
-from backend.database import connect_database
-from regression_tests.test_session_write_routes import session_api, database_state
+from regression_tests.postgres_app import database_state, fail_inserts
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OPERATIONS = {
@@ -22,6 +21,17 @@ OPERATIONS = {
     ('PUT', '/api/store-types/{type_id}'), ('DELETE', '/api/store-types/{type_id}'),
     ('GET', '/api/store-types/validate/{type_code}'),
 }
+
+
+def test_other_company_stores_look_exactly_like_missing_stores(tenant_api):
+    client = tenant_api.as_actor('admin')
+    for method, body in (('put', {'name': 'Taken'}), ('delete', None)):
+        other = getattr(client, method)('/api/stores/101', **({'json': body} if body else {}))
+        missing = getattr(client, method)('/api/stores/99999', **({'json': body} if body else {}))
+        assert other.status_code == missing.status_code != 200
+        assert other.json() == missing.json()
+    assert tenant_api.db.execute('SELECT name, archived_at FROM stores WHERE id=101').fetchone() == {
+        'name': 'Other warehouse', 'archived_at': None}
 
 
 def test_stores_registered_once_with_original_dependencies():
@@ -49,37 +59,37 @@ def test_store_schema_reexports():
     }
 
 
-@pytest.mark.parametrize('actor', ['admin-token', 'root-token', 'engineer-token'])
+@pytest.mark.parametrize('actor', ['admin', 'owner', 'engineer'])
 @pytest.mark.parametrize('include_archived', [False, True])
-def test_store_listing_archive_visibility(session_api, actor, include_archived):
-    client, path, _ = session_api
-    client.cookies.set('session_token', actor)
-    with closing(connect_database(path)) as conn, conn:
-        conn.execute("UPDATE stores SET archived_at='2000-01-01T00:00:00' WHERE id=3")
+def test_store_listing_archive_visibility(tenant_api, actor, include_archived):
+    client = tenant_api.as_actor(actor)
+    tenant_api.db.execute("UPDATE stores SET archived_at='2000-01-01T00:00:00Z' WHERE id=3")
+    tenant_api.db.commit()
     response = client.get('/api/stores', params={'include_archived': include_archived})
-    if include_archived and actor == 'engineer-token':
+    if include_archived and actor == 'engineer':
         assert response.status_code == 403, response.text
         return
     assert response.status_code == 200, response.text
     assert (3 in {r['id'] for r in response.json()}) == include_archived
 
 
-def test_store_picker_options_return_only_id_and_name(session_api):
-    client, path, _ = session_api
-    client.cookies.set('session_token', 'engineer-token')
+def test_store_picker_options_return_only_id_and_name(tenant_api):
+    client = tenant_api.as_actor('engineer')
     response = client.get('/api/store-options')
     assert response.status_code == 200, response.text
     options = response.json()
     assert options
     assert all(set(option) == {'id', 'name'} for option in options)
     assert all(option['name'] for option in options)
+    assert {option['id'] for option in options} == {1, 2, 3}
 
 
-def test_store_types_listing_and_validation_keep_inactive_access(session_api):
-    client, path, _ = session_api
-    client.cookies.set('session_token', 'engineer-token')
-    with closing(connect_database(path)) as conn, conn:
-        conn.execute("INSERT INTO store_types(type_code,type_name,is_active,display_order) VALUES('inactive_type','Inactive',0,99)")
+def test_store_types_listing_and_validation_keep_inactive_access(tenant_api):
+    client = tenant_api.as_actor('engineer')
+    tenant_api.db.execute(
+        "INSERT INTO store_types(organization_id,type_code,type_name,is_active,display_order) VALUES(%s,'inactive_type','Inactive',FALSE,99)",
+        (tenant_api.org_a,))
+    tenant_api.db.commit()
     active = client.get('/api/store-types')
     assert active.status_code == 200
     assert 'inactive_type' not in {r['type_code'] for r in active.json()}
@@ -90,11 +100,12 @@ def test_store_types_listing_and_validation_keep_inactive_access(session_api):
     assert client.get('/api/store-types/validate/missing_type').status_code == 404
 
 
-def test_store_import_preserves_existing_type_and_row_skipping_rules(session_api):
-    client, path, _ = session_api
-    with closing(connect_database(path)) as conn, conn:
-        conn.execute("INSERT INTO store_types(type_code,type_name) VALUES('custom_type','Custom')")
-        conn.execute("UPDATE users SET archived_at='2000-01-01T00:00:00' WHERE id=3")
+def test_store_import_preserves_existing_type_and_row_skipping_rules(tenant_api):
+    client = tenant_api.client
+    tenant_api.db.execute("INSERT INTO store_types(organization_id,type_code,type_name) VALUES(%s,'custom_type','Custom')",
+                          (tenant_api.org_a,))
+    tenant_api.db.execute("UPDATE users SET archived_at='2000-01-01T00:00:00Z' WHERE id=3")
+    tenant_api.db.commit()
     data = ('name,type,location,assigned_user_id\n'
             'Accepted,office,Office,\n'
             'Custom,custom_type,Office,\n'
@@ -103,14 +114,14 @@ def test_store_import_preserves_existing_type_and_row_skipping_rules(session_api
     response = client.post('/api/stores/bulk-import', files={'file': ('stores.csv', data.encode(), 'text/csv')})
     assert response.status_code == 200, response.text
     assert response.json() == {'success': True, 'added': 1, 'skipped': 3}
-    with closing(connect_database(path)) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM stores WHERE name='Accepted'").fetchone()[0] == 1
-        assert conn.execute("SELECT COUNT(*) FROM activity_logs WHERE action='bulk_import_stores'").fetchone()[0] == 1
+    db = tenant_api.db
+    assert db.execute("SELECT organization_id FROM stores WHERE name='Accepted'").fetchall() == [{'organization_id': tenant_api.org_a}]
+    assert db.execute("SELECT COUNT(*) AS n FROM activity_logs WHERE action='bulk_import_stores'").fetchone()['n'] == 1
 
 
 @pytest.mark.parametrize('in_use', [False, True])
-def test_store_type_delete_preserves_deactivate_or_delete(session_api, in_use):
-    client, path, _ = session_api
+def test_store_type_delete_preserves_deactivate_or_delete(tenant_api, in_use):
+    client = tenant_api.client
     created = client.post('/api/store-types', json={'type_code': 'new_type', 'type_name': 'New'})
     assert created.status_code == 200, created.text
     type_id = created.json()['id']
@@ -120,66 +131,48 @@ def test_store_type_delete_preserves_deactivate_or_delete(session_api, in_use):
     response = client.delete(f'/api/store-types/{type_id}')
     assert response.status_code == 200, response.text
     assert response.json()['deactivated'] is in_use
-    with closing(connect_database(path)) as conn:
-        row = conn.execute('SELECT is_active FROM store_types WHERE id=?', (type_id,)).fetchone()
-        assert (row is not None and row[0] == 0) if in_use else row is None
+    row = tenant_api.db.execute('SELECT is_active FROM store_types WHERE id=%s', (type_id,)).fetchone()
+    assert (row is not None and row['is_active'] is False) if in_use else row is None
 
 
 @pytest.mark.parametrize('payload', [
     {'type_code': 'UpperCase', 'type_name': 'Invalid'},
     {'type_code': 'new_type', 'type_name': 'New', 'display_order': -1},
 ])
-def test_store_type_schema_validation_preserved(session_api, payload):
-    client, path, _ = session_api
-    before = database_state(path)
-    assert client.post('/api/store-types', json=payload).status_code == 422
-    assert database_state(path) == before
+def test_store_type_schema_validation_preserved(tenant_api, payload):
+    before = database_state(tenant_api.db)
+    assert tenant_api.client.post('/api/store-types', json=payload).status_code == 422
+    assert database_state(tenant_api.db) == before
 
 
-def test_store_guards_and_audit_borrow_owner_and_rollback(session_api, monkeypatch):
-    client, path, _ = session_api
+def test_store_guards_and_audit_borrow_owner_and_rollback(tenant_api, monkeypatch):
+    client = tenant_api.client
     admin = main.check_admin
     active = main.require_active_record
     audit = main._record_mutation_activity
     owners = []
+    def in_transaction(conn):
+        return conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE
     def guard(user_id, conn=None):
-        assert conn is not None and conn.in_transaction
+        assert conn is not None and in_transaction(conn)
         owners.append(conn)
         return admin(user_id, conn)
     def active_guard(conn, *args, **kwargs):
-        assert conn.in_transaction
+        assert in_transaction(conn)
         return active(conn, *args, **kwargs)
     def activity(conn, *args, **kwargs):
-        assert conn is owners[-1] and conn.in_transaction
+        assert conn is owners[-1] and in_transaction(conn)
         return audit(conn, *args, **kwargs)
     monkeypatch.setattr(main, 'check_admin', guard)
     monkeypatch.setattr(main, 'require_active_record', active_guard)
     monkeypatch.setattr(main, '_record_mutation_activity', activity)
     response = client.post('/api/stores', json={'name': 'New', 'type': 'office', 'assigned_user_id': 3})
     assert response.status_code == 200, response.text
-    with closing(connect_database(path)) as conn:
-        conn.execute("CREATE TRIGGER reject_store_audit BEFORE INSERT ON activity_logs BEGIN SELECT RAISE(ABORT,'audit unavailable'); END")
-    before = database_state(path)
-    with pytest.raises(sqlite3.IntegrityError, match='audit unavailable'):
+    fail_inserts(tenant_api.db, 'activity_logs', 'audit unavailable')
+    before = database_state(tenant_api.db)
+    with pytest.raises(psycopg.errors.RaiseException, match='audit unavailable'):
         client.put('/api/stores/2', json={'name': 'Changed'})
-    assert database_state(path) == before
-    with closing(connect_database(path)) as conn:
-        conn.execute('BEGIN IMMEDIATE')
-
-
-def test_store_router_uses_current_database_path(session_api, monkeypatch, tmp_path):
-    client, path, _ = session_api
-    target = tmp_path / 'switched.db'
-    with closing(connect_database(path)) as source, closing(connect_database(target)) as destination:
-        source.backup(destination)
-    with closing(connect_database(target)) as conn, conn:
-        conn.execute("UPDATE stores SET name='Changed target' WHERE id=1")
-    monkeypatch.setattr(main, 'DATABASE', str(target))
-    response = client.get('/api/stores')
-    assert response.status_code == 200, response.text
-    assert next(r for r in response.json() if r['id'] == 1)['name'] == 'Changed target'
-    with closing(connect_database(path)) as conn:
-        assert conn.execute('SELECT name FROM stores WHERE id=1').fetchone()[0] != 'Changed target'
+    assert database_state(tenant_api.db) == before
 
 
 def test_store_imports_are_inert(tmp_path):
@@ -189,3 +182,12 @@ def test_store_imports_are_inert(tmp_path):
     result = subprocess.run([sys.executable, '-c', script], cwd=tmp_path, capture_output=True, text=True,
                             env={**os.environ, 'PYTHONPATH': str(ROOT) + os.pathsep + os.environ.get('PYTHONPATH', '')})
     assert result.returncode == 0, result.stderr
+
+
+def test_a_new_company_can_create_a_store_with_the_default_form_type(tenant_api):
+    """The web form defaults to 'customer_site'; a fresh company must accept it."""
+    client = tenant_api.as_actor('other')
+    response = client.post('/api/stores', json={'name': 'First site', 'type': 'customer_site'})
+    assert response.status_code == 200, response.text
+    assert tenant_api.db.execute("SELECT organization_id FROM stores WHERE name='First site'").fetchone() == {
+        'organization_id': tenant_api.org_b}

@@ -672,7 +672,7 @@ def complete_transfer(transfer_id, data, user_id, action, request=None, *, sessi
 from backend.routes.work_orders import create_work_order_router
 
 app.include_router(create_work_order_router(
-    get_connection=get_db_connection, current_user=get_current_user,
+    get_connection=lambda: get_db_connection(), current_user=get_current_user,
 ))
 
 
@@ -785,7 +785,7 @@ app.include_router(create_superadmin_router(
 from replenishment import register_replenishment_routes, require_planned_dispatch
 
 register_replenishment_routes(
-    app, get_connection=get_db_connection, write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
+    app, get_connection=lambda: get_db_connection(), write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
     require_active=require_active_record, require_access=require_stock_access,
     current_user=get_current_user, verify_csrf=verify_authenticated_csrf,
 )
@@ -801,7 +801,7 @@ app.include_router(create_stock_report_router(
 from stock_counts import register_stock_count_routes
 
 register_stock_count_routes(
-    app, get_connection=get_db_connection, write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
+    app, get_connection=lambda: get_db_connection(), write_transaction=lambda uid, token: authenticated_write_transaction(uid, token, busy_detail="Stock is busy; no changes saved. Try again"),
     require_active=require_active_record, require_access=require_stock_access,
     current_user=get_current_user, verify_csrf=verify_authenticated_csrf, secret=SECRET_KEY,
 )

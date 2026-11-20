@@ -8,6 +8,7 @@ from backend.schemas.users import CreateUserRequest, UpdateUserRequest
 from backend.services.principals import AuthenticatedPrincipal
 from backend.services.tenant_context import authenticated_database_transaction
 from backend.services.authorization import require_company_admin
+from backend.services.archiving import require_member_can_leave
 from backend.database_sql import execute, is_postgres
 from backend.schemas.email_change import EmailChangeRequest, EmailChangeStatus, EmailChangeRequestResponse, EmailChangeCancelResponse
 from fastapi.responses import JSONResponse
@@ -391,6 +392,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                     raise HTTPException(status_code=403, detail="Transfer ownership before removing the owner")
                 if target["company_role"] == "admin" and current_actor.company_role != "owner":
                     raise HTTPException(status_code=403, detail="Only the owner can remove an admin")
+                require_member_can_leave(conn, target_user_id)
                 revoked_count = execute(conn, "UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND is_active = TRUE", (target_user_id,)).rowcount
                 from backend.services.platform_support import end_support_sessions
                 end_support_sessions(conn, actor_user_id=current_actor.user_id, target_user_id=target_user_id,
@@ -435,6 +437,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
                     raise HTTPException(status_code=403, detail="Only the owner can deactivate an admin")
                 if not target["is_active"]:
                     raise HTTPException(status_code=409, detail="Company member is already inactive")
+                require_member_can_leave(conn, target_user_id)
                 execute(
                     conn,
                     """UPDATE organization_memberships SET is_active = FALSE

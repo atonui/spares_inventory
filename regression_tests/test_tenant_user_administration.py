@@ -67,6 +67,8 @@ def tenant_user_api(postgres_schema):
             sql.Identifier(table), sql.Identifier(role)
         ))
     connection.execute(sql.SQL("GRANT DELETE ON organization_memberships TO {}").format(sql.Identifier(role)))
+    # Deactivation and removal check the member's transfers, stores and equipment.
+    connection.execute(sql.SQL("GRANT SELECT ON stock_transfers, movements, stores, equipment TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT SELECT ON platform_admins TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT SELECT ON platform_support_sessions TO {}").format(sql.Identifier(role)))
     connection.execute(sql.SQL("GRANT UPDATE (ended_at) ON platform_support_sessions TO {}").format(sql.Identifier(role)))

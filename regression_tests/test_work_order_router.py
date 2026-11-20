@@ -11,7 +11,6 @@ from backend.database import initialize_database,connect_database
 from backend.routes.work_orders import create_work_order_router
 from regression_tests.test_work_order_service import conn
 from regression_tests.test_work_orders import seed
-from regression_tests.test_stock_safety import api
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -26,18 +25,6 @@ def test_router_uses_supplied_authentication_and_database(conn):
         assert [r['work_order_number'] for r in response.json()]==['WO-101']
         app.dependency_overrides[authenticate]=lambda:2
         assert [r['id'] for r in client.get('/api/work-orders').json()]==[103,102,101,104]
-
-def test_registered_router_uses_changed_main_database(api,tmp_path,monkeypatch):
-    seed(api);api[2]['id']=1
-    assert [r['id'] for r in api[0].get('/api/work-orders').json()]==[103,102,101,104]
-    second=tmp_path/'second.db';initialize_database(second,defaults={})
-    with connect_database(second) as c:
-        c.execute("INSERT INTO users(id,email,name,password_hash,role) VALUES(1,'one@test','One','unused','admin')")
-        c.execute("INSERT INTO work_orders(id,work_order_number) VALUES(500,'SECOND')")
-    monkeypatch.setattr(main,'DATABASE',str(second))
-    assert [r['work_order_number'] for r in api[0].get('/api/work-orders').json()]==['SECOND']
-    monkeypatch.setattr(main,'DATABASE',str(api[1]))
-    assert [r['id'] for r in api[0].get('/api/work-orders').json()]==[103,102,101,104]
 
 def test_router_closes_connection_on_query_failure():
     c=sqlite3.connect(':memory:',check_same_thread=False);c.row_factory=sqlite3.Row

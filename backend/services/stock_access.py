@@ -7,8 +7,22 @@ from .principals import AuthenticatedPrincipal
 def require_active_record(conn,table,identifier):
     if table not in ('users','stores','parts'):
         raise ValueError('Unsupported active record type')
-    placeholder = "%s" if hasattr(conn, "info") else "?"
-    row=conn.execute(f'SELECT archived_at FROM {table} WHERE id={placeholder}',(identifier,)).fetchone()
+    postgres = hasattr(conn, "info")
+    if postgres and table == 'users':
+        # Users are global; on PostgreSQL an active user means an active membership
+        # in the company whose RLS context this transaction carries.
+        row=conn.execute(
+            """SELECT u.archived_at, m.is_active FROM users u
+               JOIN organization_memberships m ON m.user_id = u.id
+                AND m.organization_id = NULLIF(current_setting('app.organization_id', true), '')::uuid
+               WHERE u.id = %s""",
+            (identifier,),
+        ).fetchone()
+        if row and row['archived_at'] is None and not row['is_active']:
+            raise HTTPException(status_code=400,detail='users record is inactive in this company; reactivate the member first')
+    else:
+        placeholder = "%s" if postgres else "?"
+        row=conn.execute(f'SELECT archived_at FROM {table} WHERE id={placeholder}',(identifier,)).fetchone()
     if not row:
         raise HTTPException(status_code=400,detail=f'{table} record does not exist')
     if row['archived_at'] is not None:

@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from fastapi.routing import APIRoute
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTH_OPERATIONS = {

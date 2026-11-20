@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 from regression_tests.test_security_reset_events import reset_unit_api, security_api
 from regression_tests.test_native_bearer_auth import native_auth_api, login_request
 

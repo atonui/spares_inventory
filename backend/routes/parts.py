@@ -7,7 +7,7 @@ from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from backend.database_sql import execute, execute_cursor, is_postgres
 from backend.services.tenant_context import authenticated_database_transaction
-from backend.schemas.parts import PartResponse, CreatePartRequest, UpdatePartRequest
+from backend.schemas.parts import PART_NUMBER_MAX_LENGTH, PartResponse, CreatePartRequest, UpdatePartRequest
 from backend.schemas.api_v1 import PartPageResponse
 from backend.services.mobile_list_cursor import decode_list_cursor, encode_list_cursor
 
@@ -188,6 +188,11 @@ def create_parts_router(*, get_connection, authenticated_writer, current_user,
                     if not row.get("part_number") or not row.get("description"):
                         skipped += 1
                         skipped_details.append(f"Row missing required fields: {row}")
+                        continue
+                    if len(row["part_number"]) > PART_NUMBER_MAX_LENGTH:
+                        skipped += 1
+                        skipped_details.append(
+                            f"Part {row['part_number'][:PART_NUMBER_MAX_LENGTH]}… is longer than {PART_NUMBER_MAX_LENGTH} characters")
                         continue
 
                     # Check if part_number already exists

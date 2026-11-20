@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from backend.services.mail_outbox import enqueue_mail
 from backend.services.mail_payloads import encrypt_mail_payload
 from backend.services.platform_audit import record_platform_audit_event
+from backend.services.store_types import seed_default_store_types
 from backend.temporal import serialize_instant, utc_now
 
 INVITATION_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -243,6 +244,7 @@ def create_organization_with_owner_invitation(
     ).fetchone()
     conn.execute("SELECT set_config('app.organization_id', %s, true)", (str(organization["id"]),))
     conn.execute("INSERT INTO organization_settings (organization_id) VALUES (%s)", (organization["id"],))
+    seed_default_store_types(conn, organization["id"])
     invitation = create_invitation(
         conn, organization_id=organization["id"], invited_by=actor_user_id,
         email=owner_email, company_role="owner", frontend_url=frontend_url,

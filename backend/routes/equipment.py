@@ -59,6 +59,24 @@ def _equipment_history_insert(conn, cursor, user, sql, values):
     return execute_cursor(conn, cursor, sql, values)
 
 
+DEFAULT_CALIBRATION_REMINDER_DAYS = 30
+
+
+def calibration_reminder_days(conn, principal) -> int:
+    """Read the reminder window: per company on PostgreSQL, global on legacy SQLite."""
+    if isinstance(principal, AuthenticatedPrincipal):
+        row = execute(
+            conn,
+            "SELECT calibration_reminder_days FROM organization_settings WHERE organization_id = ?",
+            (principal.organization_id,),
+        ).fetchone()
+        return int(row["calibration_reminder_days"]) if row else DEFAULT_CALIBRATION_REMINDER_DAYS
+    row = execute(
+        conn, "SELECT setting_value FROM system_settings WHERE setting_key = 'calibration_reminder_days'"
+    ).fetchone()
+    return int(row["setting_value"]) if row else DEFAULT_CALIBRATION_REMINDER_DAYS
+
+
 def create_equipment_router(*, get_connection, authenticated_writer, current_user,
                             csrf_dependency, admin_guard, active_record_guard,
                             endpoint_log, mutation_activity) -> APIRouter:
@@ -107,12 +125,7 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
                 (actor_id,),
             ).fetchone()["count"]
 
-            # Get calibration reminder days
-            reminder_setting = execute(conn, """
-                SELECT setting_value FROM system_settings
-                WHERE setting_key = 'calibration_reminder_days'
-            """).fetchone()
-            reminder_days = int(reminder_setting["setting_value"]) if reminder_setting else 30
+            reminder_days = calibration_reminder_days(conn, principal)
 
             # Equipment due soon
             from datetime import date
@@ -612,20 +625,14 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
     async def get_calibration_reminder_days(
         user_id: int = Depends(get_current_user), request: Request = None
     ):
-        """Get calibration reminder days setting"""
-        conn = get_db_connection()
-        if not is_postgres(conn):
-            register_instant_comparison(conn)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT setting_value FROM system_settings
-            WHERE setting_key = 'calibration_reminder_days'
-        """)
-        result = cursor.fetchone()
-        conn.close()
-
-        return {"days": int(result["setting_value"]) if result else 30}
+        """Get the calibration reminder window for the signed-in user's company"""
+        with authenticated_database_transaction(
+            get_db_connection,
+            principal_or_user=user_id,
+            session_token=get_request_credential(request).value if request else None,
+            readonly=True,
+        ) as (conn, principal):
+            return {"days": calibration_reminder_days(conn, principal)}
 
 
     @router.put("/api/settings/calibration-reminder-days")
@@ -641,19 +648,30 @@ def create_equipment_router(*, get_connection, authenticated_writer, current_use
             if days < 1 or days > 365:
                 raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
 
-            cursor = conn.cursor()
-
             if not check_admin(user_id, conn):
                 raise HTTPException(status_code=403, detail="Admin access required")
 
-            cursor.execute(
-                """
-                UPDATE system_settings
-                SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
-                WHERE setting_key = 'calibration_reminder_days'
-            """,
-                (str(days), user_id),
-            )
+            if is_postgres(conn):
+                # Each company owns its reminder window (migration 27).
+                organization_id = user_id.organization_id
+                execute(conn, "SELECT organization_id FROM organization_settings WHERE organization_id = ? FOR UPDATE",
+                        (organization_id,))
+                execute(
+                    conn,
+                    """UPDATE organization_settings
+                       SET calibration_reminder_days = ?, revision = revision + 1, updated_at = ?, updated_by = ?
+                       WHERE organization_id = ?""",
+                    (days, serialize_instant(utc_now()), user_id.user_id, organization_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE system_settings
+                    SET setting_value = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%f000Z','now')
+                    WHERE setting_key = 'calibration_reminder_days'
+                """,
+                    (str(days), user_id),
+                )
 
 
             _result = {"success": True, "message": f"Calibration reminder set to {days} days"}
