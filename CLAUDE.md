@@ -41,7 +41,7 @@ The mobile app lives in atonui/spares_inventory_mobile; it uses SQLite only as i
 - Accounts are invitation-only. Admins never set passwords, and `POST /api/users` returns 410.
 - Company roles are owner, admin, manager and engineer. Platform admins are separate (`platform_admins`).
   `saas_mode` is always true and is kept only for API clients.
-- Part numbers are limited to 25 characters. The calibration reminder is set per company,
+- Part numbers are limited to 100 characters (`PART_NUMBER_MAX_LENGTH`). The calibration reminder is set per company,
   and new companies get default store types.
 - A member can't be deactivated or removed while they have pending transfers or still hold
   active stores or equipment (`services/archiving.require_member_can_leave`).

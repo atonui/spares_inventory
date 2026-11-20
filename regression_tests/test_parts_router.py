@@ -148,7 +148,7 @@ def test_parts_imports_are_inert(tmp_path):
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize('part_number', ['', 'X' * 26])
+@pytest.mark.parametrize('part_number', ['', 'X' * 101])
 def test_part_number_length_is_validated_on_create_and_update(tenant_api, part_number):
     client = tenant_api.client
     before = database_state(tenant_api.db)
@@ -159,18 +159,18 @@ def test_part_number_length_is_validated_on_create_and_update(tenant_api, part_n
     assert database_state(tenant_api.db) == before
 
 
-def test_part_number_of_exactly_25_characters_is_accepted(tenant_api):
+def test_part_number_of_exactly_100_characters_is_accepted(tenant_api):
     response = tenant_api.client.post('/api/parts', json={
-        'part_number': 'P' * 25, 'description': 'Limit', 'category': 'test', 'unit_cost': 1,
+        'part_number': 'P' * 100, 'description': 'Limit', 'category': 'test', 'unit_cost': 1,
     })
     assert response.status_code == 200, response.text
 
 
 def test_part_import_skips_part_numbers_over_the_limit(tenant_api):
-    data = 'part_number,description,category,unit_cost\nOK-1,Fine,test,1\n' + 'Y' * 26 + ',Too long,test,1\n'
+    data = 'part_number,description,category,unit_cost\nOK-1,Fine,test,1\n' + 'Y' * 101 + ',Too long,test,1\n'
     response = tenant_api.client.post('/api/parts/bulk-import', files={'file': ('parts.csv', data.encode(), 'text/csv')})
     assert response.status_code == 200, response.text
     result = response.json()
     assert (result['added'], result['skipped']) == (1, 1)
-    assert 'longer than 25 characters' in result['skipped_details'][0]
+    assert 'longer than 100 characters' in result['skipped_details'][0]
     assert tenant_api.db.execute("SELECT count(*) AS n FROM parts WHERE part_number LIKE 'YYYY%%'").fetchone()['n'] == 0
