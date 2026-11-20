@@ -282,32 +282,19 @@ def test_v1_auth_aliases_reuse_legacy_handler_callables():
         ]
 
 
-def test_v1_protected_auth_routes_require_bearer_not_cookie():
-    import main
-
-    main.app.dependency_overrides[main.get_current_user] = lambda: 1
-    try:
-        with TestClient(main.app) as client:
-            assert client.get("/api/v1/me").status_code == 401
-            client.cookies.set("session_token", "cookie-session")
-            assert client.get("/api/v1/me").status_code == 401
-            mixed = client.get(
-                "/api/v1/me",
-                headers={"Authorization": "Bearer opaque-session"},
-            )
-            assert mixed.status_code == 401
-            client.cookies.clear()
-            response = client.get(
-                "/api/v1/me",
-                headers={"Authorization": "Bearer opaque-session"},
-            )
-            # The test override resolves the principal, but the bootstrap DB has
-            # no matching profile row; 404 proves the Bearer guard was passed.
-            assert response.status_code == 404, response.text
-            assert response.json()["error"]["code"] == "not_found"
-    finally:
-        main.app.dependency_overrides.clear()
-
+def test_v1_protected_auth_routes_require_bearer_not_cookie(tenant_api):
+    client = tenant_api.client
+    client.cookies.clear()
+    client.headers.pop("X-CSRF-Token", None)
+    assert client.get("/api/v1/me").status_code == 401
+    client.cookies.set("session_token", "admin-token")  # a valid browser session is not enough
+    assert client.get("/api/v1/me").status_code == 401
+    mixed = client.get("/api/v1/me", headers={"Authorization": "Bearer admin-token"})
+    assert mixed.status_code == 401
+    client.cookies.clear()
+    response = client.get("/api/v1/me", headers={"Authorization": "Bearer admin-token"})
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == 1
 
 def test_v1_logout_revokes_bearer_without_cookie_response(tenant_api):
     from backend.services.session_credentials import hash_session_credential

@@ -774,23 +774,9 @@ from backend.schemas.superadmin import (
     SuperadminPasswordReset,
 )
 
-from backend.routes.superadmin import create_superadmin_router
+from backend.routes.announcement_banner import create_announcement_banner_router
 
-# Keep the legacy console mounted for SQLite deployments; its router fails closed
-# for non-SQLite admin operations while public announcement reads stay cross-mode.
-app.include_router(create_superadmin_router(
-    get_connection=lambda: get_db_connection(),
-    database_path=lambda: DATABASE,
-    authenticated_writer=lambda user_id, session_token: authenticated_write_transaction(user_id, session_token),
-    current_user=get_current_user,
-    csrf_dependency=verify_authenticated_csrf,
-    superadmin_guard=lambda user_id, conn=None: require_superadmin(user_id, conn),
-    password_hash=lambda password: hash_password(password),
-    activity_log=lambda *args, **kwargs: log_activity(*args, **kwargs),
-    authenticated_activity=lambda user_id, token, **kwargs: log_authenticated_activity(user_id, token, **kwargs),
-    database_defaults=lambda: database_defaults(),
-    session_validator=lambda *args, **kwargs: require_session(*args, **kwargs),
-))
+app.include_router(create_announcement_banner_router(get_connection=lambda: get_db_connection()))
 
 from replenishment import register_replenishment_routes, require_planned_dispatch
 

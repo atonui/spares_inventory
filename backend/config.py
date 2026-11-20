@@ -29,6 +29,13 @@ class Settings(BaseSettings):
         "sparesinventory-production.up.railway.app,localhost,127.0.0.1,testserver"
     )
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def require_postgresql(cls, url):
+        if not url.startswith(("postgresql://", "postgres://")):
+            raise ValueError("DATABASE_URL must be a PostgreSQL connection URL (postgresql://...)")
+        return url
+
     @field_validator("CORS_ALLOWED_ORIGINS")
     @classmethod
     def reject_wildcard_origins(cls, origins):

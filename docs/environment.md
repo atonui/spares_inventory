@@ -10,9 +10,9 @@ Removing a file in a new commit does not erase old commits, clones, or forks. Hi
 
 ## SaaS PostgreSQL settings
 
-The legacy Railway service continues to use its mounted SQLite path until a
-separately reviewed cutover. For a SaaS PostgreSQL environment, `DATABASE_URL`
-must use PostgreSQL 17 and connect as the restricted web runtime role.
+The application runs on PostgreSQL only; the settings loader rejects any other
+`DATABASE_URL`. `DATABASE_URL` must use PostgreSQL 17 and connect as the
+restricted web runtime role.
 `MAIL_WORKER_DATABASE_URL` connects to the same database as a distinct role
 limited to processing the global mail outbox. `MIGRATION_DATABASE_URL` is the
 separate schema migration identity and is used only for application startup
@@ -54,8 +54,7 @@ PostgreSQL SaaS password-reset and invitation delivery require
 Invitation delivery also requires `INVITATION_BASE_URL`. Store these as service
 secrets. Generate the encryption key with the application's Fernet key
 generator, keep it separate from `SECRET_KEY`, and retain a protected recovery
-copy. Password-reset delivery uses `FRONTEND_URL`; legacy SQLite mode retains
-the synchronous SMTP password-reset path.
+copy. Password-reset delivery uses `FRONTEND_URL`.
 
 The platform support inbox uses `RESEND_SUPPORT_FROM_EMAIL` for replies and
 `RESEND_INBOUND_WEBHOOK_SECRET` for a separate `email.received` webhook endpoint

@@ -247,10 +247,6 @@ def _route_template(path):
     import re
     path=path.split('?')[0]
     path=path.replace('/store-types/{unused}','/store-types/{type_id}')
-    if path.startswith('/api/superadmin/security-config/'):
-        return '/api/superadmin/security-config/{key}'
-    if path.startswith('/api/superadmin/users/'):
-        return re.sub(r'/users/\d+', '/users/{target_id}', path)
     replacements={'users':'target_user_id','stores':'store_id','parts':'part_id','equipment':'equipment_id','store-types':'type_id','transfers':'transfer_id','sessions':'session_id'}
     for prefix,identifier in replacements.items():
         path=re.sub('/'+prefix+r'/\d+', '/'+prefix+'/{'+identifier+'}', path)
@@ -260,25 +256,10 @@ def _route_template(path):
 def test_every_registered_mutation_has_a_behavioral_classification():
     from fastapi.routing import APIRoute
     protected={(case[1],_route_template(case[2])) for case in STOCK_CASES+CATALOG_CASES+ADMIN_CASES}
-    protected.add(('POST','/api/superadmin/database/restore'))
-    # CSRF-protected writes this module does not exercise on Postgres: the legacy
-    # SQLite-only superadmin console (removed with SQLite) and the self-service
-    # email route, which SaaS refuses (test_saas_users_cannot_change_their_own_email).
-    protected.update({
-        ('PUT', '/api/profile'),
-        ('POST', '/api/superadmin/users/{target_id}/reset-password'),
-        ('POST', '/api/superadmin/unlock-account'),
-        ('POST', '/api/superadmin/unlock-accounts/bulk'),
-        ('POST', '/api/superadmin/sessions/force-logout'),
-        ('POST', '/api/superadmin/sessions/force-logout-all'),
-        ('PUT', '/api/superadmin/security-config/{key}'),
-        ('PUT', '/api/superadmin/users/{target_id}/role'),
-        ('DELETE', '/api/superadmin/database/logs/purge'),
-        ('POST', '/api/superadmin/announcement'),
-        ('POST', '/api/superadmin/announcement/dismiss'),
-        ('DELETE', '/api/superadmin/announcement'),
-        ('POST', '/api/users'),
-    })
+    # CSRF-protected writes this module does not exercise with a successful write:
+    # the self-service email route and direct user creation, which SaaS refuses
+    # (test_saas_users_cannot_change_their_own_email, test_users_router).
+    protected.update({('PUT', '/api/profile'), ('POST', '/api/users')})
     protected.update({('PUT', '/api/organization/settings'),
                       ('PUT', '/api/organization/mobile-session-policy'),
                       ('POST', '/api/organization/owner-transfer'),
@@ -321,12 +302,12 @@ def test_every_registered_mutation_has_a_behavioral_classification():
         ('POST', '/api/v1/inventory/adjustments'),
         ('POST', '/api/users/{target_user_id}/remove'),
     })
-    exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/v1/auth/native/login','/api/auth/native/refresh','/api/v1/auth/native/refresh','/api/forgot-password','/api/reset-password','/api/inventory/count-preview','/api/superadmin/database/query','/api/superadmin/database/vacuum']}
+    exempt={('POST',p) for p in ['/api/auth/login','/api/auth/native/login','/api/v1/auth/native/login','/api/auth/native/refresh','/api/v1/auth/native/refresh','/api/forgot-password','/api/reset-password','/api/inventory/count-preview']}
     bearer_only={('POST', '/api/v1/auth/logout')}
     bearer_only.update(('POST', '/api/v1/inventory/' + path) for path in (
         'add', 'consume', 'transfer', 'transfers/{transfer_id}/receive', 'transfers/{transfer_id}/return'))
     registered={(method,route.path) for route in main.app.routes if isinstance(route,APIRoute) for method in route.methods if method in {'POST','PUT','DELETE','PATCH'}}
-    assert len(protected)==92
+    assert len(protected)==80
     assert registered==protected|exempt|bearer_only
 
 
