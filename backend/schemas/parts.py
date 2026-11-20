@@ -1,6 +1,9 @@
 """Parts administration HTTP schemas."""
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# Part numbers are short codes (typically 10-12 characters).
+PART_NUMBER_MAX_LENGTH = 25
 
 
 class PartResponse(BaseModel):
@@ -13,14 +16,14 @@ class PartResponse(BaseModel):
 
 
 class CreatePartRequest(BaseModel):
-    part_number: str
+    part_number: str = Field(min_length=1, max_length=PART_NUMBER_MAX_LENGTH)
     description: str
     category: str
     unit_cost: float
 
 
 class UpdatePartRequest(BaseModel):
-    part_number: Optional[str] = None
+    part_number: Optional[str] = Field(None, min_length=1, max_length=PART_NUMBER_MAX_LENGTH)
     description: Optional[str] = None
     category: Optional[str] = None
     unit_cost: Optional[float] = None
