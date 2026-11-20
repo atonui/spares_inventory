@@ -1685,7 +1685,7 @@
                     <form @submit.prevent="editingPart ? updatePart() : createPart()">
                         <div class="form-group">
                             <label for="part-number">Part Number</label>
-                            <input id="part-number" type="text" x-model="partForm.part_number" maxlength="25" required>
+                            <input id="part-number" type="text" x-model="partForm.part_number" maxlength="100" required>
                         </div>
                         <div class="form-group">
                             <label for="part-description">Description</label>

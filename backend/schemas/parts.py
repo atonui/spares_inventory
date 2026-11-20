@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 # Part numbers are short codes (typically 10-12 characters).
-PART_NUMBER_MAX_LENGTH = 25
+PART_NUMBER_MAX_LENGTH = 100
 
 
 class PartResponse(BaseModel):
