@@ -35,7 +35,7 @@ def read_as(api, viewer):
 
 
 @pytest.mark.parametrize('audience,roles', [('everyone', []), ('authenticated', []), ('roles', ['manager']),
-                                           ('roles', ['admin', 'engineer'])])
+                                           ('roles', ['admin', 'engineer']), ('roles', ['owner'])])
 @pytest.mark.parametrize('viewer,role', [(None, None), ('unknown', None), ('owner', 'owner'), ('admin', 'admin'),
                                          ('manager', 'manager'), ('engineer', 'engineer'), ('other', 'owner')])
 def test_audience_matrix(tenant_api, audience, roles, viewer, role):
@@ -50,12 +50,10 @@ def test_audience_matrix(tenant_api, audience, roles, viewer, role):
     assert response.json()['dismissal_mode'] == 'browser'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Gap: company owners cannot be targeted. Announcement roles are engineer, manager, admin '
-    'and the legacy superadmin; "owner" is rejected, so owners never see role-targeted notices.'))
 def test_owners_can_be_targeted(tenant_api):
     publish(tenant_api, audience='roles', roles=['owner'])
     assert read_as(tenant_api, 'owner').json()['announcement'] is not None
+    assert read_as(tenant_api, 'admin').json()['announcement'] is None
 
 
 @pytest.mark.parametrize('fields', [{'audience': 'roles', 'roles': []}, {'audience': 'unknown'},
