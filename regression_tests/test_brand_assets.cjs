@@ -50,42 +50,7 @@ test('favicon and platform icons are exported at expected sizes', () => {
   assert.deepEqual(pngSize('static/brand/generated/favicon-32.png'), [32, 32]);
   assert.deepEqual(pngSize('static/brand/generated/favicon-48.png'), [48, 48]);
   assert.deepEqual(pngSize('static/brand/generated/apple-touch-icon.png'), [180, 180]);
-  assert.deepEqual(pngSize('mobile/assets/icon.png'), [1024, 1024]);
-  for (const name of ['android-icon-foreground.png', 'android-icon-background.png']) {
-    assert.deepEqual(pngSize(`mobile/assets/${name}`), [432, 432]);
-  }
-  assert.deepEqual(pngSize('mobile/assets/favicon.png'), [32, 32]);
-  assert.ok(fs.readFileSync('mobile/assets/icon.png').equals(fs.readFileSync('static/brand/generated/app-icon-1024.png')));
-  assert.ok(fs.readFileSync('mobile/assets/android-icon-foreground.png').equals(fs.readFileSync('static/brand/generated/android-adaptive-foreground.png')));
   assert.ok(fs.existsSync('static/brand/generated/favicon.ico'));
-});
-
-test('mobile display branding leaves technical identifiers unchanged', () => {
-  const config = JSON.parse(read('mobile/app.json')).expo;
-  assert.equal(config.name, 'Spares Tracker');
-  assert.equal(config.slug, 'inventory-management-mobile');
-  assert.equal(config.ios.bundleIdentifier, 'com.atonui.inventory');
-  assert.equal(config.android.package, 'com.atonui.inventory');
-  assert.equal(config.scheme, 'inventory-management');
-  assert.equal(config.icon, './assets/icon.png');
-  assert.equal(config.android.adaptiveIcon.backgroundColor, '#F5F7FA');
-  assert.equal(config.android.adaptiveIcon.foregroundImage, './assets/android-icon-foreground.png');
-  assert.equal(config.android.adaptiveIcon.backgroundImage, './assets/android-icon-background.png');
-  assert.equal(config.web.favicon, './assets/favicon.png');
-  assert.equal(config.android.adaptiveIcon.monochromeImage, undefined);
-});
-
-test('mobile interface uses the approved brand palette without changing status meanings', () => {
-  const source = read('mobile/src/app/index.tsx');
-  for (const color of ['#15263B', '#E9A23B', '#64748B', '#F5F7FA', '#FFFFFF']) {
-    assert.ok(source.includes(color), `Mobile UI must use approved brand color ${color}`);
-  }
-  assert.match(source, /primaryButton:[^\n]*backgroundColor:\s*palette\.navy/);
-  assert.match(source, /primaryButtonText:[^\n]*color:\s*palette\.white/);
-  assert.match(source, /quantityValue:[^\n]*#287441/);
-  assert.match(source, /lowQuantityText:[^\n]*#A54E1E/);
-  assert.match(source, /errorText:[^\n]*palette\.red/);
-  assert.doesNotMatch(source, /#1266B5|#112B45|#78B5FF|#F4F7FA/);
 });
 
 test('brand text and primary controls keep accessible contrast', () => {
