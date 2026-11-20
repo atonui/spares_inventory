@@ -338,7 +338,7 @@ def create_users_router(*, get_connection, authenticated_writer, current_user,
             cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", values)
 
             if request_data.password is not None:
-                cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (target_user_id,))
+                cursor.execute("UPDATE sessions SET is_active = FALSE WHERE user_id = ?", (target_user_id,))
 
 
             _result = {"success": True, "message": "User updated successfully"}

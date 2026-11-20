@@ -411,7 +411,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             else:
                 cursor = execute(
                     conn,
-                    f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ? AND is_active = 1",
+                    f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} != ? AND is_active = TRUE",
                     (actor_id, current_key),
                 )
                 revoked_count = cursor.rowcount
@@ -1459,7 +1459,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             conn,
             f"""SELECT id, created_at, last_activity, ip_address, user_agent,
                        CASE WHEN {session_column} = ? THEN 1 ELSE 0 END AS is_current
-                FROM sessions WHERE user_id = ? AND is_active = 1 ORDER BY {order_by}, id DESC""",
+                FROM sessions WHERE user_id = ? AND is_active = TRUE ORDER BY {order_by}, id DESC""",
             (current_key, actor_id),
         ).fetchall()
         conn.close()
@@ -1499,7 +1499,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
                     raise HTTPException(status_code=404, detail="Session not found")
             else:
                 execute_cursor(conn, cursor,
-                    "UPDATE sessions SET is_active = 0 WHERE id = ? AND user_id = ?",
+                    "UPDATE sessions SET is_active = FALSE WHERE id = ? AND user_id = ?",
                     (session_id, actor_id),
                 )
                 if cursor.rowcount == 0:
@@ -1539,7 +1539,7 @@ def create_auth_router(*, get_connection, authenticated_writer, stock_writer, cu
             else:
                 cursor = execute(
                     conn,
-                    f"UPDATE sessions SET is_active = 0 WHERE user_id = ? AND {token_column} != ? AND is_active = 1",
+                    f"UPDATE sessions SET is_active = FALSE WHERE user_id = ? AND {token_column} != ? AND is_active = TRUE",
                     (actor_id, current_key),
                 )
                 revoked_count = cursor.rowcount
