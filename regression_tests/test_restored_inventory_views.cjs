@@ -34,7 +34,7 @@ test('restored management tables use mobile cards and SaaS invitation actions',(
         assert.match(panel,/<td[^>]*data-label="[^"]+"/);
     }
     const users=html.slice(html.indexOf('<!-- User Management Panel'),html.indexOf('<!-- Equipment Management Panel'));
-    assert.match(users,/x-show="currentUser\?\.saas_mode"/);
+    assert.match(users,/aria-labelledby="pending-invitations-heading"/);
     assert.match(users,/resendInvitation\(invitation\.id\)/);
     assert.match(users,/cancelInvitation\(invitation\.id\)/);
     for(const action of ['exportUsersCSV','exportLowStockCSV','exportMyPartsCSV','exportStoreTypesCSV']) assert.match(html,new RegExp(action+'\\(\\)'));

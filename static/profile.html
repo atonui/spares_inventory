@@ -9,7 +9,7 @@
 <script src="temporal.js?v=20261013-frontend-1" defer></script>
 <script src="js/shared/csrf.js?v=20261014-announcement-controls" defer></script>
 <script src="js/shared/time-context.js?v=20261013-frontend-1" defer></script>
-<script src="js/pages/profile.js?v=20261031-mobile-session-policy" defer></script>
+<script src="js/pages/profile.js?v=20261120-invite-only-v1" defer></script>
 <link rel="stylesheet" href="announcements.css?v=20261014-announcement-controls">
     <script src="js/shared/password-visibility.js?v=20261101-password-icons" defer></script>
 <script src="js/shared/announcements.js?v=20261014-announcement-controls" defer></script>
@@ -47,11 +47,11 @@
 <section id="profile-panel-profile" role="tabpanel" aria-labelledby="profile-tab-profile" x-show="activeTab === 'profile'">
 <h2>Account details</h2><p class="profile-help">Contact your administrator to update your name, role, or territory.</p>
 <dl class="profile-details"><div><dt>Name</dt><dd x-text="profile.name || '—'"></dd></div><div><dt>Email address</dt><dd x-text="profile.email || '—'"></dd></div><div><dt>Role</dt><dd x-text="profile.role || '—'"></dd></div><div><dt>Territory</dt><dd x-text="profile.territory || '—'"></dd></div></dl>
-<section class="profile-email-change" x-show="profile.saas_mode" aria-label="Email address changes">
+<section class="profile-email-change" aria-label="Email address changes">
 <p class="profile-help" x-show="profile.role === 'owner'">Contact Spares Tracker support to change the company owner email.</p>
 <p class="profile-help" x-show="profile.role !== 'owner'">Ask your company owner or another administrator to change your sign-in email.</p>
 </section>
-<section class="profile-mobile-pairing" x-show="profile.saas_mode" aria-labelledby="mobile-pairing-title">
+<section class="profile-mobile-pairing" aria-labelledby="mobile-pairing-title">
 <h2 id="mobile-pairing-title">Connect mobile app</h2>
 <p class="profile-help" x-show="isMobileViewport()">Open Account settings on a desktop browser to generate and approve a pairing QR code. Use the Spares Tracker mobile app to scan it.</p>
 <div x-show="!isMobileViewport()">

@@ -11,7 +11,7 @@ function setup(fetch, mobile=false) {
 test('mobile website does not generate a pairing QR code',async()=>{
  const calls=[];
  const p=setup(async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',pairing_code:'ABCDE-23456',expires_at:'2026-10-21T12:02:00Z'})};},true);
- p.profile.saas_mode=true;p.csrfToken='csrf';
+ p.profileLoaded=true;p.csrfToken='csrf';
  assert.equal(p.isMobileViewport(),true);
  await p.createMobilePairing();
  assert.equal(calls.length,0);
@@ -25,7 +25,7 @@ test('desktop profile creates a no-store QR pairing request and polls device sta
   if(url==='/api/profile/mobile-pairings') return {ok:true,json:async()=>({request_id:'pair-id',qr_svg:'<svg></svg>',pairing_code:'ABCDE-23456',expires_at:'2026-10-21T12:02:00Z'})};
   return {ok:true,json:async()=>({status:'pending',device_name:'Android phone',expires_at:'2026-10-21T12:02:00Z'})};
  });
- p.profile.saas_mode=true;p.csrfToken='csrf';
+ p.profileLoaded=true;p.csrfToken='csrf';
  await p.createMobilePairing();
  await new Promise(resolve=>setTimeout(resolve,5));p.stopMobilePairingPolling();
  assert.equal(calls[0].url,'/api/profile/mobile-pairings');
@@ -40,7 +40,7 @@ test('desktop profile creates a no-store QR pairing request and polls device sta
 test('desktop profile sends explicit approval with CSRF protection',async()=>{
  let call;
  const p=setup(async(url,options)=>{call={url,options};return {ok:true,json:async()=>({success:true})};});
- p.profile.saas_mode=true;p.csrfToken='csrf';p.mobilePairing={requestId:'pair-id',status:'pending',qrDataUrl:'data:image/svg+xml,x',deviceName:'Android phone'};
+ p.profileLoaded=true;p.csrfToken='csrf';p.mobilePairing={requestId:'pair-id',status:'pending',qrDataUrl:'data:image/svg+xml,x',deviceName:'Android phone'};
  await p.approveMobilePairing();
  assert.equal(call.url,'/api/profile/mobile-pairings/pair-id/approve');
  assert.equal(call.options.method,'POST');
@@ -62,7 +62,7 @@ test('desktop profile can cancel an active pairing request',async()=>{
 test('desktop profile loads only active mobile sessions as paired devices',async()=>{
  let call;
  const p=setup(async(url,options)=>{call={url,options};return {ok:true,json:async()=>[{device_id:'device-id',device_name:'Android phone',paired_at:'2026-10-21T12:00:00Z',last_activity:'2026-10-21T12:10:00Z'}]};});
- p.profile.saas_mode=true;
+ p.profileLoaded=true;
  await p.loadMobileDevices();
  assert.equal(call.url,'/api/profile/mobile-devices');
  assert.equal(call.options.cache,'no-store');
@@ -72,7 +72,7 @@ test('desktop profile loads only active mobile sessions as paired devices',async
 test('revoking a paired device requires explicit confirmation and sends CSRF protection',async()=>{
  const calls=[];
  const p=setup(async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>url==='/api/profile/mobile-devices'?[]:{success:true}};});
- p.profile.saas_mode=true;p.csrfToken='csrf';p.mobileDevices=[{device_id:'device-id',device_name:'Android phone'}];
+ p.profileLoaded=true;p.csrfToken='csrf';p.mobileDevices=[{device_id:'device-id',device_name:'Android phone'}];
  p.askToRevokeMobileDevice('device-id');
  assert.equal(calls.length,0);
  assert.equal(p.pendingMobileDeviceRevocation,'device-id');
@@ -94,7 +94,7 @@ test('revoking a paired device refreshes and retries once when the CSRF token is
   if(url==='/api/profile/mobile-devices') return response(200,[]);
   throw new Error(`Unexpected request: ${url}`);
  });
- p.profile.saas_mode=true;p.csrfToken='expired-csrf';p.mobileDevices=[{device_id:'device-id',device_name:'Android phone'}];
+ p.profileLoaded=true;p.csrfToken='expired-csrf';p.mobileDevices=[{device_id:'device-id',device_name:'Android phone'}];
  p.askToRevokeMobileDevice('device-id');
  await p.confirmRevokeMobileDevice();
  assert.deepEqual(calls.map(call=>call.url),[
@@ -111,4 +111,13 @@ test('desktop profile displays a manual code when QR scanning is unavailable',()
  const html=require('node:fs').readFileSync('static/profile.html','utf8');
  assert.match(html,/Can’t scan\? Enter this code in the mobile app/);
  assert.match(html,/mobilePairing\?\.pairingCode/);
+});
+
+test('pairing and device actions wait until the profile has loaded',async()=>{
+ const calls=[];
+ const p=setup(async url=>{calls.push(url);return {ok:true,json:async()=>({})};});
+ p.csrfToken='csrf';
+ assert.equal(p.profileLoaded,false);
+ await p.createMobilePairing();await p.loadMobileDevices();await p.loadMobileSessionPolicy();
+ assert.deepEqual(calls,[]);
 });

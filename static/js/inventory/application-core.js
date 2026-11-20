@@ -379,7 +379,7 @@ function inventoryCoreFeature() {
         async loadUsers() {
             if (['owner','admin','superadmin'].includes(this.currentUser?.role)) {
                 this.users = await this.apiCall('/users');
-                if (this.currentUser?.saas_mode && typeof this.loadInvitations === 'function') {
+                if (typeof this.loadInvitations === 'function') {
                     await this.loadInvitations();
                 }
             }

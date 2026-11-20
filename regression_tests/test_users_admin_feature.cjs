@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const plain = value => JSON.parse(JSON.stringify(value));
-const initial = {email: '', name: '', password: '', role: 'engineer', territory: ''};
+const initial = {email: '', name: '', role: 'engineer', territory: ''};
 const saved = {...initial, role: ''};
 function setup(globals = {}) {
     const c = vm.createContext(globals);
@@ -16,7 +16,7 @@ function setup(globals = {}) {
 test('user administration owns its invitation state and independent forms', () => {
     const c = setup();
     const a = c.usersAdminFeature(), b = c.usersAdminFeature();
-    assert.deepEqual(Object.keys(a).sort(), ['userForm', 'showUserModal', 'editingUser', 'createUser', 'editUser', 'updateUser', 'deleteUser', 'removeUser', 'invitations', 'invitationsLoading', 'loadInvitations', 'inviteUser', 'resendInvitation', 'cancelInvitation', 'emailChangeDraft', 'pendingEmailChange', 'emailChangeBusy', 'emailChangeLoading', 'emailChangeError', 'emailChangeMessage', 'editedEmailTarget', 'editedEmailIsOwner', 'canManageEditedEmail', 'loadMemberEmailChange', 'requestMemberEmailChange', 'cancelMemberEmailChange'].sort());
+    assert.deepEqual(Object.keys(a).sort(), ['userForm', 'showUserModal', 'editingUser', 'editUser', 'updateUser', 'deleteUser', 'removeUser', 'invitations', 'invitationsLoading', 'loadInvitations', 'inviteUser', 'resendInvitation', 'cancelInvitation', 'emailChangeDraft', 'pendingEmailChange', 'emailChangeBusy', 'emailChangeLoading', 'emailChangeError', 'emailChangeMessage', 'editedEmailTarget', 'editedEmailIsOwner', 'canManageEditedEmail', 'loadMemberEmailChange', 'requestMemberEmailChange', 'cancelMemberEmailChange'].sort());
     assert.deepEqual(plain(a.userForm), initial);
     assert.equal(a.showUserModal, false);
     assert.equal(a.editingUser, null);
@@ -26,18 +26,18 @@ test('user administration owns its invitation state and independent forms', () =
     assert.deepEqual(plain(b.userForm), initial);
     assert.equal(b.showUserModal, false); assert.equal(b.editingUser, null);
 });
-test('edit replaces form, clears password and retains role and territory fallback', () => {
+test('edit replaces form and retains role and territory fallback', () => {
     const c = setup(); const a = c.composeInventoryFeatures({}, c.usersAdminFeature());
     const original = a.userForm;
-    a.userForm.password = 'unsaved';
+    a.userForm.name = 'unsaved';
     a.editUser({id: 42, email: 'user@example.test', name: 'Target', role: 'admin', territory: null});
     assert.notEqual(a.userForm, original);
-    assert.deepEqual(plain(a.userForm), {email: 'user@example.test', name: 'Target', password: '', role: 'admin', territory: ''});
+    assert.deepEqual(plain(a.userForm), {email: 'user@example.test', name: 'Target', role: 'admin', territory: ''});
     assert.equal(a.editingUser, 42); assert.equal(a.showUserModal, true);
     a.editUser({id: 43, email: 'next@example.test', name: 'Next', role: 'engineer', territory: ' Kitale '});
     assert.equal(a.userForm.territory, ' Kitale '); assert.equal(a.editingUser, 43);
 });
-for (const operation of ['create', 'update', 'archive']) {
+for (const operation of ['update', 'archive']) {
     test(`${operation} uses core providers with the composed receiver in original order`, async () => {
         const calls = []; let callback;
         const c = setup({confirm(message) { assert.equal(message, 'Archive user Target? History will be preserved.'); calls.push('confirm'); return true; },
@@ -49,16 +49,15 @@ for (const operation of ['create', 'update', 'archive']) {
             async loadInventory() { assert.equal(this, a); calls.push('inventory'); },
             async loadArchivedRecords() { assert.equal(this, a); calls.push('archived'); },
         }, c.usersAdminFeature());
-        a.userForm = {email: 'user@example.test', name: 'Target', password: 'password', role: 'admin', territory: ' Kitale '};
-        a.editingUser = operation === 'create' ? null : 42; a.showUserModal = true;
+        a.userForm = {email: 'user@example.test', name: 'Target', role: 'admin', territory: ' Kitale '};
+        a.editingUser = 42; a.showUserModal = true;
         if (operation === 'archive') {
             await a.deleteUser(42, 'Target');
             assert.deepEqual(calls, ['confirm', ['write', '/users/42', 'DELETE', null], 'users', 'inventory', 'archived', ['timer', 3000]]);
             assert.equal(a.successMessage, 'Archived');
         } else {
-            const body = operation === 'create' ? plain(a.userForm) : {name: 'Target', role: 'admin', territory: ' Kitale ', password: 'password'};
-            await a[operation === 'create' ? 'createUser' : 'updateUser']();
-            assert.deepEqual(calls, [['write', operation === 'create' ? '/users' : '/users/42', operation === 'create' ? 'POST' : 'PUT', body], 'users', ['timer', 3000]]);
+            await a.updateUser();
+            assert.deepEqual(calls, [['write', '/users/42', 'PUT', {name: 'Target', role: 'admin', territory: ' Kitale '}], 'users', ['timer', 3000]]);
             assert.equal(a.showUserModal, false); assert.equal(a.editingUser, null); assert.deepEqual(plain(a.userForm), saved);
         }
         assert.equal(a.loading, false); callback(); assert.equal(a.successMessage, '');

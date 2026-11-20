@@ -62,7 +62,7 @@ test('organization admin loads and saves mobile session duration within platform
   if(options.method==='PUT') {duration=JSON.parse(options.body).duration_hours;return {ok:true,json:async()=>({duration_hours:duration,max_duration_hours:72})};}
   return {ok:true,json:async()=>({duration_hours:duration,max_duration_hours:72})};
  });
- p.profile={saas_mode:true,role:'admin'};p.csrfToken='test-only';
+ p.profile={role:'admin'};p.profileLoaded=true;p.csrfToken='test-only';
  await p.loadMobileSessionPolicy();assert.equal(p.mobileSessionDurationDraft,48);assert.equal(p.mobileSessionPolicy.max_duration_hours,72);
  p.mobileSessionDurationDraft=24;await p.saveMobileSessionPolicy();
  assert.equal(calls[1].url,'/api/organization/mobile-session-policy');assert.equal(calls[1].options.method,'PUT');

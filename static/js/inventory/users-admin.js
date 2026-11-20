@@ -3,7 +3,6 @@ function usersAdminFeature() {
         userForm: {
             email: '',
             name: '',
-            password: '',
             role: 'engineer',
             territory: ''
         },
@@ -20,7 +19,6 @@ function usersAdminFeature() {
         invitationsLoading: false,
 
         async loadInvitations() {
-            if (!this.currentUser?.saas_mode) return;
             this.invitationsLoading = true;
             try {
                 this.invitations = await this.apiCall('/users/invitations');
@@ -42,7 +40,7 @@ function usersAdminFeature() {
                 });
                 this.successMessage = 'Invitation queued for delivery. It expires in seven days.';
                 this.showUserModal = false;
-                this.userForm = { email: '', name: '', password: '', role: 'engineer', territory: '' };
+                this.userForm = { email: '', name: '', role: 'engineer', territory: '' };
                 await this.loadInvitations();
                 setTimeout(() => this.successMessage = '', 3000);
             } catch (error) {
@@ -80,31 +78,6 @@ function usersAdminFeature() {
             }
         },
 
-        async createUser() {
-            this.loading = true;
-            this.error = '';
-            this.successMessage = '';
-
-            try {
-                await this.apiCall('/users', {
-                    method: 'POST',
-                    body: JSON.stringify(this.userForm)
-                });
-
-                this.successMessage = 'User created successfully!';
-                this.showUserModal = false;
-                this.userForm = { email: '', name: '', password: '', role: '', territory: '' };
-
-                await this.loadUsers();
-                setTimeout(() => this.successMessage = '', 3000);
-
-            } catch (error) {
-                this.error = 'Failed to create user: ' + error.message;
-            } finally {
-                this.loading = false;
-            }
-        },
-
         editUser(user) {
             this.editingUser = user.id;
             this.emailChangeDraft = '';
@@ -114,21 +87,20 @@ function usersAdminFeature() {
             this.userForm = {
                 email: user.email,
                 name: user.name,
-                password: '',
                 role: user.role,
                 territory: user.territory || ''
             };
             this.showUserModal = true;
-            if (this.currentUser?.saas_mode && this.canManageEditedEmail) this.loadMemberEmailChange();
+            if (this.canManageEditedEmail) this.loadMemberEmailChange();
         },
 
         get editedEmailTarget() {
-            return this.users.find(user => Number(user.id) === Number(this.editingUser)) || null;
+            return (this.users || []).find(user => Number(user.id) === Number(this.editingUser)) || null;
         },
 
         get canManageEditedEmail() {
             const target = this.editedEmailTarget;
-            return Boolean(this.currentUser?.saas_mode && target && target.id !== this.currentUser.id
+            return Boolean(target && target.id !== this.currentUser.id
                 && target.role !== 'owner' && (target.role !== 'admin' || this.currentUser.role === 'owner'));
         },
 
@@ -197,10 +169,6 @@ function usersAdminFeature() {
                     territory: this.userForm.territory || null
                 };
 
-                if (this.userForm.password) {
-                    updateData.password = this.userForm.password;
-                }
-
                 await this.apiCall(`/users/${this.editingUser}`, {
                     method: 'PUT',
                     body: JSON.stringify(updateData)
@@ -209,7 +177,7 @@ function usersAdminFeature() {
                 this.successMessage = 'User updated successfully!';
                 this.showUserModal = false;
                 this.editingUser = null;
-                this.userForm = { email: '', name: '', password: '', role: '', territory: '' };
+                this.userForm = { email: '', name: '', role: '', territory: '' };
 
                 await this.loadUsers();
                 setTimeout(() => this.successMessage = '', 3000);
