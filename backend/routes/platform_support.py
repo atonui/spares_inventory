@@ -1,6 +1,8 @@
 """Fixed, audited support reads scoped to a server-bound organization."""
 
+import secrets
 from contextlib import contextmanager
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,6 +14,17 @@ from backend.services.platform_support import authenticated_support_transaction,
 from backend.services.platform_transactions import authenticated_platform_transaction
 from backend.services.session_credentials import get_request_credential, hash_session_credential
 from backend.temporal import serialize_instant, utc_now
+
+
+class SupportAccountUnlock(BaseModel):
+    user_ids: list[int] = Field(min_length=1, max_length=100)
+
+    @field_validator('user_ids')
+    @classmethod
+    def validate_user_ids(cls, value):
+        if any(user_id < 1 for user_id in value):
+            raise ValueError('User IDs must be positive integers')
+        return list(dict.fromkeys(value))
 
 
 class SupportSessionStart(BaseModel):
@@ -33,7 +46,9 @@ class SupportSessionStart(BaseModel):
 _LOOKUPS = {
     'accounts': """SELECT u.id AS user_id,u.name,u.email,u.archived_at,
         om.company_role AS role,om.is_active AS membership_active,
-        u.failed_login_attempts,u.account_locked_until,u.last_login
+        u.failed_login_attempts,u.account_locked_until,u.last_login,
+        (SELECT count(*) FROM sessions s WHERE s.user_id=u.id AND s.is_active=TRUE
+           AND s.expires_at::timestamptz>now()) AS active_session_count
         FROM organization_memberships om JOIN users u ON u.id=om.user_id
         WHERE om.organization_id=%s AND lower(u.email)=lower(%s)
         ORDER BY u.id LIMIT 25""",
@@ -90,9 +105,25 @@ _LOOKUPS = {
 }
 
 
+# Accounts in the support organization that are currently locked out. Fixed
+# query, bounded, and limited to the same fields as the account lookup.
+_LOCKED_ACCOUNTS = """SELECT u.id AS user_id,u.name,u.email,om.company_role AS role,
+    om.is_active AS membership_active,u.failed_login_attempts,u.account_locked_until,u.last_login
+    FROM organization_memberships om JOIN users u ON u.id=om.user_id
+    WHERE om.organization_id=%s AND u.account_locked_until IS NOT NULL
+      AND u.account_locked_until::timestamptz>%s::timestamptz
+    ORDER BY u.account_locked_until::timestamptz DESC,u.id DESC LIMIT 100"""
+
+# Account actions widen access only while the organization is active; signing a
+# member out always reduces access and stays available for suspended tenants.
+_ACCESS_GRANTING_OPERATIONS = {'unlock', 'password_reset'}
+
+
 def create_platform_support_router(*, get_connection, current_user, csrf_dependency,
-                                   password_verify, limiter) -> APIRouter:
+                                   password_verify, limiter, queue_reset_email=None,
+                                   security_event=None) -> APIRouter:
     router = APIRouter(prefix='/api/platform/support-sessions', tags=['platform'])
+    log_security_event = security_event or (lambda **_event: None)
 
     def require_postgres():
         conn = get_connection()
@@ -146,7 +177,7 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
                 record_platform_audit_event(conn, principal.user_id, 'support_access_denied', 'denied', organization_id, details)
 
     @contextmanager
-    def audited_scope(request, actor, support_session_id, resource, request_id):
+    def audited_scope(request, actor, support_session_id, resource, request_id, operation='lookup'):
         try:
             with authenticated_support_transaction(
                 get_connection, session_token=get_request_credential(request).value,
@@ -155,7 +186,7 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
                 yield scope
         except HTTPException:
             try:
-                denied(request, actor, request_id=request_id, resource=resource, operation='lookup',
+                denied(request, actor, request_id=request_id, resource=resource, operation=operation,
                        support_session_id=support_session_id)
             except HTTPException:
                 pass  # The caller no longer has platform authority; preserve generic denial.
@@ -262,5 +293,119 @@ def create_platform_support_router(*, get_connection, current_user, csrf_depende
     @router.get('/{support_session_id}/movements')
     async def movements(support_session_id: UUID, query: str, request: Request, actor=Depends(current_user)):
         return lookup(request,actor,support_session_id,'movements',query)
+
+    @router.get('/{support_session_id}/locked-accounts')
+    async def locked_accounts(support_session_id: UUID, request: Request, actor=Depends(current_user)):
+        require_postgres()
+        request_id = str(uuid4())
+        with audited_scope(request, actor, support_session_id, 'locked-accounts', request_id) as (conn, principal, support):
+            rows = conn.execute(_LOCKED_ACCOUNTS, (support['organization_id'], serialize_instant(utc_now()))).fetchall()
+            record_platform_audit_event(conn, principal.user_id, 'support_data_read', 'success', support['organization_id'],
+                {'support_session_id': str(support['id']), 'resource': 'locked-accounts',
+                 'operation': 'lookup', 'request_id': request_id})
+            return {'rows': [dict(row) for row in rows]}
+
+    def member_accounts(conn, organization_id, user_ids):
+        """Lock and return the requested users that belong to the support organization."""
+        rows = conn.execute(
+            """SELECT u.id,u.email,u.archived_at,u.account_locked_until,o.is_active AS organization_active
+               FROM organization_memberships om JOIN users u ON u.id=om.user_id
+               JOIN organizations o ON o.id=om.organization_id
+               WHERE om.organization_id=%s AND u.id = ANY(%s)
+               ORDER BY u.id FOR UPDATE OF u""",
+            (organization_id, list(user_ids)),
+        ).fetchall()
+        return {row['id']: row for row in rows}
+
+    def account_action(request, actor, support_session_id, user_ids, operation, apply):
+        """Run one audited account action per user inside the bound support organization."""
+        require_postgres()
+        request_id = str(uuid4())
+        with audited_scope(request, actor, support_session_id, 'accounts', request_id, operation) as (conn, principal, support):
+            organization_id = support['organization_id']
+            targets = member_accounts(conn, organization_id, user_ids)
+            if len(targets) != len(user_ids):
+                raise HTTPException(status_code=409, detail='Account is not a member of this organization')
+            if operation in _ACCESS_GRANTING_OPERATIONS and not all(row['organization_active'] for row in targets.values()):
+                raise HTTPException(status_code=409, detail='Organization is suspended')
+            results = []
+            for user_id in user_ids:
+                outcome = apply(conn, targets[user_id])
+                details = {'support_session_id': str(support['id']), 'operation': operation,
+                           'target_user_id': user_id, 'request_id': request_id}
+                if 'session_count' in outcome:
+                    details['session_count'] = outcome['session_count']
+                record_platform_audit_event(conn, principal.user_id, 'support_account_action', 'success',
+                                            organization_id, details)
+                results.append({'user_id': user_id, **outcome})
+            return principal, results
+
+    def unlock(conn, target):
+        was_locked = target['account_locked_until'] is not None and target['account_locked_until'] > serialize_instant(utc_now())
+        conn.execute('UPDATE users SET failed_login_attempts=0, account_locked_until=NULL WHERE id=%s', (target['id'],))
+        return {'was_locked': was_locked}
+
+    @router.post('/{support_session_id}/accounts/{user_id}/unlock')
+    @limiter.limit('30/minute')
+    async def unlock_account(support_session_id: UUID, user_id: int, request: Request,
+                             actor=Depends(current_user), csrf_valid=Depends(csrf_dependency)):
+        _principal, results = account_action(request, actor, support_session_id, [user_id], 'unlock', unlock)
+        return {'success': True, **results[0]}
+
+    @router.post('/{support_session_id}/locked-accounts/unlock')
+    @limiter.limit('30/minute')
+    async def unlock_accounts(support_session_id: UUID, body: SupportAccountUnlock, request: Request,
+                              actor=Depends(current_user), csrf_valid=Depends(csrf_dependency)):
+        _principal, results = account_action(request, actor, support_session_id, body.user_ids, 'unlock', unlock)
+        return {'success': True, 'unlocked_count': sum(1 for row in results if row['was_locked'])}
+
+    @router.post('/{support_session_id}/accounts/{user_id}/sign-out')
+    @limiter.limit('30/minute')
+    async def sign_out_account(support_session_id: UUID, user_id: int, request: Request,
+                               actor=Depends(current_user), csrf_valid=Depends(csrf_dependency)):
+        def sign_out(conn, target):
+            now = serialize_instant(utc_now())
+            revoked = conn.execute(
+                'UPDATE sessions SET is_active=FALSE WHERE user_id=%s AND is_active=TRUE RETURNING id,is_mobile',
+                (target['id'],),
+            ).fetchall()
+            if revoked:
+                conn.execute(
+                    """UPDATE mobile_device_sessions SET revoked_at=COALESCE(revoked_at,%s)
+                       WHERE session_id = ANY(%s) AND revoked_at IS NULL""",
+                    (now, [row['id'] for row in revoked]),
+                )
+            return {'session_count': len(revoked), 'mobile_session_count': sum(1 for row in revoked if row['is_mobile'])}
+
+        principal, results = account_action(request, actor, support_session_id, [user_id], 'sign_out', sign_out)
+        result = results[0]
+        if result['session_count']:
+            log_security_event(event='session_revoked', outcome='success', actor_user_id=principal.user_id,
+                               details={'reason': 'platform_support_revoked', 'session_count': result['session_count'],
+                                        'target_user_id': user_id})
+        return {'success': True, 'user_id': user_id, 'sessions_revoked': result['session_count']}
+
+    @router.post('/{support_session_id}/accounts/{user_id}/password-reset', status_code=202)
+    @limiter.limit('10/minute')
+    async def send_password_reset(support_session_id: UUID, user_id: int, request: Request,
+                                  actor=Depends(current_user), csrf_valid=Depends(csrf_dependency)):
+        if queue_reset_email is None:
+            raise HTTPException(status_code=503, detail='Password reset email is not configured')
+
+        def reset(conn, target):
+            if target['archived_at'] is not None:
+                raise HTTPException(status_code=409, detail='Account is archived')
+            token = secrets.token_urlsafe(32)
+            expires_at = utc_now() + timedelta(hours=1)
+            conn.execute('UPDATE users SET reset_token=%s, reset_token_expires=%s WHERE id=%s',
+                         (token, serialize_instant(expires_at), target['id']))
+            try:
+                queue_reset_email(conn, target['email'], token, expires_at)
+            except (ValueError, RuntimeError):
+                raise HTTPException(status_code=503, detail='Password reset email is not configured') from None
+            return {}
+
+        account_action(request, actor, support_session_id, [user_id], 'password_reset', reset)
+        return {'success': True, 'user_id': user_id}
 
     return router
