@@ -42,19 +42,12 @@ def test_archived_parts_and_stores_reject_stock_add_and_import(api):
     assert api[0].post('/api/inventory/add',json={'part_id':970,'store_id':970,'quantity':1}).status_code==400
 
 
-MEMBER_DEACTIVATION_SKIPS_LEGACY_CHECKS = pytest.mark.xfail(strict=True, reason=(
-    'Behaviour difference: SaaS member deactivation does not check assigned stores; '
-    'the legacy SQLite user archive refused it.'))
-
-
-@MEMBER_DEACTIVATION_SKIPS_LEGACY_CHECKS
 def test_assigned_store_blocks_user_archive(api):
     seed(api)
     with api[1] as c:c.execute('UPDATE stores SET assigned_user_id=3 WHERE id=970')
     assert api[0].delete('/api/users/3').status_code==400
 
 
-@MEMBER_DEACTIVATION_SKIPS_LEGACY_CHECKS
 def test_archived_user_cannot_be_assigned_a_store(api):
     seed(api)
     assert api[0].delete('/api/users/3').status_code==200
@@ -83,3 +76,32 @@ def test_duplicate_unallocated_stock_is_rejected_by_database(api):
         api[1].execute('INSERT INTO inventory(store_id,part_id,quantity) VALUES(970,970,2)')
 
 
+
+
+@pytest.mark.parametrize('method,path', [('delete', '/api/users/3'), ('post', '/api/users/3/remove')])
+def test_member_with_assigned_equipment_cannot_leave_until_reassigned(api, method, path):
+    client, db, _ = api
+    db.execute("INSERT INTO equipment(id,equipment_name,make,model,serial_number,assigned_user_id) VALUES(970,'Meter','M','M1','S-970',3)")
+    response = getattr(client, method)(path)
+    assert response.status_code == 400
+    assert response.json() == {'detail': 'Reassign stores and equipment before deactivating this member'}
+    assert db.execute('SELECT is_active FROM organization_memberships WHERE user_id=3').fetchone()[0] is True
+    db.execute('UPDATE equipment SET assigned_user_id=NULL WHERE id=970')
+    assert getattr(client, method)(path).status_code == 200
+
+
+def test_member_with_in_transit_transfer_cannot_be_removed(api):
+    from regression_tests.test_transfer_receipts import seed as seed_transfer, dispatch
+    seed_transfer(api); dispatch(api, 10); api[2]['id'] = 1
+    response = api[0].post('/api/users/3/remove')
+    assert response.status_code == 400
+    assert api[1].execute('SELECT count(*) FROM organization_memberships WHERE user_id=3').fetchone()[0] == 1
+
+
+def test_store_cannot_be_assigned_to_another_companys_user(api):
+    seed(api)
+    for response in (api[0].put('/api/stores/970', json={'assigned_user_id': 5}),
+                     api[0].post('/api/stores', json={'name': 'Taken', 'type': 'central', 'assigned_user_id': 5})):
+        assert response.status_code == 400
+        assert response.json() == {'detail': 'users record does not exist'}
+    assert api[1].execute('SELECT assigned_user_id FROM stores WHERE id=970').fetchone()[0] is None

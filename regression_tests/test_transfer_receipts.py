@@ -97,9 +97,7 @@ def test_transfer_preserves_work_order_allocation(api):
         assert c.execute('SELECT quantity,work_order_id FROM inventory WHERE store_id=981').fetchone()==(4,980)
 
 
-@pytest.mark.parametrize('target',['parts/980','stores/980','stores/981',pytest.param('users/3',marks=pytest.mark.xfail(strict=True,reason=(
-    'Behaviour difference: SaaS member deactivation does not check in-transit transfers; '
-    'the legacy SQLite user archive refused it.')))])
+@pytest.mark.parametrize('target',['parts/980','stores/980','stores/981','users/3'])
 def test_pending_transfer_references_cannot_be_deleted(api,target):
     seed(api);dispatch(api,10);api[2]['id']=1
     response=api[0].delete('/api/'+target)
