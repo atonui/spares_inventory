@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
-from regression_tests.test_session_write_routes import session_api
+from regression_tests.sqlite_api import session_api
 
 
 @pytest.fixture

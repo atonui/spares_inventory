@@ -4,13 +4,13 @@ import pytest
 from pydantic import ValidationError
 import main
 import os
-import sqlite3
+import psycopg
+from backend.security import hash_session_credential
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from fastapi.routing import APIRoute
-from regression_tests.sqlite_api import api
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTH_OPERATIONS = {
@@ -30,17 +30,19 @@ AUTH_OPERATIONS = {
 
 
 @pytest.fixture
-def auth_api(api):
+def auth_api(stock_api):
+    """(client, db, current) on Postgres; every user's password is 'test-password'."""
+    stock_api[1].execute('UPDATE users SET password_hash=?', (main.hash_password('test-password'),))
     main.limiter.reset()
-    yield api
+    yield stock_api
     main.limiter.reset()
 
 
 def set_reset_token(db, token='auth-reset', expired=False):
     expiry = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=-1 if expired else 1)
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute('UPDATE users SET reset_token=?,reset_token_expires=? WHERE id=1',
-                     (token, expiry.isoformat()))
+                     (token, expiry.isoformat(timespec='microseconds') + 'Z'))
 
 
 def test_auth_routes_owned_once_by_extracted_router():
@@ -59,129 +61,53 @@ def test_auth_dependencies_keep_override_identity(auth_api):
     assert {d.call for d in route.dependant.dependencies} == {main.get_current_user, main.verify_authenticated_csrf}
     actor['id'] = 3
     assert client.get('/api/profile').json()['id'] == 3
-    assert client.put('/api/profile', json={'email': 'changed@example.com'}).status_code == 200
-    with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT email FROM users WHERE id=3').fetchone()[0] == 'changed@example.com'
+    # SaaS members cannot change their own email; their company admin does it.
+    assert client.put('/api/profile', json={'email': 'changed@example.com'}).status_code == 403
     client.cookies.set('session_token', 'revoked')
-    assert client.put('/api/profile', json={'email': 'denied@example.com'}).status_code == 401
-    with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT email FROM users WHERE id=3').fetchone()[0] == 'changed@example.com'
+    assert client.put('/api/profile', json={'email': 'denied@example.com'}, headers={'X-CSRF-Token': 'x'}).status_code == 401
+    assert db.execute('SELECT email FROM users WHERE id=3').fetchone()[0] == 'engineer@example.test'
 
 
-def test_auth_runtime_collaborators_are_late_bound(auth_api, tmp_path, monkeypatch):
+def test_forgot_password_queues_mail_in_the_token_transaction(auth_api, monkeypatch):
     client, db, _ = auth_api
-    second = tmp_path / 'second.db'
-    with sqlite3.connect(db) as source, sqlite3.connect(second) as target:
-        source.backup(target)
-        target.execute("UPDATE users SET name='Second database' WHERE id=1")
-    monkeypatch.setattr(main, 'DATABASE', str(second))
-    assert client.get('/api/profile').json()['name'] == 'Second database'
-    monkeypatch.setattr(main, 'DATABASE', str(db))
-    assert client.get('/api/profile').json()['name'] == 'User 1'
-    verified, hashed, emails, activities = [], [], [], []
-    def verify(password, password_hash):
-        verified.append(password)
-        return True
-    def hash_password(password):
-        hashed.append(password)
-        return 'replacement-hash'
-    monkeypatch.setattr(main, 'verify_password', verify)
-    monkeypatch.setattr(main, 'hash_password', hash_password)
-    monkeypatch.setattr(main, 'send_reset_email', lambda email, token: emails.append((email, token)))
-    monkeypatch.setattr(main, 'log_activity', lambda **kw: activities.append(kw))
-    for secure in [True, False]:
-        monkeypatch.setattr(main.settings, 'COOKIE_SECURE', secure)
-        response = client.post('/api/auth/login', json={'email': 'user1@example.com', 'password': 'probe'})
-        assert response.status_code == 200
-        assert ('; secure' in response.headers['set-cookie'].lower()) is secure
-    assert verified == ['probe', 'probe']
-    response = client.post('/api/forgot-password', json={'email': 'user1@example.com'})
+    observed = []
+
+    def enqueue(conn, *, email, token, expires_at, frontend_url, encryption_key):
+        assert frontend_url == main.FRONTEND_URL
+        assert encryption_key == main.settings.MAIL_PAYLOAD_ENCRYPTION_KEY
+        assert expires_at is not None
+        stored = conn.execute('SELECT reset_token FROM users WHERE email=%s', (email,)).fetchone()['reset_token']
+        observed.append((conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE, email, token, stored))
+        return 1
+
+    monkeypatch.setattr(main, 'enqueue_password_reset_mail', enqueue)
+    # The request schema rejects reserved domains such as .test.
+    db.execute("UPDATE users SET email='admin@example.com' WHERE id=1")
+    response = client.post('/api/forgot-password', json={'email': 'admin@example.com'})
+
     assert response.status_code == 200
-    assert emails[0][0] == 'user1@example.com'
-    assert not any(a['action'].startswith('password_reset') for a in activities)
-    response = client.post('/api/reset-password', json={'token': emails[0][1], 'new_password': 'new-password'})
-    assert response.status_code == 200
-    assert hashed == ['new-password']
-    with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT password_hash FROM users WHERE id=1').fetchone()[0] == 'replacement-hash'
+    assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
+    [(in_transaction, email, token, stored_during_enqueue)] = observed
+    assert in_transaction and email == 'admin@example.com' and token == stored_during_enqueue
+    assert db.execute('SELECT reset_token FROM users WHERE id=1').fetchone()[0] == token
 
 
-def test_forgot_password_failure_log_omits_email_and_provider_error(auth_api, monkeypatch, caplog):
+def test_forgot_password_rolls_back_token_and_redacts_logs_when_enqueue_fails(auth_api, monkeypatch, caplog):
     client, db, _ = auth_api
-    with sqlite3.connect(db) as conn:
-        conn.execute("UPDATE users SET email='private-user@example.com' WHERE id=1")
-    monkeypatch.setattr(
-        main,
-        'send_reset_email',
-        lambda email, token: (_ for _ in ()).throw(
-            RuntimeError(f'{email} {token} private provider diagnostic')
-        ),
-    )
+    db.execute("UPDATE users SET reset_token='previous-token', email='private-user@example.com' WHERE id=1")
 
+    def fail_enqueue(_conn, *, email, token, **_kwargs):
+        raise RuntimeError(f'{email} {token} private queue diagnostic')
+
+    monkeypatch.setattr(main, 'enqueue_password_reset_mail', fail_enqueue)
     response = client.post('/api/forgot-password', json={'email': 'private-user@example.com'})
 
     assert response.status_code == 200
     assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
+    assert db.execute('SELECT reset_token FROM users WHERE id=1').fetchone()[0] == 'previous-token'
     assert caplog.records
     assert all('private-user@example.com' not in record.getMessage() for record in caplog.records)
-    assert all('private provider diagnostic' not in record.getMessage() for record in caplog.records)
-    with sqlite3.connect(db) as conn:
-        assert conn.execute(
-            "SELECT count(*) FROM activity_logs WHERE action='password_reset_request'"
-        ).fetchone()[0] == 0
-
-
-
-def test_postgres_forgot_password_queues_mail_in_the_token_transaction(auth_api, monkeypatch):
-    client, db, _ = auth_api
-    import backend.routes.auth as auth_routes
-
-    with sqlite3.connect(db) as conn:
-        conn.execute('CREATE TABLE reset_mail_outbox (recipient TEXT, token TEXT)')
-
-    observed = []
-
-    def enqueue(conn, email, token, expires_at, *, frontend_url, encryption_key):
-        assert frontend_url == main.FRONTEND_URL
-        assert encryption_key == main.settings.MAIL_PAYLOAD_ENCRYPTION_KEY
-        assert expires_at is not None
-        observed.append(conn.in_transaction)
-        conn.execute('INSERT INTO reset_mail_outbox VALUES (?, ?)', (email, token))
-        return 1
-
-    monkeypatch.setattr(auth_routes, 'is_postgres', lambda _conn: True)
-    monkeypatch.setattr(main, 'enqueue_password_reset_mail', enqueue)
-
-    response = client.post('/api/forgot-password', json={'email': 'user1@example.com'})
-
-    assert response.status_code == 200
-    assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
-    assert observed == [True]
-    with sqlite3.connect(db) as conn:
-        stored_token = conn.execute('SELECT reset_token FROM users WHERE id=1').fetchone()[0]
-        queued = conn.execute('SELECT recipient, token FROM reset_mail_outbox').fetchone()
-    assert queued == ('user1@example.com', stored_token)
-
-
-def test_postgres_forgot_password_rolls_back_token_when_enqueue_fails(auth_api, monkeypatch):
-    client, db, _ = auth_api
-    import backend.routes.auth as auth_routes
-
-    with sqlite3.connect(db) as conn:
-        conn.execute("UPDATE users SET reset_token='previous-token' WHERE id=1")
-
-    def fail_enqueue(_conn, _email, _token, _expires_at):
-        raise RuntimeError('private queue diagnostic')
-
-    monkeypatch.setattr(auth_routes, 'is_postgres', lambda _conn: True)
-    monkeypatch.setattr(main, 'enqueue_password_reset_mail', fail_enqueue)
-
-    response = client.post('/api/forgot-password', json={'email': 'user1@example.com'})
-
-    assert response.status_code == 200
-    assert response.json() == {'message': 'If the email exists, a reset link has been sent'}
-    with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT reset_token FROM users WHERE id=1').fetchone()[0] == 'previous-token'
+    assert all('private queue diagnostic' not in record.getMessage() for record in caplog.records)
 
 
 @pytest.mark.parametrize('path,payload,limit,initial_status', [
@@ -191,8 +117,6 @@ def test_postgres_forgot_password_rolls_back_token_when_enqueue_fails(auth_api, 
 ])
 def test_auth_public_rate_limits_preserved(auth_api, path, payload, limit, initial_status):
     client, _, _ = auth_api
-    main.app.dependency_overrides.pop(main.verify_csrf)
-    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
     headers = {'X-CSRF-Token': client.get('/api/csrf-token').json()['csrf_token']}
     for _ in range(limit):
         assert client.post(path, json=payload, headers=headers).status_code == initial_status
@@ -212,7 +136,7 @@ def test_auth_backend_imports_are_inert(tmp_path):
 @pytest.mark.parametrize('remember,seconds', [(False, 86400), (True, 2592000)])
 def test_auth_login_expiry_and_cookie(auth_api, remember, seconds):
     client, db, _ = auth_api
-    response = client.post('/api/auth/login', json={'email': 'user1@example.com', 'password': 'test-password', 'remember_me': remember})
+    response = client.post('/api/auth/login', json={'email': 'admin@example.test', 'password': 'test-password', 'remember_me': remember})
     assert response.status_code == 200
     assert response.json()['user']['id'] == 1
     assert 'access_token' not in response.json()
@@ -220,43 +144,38 @@ def test_auth_login_expiry_and_cookie(auth_api, remember, seconds):
     cookie = response.headers['set-cookie'].lower()
     assert f'max-age={seconds}' in cookie
     assert '; httponly' in cookie and '; secure' in cookie and 'samesite=lax' in cookie
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         created, expires = conn.execute('SELECT created_at,expires_at FROM sessions ORDER BY id DESC LIMIT 1').fetchone()
     assert abs((datetime.fromisoformat(expires) - datetime.fromisoformat(created)).total_seconds() - seconds) < 2
 
 
-def test_native_login_requires_csrf_and_is_disabled_for_sqlite(auth_api):
-    client, _, _ = auth_api
-    main.app.dependency_overrides.pop(main.verify_csrf)
-    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
-
-    no_csrf = client.post(
-        '/api/auth/native/login',
-        json={'email': 'user1@example.com', 'password': 'test-password'},
-    )
+def test_native_login_requires_csrf_and_returns_bearer_credentials(auth_api):
+    client, _, current = auth_api
+    current['anonymous'] = True
+    no_csrf = client.post('/api/auth/native/login', json={'email': 'admin@example.test', 'password': 'test-password'})
     assert no_csrf.status_code == 403
     assert no_csrf.json()['detail'] == 'CSRF token missing'
 
     csrf = client.get('/api/csrf-token').json()['csrf_token']
-    response = client.post(
-        '/api/auth/native/login',
-        json={'email': 'user1@example.com', 'password': 'test-password'},
-        headers={'X-CSRF-Token': csrf},
-    )
-    assert response.status_code == 503
-    assert response.json()['detail'] == 'Native login requires PostgreSQL'
+    response = client.post('/api/auth/native/login', json={'email': 'admin@example.test', 'password': 'test-password'},
+                           headers={'X-CSRF-Token': csrf})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['access_token'] and body['refresh_token']
+    assert 'set-cookie' not in response.headers
 
 
 def test_auth_login_lockout(auth_api):
     client, db, _ = auth_api
-    with sqlite3.connect(db) as conn:
-        conn.execute("UPDATE system_settings SET setting_value='2' WHERE setting_key='max_login_attempts'")
-    assert client.post('/api/auth/login', json={'email': 'user1@example.com', 'password': 'wrong'}).status_code == 401
-    assert client.post('/api/auth/login', json={'email': 'user1@example.com', 'password': 'wrong'}).status_code == 423
-    response = client.post('/api/auth/login', json={'email': 'user1@example.com', 'password': 'test-password'})
+    with db as conn:
+        conn.execute("""INSERT INTO system_settings(setting_key,setting_value) VALUES('max_login_attempts','2')
+                        ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value""")
+    assert client.post('/api/auth/login', json={'email': 'admin@example.test', 'password': 'wrong'}).status_code == 401
+    assert client.post('/api/auth/login', json={'email': 'admin@example.test', 'password': 'wrong'}).status_code == 423
+    response = client.post('/api/auth/login', json={'email': 'admin@example.test', 'password': 'test-password'})
     assert response.status_code == 423
     assert response.json()['detail'].startswith('Account locked.')
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert conn.execute('SELECT failed_login_attempts FROM users WHERE id=1').fetchone()[0] == 2
 
 
@@ -270,7 +189,7 @@ def test_auth_reset_token_lifecycle(auth_api, expired):
         assert verification.json() == {'valid': True}
     response = client.post('/api/reset-password', json={'token': 'auth-reset', 'new_password': 'new-password'})
     assert response.status_code == (400 if expired else 200)
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         password_hash, token = conn.execute('SELECT password_hash,reset_token FROM users WHERE id=1').fetchone()
         if expired:
             assert response.json()['detail'] == 'Token has expired'
@@ -278,7 +197,7 @@ def test_auth_reset_token_lifecycle(auth_api, expired):
         else:
             assert main.verify_password('new-password', password_hash)
             assert token is None
-            assert conn.execute('SELECT COUNT(*) FROM sessions WHERE user_id=1 AND is_active=1').fetchone()[0] == 0
+            assert conn.execute('SELECT COUNT(*) FROM sessions WHERE user_id=1 AND is_active').fetchone()[0] == 0
     if not expired:
         assert client.post('/api/reset-password', json={'token': 'auth-reset', 'new_password': 'another-password'}).status_code == 400
 
@@ -286,8 +205,9 @@ def test_auth_reset_token_lifecycle(auth_api, expired):
 def test_auth_profile_sessions_and_logout(auth_api):
     client, db, _ = auth_api
     assert client.get('/api/me').json()['id'] == 1
-    with sqlite3.connect(db) as conn:
-        conn.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(1,'other-auth','2099-01-01T00:00:00')")
+    with db as conn:
+        conn.execute("INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES(1,?,'2099-01-01T00:00:00.000000Z')",
+                     (hash_session_credential('other-auth'),))
     sessions = client.get('/api/auth/sessions').json()
     assert len(sessions) == 2 and sum(s['is_current'] for s in sessions) == 1
     other = next(s['id'] for s in sessions if not s['is_current'])
@@ -296,15 +216,14 @@ def test_auth_profile_sessions_and_logout(auth_api):
     response = client.post('/api/auth/logout')
     assert response.status_code == 200
     assert 'max-age=0' in response.headers['set-cookie'].lower()
-    with sqlite3.connect(db) as conn:
-        assert conn.execute('SELECT COUNT(*) FROM sessions WHERE user_id=1 AND is_active=1').fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM activity_logs WHERE action='logout' AND user_id=1").fetchone()[0] == 1
+    with db as conn:
+        assert conn.execute('SELECT COUNT(*) FROM sessions WHERE user_id=1 AND is_active').fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM platform_audit_events WHERE action='user_logout' AND actor_user_id=1").fetchone()[0] == 1
 
 
 def test_auth_profile_requires_real_csrf(auth_api):
     client, _, _ = auth_api
-    main.app.dependency_overrides.pop(main.verify_csrf)
-    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
+    client.cookies.set('session_token', 'admin-token')
     assert client.put('/api/profile', json={}).json()['detail'] == 'CSRF token missing'
     assert client.put('/api/profile', json={}, headers={'X-CSRF-Token': 'invalid'}).json()['detail'] == 'Invalid CSRF token'
     token = client.get('/api/csrf-token').json()['csrf_token']

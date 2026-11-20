@@ -2,7 +2,7 @@
 import sqlite3
 import pytest
 from regression_tests.test_superadmin_router import super_api
-from regression_tests.test_session_write_routes import session_api
+from regression_tests.sqlite_api import session_api
 
 
 def seed(path):

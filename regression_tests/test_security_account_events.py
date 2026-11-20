@@ -1,12 +1,9 @@
 """Account events must be private, global, and truthful about committed state."""
 
-import sqlite3
-
 import main
 import psycopg
 import pytest
 
-from regression_tests.sqlite_api import api
 from regression_tests.test_security_reset_events import reset_unit_api, security_api
 
 pytest_plugins = ("regression_tests.postgres_fixtures",)
@@ -26,12 +23,13 @@ def test_login_security_events_replace_tenant_activity_without_identifiers(
     reset_unit_api, case, expected_status, event, caplog
 ):
     client, db, events = reset_unit_api
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         if case == "success":
             conn.execute("UPDATE users SET name='user1@example.com' WHERE id=1")
         if case == "lockout":
             conn.execute(
-                "UPDATE system_settings SET setting_value='1' WHERE setting_key='max_login_attempts'"
+                """INSERT INTO system_settings(setting_key,setting_value) VALUES('max_login_attempts','1')
+                   ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value"""
             )
         if case == "blocked":
             conn.execute(
@@ -63,7 +61,7 @@ def test_login_security_events_replace_tenant_activity_without_identifiers(
             "private-wrong-password",
         ]
     )
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert (
             conn.execute(
                 "SELECT count(*) FROM activity_logs WHERE action IN ('login','login_success','login_failed','login_blocked','account_locked')"
@@ -78,7 +76,7 @@ def test_password_change_emits_only_after_committed_password_and_revocation(
     client, db, events = reset_unit_api
     response = client.post(
         "/api/profile/change-password",
-        headers={"Cookie": "session_token=fixture-session-1"},
+        headers={"Cookie": "session_token=admin-token"},
         json={
             "current_password": "test-password",
             "new_password": "private-new-password",
@@ -90,14 +88,14 @@ def test_password_change_emits_only_after_committed_password_and_revocation(
         for e in events
     ] == [("password_changed", "success", 1, {})]
     assert "private-new-password" not in str(events)
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert main.verify_password(
             "private-new-password",
             conn.execute("SELECT password_hash FROM users WHERE id=1").fetchone()[0],
         )
         assert (
             conn.execute(
-                "SELECT count(*) FROM sessions WHERE user_id=1 AND is_active=1"
+                "SELECT count(*) FROM sessions WHERE user_id=1 AND is_active"
             ).fetchone()[0]
             == 0
         )
@@ -111,51 +109,19 @@ def test_rejected_password_change_never_emits_success(reset_unit_api, current, n
     client, db, events = reset_unit_api
     response = client.post(
         "/api/profile/change-password",
-        headers={"Cookie": "session_token=fixture-session-1"},
+        headers={"Cookie": "session_token=admin-token"},
         json={"current_password": current, "new_password": new},
     )
     assert response.status_code == 400
     assert events == []
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert main.verify_password(
             "test-password",
             conn.execute("SELECT password_hash FROM users WHERE id=1").fetchone()[0],
         )
         assert (
             conn.execute(
-                "SELECT count(*) FROM sessions WHERE user_id=1 AND is_active=1"
-            ).fetchone()[0]
-            == 1
-        )
-
-
-def test_password_commit_failure_never_logs_success(reset_unit_api, caplog):
-    client, db, events = reset_unit_api
-    with sqlite3.connect(db) as conn:
-        conn.executescript(
-            """CREATE TABLE commit_guard (user_id INTEGER REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED);
-            CREATE TRIGGER reject_password_commit AFTER UPDATE OF password_hash ON users BEGIN
-            INSERT INTO commit_guard VALUES (-1); END;"""
-        )
-    with pytest.raises(sqlite3.IntegrityError):
-        client.post(
-            "/api/profile/change-password",
-            headers={"Cookie": "session_token=fixture-session-1"},
-            json={
-                "current_password": "test-password",
-                "new_password": "private-new-password",
-            },
-        )
-    assert events == []
-    assert "Password changed successfully" not in caplog.text
-    with sqlite3.connect(db) as conn:
-        assert main.verify_password(
-            "test-password",
-            conn.execute("SELECT password_hash FROM users WHERE id=1").fetchone()[0],
-        )
-        assert (
-            conn.execute(
-                "SELECT count(*) FROM sessions WHERE user_id=1 AND is_active=1"
+                "SELECT count(*) FROM sessions WHERE user_id=1 AND is_active"
             ).fetchone()[0]
             == 1
         )

@@ -152,8 +152,15 @@ def test_reset_completion_records_event_after_password_and_session_commit(
 
 
 @pytest.fixture
-def reset_unit_api(api):
-    """SQLite route coverage with only the external telemetry sink replaced."""
+def reset_unit_api(stock_api):
+    import main as main_module
+    """Postgres route coverage with only the external telemetry sink replaced.
+
+    User 1's email is user1@example.com: the reset request schema rejects
+    reserved domains such as .test.
+    """
+    stock_api[1].execute("UPDATE users SET email='user1@example.com' WHERE id=1")
+    stock_api[1].execute('UPDATE users SET password_hash=?', (main_module.hash_password('test-password'),))
     import main
     from fastapi import FastAPI
     from slowapi import Limiter
@@ -186,10 +193,7 @@ def reset_unit_api(api):
     )
     app.include_router(router)
     with TestClient(app) as client:
-        yield client, api[1], events
-
-
-from regression_tests.sqlite_api import api
+        yield client, stock_api[1], events
 
 
 @pytest.mark.parametrize(
@@ -206,7 +210,6 @@ from regression_tests.sqlite_api import api
 def test_reset_routes_emit_security_event_instead_of_tenant_activity(
     reset_unit_api, reason, caplog
 ):
-    import sqlite3
     from regression_tests.test_auth_router import set_reset_token
 
     client, db, events = reset_unit_api
@@ -269,7 +272,7 @@ def test_reset_routes_emit_security_event_instead_of_tenant_activity(
             "user1@example.com",
         ]
     )
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         assert (
             conn.execute(
                 "SELECT count(*) FROM activity_logs WHERE action LIKE 'password_reset%'"

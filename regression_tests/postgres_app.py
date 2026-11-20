@@ -273,12 +273,12 @@ def database_state(db) -> dict:
     return state
 
 
-def fail_inserts(db, table: str, message: str, when: str | None = None, *, event: str = "INSERT") -> None:
+def fail_inserts(db, table: str, message: str, when: str | None = None, *, event: str = "INSERT") -> str:
     """Make writes to `table` raise `message`, to prove a request rolls back.
 
     `when` is an optional SQL condition on NEW (for example "NEW.action = 'x'"),
     the PostgreSQL form of a SQLite `WHEN` trigger clause. `event` may be
-    INSERT, UPDATE or DELETE.
+    INSERT, UPDATE or DELETE. Returns the trigger name, for DROP TRIGGER.
     """
     name = f"fail_{table}_{event.lower()}_{abs(hash((message, when))) % 10**8}"
     db.execute(sql.SQL(
@@ -288,6 +288,7 @@ def fail_inserts(db, table: str, message: str, when: str | None = None, *, event
         sql.Identifier(name), sql.SQL(event), sql.Identifier(table),
         sql.SQL(f"WHEN ({when})") if when else sql.SQL(""), sql.Identifier(name)))
     db.commit()
+    return name
 
 
 class CompatRow(tuple):
@@ -338,7 +339,8 @@ class CompatDatabase:
     def execute(self, statement, params=()):
         if isinstance(statement, str):
             statement = self._statement(statement)
-        return self._conn.execute(statement, params)
+        # No parameters means no placeholders, so a literal '%' (as in LIKE) stays literal.
+        return self._conn.execute(statement, params or None)
 
     def executemany(self, statement, rows):
         with self._conn.cursor() as cursor:

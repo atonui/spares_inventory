@@ -10,7 +10,7 @@ from contextlib import closing
 from pathlib import Path
 from fastapi.routing import APIRoute
 from backend.database import connect_database
-from regression_tests.test_session_write_routes import session_api, database_state
+from regression_tests.sqlite_api import session_api, database_state
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = '/api/superadmin'

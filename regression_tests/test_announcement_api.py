@@ -3,7 +3,7 @@ import pytest
 import main
 from backend.database import connect_database
 from backend.security import hash_session_credential
-from regression_tests.test_session_write_routes import session_api,database_state
+from regression_tests.sqlite_api import session_api,database_state
 from regression_tests.test_superadmin_router import super_api
 
 PREFIX='/api/superadmin/announcement'

@@ -17,6 +17,8 @@ for key, value in {
     'SMTP_SERVER': 'localhost', 'SMTP_PORT': '1025',
     'SMTP_USERNAME': 'test', 'SMTP_PASSWORD': 'test',
     'FRONTEND_URL': 'http://testserver',
+    # Disposable test key, same shape as production (openssl rand -base64 32).
+    'NATIVE_REFRESH_ENCRYPTION_KEY': 'dGVzdC1vbmx5LW5hdGl2ZS1yZWZyZXNoLWtleS0zMmI=',
 }.items():
     os.environ[key] = value
 sys.path.insert(0, str(ROOT))
