@@ -94,7 +94,7 @@ function profileManager() {
                     throw Error('Profile unavailable');
                 }
                 const data=await response.json();
-                this.profile={name:data.name,email:data.email,role:data.role,territory:data.territory || '',display_timezone:data.display_timezone || null,saas_mode:data.saas_mode === true};
+                this.profile={name:data.name,email:data.email,role:data.role,territory:data.territory || '',display_timezone:data.display_timezone || null};
                 this.profileLoaded=true;
             } catch (_) {
                 this.profileError='Your profile could not be loaded. Retry when your connection is ready.';
@@ -117,7 +117,7 @@ function profileManager() {
             finally {this.timezoneLoading=false;}
         },
         async loadMobileSessionPolicy() {
-            if (!this.profile.saas_mode || !this.canManageBusinessTimezone || this.mobileSessionPolicyLoading || this.mobileSessionPolicySaving) return;
+            if (!this.profileLoaded || !this.canManageBusinessTimezone || this.mobileSessionPolicyLoading || this.mobileSessionPolicySaving) return;
             this.mobileSessionPolicyLoading=true;this.mobileSessionPolicyError='';
             try {
                 const response=await fetch('/api/organization/mobile-session-policy',{credentials:'include',cache:'no-store'});
@@ -148,7 +148,7 @@ function profileManager() {
             }
         },
         async createMobilePairing() {
-            if (!this.profile.saas_mode || this.isMobileViewport() || this.mobilePairingBusy || this.csrfLoading || !this.csrfToken) return;
+            if (!this.profileLoaded || this.isMobileViewport() || this.mobilePairingBusy || this.csrfLoading || !this.csrfToken) return;
             this.mobilePairingBusy=true;this.mobilePairingError='';this.mobilePairingSuccess='';
             this.stopMobilePairingPolling();this.mobilePairing=null;
             try {
@@ -209,7 +209,7 @@ function profileManager() {
             finally {this.mobilePairingBusy=false;}
         },
         async loadMobileDevices() {
-            if (!this.profile.saas_mode || this.mobileDevicesLoading) return;
+            if (!this.profileLoaded || this.mobileDevicesLoading) return;
             this.mobileDevicesLoading=true;this.mobileDevicesError='';
             try {
                 const response=await fetch('/api/profile/mobile-devices',{credentials:'include',cache:'no-store'});
