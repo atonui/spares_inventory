@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from backend.database_sql import is_postgres
 from backend.temporal import parse_api_instant,serialize_instant,utc_now
-ROLES={'engineer','manager','admin','superadmin'}
+ROLES={'engineer','manager','admin','owner','superadmin'}
 
 def normalize_notice(payload):
     if payload is None:return None

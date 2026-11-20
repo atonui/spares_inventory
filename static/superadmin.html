@@ -982,6 +982,7 @@
                 <label><input type="checkbox" value="engineer" x-model="annForm.roles"> Engineer</label>
                 <label><input type="checkbox" value="manager" x-model="annForm.roles"> Manager</label>
                 <label><input type="checkbox" value="admin" x-model="annForm.roles"> Admin</label>
+                <label x-show="me?.saas_mode"><input type="checkbox" value="owner" x-model="annForm.roles"> Owner</label>
                 <label><input type="checkbox" value="superadmin" x-model="annForm.roles"> Superadmin</label>
               </div>
               <p x-show="!me?.saas_mode">Uses organisation time.</p>

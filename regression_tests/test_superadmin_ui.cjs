@@ -380,3 +380,9 @@ test('support message content uses text-only DOM bindings',()=>{
  assert.match(html,/class="support-message-list"[\s\S]*?x-text="message\.payload\.text"/);
  assert.doesNotMatch(html,/x-html="message\.payload\.(?:html|text)"/);
 });
+
+test('platform announcement form offers company owners as a SaaS-only target role',()=>{
+ const roles=html.split('class="announcement-roles"')[1].split('</div>')[0];
+ assert.match(roles,/<label x-show="me\?\.saas_mode"><input type="checkbox" value="owner" x-model="annForm\.roles"> Owner<\/label>/);
+ for(const role of ['engineer','manager','admin','superadmin'])assert.match(roles,new RegExp('value="'+role+'"'));
+});
