@@ -1,6 +1,6 @@
 import pytest
 from regression_tests.test_superadmin_router import super_api
-from regression_tests.test_session_write_routes import session_api, database_state
+from regression_tests.sqlite_api import session_api, database_state
 
 LIMITS={'max_login_attempts':100,'lockout_duration_minutes':1440,'session_duration_hours':720,'remember_me_duration_days':365,'calibration_reminder_days':365}
 

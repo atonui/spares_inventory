@@ -2,7 +2,6 @@
 from fastapi.routing import APIRoute
 import main
 from regression_tests.test_auth_router import auth_api
-from regression_tests.sqlite_api import api
 
 TOKEN_AUTHENTICATED_MUTATIONS = {
     ('/api/auth/native/refresh', frozenset({'POST'})),
@@ -30,15 +29,17 @@ def test_every_mutation_route_requires_csrf():
 
 def test_login_and_logout_reject_missing_and_invalid_tokens(auth_api):
     client,db,actor=auth_api
+    actor['anonymous']=True  # start signed out; the login cookie takes over afterwards
     # The application marks cookies Secure; exercise browser cookie rotation over HTTPS.
     client.base_url = "https://testserver"
-    main.app.dependency_overrides.pop(main.verify_csrf)
-    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
-    for path,body in [('/api/auth/login',{'email':'user1@example.com','password':'test-password'}),('/api/auth/logout',{})]:
-        assert client.post(path,json=body).json()['detail']=='CSRF token missing'
-        assert client.post(path,json=body,headers={'X-CSRF-Token':'bad'}).json()['detail']=='Invalid CSRF token'
+    login={'email':'admin@example.test','password':'test-password'}
+    assert client.post('/api/auth/login',json=login).json()['detail']=='CSRF token missing'
+    assert client.post('/api/auth/login',json=login,headers={'X-CSRF-Token':'bad'}).json()['detail']=='Invalid CSRF token'
     token=client.get('/api/csrf-token').json()['csrf_token']
-    assert client.post('/api/auth/login',json={'email':'user1@example.com','password':'test-password'},headers={'X-CSRF-Token':token}).status_code==200
+    assert client.post('/api/auth/login',json=login,headers={'X-CSRF-Token':token}).status_code==200
+    # Signed in: logout needs a token bound to the new session.
+    assert client.post('/api/auth/logout').json()['detail']=='CSRF token missing'
+    assert client.post('/api/auth/logout',headers={'X-CSRF-Token':'bad'}).json()['detail']=='Invalid CSRF token'
     assert client.post('/api/auth/logout',headers={'X-CSRF-Token':token}).status_code==403
     bound_token=client.get('/api/csrf-token').json()['csrf_token']
     assert client.post('/api/auth/logout',headers={'X-CSRF-Token':bound_token}).status_code==200

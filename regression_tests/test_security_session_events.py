@@ -2,14 +2,13 @@
 
 import asyncio
 import json
-import sqlite3
+import psycopg
 from datetime import timedelta
 
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from regression_tests.sqlite_api import api
 from regression_tests.test_security_reset_events import reset_unit_api, security_api
 from regression_tests.test_native_bearer_auth import native_auth_api, login_request
 
@@ -85,12 +84,12 @@ def test_session_revocation_emits_after_commit(reset_unit_api, operation):
     from backend.services.session_credentials import hash_session_credential
 
     client, db, events = reset_unit_api
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         sid = conn.execute(
-            "INSERT INTO sessions(user_id,session_token,expires_at) VALUES(1,?,'2099-01-01T00:00:00.000000Z')",
+            "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES(1,?,'2099-01-01T00:00:00.000000Z') RETURNING id",
             (hash_session_credential("private-other-token"),),
-        ).lastrowid
-    headers = {"Cookie": "session_token=fixture-session-1"}
+        ).fetchone()[0]
+    headers = {"Cookie": "session_token=admin-token"}
     if operation == "specific":
         response = client.delete(f"/api/auth/sessions/{sid}", headers=headers)
     else:
@@ -116,16 +115,16 @@ def test_session_revocation_emits_after_commit(reset_unit_api, operation):
         }[operation]
     )
     assert all(
-        t not in str(events) for t in ["fixture-session-1", "private-other-token"]
+        t not in str(events) for t in ["admin-token", "private-other-token"]
     )
 
 
 @pytest.mark.parametrize("operation", ["other", "all"])
 def test_noop_revocation_does_not_emit_success_event(reset_unit_api, operation):
     client, db, events = reset_unit_api
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         conn.execute(
-            "INSERT INTO sessions(user_id,session_token,expires_at,is_active) VALUES(1,'already-inactive','2099-01-01T00:00:00.000000Z',0)"
+            "INSERT INTO sessions(user_id,session_token_hash,expires_at,is_active) VALUES(1,'already-inactive','2099-01-01T00:00:00.000000Z',FALSE)"
         )
     path = (
         "/api/auth/revoke-other-sessions"
@@ -134,7 +133,7 @@ def test_noop_revocation_does_not_emit_success_event(reset_unit_api, operation):
     )
     assert (
         client.post(
-            path, headers={"Cookie": "session_token=fixture-session-1"}
+            path, headers={"Cookie": "session_token=admin-token"}
         ).status_code
         == 200
     )
@@ -143,21 +142,20 @@ def test_noop_revocation_does_not_emit_success_event(reset_unit_api, operation):
 
 def test_revocation_commit_failure_does_not_emit_event(reset_unit_api):
     client, db, events = reset_unit_api
-    with sqlite3.connect(db) as conn:
-        conn.executescript(
-            """CREATE TABLE revoke_guard (user_id INTEGER REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED);
-          CREATE TRIGGER reject_revoke_commit AFTER UPDATE OF is_active ON sessions BEGIN INSERT INTO revoke_guard VALUES(-1); END;"""
-        )
-    with pytest.raises(sqlite3.IntegrityError):
+    # A deferred constraint trigger fails at COMMIT, after the revocation ran.
+    db.execute(
+        "CREATE FUNCTION reject_revoke_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'commit guard'; END $$"
+    )
+    db.execute(
+        "CREATE CONSTRAINT TRIGGER reject_revoke_commit AFTER UPDATE OF is_active ON sessions "
+        "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_revoke_commit()"
+    )
+    with pytest.raises(psycopg.errors.RaiseException):
         client.post(
-            "/api/auth/logout", headers={"Cookie": "session_token=fixture-session-1"}
+            "/api/auth/logout", headers={"Cookie": "session_token=admin-token"}
         )
     assert events == []
-    with sqlite3.connect(db) as conn:
-        assert (
-            conn.execute("SELECT is_active FROM sessions WHERE user_id=1").fetchone()[0]
-            == 1
-        )
+    assert db.execute("SELECT is_active FROM sessions WHERE user_id=1").fetchone()[0] is True
 
 
 def native_login(api):
@@ -484,9 +482,9 @@ def test_native_issue_commit_failure_never_emits_success(native_auth_api):
 def test_repeated_revocation_does_not_create_duplicate_events(reset_unit_api,operation):
     from backend.services.session_credentials import hash_session_credential
     client,db,events=reset_unit_api
-    with sqlite3.connect(db) as conn:
-        sid=conn.execute("INSERT INTO sessions(user_id,session_token,expires_at) VALUES(1,?,'2099-01-01T00:00:00.000000Z')",(hash_session_credential('repeat-target'),)).lastrowid
-    headers={'Cookie':'session_token=fixture-session-1'}
+    with db as conn:
+        sid=conn.execute("INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES(1,?,'2099-01-01T00:00:00.000000Z') RETURNING id",(hash_session_credential('repeat-target'),)).fetchone()[0]
+    headers={'Cookie':'session_token=admin-token'}
     if operation=='specific':
         call=lambda:client.delete(f'/api/auth/sessions/{sid}',headers=headers)
     else:

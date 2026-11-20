@@ -12,7 +12,7 @@ from backend.database import connect_database
 from backend.services.session_access import require_session
 from backend.security import hash_session_credential
 from regression_tests.session_fixtures import session_database,record_state
-from regression_tests.test_session_write_routes import session_api,database_state
+from regression_tests.sqlite_api import session_api,database_state
 
 
 def restore_validator(conn):

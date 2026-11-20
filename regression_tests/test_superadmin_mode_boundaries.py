@@ -3,7 +3,7 @@ import pytest
 
 import main
 from fastapi.routing import APIRoute
-from regression_tests.test_session_write_routes import session_api
+from regression_tests.sqlite_api import session_api
 
 
 PREFIX = "/api/superadmin"
