@@ -2,6 +2,8 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
+from backend.schemas.parts import PART_NUMBER_MAX_LENGTH
+
 class AddStockRequest(BaseModel):
     part_id: int
     store_id: int
@@ -9,7 +11,7 @@ class AddStockRequest(BaseModel):
     work_order_number: Optional[str] = None
 
 class ImportBalanceRow(BaseModel):
-    part_number: str = Field(min_length=1, max_length=200)
+    part_number: str = Field(min_length=1, max_length=PART_NUMBER_MAX_LENGTH)
     quantity: int = Field(ge=0, le=9007199254740991, strict=True)
     expected_quantity: Optional[int] = Field(..., ge=0, le=9007199254740991, strict=True)
 

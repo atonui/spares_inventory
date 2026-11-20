@@ -39,6 +39,24 @@ def test_invalid_batch_leaves_all_stock_unchanged(api,bad_row):
         assert c.execute('SELECT part_id,quantity FROM inventory WHERE store_id=90').fetchall() == [(900,7)]
 
 
+def test_part_number_over_the_limit_is_rejected(api):
+    seed(api)
+    response=post(api,[{'part_number':'CSV-A','quantity':4,'expected_quantity':7},
+                       {'part_number':'X' * 101,'quantity':1,'expected_quantity':None}])
+    assert response.status_code == 422
+    with api[1] as c:
+        assert c.execute('SELECT part_id,quantity FROM inventory WHERE store_id=90').fetchall() == [(900,7)]
+
+
+def test_part_number_at_the_limit_is_imported(api):
+    seed(api)
+    with api[1] as c:
+        c.execute("INSERT INTO parts(id,part_number,description) VALUES(902,?,'Long')", ('L' * 100,))
+    assert post(api,[{'part_number':'L' * 100,'quantity':3,'expected_quantity':None}]).status_code == 200
+    with api[1] as c:
+        assert c.execute('SELECT quantity FROM inventory WHERE store_id=90 AND part_id=902').fetchall() == [(3,)]
+
+
 def test_stale_preview_rejects_whole_batch(api):
     seed(api)
     response=post(api,[{'part_number':'CSV-B','quantity':2,'expected_quantity':None},{'part_number':'CSV-A','quantity':4,'expected_quantity':6}])
