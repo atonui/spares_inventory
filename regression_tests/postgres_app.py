@@ -46,7 +46,7 @@ def actor_token(name: str) -> str:
     return f"{name}-token"
 
 
-def _seed(conn) -> None:
+def _seed(conn, *, with_catalog: bool = True) -> None:
     from backend.services.session_credentials import hash_session_credential
     from backend.temporal import serialize_instant, utc_now
 
@@ -71,6 +71,16 @@ def _seed(conn) -> None:
             "INSERT INTO sessions(user_id,session_token_hash,expires_at) VALUES (%s,%s,%s)",
             (user_id, hash_session_credential(actor_token(name)), expires),
         )
+    # Company creation seeds the default store types (services/store_types.py).
+    from backend.services.store_types import seed_default_store_types
+    for org in (ORG_A, ORG_B):
+        seed_default_store_types(conn, org)
+    if with_catalog:
+        _seed_catalog(conn)
+    _advance_identities(conn)
+
+
+def _seed_catalog(conn) -> None:
     # Company A: same IDs and shapes as the former SQLite session_api fixture.
     conn.execute(
         """INSERT INTO stores(id,organization_id,name,type,assigned_user_id) OVERRIDING SYSTEM VALUE VALUES
@@ -86,10 +96,6 @@ def _seed(conn) -> None:
         "INSERT INTO inventory(id,organization_id,store_id,part_id,quantity) OVERRIDING SYSTEM VALUE VALUES (1,%s,1,1,10)",
         (ORG_A,),
     )
-    # Company creation seeds the default store types (services/store_types.py).
-    from backend.services.store_types import seed_default_store_types
-    for org in (ORG_A, ORG_B):
-        seed_default_store_types(conn, org)
     conn.execute("INSERT INTO store_types(organization_id,type_code,type_name) VALUES (%s,'unused','Unused')", (ORG_A,))
     conn.execute(
         """INSERT INTO equipment(id,organization_id,equipment_name,make,model,serial_number,assigned_user_id)
@@ -110,22 +116,53 @@ def _seed(conn) -> None:
         "INSERT INTO inventory(id,organization_id,store_id,part_id,quantity) OVERRIDING SYSTEM VALUE VALUES (101,%s,101,101,7)",
         (ORG_B,),
     )
-    # Keep identity sequences ahead of the fixed IDs used above.
-    for table in ("users", "stores", "parts", "inventory", "equipment"):
+
+
+def _advance_identities(conn) -> None:
+    """Start every identity sequence at 1000 so fixed test IDs never collide with app inserts."""
+    for row in conn.execute(
+        """SELECT table_name, column_name FROM information_schema.columns
+           WHERE table_schema = current_schema() AND is_identity = 'YES'"""
+    ).fetchall():
         conn.execute(
-            sql.SQL("SELECT setval(pg_get_serial_sequence({}, 'id'), 1000)").format(sql.Literal(table))
+            sql.SQL("SELECT setval(pg_get_serial_sequence({}, {}), GREATEST(1000, (SELECT max({}) FROM {})))").format(
+                sql.Literal(row["table_name"]), sql.Literal(row["column_name"]),
+                sql.Identifier(row["column_name"]), sql.Identifier(row["table_name"]))
         )
 
 
-@pytest.fixture
-def tenant_database(postgres_schema):
-    """Migrated, seeded private schema plus a factory for runtime-role connections."""
+SEED_ORGANIZATION_SETTING = "test.seed_organization_id"
+
+
+def _default_seed_organization(conn) -> None:
+    """Rows a test inserts directly default to company A.
+
+    The default reads a setting only the test's own connections set. The app's
+    runtime connections never set it, so an app insert that omits
+    organization_id still fails, exactly as it would in production.
+    """
+    for row in conn.execute(
+        """SELECT table_name FROM information_schema.columns
+           WHERE table_schema = current_schema() AND column_name = 'organization_id'
+             AND table_name IN (SELECT table_name FROM information_schema.tables
+                                WHERE table_schema = current_schema() AND table_type = 'BASE TABLE')"""
+    ).fetchall():
+        conn.execute(sql.SQL(
+            "ALTER TABLE {} ALTER COLUMN organization_id SET DEFAULT NULLIF(current_setting({}, true), '')::uuid"
+        ).format(sql.Identifier(row["table_name"]), sql.Literal(SEED_ORGANIZATION_SETTING)))
+
+
+def _make_database(owner, schema, *, with_catalog: bool):
     from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    apply_postgres_migrations(owner)
+    _seed(owner, with_catalog=with_catalog)
+    _default_seed_organization(owner)
+    # Test-only helper: the current instant in the app's canonical text format.
+    owner.execute("""CREATE FUNCTION canonical_now() RETURNS text LANGUAGE sql STABLE AS
+        $$ SELECT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') $$""")
     from regression_tests.postgres_fixtures import postgres_test_dsn
 
-    owner, schema = postgres_schema
-    apply_postgres_migrations(owner)
-    _seed(owner)
     role = "app_runtime_" + uuid4().hex
     owner.execute(sql.SQL("CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS").format(sql.Identifier(role)))
     owner.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema), sql.Identifier(role)))
@@ -142,13 +179,38 @@ def tenant_database(postgres_schema):
         conn.commit()
         return conn
 
+    owner.execute("SELECT set_config(%s, %s, false)", (SEED_ORGANIZATION_SETTING, str(ORG_A)))
+    owner.commit()
+    return SimpleNamespace(db=owner, connect=connect, schema=schema, role=role)
+
+
+def _drop_runtime_role(owner, role) -> None:
+    owner.rollback()
+    owner.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+    owner.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
+    owner.commit()
+
+
+@pytest.fixture
+def tenant_database(postgres_schema):
+    """Migrated, seeded private schema plus a factory for runtime-role connections."""
+    owner, schema = postgres_schema
+    database = _make_database(owner, schema, with_catalog=True)
     try:
-        yield SimpleNamespace(db=owner, connect=connect, schema=schema, role=role)
+        yield database
     finally:
-        owner.rollback()
-        owner.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
-        owner.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
-        owner.commit()
+        _drop_runtime_role(owner, database.role)
+
+
+@pytest.fixture
+def stock_database(postgres_schema):
+    """Like tenant_database, but company A has no stores, parts or stock yet."""
+    owner, schema = postgres_schema
+    database = _make_database(owner, schema, with_catalog=False)
+    try:
+        yield database
+    finally:
+        _drop_runtime_role(owner, database.role)
 
 
 @pytest.fixture
@@ -206,12 +268,125 @@ def database_state(db) -> dict:
     return state
 
 
-def fail_inserts(db, table: str, message: str) -> None:
-    """Make every INSERT into `table` raise `message`, to prove a write rolls back."""
-    function = sql.Identifier(f"fail_{table}_insert")
+def fail_inserts(db, table: str, message: str, when: str | None = None, *, event: str = "INSERT") -> None:
+    """Make writes to `table` raise `message`, to prove a request rolls back.
+
+    `when` is an optional SQL condition on NEW (for example "NEW.action = 'x'"),
+    the PostgreSQL form of a SQLite `WHEN` trigger clause. `event` may be
+    INSERT, UPDATE or DELETE.
+    """
+    name = f"fail_{table}_{event.lower()}_{abs(hash((message, when))) % 10**8}"
     db.execute(sql.SQL(
         "CREATE FUNCTION {}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION {}; END $$"
-    ).format(function, sql.Literal(message)))
-    db.execute(sql.SQL("CREATE TRIGGER {} BEFORE INSERT ON {} FOR EACH ROW EXECUTE FUNCTION {}()").format(
-        sql.Identifier(f"fail_{table}_insert"), sql.Identifier(table), function))
+    ).format(sql.Identifier(name), sql.Literal(message)))
+    db.execute(sql.SQL("CREATE TRIGGER {} BEFORE {} ON {} FOR EACH ROW {} EXECUTE FUNCTION {}()").format(
+        sql.Identifier(name), sql.SQL(event), sql.Identifier(table),
+        sql.SQL(f"WHEN ({when})") if when else sql.SQL(""), sql.Identifier(name)))
     db.commit()
+
+
+class CompatRow(tuple):
+    """A row readable by position or by column name, like sqlite3.Row."""
+
+    def __new__(cls, names, values):
+        row = super().__new__(cls, values)
+        row._names = names
+        return row
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return tuple.__getitem__(self, self._names.index(key))
+        return tuple.__getitem__(self, key)
+
+    def keys(self):
+        return list(self._names)
+
+    def values(self):
+        return list(self)
+
+
+def _compat_row_factory(cursor):
+    names = [column.name for column in cursor.description or ()]
+    return lambda values: CompatRow(names, values)
+
+
+class CompatDatabase:
+    """Owner connection with a sqlite3-like surface for porting seed/inspection code.
+
+    Accepts '?' placeholders, autocommits each statement, returns CompatRow rows,
+    and works as a no-op context manager (`with db as conn:`). Rows it inserts
+    without an organization_id belong to company A (see _default_seed_organization).
+    """
+
+    def __init__(self, schema):
+        from regression_tests.postgres_fixtures import postgres_test_dsn
+
+        self._conn = psycopg.connect(postgres_test_dsn(), autocommit=True, row_factory=_compat_row_factory)
+        self._conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+        self._conn.execute("SELECT set_config(%s, %s, false)", (SEED_ORGANIZATION_SETTING, str(ORG_A)))
+
+    @staticmethod
+    def _statement(statement):
+        from backend.database_sql import _postgres_placeholders
+        return _postgres_placeholders(statement)
+
+    def execute(self, statement, params=()):
+        if isinstance(statement, str):
+            statement = self._statement(statement)
+        return self._conn.execute(statement, params)
+
+    def executemany(self, statement, rows):
+        with self._conn.cursor() as cursor:
+            cursor.executemany(self._statement(statement), rows)
+            return cursor
+
+    def commit(self):
+        """Statements autocommit; kept for code written against sqlite3."""
+
+    def close(self):
+        self._conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+
+ACTOR_BY_ID = {user_id: name for name, (user_id, _org, _role) in ACTORS.items()}
+
+
+@pytest.fixture
+def stock_api(stock_database, monkeypatch):
+    """Postgres replacement for the old SQLite `api` fixture: yields (client, db, current).
+
+    Set current['id'] to act as another user (1 admin, 2 owner, 3 engineer,
+    4 manager, 5 other company's owner). Each request is authenticated with that
+    user's real session and CSRF token unless the test sends its own session cookie.
+    current['csrf'] = False sends an invalid CSRF token; current['anonymous'] = True
+    sends no session at all.
+    """
+    from fastapi.testclient import TestClient
+
+    import main
+
+    monkeypatch.setattr(main, "get_db_connection", stock_database.connect)
+    monkeypatch.setattr(main, "init_db", lambda: None)
+    db = CompatDatabase(stock_database.schema)
+    current = {"id": 1}
+    try:
+        with TestClient(main.app) as client:
+            def authenticate(request):
+                cookie = request.headers.get("cookie", "")
+                if "session_token=" in cookie or current.get("anonymous"):
+                    return
+                token = actor_token(ACTOR_BY_ID[current["id"]])
+                request.headers["cookie"] = (cookie + "; " if cookie else "") + f"session_token={token}"
+                if "x-csrf-token" not in request.headers:
+                    request.headers["X-CSRF-Token"] = (
+                        main.generate_csrf_token(token) if current.get("csrf", True) else "invalid-csrf-token")
+            client.event_hooks["request"].append(authenticate)
+            yield client, db, current
+    finally:
+        db.close()
+        main.app.dependency_overrides.clear()

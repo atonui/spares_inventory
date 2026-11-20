@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import main
 from regression_tests.test_stock_safety import api
-from regression_tests.migration_fixtures import snapshot
+from regression_tests.postgres_app import database_state as snapshot
 
 KEYS={'id','work_order_number','customer_name','description','status','assigned_engineer_id','engineer_name'}
 
@@ -14,7 +14,7 @@ def seed_orders(conn):
         (103,'WO-103',None,'2026-10-04T00:00:00'),(104,'WO-104',2,'2026-10-01T00:00:00')])
 
 def seed(api):
-    with sqlite3.connect(api[1]) as c:seed_orders(c)
+    with api[1] as c:seed_orders(c)
 
 def rows(api,actor):
     api[2]['id']=actor
@@ -33,24 +33,24 @@ def test_work_order_response_contract(api):
     seed(api);result=rows(api,1)
     assert all(set(r)==KEYS for r in result)
     assert result[0]=={'id':103,'work_order_number':'WO-103','customer_name':None,'description':None,'status':'open','assigned_engineer_id':None,'engineer_name':None}
-    assert next(r for r in result if r['id']==101)['engineer_name']=='User 3'
+    assert next(r for r in result if r['id']==101)['engineer_name']=='Engineer'
 
 def test_work_order_ordering(api):
     seed(api);assert [r['work_order_number'] for r in rows(api,1)]==['WO-103','WO-102','WO-101','WO-104']
 
 def test_archived_engineer_name_is_retained(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:c.execute('UPDATE users SET archived_at=CURRENT_TIMESTAMP WHERE id=3')
-    assert next(r for r in rows(api,1) if r['id']==101)['engineer_name']=='User 3'
+    with api[1] as c:c.execute('UPDATE users SET archived_at=canonical_now() WHERE id=3')
+    assert next(r for r in rows(api,1) if r['id']==101)['engineer_name']=='Engineer'
 
 def test_work_order_get_is_readonly(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:before=snapshot(c)
+    with api[1] as c:before=snapshot(c)
     rows(api,1)
-    with sqlite3.connect(api[1]) as c:assert snapshot(c)==before
+    with api[1] as c:assert snapshot(c)==before
 
 def test_work_orders_require_authentication(api):
-    main.app.dependency_overrides.pop(main.get_current_user)
+    api[2]['anonymous'] = True  # no session
     assert api[0].get('/api/work-orders').status_code==401
 
 def test_work_order_openapi_contract():

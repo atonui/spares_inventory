@@ -84,7 +84,7 @@ def test_legacy_backup_restore_produces_canonical_instants(tmp_path):
                 assert stamp==serialize_instant(parse_api_instant(stamp))
 
 from regression_tests.test_auth_router import auth_api
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 from regression_tests.test_session_write_routes import session_api
 from regression_tests.test_superadmin_router import super_api
 

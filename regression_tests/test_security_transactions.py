@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 import main
 from fastapi import Request
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 
 def test_login_cookie_requires_https(api):

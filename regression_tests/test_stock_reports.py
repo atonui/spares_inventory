@@ -7,11 +7,11 @@ from regression_tests.test_stock_safety import api
 
 
 def seed(api):
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         c.execute("INSERT INTO stores(id,name,type,assigned_user_id) VALUES(970,'History Store','car',3)")
         c.execute("INSERT INTO parts(id,part_number,description) VALUES(970,'REPORT','Report Part'),(971,'=FORMULA','Formula part')")
         c.execute("INSERT INTO work_orders(id,work_order_number,assigned_engineer_id) VALUES(970,'REPORT-WO',4),(971,'OTHER-WO',3)")
-        rows=[(970,970,2,'consume',970,3,'2026-10-04 20:59:59'),(970,970,3,'consume',970,3,'2026-10-04 21:00:00'),(970,970,4,'consume',970,4,'2026-10-05 20:59:59'),(970,970,5,'consume',971,3,'2026-10-05 21:00:00'),(970,970,99,'add',970,3,'2026-10-05 09:00:00'),(970,970,88,'remove',970,3,'2026-10-05 09:00:00'),(970,970,77,'transfer',970,3,'2026-10-05 09:00:00')]
+        rows=[(970,970,2,'consume',970,3,'2026-10-04T20:59:59.000000Z'),(970,970,3,'consume',970,3,'2026-10-04T21:00:00.000000Z'),(970,970,4,'consume',970,4,'2026-10-05T20:59:59.000000Z'),(970,970,5,'consume',971,3,'2026-10-05T21:00:00.000000Z'),(970,970,99,'add',970,3,'2026-10-05T09:00:00.000000Z'),(970,970,88,'remove',970,3,'2026-10-05T09:00:00.000000Z'),(970,970,77,'transfer',970,3,'2026-10-05T09:00:00.000000Z')]
         c.executemany('INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at) VALUES(?,?,?,?,?,?,?)',rows)
     api[2]['id']=3
 
@@ -56,21 +56,21 @@ def test_work_order_filter_matches_exact_number_and_uses_own_consumption(api):
 
 def test_archived_entities_remain_in_admin_history(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
-        c.execute("UPDATE stores SET archived_at=CURRENT_TIMESTAMP WHERE id=970")
-        c.execute("UPDATE parts SET archived_at=CURRENT_TIMESTAMP WHERE id=970")
-        c.execute("UPDATE users SET archived_at=CURRENT_TIMESTAMP WHERE id=4")
-        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(970,970,1,'consume',4,'2026-10-05 09:00:00')")
+    with api[1] as c:
+        c.execute("UPDATE stores SET archived_at=canonical_now() WHERE id=970")
+        c.execute("UPDATE parts SET archived_at=canonical_now() WHERE id=970")
+        c.execute("UPDATE users SET archived_at=canonical_now() WHERE id=4")
+        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(970,970,1,'consume',4,'2026-10-05T09:00:00.000000Z')")
     api[2]['id']=1
     result=report(api)
     assert result['totals']['quantity']==15
-    assert any(r['engineer_id']==4 and r['engineer_name']=='User 4' for r in result['rows'])
+    assert any(r['engineer_id']==4 and r['engineer_name']=='Manager' for r in result['rows'])
 
 
 def test_totals_and_export_include_every_record_beyond_display_page(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
-        c.executemany("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at) VALUES(970,970,1,'consume',970,3,'2026-10-05 09:00:00')",[()]*205)
+    with api[1] as c:
+        c.executemany("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at) VALUES(970,970,1,'consume',970,3,'2026-10-05T09:00:00.000000Z')",[()]*205)
     result=report(api,'?limit=100')
     assert len(result['rows'])==100
     assert result['totals']['events']==208 and result['totals']['quantity']==215
@@ -91,8 +91,8 @@ def test_invalid_filters_are_rejected(api,query):
 
 def test_exports_escape_spreadsheet_formulas_and_apply_same_filters(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
-        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at,notes) VALUES(970,971,1,'consume',970,3,'2026-10-05 09:00:00','@formula')")
+    with api[1] as c:
+        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,work_order_id,created_by,created_at,notes) VALUES(970,971,1,'consume',970,3,'2026-10-05T09:00:00.000000Z','@formula')")
     response=api[0].get('/api/reports/consumption.csv?part_id=971')
     rows=list(csv.DictReader(io.StringIO(response.text.lstrip('\ufeff'))))
     assert len(rows)==1 and rows[0]['Part number']=="'=FORMULA" and rows[0]['Notes']=="'@formula"
@@ -100,11 +100,11 @@ def test_exports_escape_spreadsheet_formulas_and_apply_same_filters(api):
 
 def test_reports_are_read_only_and_require_authentication(api):
     seed(api)
-    with sqlite3.connect(api[1]) as c:
+    with api[1] as c:
         before=[c.execute('SELECT * FROM '+t).fetchall() for t in ('inventory','movements','work_orders','activity_logs')]
     report(api);api[0].get('/api/reports/consumption.csv')
-    with sqlite3.connect(api[1]) as c:assert [c.execute('SELECT * FROM '+t).fetchall() for t in ('inventory','movements','work_orders','activity_logs')]==before
-    main.app.dependency_overrides.pop(main.get_current_user)
+    with api[1] as c:assert [c.execute('SELECT * FROM '+t).fetchall() for t in ('inventory','movements','work_orders','activity_logs')]==before
+    api[2]['anonymous'] = True  # no session
     assert api[0].get('/api/reports/consumption').status_code==401
 
 
@@ -112,9 +112,9 @@ def test_historical_filter_options_obey_report_scope(api):
     seed(api)
     result=report(api)
     assert [e['id'] for e in result['filter_options']['engineers']]==[3]
-    with sqlite3.connect(api[1]) as c:
-        c.execute('UPDATE stores SET archived_at=CURRENT_TIMESTAMP WHERE id=970')
-        c.execute('UPDATE parts SET archived_at=CURRENT_TIMESTAMP WHERE id=970')
+    with api[1] as c:
+        c.execute('UPDATE stores SET archived_at=canonical_now() WHERE id=970')
+        c.execute('UPDATE parts SET archived_at=canonical_now() WHERE id=970')
     api[2]['id']=2
     result=report(api)
     assert result['filter_options']['stores'][0]['id']==970

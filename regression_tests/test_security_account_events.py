@@ -6,7 +6,7 @@ import main
 import psycopg
 import pytest
 
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 from regression_tests.test_security_reset_events import reset_unit_api, security_api
 
 pytest_plugins = ("regression_tests.postgres_fixtures",)

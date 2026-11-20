@@ -1,6 +1,6 @@
 import sqlite3
 import pytest
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 
 def test_profile_and_session_instants_are_explicit_utc(api):

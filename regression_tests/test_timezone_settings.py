@@ -2,7 +2,7 @@ import json
 import sqlite3
 import pytest
 import main
-from regression_tests.test_stock_safety import api
+from regression_tests.sqlite_api import api
 
 
 def test_context_defaults_and_personal_omission_vs_null(api):
