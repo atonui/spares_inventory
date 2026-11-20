@@ -1,4 +1,4 @@
-"""Run tests with disposable settings, logs and database; never load repository secrets."""
+"""Run tests with disposable settings and logs against PostgreSQL; never load repository secrets."""
 
 # Shared PostgreSQL fixtures (postgres_schema, tenant_database, tenant_api).
 pytest_plugins = ("regression_tests.postgres_fixtures", "regression_tests.postgres_app")
@@ -14,7 +14,8 @@ RUNTIME = tempfile.TemporaryDirectory()
 os.chdir(RUNTIME.name)
 Path('static').symlink_to(ROOT / 'static', target_is_directory=True)
 for key, value in {
-    'DATABASE_URL': str(Path(RUNTIME.name) / 'test.db'),
+    # PostgreSQL only. Fixtures connect to private schemas in TEST_DATABASE_URL.
+    'DATABASE_URL': os.environ.get('TEST_DATABASE_URL') or 'postgresql://localhost/unconfigured_test',
     'SECRET_KEY': 'test-only', 'CSRF_SECRET': 'test-only',
     'SMTP_SERVER': 'localhost', 'SMTP_PORT': '1025',
     'SMTP_USERNAME': 'test', 'SMTP_PASSWORD': 'test',
@@ -27,4 +28,6 @@ for key, value in {
 sys.path.insert(0, str(ROOT))
 import main
 
-main.init_db()
+# Never migrate the shared test database's public schema at app startup:
+# each fixture applies the migrations to its own private schema.
+main.init_db = lambda: None

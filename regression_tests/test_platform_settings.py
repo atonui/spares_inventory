@@ -18,7 +18,7 @@ pytest_plugins = ("regression_tests.postgres_fixtures",)
 def platform_settings_api(postgres_schema):
     from backend.postgres_migrations.runner import apply_postgres_migrations
     from backend.routes.platform_settings import create_platform_settings_router
-    from backend.routes.superadmin import create_superadmin_router
+    from backend.routes.announcement_banner import create_announcement_banner_router
     from backend.services.principals import AuthenticatedPrincipal
     from backend.services.session_credentials import hash_session_credential
     from backend.temporal import serialize_instant, utc_now
@@ -66,19 +66,7 @@ def platform_settings_api(postgres_schema):
         current_user=lambda: None,
         csrf_dependency=lambda: None,
     )
-    legacy_router = create_superadmin_router(
-        get_connection=get_connection,
-        database_path=lambda: "unused",
-        authenticated_writer=lambda *args, **kwargs: None,
-        current_user=lambda: None,
-        csrf_dependency=lambda: None,
-        superadmin_guard=lambda *args, **kwargs: None,
-        password_hash=lambda value: value,
-        activity_log=lambda *args, **kwargs: None,
-        authenticated_activity=lambda *args, **kwargs: None,
-        database_defaults=lambda: {},
-        session_validator=lambda *args, **kwargs: None,
-    )
+    banner_router = create_announcement_banner_router(get_connection=get_connection)
 
     def endpoint(router, method, path):
         return next(route.endpoint for route in router.routes if route.path == path and method in route.methods)
@@ -88,7 +76,7 @@ def platform_settings_api(postgres_schema):
     yield SimpleNamespace(
         admin=admin,
         settings_endpoint=lambda method, path: endpoint(platform_router, method, path),
-        public_announcement_endpoint=endpoint(legacy_router, "GET", "/api/superadmin/announcement"),
+        public_announcement_endpoint=endpoint(banner_router, "GET", "/api/superadmin/announcement"),
         request=request,
         principal=principal,
         runtime_connection=get_connection,

@@ -1,5 +1,7 @@
 from contextlib import closing
 
+import pytest
+
 
 def test_app_database_defaults_preserve_core_defaults_and_stringify_overrides():
     from backend.app_database import make_database_defaults
@@ -18,27 +20,20 @@ def test_app_database_defaults_preserve_core_defaults_and_stringify_overrides():
     assert defaults["remember_me_duration_days"] == "55"
 
 
-def test_main_database_wrappers_use_current_database_path(tmp_path, monkeypatch):
+@pytest.mark.parametrize("url", ["inventory.db", "/data/inventory.db", "sqlite:///inventory.db", "mysql://db/app"])
+def test_non_postgresql_database_urls_are_refused(url):
     import main
+    from pydantic import ValidationError
+    from backend.app_database import initialize_application_database, open_application_database
 
-    database_path = tmp_path / "current.db"
-    monkeypatch.setattr(main, "DATABASE", str(database_path))
-
-    main.init_db()
-
-    with closing(main.get_db_connection()) as conn:
-        setting = conn.execute(
-            "SELECT setting_value FROM system_settings WHERE setting_key=?",
-            ("session_duration_hours",),
-        ).fetchone()
-        user_table = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
-        ).fetchone()
-
-    assert database_path.exists()
-    assert setting["setting_value"] == str(main.SESSION_DURATION_HOURS)
-    assert user_table["name"] == "users"
-
+    config = main.settings.model_dump()
+    config["DATABASE_URL"] = url
+    with pytest.raises(ValidationError, match="PostgreSQL"):
+        main.Settings(**config)
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        open_application_database(url)
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        initialize_application_database(url, defaults={})
 
 def test_application_database_initializes_postgres_migrations(monkeypatch):
     import backend.app_database as app_database

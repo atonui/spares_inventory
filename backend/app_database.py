@@ -1,7 +1,15 @@
-"""Application database helpers that bind settings to path-based database APIs."""
+"""Application database helpers bound to the configured PostgreSQL database."""
 
-from backend.database import DEFAULT_SETTINGS, connect_database, initialize_database
 from backend.postgres_database import connect_postgres
+
+# Bootstrap security defaults; saved system_settings values override them.
+DEFAULT_SETTINGS = {
+    "calibration_reminder_days": "30",
+    "max_login_attempts": "5",
+    "lockout_duration_minutes": "15",
+    "session_duration_hours": "24",
+    "remember_me_duration_days": "30",
+}
 
 
 def is_postgresql_dsn(database_url):
@@ -26,19 +34,23 @@ def make_database_defaults(
     }
 
 
-def initialize_application_database(database_path, *, defaults, migration_database_url=None):
-    if is_postgresql_dsn(database_path):
-        from backend.postgres_migrations.runner import apply_postgres_migrations
+def _require_postgresql(database_url):
+    if not is_postgresql_dsn(database_url):
+        raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL")
 
-        connection = connect_postgres(migration_database_url or database_path)
-        try:
-            return apply_postgres_migrations(connection)
-        finally:
-            connection.close()
-    return initialize_database(database_path, defaults=defaults)
+
+def initialize_application_database(database_path, *, defaults, migration_database_url=None):
+    """Apply the PostgreSQL migration chain (as the migration role when configured)."""
+    _require_postgresql(database_path)
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+
+    connection = connect_postgres(migration_database_url or database_path)
+    try:
+        return apply_postgres_migrations(connection)
+    finally:
+        connection.close()
 
 
 def open_application_database(database_path):
-    if is_postgresql_dsn(database_path):
-        return connect_postgres(database_path)
-    return connect_database(database_path)
+    _require_postgresql(database_path)
+    return connect_postgres(database_path)
