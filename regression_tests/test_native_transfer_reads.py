@@ -1,11 +1,8 @@
 """Bounded native reads include empty stores and shared transfer permissions."""
-from contextlib import closing
 
 import pytest
 
-from backend.database import connect_database
 from regression_tests.test_api_v1_inventory import v1_inventory_client
-from regression_tests.test_session_write_routes import session_api
 from regression_tests.test_inventory_read_router import populate
 
 
@@ -26,7 +23,7 @@ def test_native_reads_reject_cookies_and_invalid_limits(v1_inventory_client, pat
 
 def test_empty_stores_and_keyset_pagination(v1_inventory_client):
     client, database_path = v1_inventory_client
-    with closing(connect_database(database_path)) as conn, conn:
+    with database_path.legacy_db as conn:
         conn.execute("INSERT INTO stores(id,name,type) VALUES(20,'Empty destination','central')")
         conn.execute("INSERT INTO stores(id,name,type,archived_at) VALUES(21,'Archived','central','2025-01-01T00:00:00')")
     ids = []
@@ -69,11 +66,11 @@ def test_store_cursor_cannot_be_used_for_transfers(v1_inventory_client):
 def test_transfer_pages_continue_after_previous_transfer_is_completed(v1_inventory_client):
     client, database_path = v1_inventory_client
     populate(database_path)
-    with closing(connect_database(database_path)) as conn, conn:
+    with database_path.legacy_db as conn:
         conn.execute("UPDATE stock_transfers SET status='in_transit' WHERE movement_id=11")
     first = get(client, '/api/v1/inventory/transfers', limit=1).json()
     assert [row['id'] for row in first['items']] == [10]
-    with closing(connect_database(database_path)) as conn, conn:
+    with database_path.legacy_db as conn:
         conn.execute("UPDATE stock_transfers SET status='received' WHERE movement_id=10")
     second = get(client, '/api/v1/inventory/transfers', limit=1, cursor=first['page']['next_cursor'])
     assert second.status_code == 200

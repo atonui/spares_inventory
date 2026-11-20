@@ -1,28 +1,20 @@
 """Pagination contract tests for the versioned inventory API."""
 
-from contextlib import closing
 import random
 import string
 
 import pytest
 
-from backend.database import connect_database
 from regression_tests.test_inventory_read_router import populate
-from regression_tests.test_session_write_routes import session_api
 
 
 @pytest.fixture
-def v1_inventory_client(session_api):
-    import main
-
-    client, database_path, _control = session_api
-    previous = main.app.dependency_overrides[main.get_current_user]
-    main.app.dependency_overrides[main.get_current_user] = lambda: 1
+def v1_inventory_client(tenant_api):
+    """Bearer-only client; the second value is the tenant_api fixture (seed via legacy_db)."""
+    client = tenant_api.client
     client.cookies.clear()
-    try:
-        yield client, database_path
-    finally:
-        main.app.dependency_overrides[main.get_current_user] = previous
+    client.headers.pop("X-CSRF-Token", None)
+    yield client, tenant_api
 
 
 def get_page(client, **params):
@@ -75,7 +67,7 @@ def test_v1_inventory_rejects_cookie_only_authentication(v1_inventory_client):
 def test_v1_inventory_empty_result_has_no_next_cursor(v1_inventory_client):
     client, database_path = v1_inventory_client
     populate(database_path)
-    with closing(connect_database(database_path)) as conn, conn:
+    with database_path.legacy_db as conn:
         conn.execute("UPDATE parts SET archived_at='2025-01-01T00:00:00Z'")
 
     response = get_page(client)
@@ -113,7 +105,7 @@ def test_v1_inventory_includes_rows_inserted_after_current_key(v1_inventory_clie
     assert first.status_code == 200, first.text
     cursor = first.json()["page"]["next_cursor"]
 
-    with closing(connect_database(database_path)) as conn, conn:
+    with database_path.legacy_db as conn:
         conn.execute(
             "INSERT INTO inventory(id,store_id,part_id,quantity,min_threshold) VALUES(13,3,1,5,0)"
         )
@@ -129,11 +121,12 @@ def test_v1_cursor_stays_usable_with_unbounded_sort_values(v1_inventory_client):
     populate(database_path)
     generator = random.Random(37)
     alphabet = string.ascii_letters + string.digits + string.punctuation
-    long_part_number = "".join(generator.choices(alphabet, k=3000))
+    # Part numbers have a unique btree index (about 2,700-byte limit on Postgres).
+    long_part_number = "".join(generator.choices(alphabet, k=2000))
     long_store_name = "".join(generator.choices(alphabet, k=3000))
-    with closing(connect_database(database_path)) as conn, conn:
+    with database_path.legacy_db as conn:
         conn.execute("UPDATE parts SET part_number=? WHERE id=2", (long_part_number,))
-        conn.execute("UPDATE parts SET part_number=? WHERE id=1", ("Z" * 3000,))
+        conn.execute("UPDATE parts SET part_number=? WHERE id=1", ("Z" * 2000,))
         conn.execute("UPDATE stores SET name=? WHERE id=3", (long_store_name,))
 
     first = get_page(client, limit=1)
@@ -198,7 +191,7 @@ def test_mobile_stock_adjustment_is_idempotent_and_checks_expected_quantity(v1_i
     assert retry.status_code == 200, retry.text
     assert retry.json() == {"success": True, "duplicate": True}
     assert stale.status_code == 409
-    with closing(connect_database(database_path)) as conn:
+    with database_path.legacy_db as conn:
         assert conn.execute("SELECT quantity FROM inventory WHERE id=1").fetchone()["quantity"] == 7
         assert conn.execute("SELECT count(*) AS count FROM movements WHERE client_operation_id=?",
                             (payload["operation_id"],)).fetchone()["count"] == 1

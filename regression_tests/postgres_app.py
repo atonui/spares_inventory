@@ -16,6 +16,8 @@ What it provides:
   fixture; company B ("other") exists for isolation checks.
 - `db`: an owner connection (bypasses RLS) for seeding and inspecting rows.
   Commit after seeding; the app uses its own connections.
+- `legacy_db`: an autocommitting owner connection with a sqlite3-like surface
+  ('?' placeholders, positional rows); rows it inserts default to company A.
 """
 from __future__ import annotations
 
@@ -223,6 +225,7 @@ def tenant_api(tenant_database, monkeypatch):
     monkeypatch.setattr(main, "get_db_connection", tenant_database.connect)
     # The schema is already migrated; skip the startup migration of main.DATABASE.
     monkeypatch.setattr(main, "init_db", lambda: None)
+    legacy_db = CompatDatabase(tenant_database.schema)
     with TestClient(main.app) as client:
         def as_actor(name: str):
             token = actor_token(name)
@@ -239,8 +242,10 @@ def tenant_api(tenant_database, monkeypatch):
         as_actor("admin")
         yield SimpleNamespace(
             client=client, db=tenant_database.db, connect=tenant_database.connect,
-            as_actor=as_actor, as_bearer=as_bearer, actors=ACTORS, org_a=ORG_A, org_b=ORG_B,
+            legacy_db=legacy_db, as_actor=as_actor, as_bearer=as_bearer,
+            actors=ACTORS, org_a=ORG_A, org_b=ORG_B,
         )
+    legacy_db.close()
     main.app.dependency_overrides.clear()
 
 

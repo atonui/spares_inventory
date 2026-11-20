@@ -11,7 +11,6 @@ from backend.database import initialize_database,connect_database
 from backend.routes.work_orders import create_work_order_router
 from regression_tests.test_work_order_service import conn
 from regression_tests.test_work_orders import seed
-from regression_tests.test_stock_safety import api
 
 ROOT=Path(__file__).resolve().parents[1]
 
