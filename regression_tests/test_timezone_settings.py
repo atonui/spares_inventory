@@ -1,8 +1,8 @@
 import json
-import sqlite3
 import pytest
 import main
-from regression_tests.sqlite_api import api
+from regression_tests.test_stock_safety import api
+from regression_tests.postgres_app import ORG_A
 
 
 def test_context_defaults_and_personal_omission_vs_null(api):
@@ -10,9 +10,10 @@ def test_context_defaults_and_personal_omission_vs_null(api):
     actor['id'] = 3
     initial = client.get('/api/timezone-context')
     assert initial.status_code == 200
-    assert initial.json() == {'organisation_id':1,'business_timezone':'Africa/Nairobi','display_timezone':'Africa/Nairobi','revision':1}
+    assert initial.json() == {'organisation_id':str(ORG_A),'business_timezone':'Africa/Nairobi','display_timezone':'Africa/Nairobi','revision':1}
     assert client.put('/api/profile', json={'display_timezone':'Europe/London'}).status_code == 200
-    assert client.put('/api/profile', json={'email':'new@example.com'}).status_code == 200
+    # SaaS members cannot change their own email; the personal zone is unaffected.
+    assert client.put('/api/profile', json={'email':'new@example.com'}).status_code == 403
     assert client.get('/api/profile').json()['display_timezone'] == 'Europe/London'
     assert client.get('/api/timezone-context').json()['display_timezone'] == 'Europe/London'
     assert client.put('/api/profile', json={'display_timezone':None}).status_code == 200
@@ -29,7 +30,7 @@ def test_authorised_business_change_audits_and_conflicting_revision_is_rejected(
     conflict = client.put('/api/organisation/timezone',json={'timezone':'UTC','expected_revision':1})
     assert conflict.status_code == 409
     assert client.get('/api/timezone-context').json()['business_timezone'] == 'America/New_York'
-    with sqlite3.connect(db) as conn:
+    with db as conn:
         records=conn.execute("SELECT user_id,details FROM activity_logs WHERE action='update_business_timezone'").fetchall()
     assert len(records)==1 and records[0][0]==actor_id
     details=json.loads(records[0][1]);assert details['old_timezone']=='Africa/Nairobi' and details['new_timezone']=='America/New_York'
@@ -51,16 +52,15 @@ def test_invalid_business_settings_are_rejected(api, body):
 def test_personal_invalid_zone_and_business_csrf_rejected(api):
     client, db, actor=api
     assert client.put('/api/profile',json={'display_timezone':'BST'}).status_code==422
-    main.app.dependency_overrides.pop(main.verify_csrf)
-    main.app.dependency_overrides.pop(main.verify_authenticated_csrf)
+    actor['csrf'] = False  # send an invalid CSRF token
     assert client.put('/api/organisation/timezone',json={'timezone':'UTC','expected_revision':1}).status_code==403
 
 
 def test_inactive_actor_and_revoked_session_cannot_write(api):
     client, db, actor=api
-    client.cookies.set('session_token','revoked')
-    assert client.put('/api/organisation/timezone',json={'timezone':'UTC','expected_revision':1}).status_code==401
-    with sqlite3.connect(db) as c:c.execute('UPDATE users SET archived_at=CURRENT_TIMESTAMP WHERE id=1')
+    assert client.put('/api/organisation/timezone',json={'timezone':'UTC','expected_revision':1},
+                      headers={'cookie':'session_token=revoked','X-CSRF-Token':'x'}).status_code==401
+    db.execute('UPDATE organization_memberships SET is_active=FALSE WHERE user_id=1')
     assert client.get('/api/timezone-context').status_code==403
 
 
@@ -72,8 +72,8 @@ def test_failed_audit_rolls_back_setting_update(api, monkeypatch):
     with pytest.raises(RuntimeError):
         api[0].put('/api/organisation/timezone',json={'timezone':'UTC','expected_revision':1})
     assert api[0].get('/api/timezone-context').json()['business_timezone']=='Africa/Nairobi'
-    with sqlite3.connect(api[1]) as conn:
-        assert conn.execute('SELECT revision FROM organisation_settings').fetchone()[0]==1
+    with api[1] as conn:
+        assert conn.execute('SELECT revision FROM organization_settings WHERE organization_id=?',(ORG_A,)).fetchone()[0]==1
 
 
 def test_concurrent_writers_cannot_both_save_same_revision(api):

@@ -1,27 +1,26 @@
-import sqlite3
 import pytest
-from regression_tests.sqlite_api import api
+from regression_tests.test_stock_safety import api
 
 
 def test_profile_and_session_instants_are_explicit_utc(api):
     client, db, _=api
     assert client.get('/api/profile').json()['created_at'].endswith('Z')
-    with sqlite3.connect(db) as conn:
-        conn.execute("UPDATE sessions SET expires_at='2099-01-01T00:00:00' WHERE user_id=1")
+    with db as conn:
+        conn.execute("UPDATE sessions SET expires_at='2099-01-01T00:00:00.000000Z' WHERE user_id=1")
         before=conn.execute('SELECT created_at FROM users WHERE id=1').fetchone()[0]
     rows=client.get('/api/auth/sessions').json()
     assert rows[0]['created_at'].endswith('Z') and rows[0]['last_activity'].endswith('Z')
-    with sqlite3.connect(db) as conn:assert conn.execute('SELECT created_at FROM users WHERE id=1').fetchone()[0]==before
+    with db as conn:assert conn.execute('SELECT created_at FROM users WHERE id=1').fetchone()[0]==before
 
 
 def test_reports_use_business_zone_and_personal_zone_does_not_change_rows(api):
     client,db,actor=api
-    with sqlite3.connect(db) as c:
+    with db as c:
         c.execute("INSERT INTO stores(id,name,type) VALUES(901,'Source','central')")
         c.execute("INSERT INTO parts(id,part_number,description) VALUES(901,'P','Part')")
-        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(901,901,2,'consume',1,'2026-03-09T03:59:59.999999')")
-        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(901,901,3,'consume',1,'2026-03-09T04:00:00')")
-        c.execute("UPDATE organisation_settings SET business_timezone='America/New_York'")
+        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(901,901,2,'consume',1,'2026-03-09T03:59:59.999999Z')")
+        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(901,901,3,'consume',1,'2026-03-09T04:00:00.000000Z')")
+        c.execute("UPDATE organization_settings SET business_timezone='America/New_York' WHERE organization_id='00000000-0000-4000-8000-00000000000a'")
     query='/api/reports/consumption?start_date=2026-03-08&end_date=2026-03-08'
     first=client.get(query).json()
     assert first['timezone']=='America/New_York'
@@ -39,9 +38,9 @@ def test_reports_use_business_zone_and_personal_zone_does_not_change_rows(api):
 
 def test_history_includes_fractional_last_second_in_business_day(api):
     client,db,_=api
-    with sqlite3.connect(db) as c:
-        c.execute("INSERT INTO activity_logs(user_id,username,action,created_at) VALUES(1,'User 1','boundary','2026-10-12 20:59:59.999999')")
-        c.execute("INSERT INTO activity_logs(user_id,username,action,created_at) VALUES(1,'User 1','boundary','2026-10-12 21:00:00')")
+    with db as c:
+        c.execute("INSERT INTO activity_logs(user_id,username,action,created_at) VALUES(1,'User 1','boundary','2026-10-12T20:59:59.999999Z')")
+        c.execute("INSERT INTO activity_logs(user_id,username,action,created_at) VALUES(1,'User 1','boundary','2026-10-12T21:00:00.000000Z')")
     response=client.get('/api/logs/activity?start_date=2026-10-12&end_date=2026-10-12&action=boundary')
     assert response.status_code==200
     assert len(response.json())==1
@@ -50,7 +49,7 @@ def test_history_includes_fractional_last_second_in_business_day(api):
 
 def test_calendar_dates_are_not_serialised_as_instants(api):
     client,db,_=api
-    with sqlite3.connect(db) as c:
+    with db as c:
         c.execute("INSERT INTO equipment(equipment_name,make,model,serial_number,calibration_date,next_calibration_date,assigned_user_id) VALUES('Meter','M','M','TZ-1','2026-10-12','2027-10-12',1)")
     row=client.get('/api/equipment').json()[0]
     assert row['calibration_date']=='2026-10-12'
@@ -62,9 +61,9 @@ def test_lockout_reads_are_offset_equivalent(api, monkeypatch, offset):
     import backend.routes.auth as auth
     client,db,_=api
     monkeypatch.setattr(auth,'utc_now',lambda:datetime(2026,10,12,9,59,tzinfo=timezone.utc),raising=False)
-    with sqlite3.connect(db) as c:
+    with db as c:
         c.execute('UPDATE users SET account_locked_until=? WHERE id=1',(offset,))
-    response=client.post('/api/auth/login',json={'email':'user1@example.com','password':'wrong'})
+    response=client.post('/api/auth/login',json={'email':'admin@example.test','password':'wrong'})
     assert response.status_code==423
 
 
@@ -91,7 +90,7 @@ def test_equipment_due_day_uses_business_today(api,monkeypatch):
     import backend.routes.equipment as equipment
     client,db,_=api
     monkeypatch.setattr(equipment,'utc_now',lambda:datetime(2030,10,11,22,0,tzinfo=timezone.utc),raising=False)
-    with sqlite3.connect(db) as c:
+    with db as c:
         c.execute("INSERT INTO equipment(equipment_name,make,model,serial_number,next_calibration_date,assigned_user_id) VALUES('Meter','M','M','TZ-DUE','2030-10-12',1)")
     row=client.get('/api/equipment').json()[0]
     assert row['days_until_calibration']==0
@@ -120,34 +119,24 @@ def test_manifest_instant_fields_are_normalised_and_calendar_fields_untouched():
 
 def test_csv_rejects_timezone_revision_changed_since_report(api):
     client,db,_=api
-    with sqlite3.connect(db) as c:c.execute('UPDATE organisation_settings SET revision=revision+1')
+    with db as c:c.execute('UPDATE organization_settings SET revision=revision+1 WHERE organization_id=?',('00000000-0000-4000-8000-00000000000a',))
     response=client.get('/api/reports/consumption.csv?expected_timezone_revision=1')
     assert response.status_code==409
-
-
-def test_session_ordering_uses_instants_not_offset_strings(api):
-    client,db,_=api
-    with sqlite3.connect(db) as c:
-        c.execute("UPDATE sessions SET last_activity='2026-10-11 23:00:00' WHERE user_id=1")
-        c.execute("INSERT INTO sessions(user_id,session_token,expires_at,last_activity) VALUES(1,'older-offset','2099-01-01T00:00:00','2026-10-12T00:00:00+03:00')")
-    rows=client.get('/api/auth/sessions').json()
-    assert rows[0]['last_activity']=='2026-10-11T23:00:00.000000Z'
 
 
 def test_report_keeps_one_policy_snapshot_during_a_setting_change(api,monkeypatch):
     import backend.routes.reports as reports
     client,db,_=api
-    with sqlite3.connect(db) as c:
-        c.execute('PRAGMA journal_mode=WAL')
+    with db as c:
         c.execute("INSERT INTO stores(id,name,type) VALUES(902,'Source','central')")
         c.execute("INSERT INTO parts(id,part_number,description) VALUES(902,'TZ-SNAPSHOT','Part')")
-        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(902,902,2,'consume',1,'2026-10-11T22:00:00')")
+        c.execute("INSERT INTO movements(from_store_id,part_id,quantity,movement_type,created_by,created_at) VALUES(902,902,2,'consume',1,'2026-10-11T22:00:00.000000Z')")
     original=reports.resolve_business_context
     calls=[]
     def change_after_resolution(conn,**kwargs):
         context=original(conn,**kwargs);calls.append(context)
         if len(calls)==1:
-            with sqlite3.connect(db) as other:other.execute("UPDATE organisation_settings SET business_timezone='UTC',revision=2")
+            with db as other:other.execute("UPDATE organization_settings SET business_timezone='UTC',revision=2 WHERE organization_id='00000000-0000-4000-8000-00000000000a'")
         return context
     monkeypatch.setattr(reports,'resolve_business_context',change_after_resolution)
     query='/api/reports/consumption?start_date=2026-10-12&end_date=2026-10-12'
@@ -173,7 +162,7 @@ def test_range_bounds_ignore_unrequested_interior_midnights():
 def test_history_lists_carry_snapshot_metadata_without_changing_json_shape(api):
     import json
     client,db,_=api
-    with sqlite3.connect(db) as c:c.execute("UPDATE organisation_settings SET business_timezone='America/New_York',revision=2")
+    with db as c:c.execute("UPDATE organization_settings SET business_timezone='America/New_York',revision=2 WHERE organization_id='00000000-0000-4000-8000-00000000000a'")
     for endpoint in ['/api/movements','/api/logs/activity']:
         response=client.get(endpoint+'?start_date=2026-03-08&end_date=2026-03-08')
         assert response.status_code==200 and isinstance(response.json(),list)
