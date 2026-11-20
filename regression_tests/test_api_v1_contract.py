@@ -4,7 +4,6 @@ import pytest
 from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
-from regression_tests.sqlite_api import session_api
 
 
 @pytest.fixture
@@ -58,6 +57,17 @@ def error_contract_client(tmp_path):
             conn.execute("INSERT INTO records VALUES (1)")
         except sqlite3.IntegrityError as error:
             raise error
+
+    @app.get("/api/v1/test-postgres-integrity/{kind}")
+    def test_postgres_integrity(kind: str):
+        import psycopg
+        raise {"unique": psycopg.errors.UniqueViolation, "foreign": psycopg.errors.ForeignKeyViolation,
+               "check": psycopg.errors.CheckViolation}[kind]("private constraint detail")
+
+    @app.get("/api/test-postgres-integrity")
+    def test_legacy_postgres_integrity():
+        import psycopg
+        raise psycopg.errors.UniqueViolation("private constraint detail")
 
     @app.post("/api/v1/auth/native/login")
     def test_locked_login():
@@ -145,6 +155,38 @@ def test_v1_integrity_conflict_uses_standard_envelope(error_contract_client):
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.parametrize("kind", ["unique", "foreign"])
+def test_postgres_duplicate_or_missing_reference_is_a_409_conflict(error_contract_client, kind):
+    response = error_contract_client.get(f"/api/v1/test-postgres-integrity/{kind}")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+    assert "private constraint detail" not in response.text
+
+
+def test_postgres_integrity_conflict_keeps_legacy_detail_shape(error_contract_client):
+    response = error_contract_client.get("/api/test-postgres-integrity")
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Invalid database reference or duplicate record; no changes saved"}
+
+
+def test_other_postgres_integrity_errors_are_not_reported_as_conflicts():
+    from fastapi.testclient import TestClient
+    from backend.app_bootstrap import create_inventory_app
+    import tempfile
+    with tempfile.TemporaryDirectory() as static_dir:
+        app, _ = create_inventory_app(lifespan=None, cors_allowed_origins=[], static_directory=static_dir)
+
+        @app.get("/api/v1/check")
+        def check():
+            import psycopg
+            raise psycopg.errors.CheckViolation("private constraint detail")
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get("/api/v1/check")
+    assert response.status_code == 500
+    assert "private constraint detail" not in response.text
 
 
 def test_v1_locked_login_uses_account_locked_code(error_contract_client):
@@ -267,28 +309,19 @@ def test_v1_protected_auth_routes_require_bearer_not_cookie():
         main.app.dependency_overrides.clear()
 
 
-def test_v1_logout_revokes_bearer_without_cookie_response(session_api):
-    import main
-    from contextlib import closing
-    from backend.database import connect_database
+def test_v1_logout_revokes_bearer_without_cookie_response(tenant_api):
+    from backend.services.session_credentials import hash_session_credential
 
-    client, database_path, _control = session_api
-    main.app.dependency_overrides.pop(main.get_current_user)
-    client.cookies.clear()
-    response = client.post(
-        "/api/v1/auth/logout",
-        headers={"Authorization": "Bearer admin-token"},
-    )
+    client = tenant_api.as_bearer("admin")
+    response = client.post("/api/v1/auth/logout")
 
     assert response.status_code == 200, response.text
     assert "set-cookie" not in response.headers
-    with closing(connect_database(database_path)) as conn:
-        active = conn.execute(
-            "SELECT is_active FROM sessions WHERE session_token=?",
-            (__import__('backend.services.session_credentials', fromlist=['hash_session_credential']).hash_session_credential('admin-token'),),
-        ).fetchone()[0]
-    assert active == 0
-
+    active = tenant_api.db.execute(
+        "SELECT is_active FROM sessions WHERE session_token_hash=%s",
+        (hash_session_credential("admin-token"),),
+    ).fetchone()["is_active"]
+    assert active is False
 
 def test_v1_csrf_token_is_no_store():
     import main
