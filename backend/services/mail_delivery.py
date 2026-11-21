@@ -9,6 +9,9 @@ from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+# Resend's API is behind Cloudflare, which rejects the default Python-urllib
+# user agent with error 1010 (HTTP 403). Every Resend request must send this.
+RESEND_USER_AGENT = "SparesTracker-MailWorker/1.0"
 _PROVIDER_ERROR_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
@@ -95,7 +98,7 @@ class _UrllibTransport:
             headers={
                 **headers,
                 "Content-Type": "application/json",
-                "User-Agent": "SparesTracker-MailWorker/1.0",
+                "User-Agent": RESEND_USER_AGENT,
             },
             method="POST",
         )
