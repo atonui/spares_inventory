@@ -10,6 +10,7 @@ from urllib.request import HTTPRedirectHandler, Request as UrlRequest, build_ope
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from backend.services.mail_delivery import RESEND_USER_AGENT
 from backend.services.mail_outbox import enqueue_mail
 from backend.services.mail_payloads import encrypt_mail_payload
 from backend.services.platform_audit import record_platform_audit_event
@@ -48,7 +49,8 @@ def create_platform_support_inbox_router(*, get_connection, current_user, csrf_d
         if not resend_api_key:
             raise HTTPException(status_code=503, detail="Attachment service is not configured")
         request = UrlRequest(f"https://api.resend.com/emails/receiving/{email_id}/attachments",
-            headers={"Authorization": f"Bearer {resend_api_key}", "Accept": "application/json"})
+            headers={"Authorization": f"Bearer {resend_api_key}", "Accept": "application/json",
+                     "User-Agent": RESEND_USER_AGENT})
         try:
             with urlopen(request, timeout=10) as provider_response:
                 data = json.loads(provider_response.read(1_000_001).decode("utf-8"))
@@ -63,7 +65,7 @@ def create_platform_support_inbox_router(*, get_connection, current_user, csrf_d
                     or not (host.endswith(".amazonaws.com") or host.endswith(".resend.com"))):
                 raise ValueError("Attachment host rejected")
             no_redirect = build_opener(_NoRedirect)
-            with no_redirect.open(UrlRequest(item["download_url"], headers={"Accept": "application/octet-stream"}), timeout=15) as file_response:
+            with no_redirect.open(UrlRequest(item["download_url"], headers={"Accept": "application/octet-stream", "User-Agent": RESEND_USER_AGENT}), timeout=15) as file_response:
                 content = file_response.read(10_000_001)
                 content_type = file_response.headers.get_content_type()
             if len(content) > 10_000_000:

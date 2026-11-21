@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from psycopg.rows import dict_row
 
 from backend.mail_worker import run
+from backend.services.mail_delivery import RESEND_USER_AGENT
 from backend.services.mail_outbox import RESEND_EVENT_STATUS, record_resend_webhook_event
 from backend.temporal import parse_api_instant, serialize_instant
 from backend.services.platform_support_inbox import store_inbound_message
@@ -103,7 +104,8 @@ def fetch_received_email(email_id: str, api_key: str) -> dict:
         raise ValueError("Invalid provider email identifier")
     request = UrlRequest(
         f"https://api.resend.com/emails/receiving/{email_id}",
-        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json",
+                 "User-Agent": RESEND_USER_AGENT},
         method="GET",
     )
     try:

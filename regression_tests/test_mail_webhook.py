@@ -214,3 +214,38 @@ def test_inbound_receiver_requires_an_email_id(monkeypatch):
     with TestClient(webhook.app) as client:
         response = client.post("/webhooks/resend/inbound", content=body, headers=headers)
     assert response.status_code == 400
+
+
+def test_received_email_fetch_sends_a_named_user_agent(monkeypatch):
+    """Cloudflare in front of Resend blocks Python-urllib's default agent (error 1010)."""
+    import backend.mail_webhook as webhook
+    from backend.services.mail_delivery import RESEND_USER_AGENT
+
+    seen = {}
+
+    class _Response:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def read(self, _limit): return b'{"id":"re_1","to":["support@sparestracker.com"]}'
+
+    def fake_urlopen(request, timeout):
+        seen["agent"] = request.get_header("User-agent")
+        seen["url"] = request.full_url
+        return _Response()
+
+    monkeypatch.setattr(webhook, "urlopen", fake_urlopen)
+    assert webhook.fetch_received_email("re_1", "test-key")["id"] == "re_1"
+    assert seen == {"agent": RESEND_USER_AGENT, "url": "https://api.resend.com/emails/receiving/re_1"}
+
+
+def test_every_resend_request_sets_the_user_agent():
+    import pathlib
+    import re as re_module
+
+    found = 0
+    for path in (pathlib.Path(__file__).resolve().parents[1] / "backend").rglob("*.py"):
+        source = path.read_text()
+        for match in re_module.finditer(r"(?:Url)?Request\(\s*f?[\"']https://api\.resend\.com[^)]*\)", source):
+            found += 1
+            assert "RESEND_USER_AGENT" in match.group(0), (path, match.group(0)[:80])
+    assert found >= 2, "the scan must find the receiving and attachment requests"
