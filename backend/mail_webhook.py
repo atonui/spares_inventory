@@ -98,6 +98,14 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+class ProviderRetrievalError(RuntimeError):
+    """Resend could not return a received email; carries only the HTTP status."""
+
+    def __init__(self, status: int | None):
+        super().__init__("Inbound provider unavailable")
+        self.status = status
+
+
 def fetch_received_email(email_id: str, api_key: str) -> dict:
     """Fetch full inbound content from Resend without exposing provider errors."""
     if not isinstance(email_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,255}", email_id):
@@ -119,8 +127,11 @@ def fetch_received_email(email_id: str, api_key: str) -> dict:
         if not isinstance(result, dict):
             raise ValueError("Invalid provider message")
         return result
-    except (HTTPError, URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError):
-        raise RuntimeError("Inbound provider unavailable") from None
+    except HTTPError as error:
+        # Keep only the numeric status; the body may echo request details.
+        raise ProviderRetrievalError(error.code if isinstance(error.code, int) else None) from None
+    except (URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ProviderRetrievalError(None) from None
 
 
 def is_spares_tracker_message(data: dict) -> bool:
@@ -260,8 +271,10 @@ async def receive_resend_inbound_webhook(request: Request) -> Response:
         raise HTTPException(status_code=400, detail="Invalid received email event")
     try:
         message = await asyncio.to_thread(fetch_received_email, email_id, api_key)
-    except (RuntimeError, ValueError):
-        logger.warning("Resend inbound message retrieval failed")
+    except (RuntimeError, ValueError) as exc:
+        status = getattr(exc, "status", None)
+        logger.warning("Resend inbound message retrieval failed status=%s",
+                       status if isinstance(status, int) else "none")
         raise HTTPException(status_code=503, detail="Inbound message temporarily unavailable") from None
     message.setdefault("message_id", data.get("message_id"))
     message.setdefault("created_at", data.get("created_at") or event.get("created_at"))
@@ -274,7 +287,9 @@ async def receive_resend_inbound_webhook(request: Request) -> Response:
         # Bad recipient or malformed sender is intentionally acknowledged and discarded.
         logger.warning("Resend inbound message rejected")
         return Response(status_code=204)
-    except Exception:
-        logger.warning("Resend inbound message persistence failed")
+    except Exception as exc:
+        error_type, sqlstate = safe_worker_error_fields(exc)
+        logger.warning("Resend inbound message persistence failed error_type=%s sqlstate=%s",
+                       error_type, sqlstate)
         raise HTTPException(status_code=503, detail="Inbound message persistence unavailable") from None
     return Response(status_code=204)

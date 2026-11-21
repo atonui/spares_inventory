@@ -245,3 +245,75 @@ def test_runtime_role_reads_curated_invitation_history_without_invitation_table_
         admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
         admin.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
         admin.commit()
+
+
+def test_worker_role_can_save_inbound_support_mail_after_v0029(postgres_schema, monkeypatch):
+    """Reproduces the production failure: before v0029 the worker role could not save inbound mail."""
+    from cryptography.fernet import Fernet
+
+    from backend.postgres_migrations import registry
+    from backend.postgres_migrations.runner import apply_postgres_migrations
+    from backend.services.platform_support_inbox import store_inbound_message
+
+    admin, schema = postgres_schema
+    role = "mail_worker_role"  # v0029 grants to the fixed production role name
+    created = admin.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone() is None
+    if created:
+        admin.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+    admin.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(schema), sql.Identifier(role)))
+    admin.commit()
+    key = Fernet.generate_key().decode()
+    message = {
+        "from": "Customer <customer@example.test>", "to": ["support@sparestracker.com"],
+        "subject": "Help", "text": "The scanner will not sync.", "created_at": "2026-11-21T13:46:12.106Z",
+        "headers": {"Message-ID": "<first@example.test>"}, "attachments": [], "message_id": "<first@example.test>",
+    }
+
+    def save_as_worker(event_id):
+        connection = psycopg.connect(os.environ["TEST_DATABASE_URL"], row_factory=psycopg.rows.dict_row)
+        try:
+            connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
+            connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
+            connection.commit()
+            with connection.transaction():
+                return store_inbound_message(connection, event_id=event_id, provider_email_id="re_received_1",
+                                             message=message, support_address="support@sparestracker.com",
+                                             encryption_key=key)
+        finally:
+            connection.close()
+
+    try:
+        migrations = registry.MIGRATIONS
+        monkeypatch.setattr(registry, "MIGRATIONS", migrations[:28])
+        apply_postgres_migrations(admin)
+        # The runbook grants without is_read, as in production before v0029.
+        for statement in (
+            "GRANT SELECT ON TABLE platform_support_conversations TO mail_worker_role",
+            "GRANT INSERT (status,is_read,original_sender_hash,created_at,updated_at,latest_message_at) ON TABLE platform_support_conversations TO mail_worker_role",
+            "GRANT UPDATE (status,latest_message_at,updated_at) ON TABLE platform_support_conversations TO mail_worker_role",
+            "GRANT SELECT ON TABLE platform_support_messages TO mail_worker_role",
+            "GRANT INSERT (conversation_id,direction,encrypted_payload,provider_email_id,provider_message_id,delivery_status,attachment_count,created_at) ON TABLE platform_support_messages TO mail_worker_role",
+            "GRANT SELECT, INSERT, UPDATE ON TABLE platform_support_webhook_events TO mail_worker_role",
+            "GRANT USAGE ON SEQUENCE platform_support_conversations_id_seq, platform_support_messages_id_seq TO mail_worker_role",
+        ):
+            admin.execute(statement)
+        admin.commit()
+        with pytest.raises(InsufficientPrivilege):
+            save_as_worker("msg-before-fix")
+
+        monkeypatch.setattr(registry, "MIGRATIONS", migrations)
+        assert apply_postgres_migrations(admin).current_version == 29
+        assert save_as_worker("msg-after-fix") is True
+        assert save_as_worker("msg-retry") is False  # same provider email: no duplicate
+        stored = admin.execute(
+            "SELECT c.is_read, c.status, count(m.id) AS messages FROM platform_support_conversations c "
+            "JOIN platform_support_messages m ON m.conversation_id=c.id GROUP BY c.id"
+        ).fetchall()
+        assert [dict(row) for row in stored] == [{"is_read": False, "status": "open", "messages": 1}]
+    finally:
+        admin.rollback()
+        admin.execute(sql.SQL("REVOKE ALL ON SCHEMA {} FROM {}").format(sql.Identifier(schema), sql.Identifier(role)))
+        if created:
+            admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+            admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
+        admin.commit()

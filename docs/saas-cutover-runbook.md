@@ -138,6 +138,8 @@ REVOKE ALL PRIVILEGES ON TABLE platform_invitation_history FROM web_runtime_role
 GRANT SELECT ON platform_invitation_history TO web_runtime_role;
 
 -- Platform support inbox data: content is application-encrypted in payload.
+-- Migration v0029 applies these grants automatically on deploy; they are
+-- listed here for reference.
 REVOKE ALL PRIVILEGES ON TABLE platform_support_conversations,
   platform_support_messages, platform_support_webhook_events FROM web_runtime_role;
 GRANT SELECT ON TABLE platform_support_conversations TO web_runtime_role;
@@ -153,7 +155,7 @@ REVOKE ALL PRIVILEGES ON TABLE platform_support_conversations,
 GRANT SELECT ON TABLE platform_support_conversations TO mail_worker_role;
 GRANT INSERT (status,is_read,original_sender_hash,created_at,updated_at,latest_message_at)
   ON TABLE platform_support_conversations TO mail_worker_role;
-GRANT UPDATE (status,latest_message_at,updated_at)
+GRANT UPDATE (status,is_read,latest_message_at,updated_at)
   ON TABLE platform_support_conversations TO mail_worker_role;
 GRANT SELECT ON TABLE platform_support_messages TO mail_worker_role;
 GRANT INSERT (conversation_id,direction,encrypted_payload,provider_email_id,provider_message_id,delivery_status,attachment_count,created_at)
