@@ -33,6 +33,7 @@ from . import (
     v0027_organization_calibration_reminder,
     v0028_default_store_types,
     v0029_support_inbox_role_grants,
+    v0030_mail_worker_grants_by_capability,
 )
 
 
@@ -80,6 +81,7 @@ MIGRATIONS = tuple(
         v0027_organization_calibration_reminder,
         v0028_default_store_types,
         v0029_support_inbox_role_grants,
+        v0030_mail_worker_grants_by_capability,
     )
 )
 
