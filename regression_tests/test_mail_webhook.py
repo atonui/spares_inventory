@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import time
+import pytest
 from contextlib import contextmanager
 
 from backend.mail_webhook import verify_resend_signature
@@ -85,8 +86,8 @@ def test_receiver_persists_verified_spares_tracker_event(monkeypatch):
     raw_secret = b"test-webhook-signing-key"
     secret = "whsec_" + base64.b64encode(raw_secret).decode()
     timestamp = str(int(time.time()))
+    # Resend's real payload shape: no top-level id; the id is the svix-id header.
     event = {
-        "id": "evt-delivered-1",
         "type": "email.delivered",
         "created_at": "2026-10-30T12:00:00Z",
         "data": {
@@ -130,7 +131,7 @@ def test_receiver_persists_verified_spares_tracker_event(monkeypatch):
         response = client.post("/webhooks/resend", content=body, headers=headers)
 
     assert response.status_code == 204
-    assert saved["event_id"] == "evt-delivered-1"
+    assert saved["event_id"] == "msg-webhook-1"
     assert saved["provider_message_id"] == "re_message_1"
     assert saved["event_type"] == "email.delivered"
     assert saved["occurred_at"].startswith("2026-10-30T12:00:00")
@@ -143,7 +144,7 @@ def test_inbound_receiver_validates_signature_fetches_and_persists_message(monke
 
     secret = "whsec_" + base64.b64encode(b"inbound-test-key").decode()
     timestamp = str(int(time.time()))
-    event = {"id": "evt-inbound-1", "type": "email.received", "created_at": "2026-11-15T12:00:00Z",
+    event = {"type": "email.received", "created_at": "2026-11-15T12:00:00Z",
              "data": {"email_id": "re_received_1", "message_id": "<incoming@example.test>"}}
     body = json.dumps(event, separators=(",", ":")).encode()
     signature = _signed_request(body, secret=secret, webhook_id="msg-inbound-1", timestamp=timestamp)
@@ -171,7 +172,7 @@ def test_inbound_receiver_validates_signature_fetches_and_persists_message(monke
     with TestClient(webhook.app) as client:
         response = client.post("/webhooks/resend/inbound", content=body, headers=headers)
     assert response.status_code == 204
-    assert saved["event_id"] == "evt-inbound-1"
+    assert saved["event_id"] == "msg-inbound-1"
     assert saved["provider_email_id"] == "re_received_1"
     assert saved["message"]["message_id"] == "<incoming@example.test>"
 
@@ -191,3 +192,25 @@ def test_inbound_receiver_rejects_invalid_signature_before_fetch(monkeypatch):
     with TestClient(webhook.app) as client:
         response = client.post("/webhooks/resend/inbound", json={"id": "evt", "type": "email.received", "data": {"email_id": "abc"}})
     assert response.status_code == 401
+
+
+def test_inbound_receiver_requires_an_email_id(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import backend.mail_webhook as webhook
+
+    secret = "whsec_" + base64.b64encode(b"inbound-test-key").decode()
+    timestamp = str(int(time.time()))
+    body = json.dumps({"type": "email.received", "created_at": "2026-11-15T12:00:00Z", "data": {}},
+                      separators=(",", ":")).encode()
+    signature = _signed_request(body, secret=secret, webhook_id="msg-inbound-2", timestamp=timestamp)
+    monkeypatch.setenv("RESEND_INBOUND_WEBHOOK_SECRET", secret)
+    monkeypatch.setenv("MAIL_WORKER_DATABASE_URL", "postgresql://mail-worker/test")
+    monkeypatch.setenv("RESEND_API_KEY", "test-api-key")
+    monkeypatch.setenv("MAIL_PAYLOAD_ENCRYPTION_KEY", "test-encryption-key")
+    monkeypatch.setattr(webhook, "run", lambda *, once: False)
+    monkeypatch.setattr(webhook, "fetch_received_email", lambda *a: pytest.fail("must not fetch"))
+    headers = {"svix-id": "msg-inbound-2", "svix-timestamp": timestamp, "svix-signature": "v1," + signature}
+    with TestClient(webhook.app) as client:
+        response = client.post("/webhooks/resend/inbound", content=body, headers=headers)
+    assert response.status_code == 400
