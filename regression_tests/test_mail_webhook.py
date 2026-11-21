@@ -249,3 +249,58 @@ def test_every_resend_request_sets_the_user_agent():
             found += 1
             assert "RESEND_USER_AGENT" in match.group(0), (path, match.group(0)[:80])
     assert found >= 2, "the scan must find the receiving and attachment requests"
+
+
+def test_inbound_failures_log_only_status_and_sqlstate(monkeypatch, caplog):
+    import io
+    import logging
+    from urllib.error import HTTPError
+
+    from fastapi.testclient import TestClient
+    from psycopg.errors import InsufficientPrivilege
+
+    import backend.mail_webhook as webhook
+
+    def fake_urlopen(request, timeout):
+        raise HTTPError(request.full_url, 401, "Unauthorized", {}, io.BytesIO(b"secret detail"))
+
+    monkeypatch.setattr(webhook, "urlopen", fake_urlopen)
+    with pytest.raises(webhook.ProviderRetrievalError) as raised:
+        webhook.fetch_received_email("re_1", "test-key")
+    assert raised.value.status == 401
+
+    secret = "whsec_" + base64.b64encode(b"inbound-test-key").decode()
+    monkeypatch.setenv("RESEND_INBOUND_WEBHOOK_SECRET", secret)
+    monkeypatch.setenv("MAIL_WORKER_DATABASE_URL", "postgresql://mail-worker/test")
+    monkeypatch.setenv("RESEND_API_KEY", "test-api-key")
+    monkeypatch.setenv("MAIL_PAYLOAD_ENCRYPTION_KEY", "test-encryption-key")
+    monkeypatch.setattr(webhook, "run", lambda *, once: False)
+
+    def post(webhook_id):
+        timestamp = str(int(time.time()))
+        body = json.dumps({"type": "email.received", "created_at": "2026-11-15T12:00:00Z",
+                           "data": {"email_id": "re_1"}}, separators=(",", ":")).encode()
+        signature = _signed_request(body, secret=secret, webhook_id=webhook_id, timestamp=timestamp)
+        headers = {"svix-id": webhook_id, "svix-timestamp": timestamp, "svix-signature": "v1," + signature}
+        with TestClient(webhook.app) as client:
+            return client.post("/webhooks/resend/inbound", content=body, headers=headers)
+
+    caplog.set_level(logging.WARNING, logger="backend.mail_webhook")
+    monkeypatch.setattr(webhook, "fetch_received_email", lambda *a: (_ for _ in ()).throw(webhook.ProviderRetrievalError(401)))
+    assert post("msg-a").status_code == 503
+    assert "retrieval failed status=401" in caplog.text
+
+    class _Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        @contextmanager
+        def transaction(self): yield self
+
+    monkeypatch.setattr(webhook, "fetch_received_email", lambda *a: {"to": ["support@sparestracker.com"]})
+    monkeypatch.setattr(webhook.psycopg, "connect", lambda *args, **kwargs: _Connection())
+    def refuse(conn, **fields):
+        raise InsufficientPrivilege("permission denied for table platform_support_conversations")
+    monkeypatch.setattr(webhook, "store_inbound_message", refuse)
+    assert post("msg-b").status_code == 503
+    assert "persistence failed error_type=InsufficientPrivilege sqlstate=42501" in caplog.text
+    assert "secret detail" not in caplog.text and "platform_support_conversations" not in caplog.text
