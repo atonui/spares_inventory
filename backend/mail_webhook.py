@@ -172,7 +172,9 @@ async def receive_resend_webhook(request: Request) -> Response:
     if not isinstance(event, dict):
         raise HTTPException(status_code=400, detail="Invalid webhook payload")
 
-    event_id = event.get("id")
+    # Resend's event body has no top-level id; the signed svix-id header is the
+    # event identifier and stays the same across delivery retries.
+    event_id = request.headers.get("svix-id")
     event_type = event.get("type")
     data = event.get("data")
     if not isinstance(event_id, str) or not isinstance(event_type, str) or not isinstance(data, dict):
@@ -250,7 +252,7 @@ async def receive_resend_inbound_webhook(request: Request) -> Response:
     if not isinstance(event, dict) or event.get("type") != "email.received":
         return Response(status_code=204)
     data = event.get("data")
-    event_id = event.get("id")
+    event_id = request.headers.get("svix-id")  # Resend's body has no top-level id.
     email_id = data.get("email_id") if isinstance(data, dict) else None
     if not all(isinstance(value, str) and value for value in (event_id, email_id)):
         raise HTTPException(status_code=400, detail="Invalid received email event")
